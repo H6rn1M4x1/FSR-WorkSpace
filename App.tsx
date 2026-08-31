@@ -333,10 +333,14 @@ export default function App() {
   // We store it in Firestore as a single-item "user_profile" category (id = user email) and keep it
   // in sync both ways, without touching the many existing save call-sites that write localStorage.
   const lastSyncedProfileJsonRef = useRef<string | null>(null);
+  // Guards against overwriting the remote (other-device) profile with this device's local
+  // defaults before we've had a chance to hear back from Firestore at least once.
+  const hasHeardFromFirestoreRef = useRef(false);
 
   useEffect(() => {
     const currentUserId = user?.email || userProfile?.email || "hernanmaximiliano10@gmail.com";
     const unsub = subscribeToCategory(currentUserId, "user_profile", (items) => {
+      hasHeardFromFirestoreRef.current = true;
       const remote = items && items[0];
       if (!remote) return;
       const remoteJson = JSON.stringify(remote);
@@ -347,13 +351,20 @@ export default function App() {
         localStorage.setItem("liquid_user_profile", JSON.stringify({ ...(userProfile || {}), ...remote }));
       } catch (_) {}
     });
+    // Safety net: if Firestore never responds (offline, brand-new account, etc.), don't block
+    // syncing forever — allow pushes after a few seconds regardless.
+    const fallbackTimer = setTimeout(() => {
+      hasHeardFromFirestoreRef.current = true;
+    }, 4000);
     return () => {
       try { unsub(); } catch (_) {}
+      clearTimeout(fallbackTimer);
     };
   }, [user?.email]);
 
   useEffect(() => {
     if (!userProfile) return;
+    if (!hasHeardFromFirestoreRef.current) return; // wait for the remote profile before pushing anything
     const currentUserId = user?.email || userProfile.email || "hernanmaximiliano10@gmail.com";
     const profileJson = JSON.stringify(userProfile);
     if (profileJson === lastSyncedProfileJsonRef.current) return; // avoid re-pushing what we just received
