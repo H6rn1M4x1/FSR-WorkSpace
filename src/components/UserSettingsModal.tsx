@@ -21,6 +21,7 @@ import {
   Loader2,
   Settings,
   Mail,
+  Bell,
   Phone,
   Briefcase,
   Globe,
@@ -421,6 +422,43 @@ export function UserSettingsModal({
   );
   const [emailVerificationStatus, setEmailVerificationStatus] = useState<string>("");
   const [isSendingVerification, setIsSendingVerification] = useState(false);
+  const [pushStatus, setPushStatus] = useState<string>("");
+  const [isEnablingPush, setIsEnablingPush] = useState(false);
+
+  const handleEnablePush = async () => {
+    setIsEnablingPush(true);
+    setPushStatus("");
+    try {
+      const { enablePushNotifications } = await import("../lib/pushNotifications");
+      const result = await enablePushNotifications();
+      setPushStatus(
+        result.ok
+          ? "¡Notificaciones activadas! Vas a recibir avisos aunque la app esté cerrada."
+          : result.reason || "No se pudo activar."
+      );
+    } catch (err: any) {
+      setPushStatus(err.message || "Error al activar las notificaciones.");
+    } finally {
+      setIsEnablingPush(false);
+    }
+  };
+
+  const handleTestPush = async () => {
+    setPushStatus("Enviando notificación de prueba...");
+    try {
+      const { supabase } = await import("../lib/supabase");
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      const res = await fetch("/.netlify/functions/send-test-push", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(await res.text());
+      setPushStatus("Notificación de prueba enviada. Cerrá la app y esperá unos segundos.");
+    } catch (err: any) {
+      setPushStatus(err.message || "Error al enviar la prueba.");
+    }
+  };
 
   const handleSendEmailVerification = async () => {
     setIsSendingVerification(true);
@@ -2420,6 +2458,50 @@ export function UserSettingsModal({
                 {emailVerificationStatus && (
                   <p className="text-xs font-bold text-primary dark:text-primary p-3 rounded-xl bg-primary-container border border-primary/30">
                     {emailVerificationStatus}
+                  </p>
+                )}
+              </div>
+
+              {/* Push Notifications Card */}
+              <div className="p-5 rounded-2xl border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 space-y-4">
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 rounded-2xl bg-primary text-white dark:text-blue-950 shadow-md">
+                      <Bell className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-extrabold text-sm text-zinc-900 dark:text-zinc-100">
+                        Notificaciones (app cerrada)
+                      </h3>
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                        Activá los avisos push para recibir recordatorios aunque no tengas la app abierta.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleEnablePush}
+                      disabled={isEnablingPush}
+                      className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-white font-bold text-xs cursor-pointer transition-all shadow-md flex items-center gap-2 disabled:opacity-50"
+                    >
+                      {isEnablingPush ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Bell className="w-3.5 h-3.5" />}
+                      <span>{isEnablingPush ? "Activando..." : "Activar Notificaciones"}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleTestPush}
+                      className="px-3 py-2 rounded-xl border border-slate-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 font-bold text-xs cursor-pointer transition-all hover:bg-slate-100 dark:hover:bg-zinc-800"
+                    >
+                      Probar
+                    </button>
+                  </div>
+                </div>
+
+                {pushStatus && (
+                  <p className="text-xs font-bold text-primary dark:text-primary p-3 rounded-xl bg-primary-container border border-primary/30">
+                    {pushStatus}
                   </p>
                 )}
               </div>

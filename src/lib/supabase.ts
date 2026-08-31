@@ -76,6 +76,7 @@ export type FirebaseLikeUser = User & {
   uid: string;
   displayName: string | null;
   photoURL: string | null;
+  emailVerified: boolean;
 };
 
 const toFirebaseLikeUser = (user: User): FirebaseLikeUser => ({
@@ -83,6 +84,7 @@ const toFirebaseLikeUser = (user: User): FirebaseLikeUser => ({
   uid: user.id,
   displayName: (user.user_metadata?.full_name || user.user_metadata?.name || null) as string | null,
   photoURL: (user.user_metadata?.avatar_url || user.user_metadata?.picture || null) as string | null,
+  emailVerified: !!user.email_confirmed_at,
 });
 
 // Lightweight stand-in for Firebase's `auth.currentUser`, kept in sync via initAuth below.
