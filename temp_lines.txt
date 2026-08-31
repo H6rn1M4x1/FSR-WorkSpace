@@ -1,0 +1,126 @@
+  const userId = (userEmail || auth.currentUser?.email || auth.currentUser?.uid || "hernanmaximiliano10@gmail.com").toLowerCase().trim();
+
+  // --- NUEVOS ESTADOS PARA SALUD METABÓLICA ---
+  const [selectedActivityFactor, setSelectedActivityFactor] = useState<number>(1.2);
+  const [selectedAlimDate, setSelectedAlimDate] = useState<Date | null>(null);
+  const [selectedDiarioDate, setSelectedDiarioDate] = useState<Date | null>(null);
+
+  const weekDaysCurrent = useMemo(() => {
+    const now = new Date();
+    const currentDay = now.getDay();
+    const distToMonday = currentDay === 0 ? -6 : 1 - currentDay;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() + distToMonday);
+    
+    const days = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      days.push(d);
+    }
+    return days;
+  }, []);
+
+  const alimWeekData = useMemo(() => {
+    const daysShort = ["LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB", "DOM"];
+    return weekDaysCurrent.map((day, idx) => {
+      let calories = 0;
+      let hasActivity = false;
+      
+      alimentacionLogs.forEach((log) => {
+        if (!log.fecha) return;
+        const itemDate = new Date(log.fecha);
+        if (
+          !isNaN(itemDate.getTime()) &&
+          itemDate.getFullYear() === day.getFullYear() &&
+          itemDate.getMonth() === day.getMonth() &&
+          itemDate.getDate() === day.getDate()
+        ) {
+          hasActivity = true;
+          calories += Number(log.calorias) || 0;
+        }
+      });
+      
+      return {
+        dateObj: day,
+        dayLabel: daysShort[idx],
+        dayNumber: day.getDate(),
+        calories,
+        hasActivity
+      };
+    });
+  }, [weekDaysCurrent, alimentacionLogs]);
+
+  const diarioWeekData = useMemo(() => {
+    const daysShort = ["LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB", "DOM"];
+    return weekDaysCurrent.map((day, idx) => {
+      let balanceNeto = 0;
+      let hasActivity = false;
+      const diaStr = day.toISOString().substring(0, 10);
+      const medidaDia = medidasHistory.find(m => m.fecha === diaStr);
+      let consumo = 0;
+      let gasto = 0;
+      alimentacionLogs.forEach((l) => {
+        if (l.fecha && l.fecha.startsWith(diaStr)) consumo += Number(l.calorias) || 0;
+      });
+      
+      if (medidaDia && medidaDia.peso > 0 && metabolicProfile) {
+        gasto = selectedActivityFactor * ((10 * medidaDia.peso) + (6.25 * metabolicProfile.altura) - (5 * metabolicProfile.edad) + 5);
+      } else {
+        const lastMedida = [...medidasHistory].sort((a,b)=>new Date(b.fecha).getTime() - new Date(a.fecha).getTime())[0];
+        if (lastMedida && lastMedida.peso > 0 && metabolicProfile) {
+          gasto = selectedActivityFactor * ((10 * lastMedida.peso) + (6.25 * metabolicProfile.altura) - (5 * metabolicProfile.edad) + 5);
+        }
+      }
+      balanceNeto = consumo - gasto;
+      if (consumo > 0 || gasto > 0) hasActivity = true;
+
+      return {
+        dateObj: day,
+        dayLabel: daysShort[idx],
+        dayNumber: day.getDate(),
+        balance: balanceNeto,
+        hasActivity
+      };
+    });
+  }, [weekDaysCurrent, alimentacionLogs, medidasHistory, metabolicProfile, selectedActivityFactor]);
+
+
+  const [metabolicProfile, setMetabolicProfile] = useState<{
+    id: string;
+    edad: number;
+    altura: number;
+    pesoActual: number;
+    genero: "Masculino" | "Femenino";
+    objetivo: "Bajar de Peso (Déficit)" | "Mantenimiento" | "Ganar Masa Muscular (Superávit)";
+    cintura: number;
+    cadera: number;
+    cuello: number;
+    factorActividad?: number;
+  }>({
+    id: "profile",
+    edad: 28,
+    altura: 175,
+    pesoActual: 70,
+    genero: "Masculino",
+    objetivo: "Mantenimiento",
+    cintura: 82,
+    cadera: 94,
+    cuello: 38,
+    factorActividad: 1.2
+  });
+
+  const [hydrationLogs, setHydrationLogs] = useState<{ id: string; fecha: string; cantidadVasos: number }[]>([]);
+  const [medidasHistory, setMedidasHistory] = useState<{ id: string; fecha: string; peso: number; cintura?: number; cadera?: number; cuello?: number; timestamp?: number; createdAt?: string }[]>([]);
+  
+  // Helper para ordenar por timestamp/fecha descendente (más reciente primero)
+  const sortMedidasDesc = <T extends { fecha: string; timestamp?: number; createdAt?: string }>(items: T[]): T[] => {
+    return [...items].sort((a, b) => {
+      const timeA = a.timestamp || (a.createdAt ? new Date(a.createdAt).getTime() : new Date(a.fecha).getTime());
+      const timeB = b.timestamp || (b.createdAt ? new Date(b.createdAt).getTime() : new Date(b.fecha).getTime());
+      if (timeB !== timeA) return timeB - timeA;
+      return b.fecha.localeCompare(a.fecha);
+    });
+  };
+
+  // 3. Estado Global REAL (Ajustes & Configuración de Usuario > Salud y Datos Físicos)
