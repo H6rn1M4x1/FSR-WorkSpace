@@ -1,0 +1,6 @@
+{
+  "name": "FSR - Workspace",
+  "description": "Un espacio de trabajo interactivo, minimalista y funcional con Glassmorphism para la organización personal diaria. Cuenta con autenticación de Firebase, sincronización con Google Drive, exportación de informes, notificaciones personalizadas y un asistente de IA con Gemini.",
+  "requestFramePermissions": ["microphone", "geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

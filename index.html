@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FSR - Workspace</title>
+    <link rel="icon" type="image/svg+xml" href="/pwa-icon.svg" />
+    <link rel="alternate icon" type="image/png" href="/logo.png" />
+    <link rel="apple-touch-icon" href="/pwa-icon.svg" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="FSR Workspace" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
+    <script>
+      // Apply favicon on load with transparent background and device-specific theme color
+      (function() {
+        try {
+          var themeColor = localStorage.getItem("theme_color") || "#8ab4f8";
+          var svgIcon = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%"><path d="M 256,80 Q 256,256 432,256 Q 256,256 256,432 Q 256,256 80,256 Q 256,256 256,80 Z" fill="' + themeColor + '" stroke="' + themeColor + '" stroke-width="4" stroke-linejoin="round"/></svg>';
+          var svgBlob = new Blob([svgIcon], { type: "image/svg+xml" });
+          var svgUrl = URL.createObjectURL(svgBlob);
+          var iconLinks = document.querySelectorAll("link[rel='icon'], link[rel='apple-touch-icon']");
+          iconLinks.forEach(function(link) {
+            link.href = svgUrl;
+          });
+        } catch(e) {}
+      })();
+    </script>
+    <script>
+      // Prevent unhandled Cannot redefine property errors from browser extensions
+      (function() {
+        try {
+          const origDefineProperty = Object.defineProperty;
+          Object.defineProperty = function(obj, prop, descriptor) {
+            try {
+              return origDefineProperty.call(Object, obj, prop, descriptor);
+            } catch (e) {
+              if (e && e.message && (e.message.includes('redefine property') || e.message.includes('ethereum'))) {
+                return obj;
+              }
+              throw e;
+            }
+          };
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
