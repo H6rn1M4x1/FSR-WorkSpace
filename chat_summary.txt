@@ -1,0 +1,4 @@
+He realizado las modificaciones solicitadas:
+
+- **Menú Flotante Compacto**: El formulario de agregar/editar pago ahora utiliza un diseño de cuadrícula (grid) para ser mucho más corto verticalmente, permitiendo ver todo el contenido sin necesidad de desplazarse.
+- **Posición**: El menú ahora se despliega como un panel flotante desde la parte superior (justo debajo del título/botón) en lugar de centrarse en la pantalla, comportándose como un verdadero menú desplegable.

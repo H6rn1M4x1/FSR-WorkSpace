@@ -1,0 +1,37 @@
+{
+  "entities": {
+    "Share": {
+      "title": "Share",
+      "description": "Agenda sharing configuration and data",
+      "type": "object",
+      "properties": {
+        "fromEmail": { "type": "string", "description": "Email of the sharer" },
+        "toEmail": { "type": "string", "description": "Email of the recipient" },
+        "categories": { "type": "object", "description": "Categories shared" },
+        "agendaData": { "type": "object", "description": "Serialized agenda items" },
+        "updatedAt": { "type": "string", "description": "ISO timestamp of last update" }
+      },
+      "required": ["fromEmail", "toEmail", "categories", "agendaData", "updatedAt"]
+    },
+    "UserItem": {
+      "title": "UserItem",
+      "description": "Individual workspace item for real-time syncing",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Item ID" },
+        "updatedAt": { "type": "number", "description": "Timestamp" }
+      },
+      "required": ["id"]
+    }
+  },
+  "firestore": {
+    "/shares/{shareId}": {
+      "schema": "Share",
+      "description": "Collection of sharing configurations and data"
+    },
+    "/users/{userId}/{category}/{docId}": {
+      "schema": "UserItem",
+      "description": "Granular user collections for real-time multi-device sync"
+    }
+  }
+}
