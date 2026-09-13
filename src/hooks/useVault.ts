@@ -7,6 +7,9 @@ import {
   normalizeSecret,
   encryptJSON,
   decryptJSON,
+  persistVaultUnlock,
+  loadPersistedVaultUnlock,
+  clearPersistedVaultUnlock,
 } from "../lib/vaultCrypto";
 import {
   fetchVaultConfig,
@@ -17,8 +20,6 @@ import {
   deleteVaultItem,
 } from "../lib/vaultService";
 import type { VaultConfig, VaultItemDecrypted, VaultItemEncrypted } from "../types";
-
-const AUTO_LOCK_MS = 5 * 60 * 1000; // lock after 5 minutes of inactivity
 
 export type VaultStatus = "loading" | "not_setup" | "locked" | "unlocked";
 
@@ -38,9 +39,14 @@ interface UseVaultResult {
 }
 
 /**
- * Owns the vault's unlock state and the master encryption key (MEK), which lives
- * ONLY in a React ref in memory — never in localStorage, never sent to the server.
- * Locking (explicit, on inactivity, or on tab close) simply drops that ref.
+ * Owns the vault's unlock state and the master encryption key (MEK).
+ *
+ * By request, the vault should only ask for the master password again after an
+ * explicit logout or an explicit "Bloquear" — not on every reload, tab close,
+ * or idle period (that was the annoying part). So once unlocked, the MEK is
+ * cached in localStorage (see persistVaultUnlock in vaultCrypto.ts) and
+ * rehydrated on mount, instead of living only in a memory ref. It's removed
+ * from storage by lock() and by the caller on logout.
  */
 export function useVault(userId: string | null | undefined): UseVaultResult {
   const [status, setStatus] = useState<VaultStatus>("loading");
@@ -50,55 +56,41 @@ export function useVault(userId: string | null | undefined): UseVaultResult {
   const [error, setError] = useState<string | null>(null);
 
   const mekRef = useRef<Uint8Array | null>(null);
-  const lockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const userIdRef = useRef<string | null | undefined>(userId);
+  userIdRef.current = userId;
 
   const lock = useCallback(() => {
     mekRef.current = null;
     setDecryptedItems([]);
+    if (userIdRef.current) clearPersistedVaultUnlock(userIdRef.current);
     setStatus((prev) => (prev === "unlocked" ? "locked" : prev));
   }, []);
 
-  const armAutoLock = useCallback(() => {
-    if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
-    lockTimerRef.current = setTimeout(lock, AUTO_LOCK_MS);
-  }, [lock]);
-
-  // Reset the inactivity timer on user interaction while unlocked.
   useEffect(() => {
-    if (status !== "unlocked") return;
-    const bump = () => armAutoLock();
-    bump();
-    window.addEventListener("mousedown", bump);
-    window.addEventListener("keydown", bump);
-    window.addEventListener("visibilitychange", bump);
-    return () => {
-      window.removeEventListener("mousedown", bump);
-      window.removeEventListener("keydown", bump);
-      window.removeEventListener("visibilitychange", bump);
-      if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
-    };
-  }, [status, armAutoLock]);
-
-  // Always lock when the tab/app is closed or the user logs out.
-  useEffect(() => {
-    const onUnload = () => lock();
-    window.addEventListener("beforeunload", onUnload);
-    return () => window.removeEventListener("beforeunload", onUnload);
-  }, [lock]);
-
-  useEffect(() => {
-    mekRef.current = null;
     setDecryptedItems([]);
     if (!userId) {
+      mekRef.current = null;
       setStatus("loading");
       return;
     }
     setStatus("loading");
     let cancelled = false;
+    const persistedMek = loadPersistedVaultUnlock(userId);
     fetchVaultConfig(userId).then((cfg) => {
       if (cancelled) return;
       setConfig(cfg);
-      setStatus(cfg ? "locked" : "not_setup");
+      if (!cfg) {
+        // Vault was never set up (or was reset elsewhere) — nothing valid to stay unlocked with.
+        mekRef.current = null;
+        clearPersistedVaultUnlock(userId);
+        setStatus("not_setup");
+      } else if (persistedMek) {
+        mekRef.current = persistedMek;
+        setStatus("unlocked");
+      } else {
+        mekRef.current = null;
+        setStatus("locked");
+      }
     });
     const unsubConfig = subscribeVaultConfig(userId, (cfg) => {
       setConfig(cfg);
@@ -157,6 +149,7 @@ export function useVault(userId: string | null | undefined): UseVaultResult {
         };
         await saveVaultConfig(userId, newConfig);
         mekRef.current = mek;
+        persistVaultUnlock(userId, mek);
         setConfig(newConfig);
         setStatus("unlocked");
         return { recoveryPhrase };
@@ -178,10 +171,11 @@ export function useVault(userId: string | null | undefined): UseVaultResult {
         return false;
       }
       mekRef.current = mek;
+      if (userId) persistVaultUnlock(userId, mek);
       setStatus("unlocked");
       return true;
     },
-    [config]
+    [config, userId]
   );
 
   const unlockWithRecoveryPhrase = useCallback(
@@ -194,10 +188,11 @@ export function useVault(userId: string | null | undefined): UseVaultResult {
         return false;
       }
       mekRef.current = mek;
+      if (userId) persistVaultUnlock(userId, mek);
       setStatus("unlocked");
       return true;
     },
-    [config]
+    [config, userId]
   );
 
   const changeMasterPassword = useCallback(

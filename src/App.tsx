@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, Suspense, lazy } from "react";
 import { StorageService, AestheticStorageService, setStoredDataSilent, setSyncUserId } from "./lib/storage";
 import { subscribeToCategory, saveItemToFirestore, refetchCategory } from "./lib/firestoreSyncService";
+import { clearPersistedVaultUnlock } from "./lib/vaultCrypto";
 import { reconcileCollection, sanitizeSyncPayload, saveStateToServer } from "./utils/sync";
 import { getLocalDateString } from "./utils/date";
 import { useToast } from "./context/ToastContext";
@@ -1957,6 +1958,10 @@ export default function App() {
   };
 
   const handleLogout = async () => {
+    // The password vault stays unlocked across reloads/tab closes on purpose (see useVault.ts),
+    // so it must be explicitly locked here — logging out is the one moment it should re-ask
+    // for the master password.
+    if (user?.email) clearPersistedVaultUnlock(user.email);
     await logout();
     setUser(null);
     setToken(null);

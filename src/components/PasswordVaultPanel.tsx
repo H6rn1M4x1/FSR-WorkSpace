@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   KeyRound,
   Lock,
@@ -33,6 +33,8 @@ interface PasswordVaultPanelProps {
   twoFactorEnabled: boolean;
   twoFactorSecret: string;
 }
+
+const REVEAL_MS = 5 * 60 * 1000; // an unlocked password auto-hides itself after 5 minutes
 
 const CARD =
   "p-5 rounded-2xl border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 space-y-4";
@@ -80,6 +82,41 @@ export function PasswordVaultPanel({
   const [totpCodeInput, setTotpCodeInput] = useState("");
   const [totpError, setTotpError] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
+  // Auto-hide timers per revealed item id, so "ver contraseña" only lasts 5 minutes
+  // before it hides itself again (independent of the vault's own unlock state).
+  const revealTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  useEffect(() => {
+    const timers = revealTimersRef.current;
+    return () => {
+      Object.values(timers).forEach(clearTimeout);
+    };
+  }, []);
+
+  const hideItem = (id: string) => {
+    if (revealTimersRef.current[id]) {
+      clearTimeout(revealTimersRef.current[id]);
+      delete revealTimersRef.current[id];
+    }
+    setRevealedIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  };
+
+  const showItem = (id: string) => {
+    if (revealTimersRef.current[id]) clearTimeout(revealTimersRef.current[id]);
+    revealTimersRef.current[id] = setTimeout(() => {
+      delete revealTimersRef.current[id];
+      setRevealedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }, REVEAL_MS);
+    setRevealedIds((prev) => new Set(prev).add(id));
+  };
 
   const strength = editingItem?.password ? estimatePasswordStrength(editingItem.password) : null;
 
@@ -142,7 +179,7 @@ export function PasswordVaultPanel({
       setTotpCodeInput("");
       setTotpError(null);
     } else {
-      setRevealedIds((prev) => new Set(prev).add(id));
+      showItem(id);
     }
   };
 
@@ -167,8 +204,8 @@ export function PasswordVaultPanel({
     }
     if (totpGateFor.action === "reveal") {
       const item = vault.items.find((i) => i.id === totpGateFor.id);
-      setRevealedIds((prev) => new Set(prev).add(totpGateFor.id));
-      showToast(`Mostrando la contraseña de ${item?.site || "este sitio"}.`, "success");
+      showItem(totpGateFor.id);
+      showToast(`Mostrando la contraseña de ${item?.site || "este sitio"} durante 5 minutos.`, "success");
     } else if (totpGateFor.action === "copy") {
       const item = vault.items.find((i) => i.id === totpGateFor.id);
       if (item) {
@@ -199,6 +236,7 @@ export function PasswordVaultPanel({
   const handleConfirmDelete = async () => {
     if (!deleteConfirmId) return;
     const item = vault.items.find((i) => i.id === deleteConfirmId);
+    hideItem(deleteConfirmId); // clears any pending auto-hide timer for the deleted item
     await vault.deleteItem(deleteConfirmId);
     showToast(`Se eliminó la contraseña de ${item?.site || "el sitio"} correctamente.`, "success");
   };
@@ -494,7 +532,7 @@ export function PasswordVaultPanel({
             </span>
             <span className="text-[10px] text-zinc-500 dark:text-zinc-400 block mt-0.5">
               {twoFactorEnabled
-                ? "Capa extra: aunque la caja esté desbloqueada, cada revelado pide el código de 6 dígitos."
+                ? "Capa extra: aunque la caja esté desbloqueada, cada revelado pide el código de 6 dígitos y se vuelve a ocultar solo a los 5 minutos."
                 : "Activá primero el 2FA (arriba en esta misma pestaña) para poder usar esta opción."}
             </span>
           </span>
@@ -528,13 +566,7 @@ export function PasswordVaultPanel({
                   <button
                     type="button"
                     onClick={() =>
-                      revealedIds.has(item.id)
-                        ? setRevealedIds((prev) => {
-                            const next = new Set(prev);
-                            next.delete(item.id);
-                            return next;
-                          })
-                        : requestReveal(item.id)
+                      revealedIds.has(item.id) ? hideItem(item.id) : requestReveal(item.id)
                     }
                     className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 text-zinc-500"
                     title="Mostrar/ocultar"
