@@ -18,6 +18,8 @@ import {
 } from "lucide-react";
 import { useVault } from "../hooks/useVault";
 import { verify2FAToken } from "../lib/totp";
+import { useToast } from "../context/ToastContext";
+import { ConfirmationModal } from "./ConfirmationModal";
 import {
   generateStrongPassword,
   estimatePasswordStrength,
@@ -58,6 +60,7 @@ export function PasswordVaultPanel({
   twoFactorSecret,
 }: PasswordVaultPanelProps) {
   const vault = useVault(userId);
+  const { showToast } = useToast();
   const [masterPwInput, setMasterPwInput] = useState("");
   const [confirmPwInput, setConfirmPwInput] = useState("");
   const [recoveryInput, setRecoveryInput] = useState("");
@@ -70,9 +73,13 @@ export function PasswordVaultPanel({
   const [showPasswordInForm, setShowPasswordInForm] = useState(false);
   const [revealedIds, setRevealedIds] = useState<Set<string>>(new Set());
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [totpGateFor, setTotpGateFor] = useState<{ id: string; action: "reveal" | "copy" } | null>(null);
+  const [totpGateFor, setTotpGateFor] = useState<{
+    id: string;
+    action: "reveal" | "copy" | "disable-gate";
+  } | null>(null);
   const [totpCodeInput, setTotpCodeInput] = useState("");
   const [totpError, setTotpError] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const strength = editingItem?.password ? estimatePasswordStrength(editingItem.password) : null;
 
@@ -158,16 +165,42 @@ export function PasswordVaultPanel({
       setTotpError("Código incorrecto o expirado.");
       return;
     }
-    const item = vault.items.find((i) => i.id === totpGateFor.id);
     if (totpGateFor.action === "reveal") {
+      const item = vault.items.find((i) => i.id === totpGateFor.id);
       setRevealedIds((prev) => new Set(prev).add(totpGateFor.id));
-    } else if (item) {
-      clipboardCopy(item.password);
-      setCopiedId(item.id);
-      setTimeout(() => setCopiedId(null), 1500);
+      showToast(`Mostrando la contraseña de ${item?.site || "este sitio"}.`, "success");
+    } else if (totpGateFor.action === "copy") {
+      const item = vault.items.find((i) => i.id === totpGateFor.id);
+      if (item) {
+        clipboardCopy(item.password);
+        setCopiedId(item.id);
+        setTimeout(() => setCopiedId(null), 1500);
+      }
+    } else if (totpGateFor.action === "disable-gate") {
+      await vault.setRequireTotpToReveal(false);
+      showToast("Verificación con Google Authenticator desactivada para revelar contraseñas.", "success");
     }
     setTotpGateFor(null);
     setTotpCodeInput("");
+  };
+
+  const handleToggleRequireTotp = async (checked: boolean) => {
+    if (checked) {
+      await vault.setRequireTotpToReveal(true);
+      showToast("Verificación con Google Authenticator activada para ver o copiar contraseñas.", "success");
+    } else {
+      // Disabling this protection is itself sensitive, so it requires a live 2FA code too.
+      setTotpGateFor({ id: "", action: "disable-gate" });
+      setTotpCodeInput("");
+      setTotpError(null);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteConfirmId) return;
+    const item = vault.items.find((i) => i.id === deleteConfirmId);
+    await vault.deleteItem(deleteConfirmId);
+    showToast(`Se eliminó la contraseña de ${item?.site || "el sitio"} correctamente.`, "success");
   };
 
   const handleSaveItem = async () => {
@@ -452,7 +485,7 @@ export function PasswordVaultPanel({
             type="checkbox"
             checked={!!vault.config?.requireTotpToReveal}
             disabled={!twoFactorEnabled}
-            onChange={(e) => vault.setRequireTotpToReveal(e.target.checked)}
+            onChange={(e) => handleToggleRequireTotp(e.target.checked)}
             className="mt-0.5"
           />
           <span>
@@ -526,7 +559,7 @@ export function PasswordVaultPanel({
                   </button>
                   <button
                     type="button"
-                    onClick={() => vault.deleteItem(item.id)}
+                    onClick={() => setDeleteConfirmId(item.id)}
                     className="p-2 rounded-lg hover:bg-red-500/10 text-red-500"
                     title="Eliminar"
                   >
@@ -637,6 +670,12 @@ export function PasswordVaultPanel({
                 <ShieldCheck className="w-5 h-5 text-primary" />
                 <h4 className="font-extrabold text-sm">Confirmá con Google Authenticator</h4>
               </div>
+              {totpGateFor.action === "disable-gate" && (
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Para desactivar el pedido de código al revelar contraseñas, ingresá tu código
+                  de Google Authenticator una última vez.
+                </p>
+              )}
               <input
                 type="text"
                 inputMode="numeric"
@@ -665,6 +704,17 @@ export function PasswordVaultPanel({
             </div>
           </div>
         )}
+
+        <ConfirmationModal
+          isOpen={!!deleteConfirmId}
+          title="Eliminar contraseña"
+          message="¿Seguro que querés eliminar esta contraseña guardada? Esta acción no se puede deshacer."
+          confirmText="Eliminar"
+          cancelText="Cancelar"
+          darkMode={darkMode}
+          onClose={() => setDeleteConfirmId(null)}
+          onConfirm={handleConfirmDelete}
+        />
       </div>
     );
   }
