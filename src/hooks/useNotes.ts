@@ -18,14 +18,24 @@ function stripHtml(html: string): string {
 
 interface UseNotesResult {
   notes: StickyNote[]; // own notes + notes shared with me, merged
-  addNote: (html: string, color: string, attachments?: { name: string; url: string }[]) => Promise<void>;
-  updateNote: (id: string, patch: Partial<Pick<StickyNote, "text" | "color" | "pinned" | "attachments">>) => Promise<void>;
+  addNote: (
+    title: string,
+    html: string,
+    color: string,
+    attachments?: { name: string; url: string }[]
+  ) => Promise<void>;
+  updateNote: (
+    id: string,
+    patch: Partial<Pick<StickyNote, "title" | "text" | "color" | "pinned" | "attachments" | "order">>
+  ) => Promise<void>;
   deleteNote: (id: string) => Promise<void>;
   togglePin: (id: string) => Promise<void>;
   shareNote: (id: string, email: string) => Promise<void>;
   unshareNote: (id: string, email: string) => Promise<void>;
   getRecipients: (id: string) => string[];
   getAllRecipients: () => string[];
+  /** Persists a new manual display order for a set of MY OWN notes (e.g. after a drag-and-drop reorder). */
+  reorderNotes: (orderedIds: string[]) => Promise<void>;
 }
 
 export function useNotes(userId: string | null | undefined): UseNotesResult {
@@ -67,22 +77,27 @@ export function useNotes(userId: string | null | undefined): UseNotesResult {
   }, [sharedInRefs]);
 
   const addNote = useCallback(
-    async (html: string, color: string, attachments?: { name: string; url: string }[]) => {
+    async (title: string, html: string, color: string, attachments?: { name: string; url: string }[]) => {
       if (!userId) return;
-      if (!stripHtml(html) && !(attachments && attachments.length)) return;
+      if (!title.trim() && !stripHtml(html) && !(attachments && attachments.length)) return;
       const now = Date.now();
+      // New notes get the lowest order so far minus one, so they show up first (top-left) —
+      // same feel as Google Keep, where a fresh note always appears before older ones.
+      const lowestOrder = ownNotes.reduce((min, n) => Math.min(min, n.order ?? n.createdAt), now);
       const note: StickyNote = {
         id: `note_${now}_${Math.random().toString(36).slice(2, 8)}`,
+        title: title.trim(),
         text: html,
         color,
         pinned: false,
+        order: lowestOrder - 1,
         attachments: attachments || [],
         createdAt: now,
         updatedAt: now,
       };
       await saveNote(userId, note);
     },
-    [userId]
+    [userId, ownNotes]
   );
 
   const findNote = useCallback(
@@ -165,6 +180,20 @@ export function useNotes(userId: string | null | undefined): UseNotesResult {
     return emails;
   }, [sharedOutRefs]);
 
+  const reorderNotes = useCallback(
+    async (orderedIds: string[]) => {
+      if (!userId) return;
+      await Promise.all(
+        orderedIds.map((id, index) => {
+          const existing = ownNotes.find((n) => n.id === id);
+          if (!existing || existing.order === index) return Promise.resolve();
+          return saveNote(userId, { ...existing, order: index, updatedAt: Date.now() });
+        })
+      );
+    },
+    [userId, ownNotes]
+  );
+
   const notes = useMemo(() => [...ownNotes, ...sharedInNotes], [ownNotes, sharedInNotes]);
 
   return useMemo(
@@ -178,7 +207,19 @@ export function useNotes(userId: string | null | undefined): UseNotesResult {
       unshareNote,
       getRecipients,
       getAllRecipients,
+      reorderNotes,
     }),
-    [notes, addNote, updateNote, removeNote, togglePin, shareNote, unshareNote, getRecipients, getAllRecipients]
+    [
+      notes,
+      addNote,
+      updateNote,
+      removeNote,
+      togglePin,
+      shareNote,
+      unshareNote,
+      getRecipients,
+      getAllRecipients,
+      reorderNotes,
+    ]
   );
 }
