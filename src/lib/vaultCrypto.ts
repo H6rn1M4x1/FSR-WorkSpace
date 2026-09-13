@@ -187,6 +187,43 @@ export function generateStrongPassword(opts: PasswordGeneratorOptions): string {
   return result;
 }
 
+// ---------- "stay unlocked" persistence ----------
+// By request, the vault should only re-ask for the master password after an
+// explicit logout (or an explicit "Bloquear" click) — not on every reload, tab
+// close, or period of inactivity. To make that possible, the unwrapped MEK is
+// cached in localStorage instead of living only in memory. Trade-off, spelled
+// out plainly: anyone with access to this browser profile while the account
+// stays logged in can read the vault without the master password, since the
+// key needed to decrypt it is sitting in local storage. Locking manually or
+// logging out removes it immediately.
+const VAULT_UNLOCK_STORAGE_PREFIX = "fsr_vault_unlock:";
+
+export function persistVaultUnlock(userId: string, mek: Uint8Array): void {
+  try {
+    localStorage.setItem(VAULT_UNLOCK_STORAGE_PREFIX + userId, bytesToBase64(mek));
+  } catch {
+    // Storage unavailable (private browsing, quota, etc.) — the vault will just
+    // ask for the master password again next time, which is a safe fallback.
+  }
+}
+
+export function loadPersistedVaultUnlock(userId: string): Uint8Array | null {
+  try {
+    const raw = localStorage.getItem(VAULT_UNLOCK_STORAGE_PREFIX + userId);
+    return raw ? base64ToBytes(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearPersistedVaultUnlock(userId: string): void {
+  try {
+    localStorage.removeItem(VAULT_UNLOCK_STORAGE_PREFIX + userId);
+  } catch {
+    // ignore
+  }
+}
+
 export function estimatePasswordStrength(pw: string): { score: 0 | 1 | 2 | 3 | 4; label: string } {
   if (!pw) return { score: 0, label: "Vacía" };
   let variety = 0;
