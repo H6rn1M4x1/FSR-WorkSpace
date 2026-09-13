@@ -561,4 +561,14 @@ export interface VaultItemDecrypted {
   updatedAt: number;
 }
 
+// --- Notes (Google Keep-style perpetual sticky notes) ---
+export interface StickyNote {
+  id: string;
+  text: string;
+  color: string; // key into the NOTE_COLORS palette (see NotesView.tsx)
+  pinned: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
 

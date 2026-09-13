@@ -58,6 +58,7 @@ import {
   Sun,
   Moon,
   Sparkles,
+  StickyNote,
   Palette,
   Cloud,
   History,
@@ -1737,7 +1738,7 @@ export function UserSettingsModal({
                       <span>Visibilidad Individual de Menús</span>
                     </h4>
                     <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5 font-medium">
-                      Oculta o muestra cada menú (Turnos, Finanzas, Universidad, Salud, Comidas, Copiloto IA) de forma independiente.
+                      Oculta o muestra cada menú (Turnos, Finanzas, Universidad, Salud, Comidas, Notas) de forma independiente.
                     </p>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
@@ -1747,7 +1748,7 @@ export function UserSettingsModal({
                       { id: "academic", label: "Universidad", icon: GraduationCap },
                       { id: "health", label: "Salud", icon: Heart },
                       { id: "meals", label: "Comidas", icon: UtensilsCrossed },
-                      { id: "ai", label: "Copiloto IA", icon: Sparkles },
+                      { id: "notes", label: "Notas", icon: StickyNote },
                     ].map((menu) => {
                       const Icon = menu.icon;
                       const isVisible = menuVisibility?.[menu.id] !== false;
@@ -1762,7 +1763,7 @@ export function UserSettingsModal({
                                 academic: true,
                                 health: true,
                                 meals: true,
-                                ai: true,
+                                notes: true,
                               }),
                               [menu.id]: !isVisible,
                             };

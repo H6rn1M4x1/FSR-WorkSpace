@@ -225,7 +225,7 @@ export class AestheticStorageService {
       academic: true,
       health: true,
       meals: true,
-      ai: true,
+      notes: true,
     };
   }
 
