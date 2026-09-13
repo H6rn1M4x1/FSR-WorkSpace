@@ -14,6 +14,7 @@ import { PillFilterBar } from "./PillFilterBar";
 import { getMatchTeamLogos, syncMonthlyMatches } from "../lib/matchScheduler";
 import { motion, AnimatePresence } from "motion/react";
 import { ConfirmationModal } from "./ConfirmationModal";
+import { shareItemWith, unshareItem } from "../lib/itemSharingService";
 import {
   Calendar,
   ChevronLeft,
@@ -728,7 +729,6 @@ export default function HomeView({
       itemData.descripcion || itemData.title || itemData.name || itemData?.details?.marca || "Elemento";
 
     try {
-      const { shareItemWith } = await import("../lib/itemSharingService");
       await shareItemWith(user.email, email, category, itemId, itemLabel);
       showToast(`Compartido con ${email} correctamente.`, "success");
       setSharingModalOpen(false);
@@ -4250,7 +4250,6 @@ export default function HomeView({
                         key={s.id}
                         onClick={async () => {
                           try {
-                            const { unshareItem } = await import("../lib/itemSharingService");
                             await unshareItem(s.ownerEmail, s.sharedWithEmail, s.category, s.itemId);
                             showToast(`Dejaste de compartir con ${s.sharedWithEmail}.`, "success");
                             setContextMenu(null);
@@ -4450,8 +4449,12 @@ export default function HomeView({
                                   type="button"
                                   onClick={async () => {
                                     if (!user?.email || !cat || !itemId) return;
-                                    const { unshareItem } = await import("../lib/itemSharingService");
-                                    await unshareItem(user.email, email, cat, itemId);
+                                    try {
+                                      await unshareItem(user.email, email, cat, itemId);
+                                      showToast(`Dejaste de compartir con ${email}.`, "success");
+                                    } catch (err: any) {
+                                      showToast("Error al dejar de compartir: " + (err?.message || String(err)), "error");
+                                    }
                                   }}
                                   className="px-2 py-1 text-[9px] bg-red-500/10 hover:bg-red-500/20 text-red-500 font-bold rounded-full transition-all cursor-pointer flex items-center gap-1"
                                   title="Dejar de compartir esto con este usuario"
