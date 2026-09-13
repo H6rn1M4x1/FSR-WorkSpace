@@ -277,7 +277,7 @@ export function NotesView({ userId, darkMode = false }: NotesViewProps) {
           e.preventDefault();
           setRightClickMenu({ id: note.id, x: e.clientX, y: e.clientY });
         }}
-        className={`break-inside-avoid mb-4 min-w-[240px] rounded-2xl border p-3 shadow-sm hover:shadow-md transition-shadow ${palette.card}`}
+        className={`break-inside-avoid mb-4 min-w-[280px] rounded-2xl border p-3 shadow-sm hover:shadow-md transition-shadow ${palette.card}`}
       >
         {isSharedIn && (
           <div className="mb-1.5">
@@ -462,7 +462,7 @@ export function NotesView({ userId, darkMode = false }: NotesViewProps) {
             <p className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
               <Pin className="w-3 h-3" /> Fijadas
             </p>
-            <div className="columns-[240px] gap-4">{pinned.map(renderNote)}</div>
+            <div className="columns-[380px] gap-4">{pinned.map(renderNote)}</div>
           </div>
         )}
 
@@ -471,7 +471,7 @@ export function NotesView({ userId, darkMode = false }: NotesViewProps) {
             {pinned.length > 0 && (
               <p className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-400">Otras</p>
             )}
-            <div className="columns-[240px] gap-4">{others.map(renderNote)}</div>
+            <div className="columns-[380px] gap-4">{others.map(renderNote)}</div>
           </div>
         )}
       </div>

@@ -405,9 +405,6 @@ export default function HomeView({
   } | null>(null);
 
   const [customShareEmail, setCustomShareEmail] = useState("");
-  const [specificShareMode, setSpecificShareMode] = useState<"only" | "append">(
-    "append",
-  );
 
   const handleEventContextMenu = (
     e: React.MouseEvent,
@@ -4220,17 +4217,7 @@ export default function HomeView({
                 className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold hover:bg-primary/10 hover:text-primary rounded-full transition-all text-left cursor-pointer"
               >
                 <Share2 className="w-4 h-4 text-primary" />
-                <span>
-                  Compartir solo {
-                    contextMenu.itemType === "appointment" ? "este turno médico" :
-                    contextMenu.itemType === "turno" ? "este turno/compromiso" :
-                    contextMenu.itemType === "invoice" ? "esta factura" :
-                    contextMenu.itemType === "detailedPayment" ? "este pago" :
-                    contextMenu.itemType === "meal" ? "esta comida" :
-                    contextMenu.itemType === "medication" ? "este medicamento" :
-                    "este elemento"
-                  }...
-                </span>
+                <span>Compartir con...</span>
               </button>
 
               {/* Who currently has access (new sharing system) — tap to stop sharing */}
@@ -4411,107 +4398,92 @@ export default function HomeView({
                 </p>
               </div>
 
-              {/* Selection Mode Selector */}
-              <div className="mb-4">
-                <label className="block text-[10px] uppercase font-bold text-zinc-400 mb-1.5">
-                  Modo de Compartido:
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setSpecificShareMode("append")}
-                    className={`py-2 px-3 rounded-full border text-[11px] font-bold transition-all cursor-pointer ${
-                      specificShareMode === "append"
-                        ? "bg-white dark:bg-black/85 backdrop-blur-md border-zinc-200 dark:border-zinc-800 text-primary shadow-sm"
-                        : "bg-transparent border-zinc-200 dark:border-zinc-800 text-zinc-400"
-                    }`}
-                    title="Añadirá este evento a los elementos que ya estás compartiendo con este usuario"
-                  >
-                    Añadir al Compartido
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSpecificShareMode("only")}
-                    className={`py-2 px-3 rounded-full border text-[11px] font-bold transition-all cursor-pointer ${
-                      specificShareMode === "only"
-                        ? "bg-white dark:bg-black/85 backdrop-blur-md border-zinc-200 dark:border-zinc-800 text-primary shadow-sm"
-                        : "bg-transparent border-zinc-200 dark:border-zinc-800 text-zinc-400"
-                    }`}
-                    title="Sobrescribirá la configuración del usuario para que SOLO vea esta nota"
-                  >
-                    Compartir SOLO esta nota
-                  </button>
-                </div>
-              </div>
-
-              {/* List of existing shared users */}
+              {/* List of existing shared users — everyone you've already shared ANY item
+                  with via item-level sharing, so you can pick them instead of retyping
+                  their email. Always shares just this one item (no other mode exists). */}
               <div className="space-y-2 mb-4">
                 <label className="block text-[10px] uppercase font-bold text-zinc-400">
                   Usuarios Existentes (con los que ya compartiste):
                 </label>
-                {outgoingShares.length === 0 ? (
-                  <p className="text-[10px] text-zinc-400 italic">
-                    No tienes ningún usuario con agenda compartida todavía.
-                  </p>
-                ) : (
-                  <div className="space-y-1.5 max-h-[150px] overflow-y-auto pr-1">
-                    {outgoingShares.map((share) => {
-                      const isShared = isItemSharedWith(
-                        share,
-                        sharingModalItem.type,
-                        sharingModalItem.data,
-                      );
-                      return (
-                        <div
-                          key={share.id}
-                          className="w-full p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 text-left transition-all text-xs font-bold flex items-center justify-between gap-3 bg-zinc-500/5"
-                        >
-                          <span className="truncate flex-1 font-bold">
-                            {share.toEmail}
-                          </span>
-                          {isShared ? (
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              <span className="px-1.5 py-0.5 rounded-md text-[8px] font-extrabold bg-primary/10 text-primary uppercase tracking-wide">
-                                Compartido
-                              </span>
+                {(() => {
+                  const categoryByType: Record<string, string> = {
+                    appointment: "appointments",
+                    turno: "turnos_compromisos",
+                    invoice: "invoices",
+                    detailedPayment: "detailed_payments",
+                    meal: "organizacion_semanal",
+                    medication: "disponibilidad_medicamentos",
+                  };
+                  const cat = categoryByType[sharingModalItem.type];
+                  const itemId =
+                    sharingModalItem.type === "medication"
+                      ? sharingModalItem.data?.disp?.id
+                      : sharingModalItem.data?.id;
+                  const knownEmails = Array.from(
+                    new Set((itemsIShared || []).map((s: any) => s.sharedWithEmail)),
+                  );
+                  if (knownEmails.length === 0) {
+                    return (
+                      <p className="text-[10px] text-zinc-400 italic">
+                        Todavía no compartiste nada con nadie.
+                      </p>
+                    );
+                  }
+                  return (
+                    <div className="space-y-1.5 max-h-[150px] overflow-y-auto pr-1">
+                      {knownEmails.map((email) => {
+                        const isShared = (itemsIShared || []).some(
+                          (s: any) => s.category === cat && s.itemId === itemId && s.sharedWithEmail === email,
+                        );
+                        return (
+                          <div
+                            key={email}
+                            className="w-full p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 text-left transition-all text-xs font-bold flex items-center justify-between gap-3 bg-zinc-500/5"
+                          >
+                            <span className="truncate flex-1 font-bold">{email}</span>
+                            {isShared ? (
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <span className="px-1.5 py-0.5 rounded-md text-[8px] font-extrabold bg-primary/10 text-primary uppercase tracking-wide">
+                                  Compartido
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    if (!user?.email || !cat || !itemId) return;
+                                    const { unshareItem } = await import("../lib/itemSharingService");
+                                    await unshareItem(user.email, email, cat, itemId);
+                                  }}
+                                  className="px-2 py-1 text-[9px] bg-red-500/10 hover:bg-red-500/20 text-red-500 font-bold rounded-full transition-all cursor-pointer flex items-center gap-1"
+                                  title="Dejar de compartir esto con este usuario"
+                                >
+                                  <X className="w-3 h-3" />
+                                  <span>Quitar</span>
+                                </button>
+                              </div>
+                            ) : (
                               <button
                                 type="button"
                                 onClick={() =>
-                                  handleToggleShareForUser(
-                                    share,
+                                  handleShareSpecificItem(
+                                    email,
                                     sharingModalItem.type,
                                     sharingModalItem.data,
+                                    "only",
                                   )
                                 }
-                                className="px-2 py-1 text-[9px] bg-red-500/10 hover:bg-red-500/20 text-red-500 font-bold rounded-full transition-all cursor-pointer flex items-center gap-1"
-                                title="Dejar de compartir esta nota con este usuario"
+                                className="px-2.5 py-1 text-[9px] bg-primary hover:bg-primary text-white dark:text-blue-950 font-extrabold rounded-full transition-all cursor-pointer flex items-center gap-1 shrink-0"
+                                title="Compartir esto con este usuario"
                               >
-                                <X className="w-3 h-3" />
-                                <span>Quitar</span>
+                                <Share2 className="w-3 h-3" />
+                                <span>Compartir</span>
                               </button>
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                handleToggleShareForUser(
-                                  share,
-                                  sharingModalItem.type,
-                                  sharingModalItem.data,
-                                )
-                              }
-                              className="px-2.5 py-1 text-[9px] bg-primary hover:bg-primary text-white dark:text-blue-950 font-extrabold rounded-full transition-all cursor-pointer flex items-center gap-1 shrink-0"
-                              title="Compartir esta nota con este usuario"
-                            >
-                              <Share2 className="w-3 h-3" />
-                              <span>Compartir</span>
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Share with new user */}
@@ -4542,7 +4514,7 @@ export default function HomeView({
                         email,
                         sharingModalItem.type,
                         sharingModalItem.data,
-                        specificShareMode,
+                        "only",
                       );
                     }}
                     className="px-4 py-2 bg-primary hover:bg-primary text-white dark:text-blue-950 font-extrabold text-xs rounded-full transition-all cursor-pointer"
