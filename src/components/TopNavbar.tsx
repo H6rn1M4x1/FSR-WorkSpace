@@ -10,6 +10,7 @@ import {
   Heart,
   UtensilsCrossed,
   Sparkles,
+  StickyNote,
   Settings,
   LogOut,
   Bell,
@@ -382,7 +383,7 @@ export default function TopNavbar({
     { id: "academic", label: "Universidad", icon: GraduationCap },
     { id: "health", label: "Salud", icon: Heart },
     { id: "meals", label: "Comidas", icon: UtensilsCrossed },
-    { id: "ai", label: "Copiloto IA", icon: Sparkles },
+    { id: "notes", label: "Notas", icon: StickyNote },
   ].filter((item) => item.id === "home" || menuVisibility?.[item.id] !== false);
 
   return (

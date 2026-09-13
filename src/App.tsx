@@ -17,7 +17,7 @@ const MealsView = lazy(() => import("./components/MealsView"));
 const FinanceView = lazy(() => import("./components/FinanceView"));
 const AppointmentsView = lazy(() => import("./components/AppointmentsView"));
 const HealthView = lazy(() => import("./components/HealthView"));
-import AIAssistant from "./components/AIAssistant";
+import { NotesView } from "./components/NotesView";
 import PageSkeleton from "./components/PageSkeleton";
 const UserSettingsModal = lazy(() =>
   import("./components/UserSettingsModal").then((m) => ({ default: m.UserSettingsModal }))
@@ -2342,12 +2342,8 @@ export default function App() {
                 />
               )}
 
-              {currentTab === "ai" && (
-                <AIAssistant
-                  darkMode={darkMode}
-                  activeSubTab={activeSubTab}
-                  onSubTabChange={setActiveSubTab}
-                />
+              {currentTab === "notes" && (
+                <NotesView userId={user?.email || ""} darkMode={darkMode} />
               )}
             </>
             </Suspense>
