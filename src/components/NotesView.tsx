@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { StickyNote as StickyNoteIcon, Pin, Trash2, Plus, X, Send } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { StickyNote as StickyNoteIcon, Pin, Trash2, Plus, X, Send, Share2 } from "lucide-react";
 import { useNotes } from "../hooks/useNotes";
 import { useToast } from "../context/ToastContext";
 import { ConfirmationModal } from "./ConfirmationModal";
@@ -19,42 +19,42 @@ const NOTE_COLORS: Record<string, { card: string; swatch: string; label: string 
     label: "Sin color",
   },
   red: {
-    card: "bg-red-100 dark:bg-red-950/40 border-red-200 dark:border-red-900/50",
+    card: "bg-red-100 dark:bg-red-950 border-red-200 dark:border-red-900",
     swatch: "bg-red-300 dark:bg-red-700",
     label: "Rojo",
   },
   orange: {
-    card: "bg-orange-100 dark:bg-orange-950/40 border-orange-200 dark:border-orange-900/50",
+    card: "bg-orange-100 dark:bg-orange-950 border-orange-200 dark:border-orange-900",
     swatch: "bg-orange-300 dark:bg-orange-700",
     label: "Naranja",
   },
   yellow: {
-    card: "bg-amber-100 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900/50",
+    card: "bg-amber-100 dark:bg-amber-950 border-amber-200 dark:border-amber-900",
     swatch: "bg-amber-300 dark:bg-amber-700",
     label: "Amarillo",
   },
   green: {
-    card: "bg-emerald-100 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900/50",
+    card: "bg-emerald-100 dark:bg-emerald-950 border-emerald-200 dark:border-emerald-900",
     swatch: "bg-emerald-300 dark:bg-emerald-700",
     label: "Verde",
   },
   sky: {
-    card: "bg-sky-100 dark:bg-sky-950/40 border-sky-200 dark:border-sky-900/50",
+    card: "bg-sky-100 dark:bg-sky-950 border-sky-200 dark:border-sky-900",
     swatch: "bg-sky-300 dark:bg-sky-700",
     label: "Celeste",
   },
   blue: {
-    card: "bg-blue-100 dark:bg-blue-950/40 border-blue-200 dark:border-blue-900/50",
+    card: "bg-blue-100 dark:bg-blue-950 border-blue-200 dark:border-blue-900",
     swatch: "bg-blue-300 dark:bg-blue-700",
     label: "Azul",
   },
   violet: {
-    card: "bg-violet-100 dark:bg-violet-950/40 border-violet-200 dark:border-violet-900/50",
+    card: "bg-violet-100 dark:bg-violet-950 border-violet-200 dark:border-violet-900",
     swatch: "bg-violet-300 dark:bg-violet-700",
     label: "Violeta",
   },
   pink: {
-    card: "bg-pink-100 dark:bg-pink-950/40 border-pink-200 dark:border-pink-900/50",
+    card: "bg-pink-100 dark:bg-pink-950 border-pink-200 dark:border-pink-900",
     swatch: "bg-pink-300 dark:bg-pink-700",
     label: "Rosa",
   },
@@ -64,6 +64,8 @@ const COLOR_KEYS = Object.keys(NOTE_COLORS);
 // The dark, semi-transparent "floating pill" look requested for every icon toolbar and
 // popover in this view, so icons never sit directly on a note's color with nothing behind them.
 const DARK_PANEL = "bg-black/55 backdrop-blur-md rounded-2xl border border-white/10 shadow-lg";
+
+type NoteMenu = "format" | "color" | "list" | "share" | "bgcolor" | null;
 
 function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
@@ -81,7 +83,7 @@ function ColorPicker({
   return (
     <div
       onClick={(e) => e.stopPropagation()}
-      className={`absolute z-20 top-full left-0 mt-1.5 p-2 flex flex-wrap gap-1.5 w-36 ${DARK_PANEL}`}
+      className={`absolute z-20 bottom-full right-0 mb-1.5 p-2 flex flex-wrap gap-1.5 w-36 ${DARK_PANEL}`}
     >
       {COLOR_KEYS.map((key) => (
         <button
@@ -101,31 +103,33 @@ function ColorPicker({
   );
 }
 
-function SharePanel({
+/** Rendered INSIDE the RichTextEditor's own toolbar (as its "share" row) — same place/style as format/color/list. */
+function ShareRowContent({
   recipients,
+  allKnownRecipients,
   onShare,
   onUnshare,
-  onClose,
 }: {
   recipients: string[];
+  allKnownRecipients: string[];
   onShare: (email: string) => Promise<void>;
   onUnshare: (email: string) => Promise<void>;
-  onClose: () => void;
 }) {
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleShare = async () => {
+  const handleShare = async (target?: string) => {
+    const value = (target ?? email).trim();
     setError(null);
-    if (!isValidEmail(email)) {
+    if (!isValidEmail(value)) {
       setError("Ingresá un email válido.");
       return;
     }
     setBusy(true);
     try {
-      await onShare(email.trim());
-      setEmail("");
+      await onShare(value);
+      if (!target) setEmail("");
     } catch (err: any) {
       setError(err?.message || "No se pudo compartir la nota.");
     } finally {
@@ -133,14 +137,10 @@ function SharePanel({
     }
   };
 
+  const quickPicks = allKnownRecipients.filter((e) => !recipients.includes(e));
+
   return (
-    <div onClick={(e) => e.stopPropagation()} className={`absolute z-30 top-full right-0 mt-1.5 p-3 w-64 space-y-2.5 ${DARK_PANEL}`}>
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-extrabold text-white">Compartir nota</p>
-        <button type="button" onClick={onClose} className="p-1 rounded-lg hover:bg-white/10 text-zinc-300">
-          <X className="w-3.5 h-3.5" />
-        </button>
-      </div>
+    <div className="space-y-2 w-full max-w-full" onClick={(e) => e.stopPropagation()}>
       <div className="flex items-center gap-1.5">
         <input
           type="email"
@@ -152,7 +152,7 @@ function SharePanel({
         />
         <button
           type="button"
-          onClick={handleShare}
+          onClick={() => handleShare()}
           disabled={busy}
           className="p-1.5 rounded-lg bg-primary hover:bg-primary/90 text-white disabled:opacity-50 shrink-0"
           title="Compartir"
@@ -161,9 +161,31 @@ function SharePanel({
         </button>
       </div>
       {error && <p className="text-[10px] font-bold text-red-400">{error}</p>}
+
+      {quickPicks.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-wide">
+            Usuarios existentes (con los que ya compartiste)
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {quickPicks.map((r) => (
+              <button
+                key={r}
+                type="button"
+                onClick={() => handleShare(r)}
+                className="px-2 py-1 rounded-full bg-white/10 hover:bg-white/20 text-[10px] font-bold text-zinc-200 truncate max-w-[140px]"
+                title={`Compartir con ${r}`}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {recipients.length > 0 && (
         <div className="space-y-1 pt-1 border-t border-white/10">
-          <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Compartida con</p>
+          <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-wide">Compartida con</p>
           {recipients.map((r) => (
             <div key={r} className="flex items-center justify-between gap-2 text-xs text-zinc-200">
               <span className="truncate">{r}</span>
@@ -184,25 +206,43 @@ function SharePanel({
 }
 
 export function NotesView({ userId, darkMode = false }: NotesViewProps) {
-  const { notes, addNote, updateNote, deleteNote, togglePin, shareNote, unshareNote, getRecipients } = useNotes(userId);
+  const { notes, addNote, updateNote, deleteNote, togglePin, shareNote, unshareNote, getRecipients, getAllRecipients } =
+    useNotes(userId);
   const { showToast } = useToast();
 
   const [composeOpen, setComposeOpen] = useState(false);
   const [composeHtml, setComposeHtml] = useState("");
   const [composeColor, setComposeColor] = useState("default");
   const [composeAttachments, setComposeAttachments] = useState<{ name: string; url: string }[]>([]);
-  const [composeColorPickerOpen, setComposeColorPickerOpen] = useState(false);
+  const [composeMenu, setComposeMenu] = useState<NoteMenu>(null);
 
-  const [openColorPickerId, setOpenColorPickerId] = useState<string | null>(null);
-  const [openShareId, setOpenShareId] = useState<string | null>(null);
+  // Exactly one popover open across the whole board at a time: format/color/list/share
+  // (rendered inside RichTextEditor) and this note's own background-color swatch.
+  const [openMenu, setOpenMenu] = useState<{ id: string; menu: NoteMenu } | null>(null);
+  const [rightClickMenu, setRightClickMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!rightClickMenu) return;
+    const close = () => setRightClickMenu(null);
+    window.addEventListener("click", close);
+    window.addEventListener("scroll", close, true);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("scroll", close, true);
+    };
+  }, [rightClickMenu]);
+
+  const menuFor = (id: string): NoteMenu => (openMenu?.id === id ? openMenu.menu : null);
+  const setMenuFor = (id: string, menu: NoteMenu) => setOpenMenu(menu ? { id, menu } : null);
 
   const handleCreate = async () => {
     await addNote(composeHtml, composeColor, composeAttachments);
     setComposeHtml("");
     setComposeColor("default");
     setComposeAttachments([]);
+    setComposeMenu(null);
     setComposeOpen(false);
   };
 
@@ -227,11 +267,17 @@ export function NotesView({ userId, darkMode = false }: NotesViewProps) {
     const value = drafts[note.id] !== undefined ? drafts[note.id] : note.text;
     const isSharedIn = !!note.__sharedByEmail;
     const recipients = getRecipients(note.id);
+    const menu = menuFor(note.id);
 
     return (
       <div
         key={note.id}
-        className={`break-inside-avoid mb-4 rounded-2xl border p-3 shadow-sm hover:shadow-md transition-shadow ${palette.card}`}
+        onContextMenu={(e) => {
+          if (isSharedIn) return; // can't re-share something shared to me
+          e.preventDefault();
+          setRightClickMenu({ id: note.id, x: e.clientX, y: e.clientY });
+        }}
+        className={`break-inside-avoid mb-4 min-w-[240px] rounded-2xl border p-3 shadow-sm hover:shadow-md transition-shadow ${palette.card}`}
       >
         {isSharedIn && (
           <div className="mb-1.5">
@@ -245,7 +291,25 @@ export function NotesView({ userId, darkMode = false }: NotesViewProps) {
           darkToolbar
           attachments={note.attachments || []}
           onAttachmentsChange={(atts) => updateNote(note.id, { attachments: atts })}
-          onShareClick={isSharedIn ? undefined : () => setOpenShareId(openShareId === note.id ? null : note.id)}
+          activeMenu={menu === "bgcolor" ? null : menu}
+          onActiveMenuChange={(m) => setMenuFor(note.id, m)}
+          onShareClick={isSharedIn ? undefined : () => setMenuFor(note.id, "share")}
+          shareMenuContent={
+            isSharedIn ? undefined : (
+              <ShareRowContent
+                recipients={recipients}
+                allKnownRecipients={getAllRecipients()}
+                onShare={async (email) => {
+                  await shareNote(note.id, email);
+                  showToast(`Nota compartida con ${email}.`, "success");
+                }}
+                onUnshare={async (email) => {
+                  await unshareNote(note.id, email);
+                  showToast(`Se dejó de compartir con ${email}.`, "success");
+                }}
+              />
+            )
+          }
         />
         {/* Commit the debounced draft to Firestore once the user stops typing, then drop the
             local draft so a later external update (e.g. from whoever this is shared with)
@@ -263,39 +327,23 @@ export function NotesView({ userId, darkMode = false }: NotesViewProps) {
           }}
         />
 
-        <div className="relative flex items-center justify-end mt-2">
-          {openShareId === note.id && (
-            <SharePanel
-              recipients={recipients}
-              onShare={async (email) => {
-                await shareNote(note.id, email);
-                showToast(`Nota compartida con ${email}.`, "success");
-              }}
-              onUnshare={async (email) => {
-                await unshareNote(note.id, email);
-                showToast(`Se dejó de compartir con ${email}.`, "success");
-              }}
-              onClose={() => setOpenShareId(null)}
-            />
-          )}
-          <div className={`flex items-center gap-1 p-1 ${DARK_PANEL}`}>
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setOpenColorPickerId(openColorPickerId === note.id ? null : note.id)}
-                className="w-6 h-6 rounded-full border border-white/20 cursor-pointer flex items-center justify-center"
-                title="Color"
-              >
-                <span className={`w-4 h-4 rounded-full ${palette.swatch}`} />
-              </button>
-              {openColorPickerId === note.id && (
-                <ColorPicker
-                  value={note.color}
-                  onChange={(color) => updateNote(note.id, { color })}
-                  onClose={() => setOpenColorPickerId(null)}
-                />
-              )}
-            </div>
+        <div className="flex items-center justify-end mt-2">
+          <div className={`relative flex items-center gap-1 p-1 ${DARK_PANEL}`}>
+            <button
+              type="button"
+              onClick={() => setMenuFor(note.id, menu === "bgcolor" ? null : "bgcolor")}
+              className="w-6 h-6 rounded-full border border-white/20 cursor-pointer flex items-center justify-center"
+              title="Color"
+            >
+              <span className={`w-4 h-4 rounded-full ${palette.swatch}`} />
+            </button>
+            {menu === "bgcolor" && (
+              <ColorPicker
+                value={note.color}
+                onChange={(color) => updateNote(note.id, { color })}
+                onClose={() => setMenuFor(note.id, null)}
+              />
+            )}
             <button
               type="button"
               onClick={() => togglePin(note.id)}
@@ -319,107 +367,132 @@ export function NotesView({ userId, darkMode = false }: NotesViewProps) {
   };
 
   return (
-    <div className="max-w-6xl mx-auto px-3 sm:px-4 py-4 sm:py-6 space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="p-2.5 rounded-2xl bg-primary text-white dark:text-blue-950 shadow-md">
-          <StickyNoteIcon className="w-5 h-5" />
-        </div>
-        <div>
-          <h2 className="font-extrabold text-lg text-zinc-900 dark:text-zinc-100">Notas</h2>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            Recordatorios e información que querés tener siempre a la vista.
-          </p>
-        </div>
-      </div>
-
-      {/* Compose box */}
+    <div className="max-w-6xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
       <div
-        className={`rounded-2xl border p-4 shadow-sm transition-all ${
-          darkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-slate-200"
+        className={`rounded-3xl border p-4 sm:p-6 space-y-6 ${
+          darkMode ? "bg-zinc-900/60 border-zinc-800" : "bg-white/80 border-slate-200"
         }`}
       >
-        {!composeOpen ? (
-          <button
-            type="button"
-            onClick={() => setComposeOpen(true)}
-            className="w-full text-left text-sm text-zinc-400 font-medium flex items-center gap-2 cursor-pointer"
-          >
-            <Plus className="w-4 h-4" /> Toma una nota...
-          </button>
-        ) : (
-          <div className="space-y-3">
-            <RichTextEditor
-              value={composeHtml}
-              onChange={setComposeHtml}
-              placeholder="Escribí tu nota..."
-              darkToolbar
-              attachments={composeAttachments}
-              onAttachmentsChange={setComposeAttachments}
-            />
-            <div className="flex items-center justify-between">
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setComposeColorPickerOpen((v) => !v)}
-                  className={`w-6 h-6 rounded-full border border-slate-300 dark:border-zinc-700 cursor-pointer ${NOTE_COLORS[composeColor].swatch}`}
-                  title="Color"
-                />
-                {composeColorPickerOpen && (
-                  <ColorPicker
-                    value={composeColor}
-                    onChange={setComposeColor}
-                    onClose={() => setComposeColorPickerOpen(false)}
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-2xl bg-primary text-white dark:text-blue-950 shadow-md">
+            <StickyNoteIcon className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="font-extrabold text-lg text-zinc-900 dark:text-zinc-100">Notas</h2>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              Recordatorios e información que querés tener siempre a la vista.
+            </p>
+          </div>
+        </div>
+
+        {/* Compose box */}
+        <div
+          className={`rounded-2xl border p-4 shadow-sm transition-all ${
+            darkMode ? "bg-zinc-950/60 border-zinc-800" : "bg-white border-slate-200"
+          }`}
+        >
+          {!composeOpen ? (
+            <button
+              type="button"
+              onClick={() => setComposeOpen(true)}
+              className="w-full text-left text-sm text-zinc-400 font-medium flex items-center gap-2 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" /> Toma una nota...
+            </button>
+          ) : (
+            <div className="space-y-3">
+              <RichTextEditor
+                value={composeHtml}
+                onChange={setComposeHtml}
+                placeholder="Escribí tu nota..."
+                darkToolbar
+                attachments={composeAttachments}
+                onAttachmentsChange={setComposeAttachments}
+                activeMenu={composeMenu === "bgcolor" ? null : composeMenu}
+                onActiveMenuChange={setComposeMenu}
+              />
+              <div className="flex items-center justify-between">
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setComposeMenu(composeMenu === "bgcolor" ? null : "bgcolor")}
+                    className={`w-6 h-6 rounded-full border border-slate-300 dark:border-zinc-700 cursor-pointer ${NOTE_COLORS[composeColor].swatch}`}
+                    title="Color"
                   />
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setComposeOpen(false);
-                    setComposeHtml("");
-                    setComposeColor("default");
-                    setComposeAttachments([]);
-                  }}
-                  className="px-3 py-1.5 text-xs font-bold text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={handleCreate}
-                  className="px-4 py-1.5 rounded-full bg-primary hover:bg-primary/90 text-white text-xs font-bold shadow-md cursor-pointer"
-                >
-                  Guardar
-                </button>
+                  {composeMenu === "bgcolor" && (
+                    <ColorPicker value={composeColor} onChange={setComposeColor} onClose={() => setComposeMenu(null)} />
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setComposeOpen(false);
+                      setComposeHtml("");
+                      setComposeColor("default");
+                      setComposeAttachments([]);
+                      setComposeMenu(null);
+                    }}
+                    className="px-3 py-1.5 text-xs font-bold text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCreate}
+                    className="px-4 py-1.5 rounded-full bg-primary hover:bg-primary/90 text-white text-xs font-bold shadow-md cursor-pointer"
+                  >
+                    Guardar
+                  </button>
+                </div>
               </div>
             </div>
+          )}
+        </div>
+
+        {notes.length === 0 && (
+          <p className="text-center text-xs text-zinc-500 dark:text-zinc-400 py-10">
+            Todavía no tenés notas. Creá la primera de arriba — quedan guardadas de forma
+            permanente hasta que las borres.
+          </p>
+        )}
+
+        {pinned.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+              <Pin className="w-3 h-3" /> Fijadas
+            </p>
+            <div className="columns-[240px] gap-4">{pinned.map(renderNote)}</div>
+          </div>
+        )}
+
+        {others.length > 0 && (
+          <div className="space-y-2">
+            {pinned.length > 0 && (
+              <p className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-400">Otras</p>
+            )}
+            <div className="columns-[240px] gap-4">{others.map(renderNote)}</div>
           </div>
         )}
       </div>
 
-      {notes.length === 0 && (
-        <p className="text-center text-xs text-zinc-500 dark:text-zinc-400 py-10">
-          Todavía no tenés notas. Creá la primera de arriba — quedan guardadas de forma
-          permanente hasta que las borres.
-        </p>
-      )}
-
-      {pinned.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
-            <Pin className="w-3 h-3" /> Fijadas
-          </p>
-          <div className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-4">{pinned.map(renderNote)}</div>
-        </div>
-      )}
-
-      {others.length > 0 && (
-        <div className="space-y-2">
-          {pinned.length > 0 && (
-            <p className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-400">Otras</p>
-          )}
-          <div className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-4">{others.map(renderNote)}</div>
+      {/* Right-click context menu: just "Compartir con..." for now */}
+      {rightClickMenu && (
+        <div
+          className={`fixed z-50 p-1 ${DARK_PANEL}`}
+          style={{ top: rightClickMenu.y, left: rightClickMenu.x }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              setMenuFor(rightClickMenu.id, "share");
+              setRightClickMenu(null);
+            }}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-white/10 text-xs font-bold text-zinc-100 cursor-pointer whitespace-nowrap"
+          >
+            <Share2 className="w-3.5 h-3.5" /> Compartir con...
+          </button>
         </div>
       )}
 
@@ -455,7 +528,7 @@ function SaveOnIdle({
   original: string;
   onSave: (html: string) => void;
 }) {
-  React.useEffect(() => {
+  useEffect(() => {
     if (html === original) return;
     const timer = setTimeout(() => onSave(html), 900);
     return () => clearTimeout(timer);
