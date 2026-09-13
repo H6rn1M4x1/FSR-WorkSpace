@@ -397,7 +397,8 @@ export function AgendaSharingManager({
 
   return (
     <div className="space-y-6">
-      {/* 1. SECCIÓN: COMPARTIR AGENDA CENTRAL INTEGRADA */}
+      {/* 1. SECCIÓN: COMPARTIR AGENDA CENTRAL INTEGRADA (oculta temporalmente) */}
+      {false && (
       <div className="space-y-3">
         <div
           onClick={() => setShowMySharePanel(!showMySharePanel)}
@@ -1078,8 +1079,10 @@ export function AgendaSharingManager({
           )}
         </AnimatePresence>
       </div>
+      )}
 
-      {/* 2. SECCIÓN: AGENDAS COMPARTIDAS CONMIGO */}
+      {/* 2. SECCIÓN: AGENDAS COMPARTIDAS CONMIGO (oculta temporalmente) */}
+      {false && (
       <div className="space-y-3">
         <div
           onClick={() => setShowSharedWithMe(!showSharedWithMe)}
@@ -1413,6 +1416,7 @@ export function AgendaSharingManager({
           )}
         </AnimatePresence>
       </div>
+      )}
 
       {/* Confirmation Modal */}
       <ConfirmationModal
