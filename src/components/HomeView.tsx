@@ -728,11 +728,15 @@ export default function HomeView({
     const itemLabel =
       itemData.descripcion || itemData.title || itemData.name || itemData?.details?.marca || "Elemento";
 
+    // Close and confirm right away instead of waiting on the Firestore round-trip — on a slow
+    // or flaky connection the write can take a moment, and the modal sitting there with no
+    // feedback reads as "nothing happened". If the write itself fails, a second toast says so.
+    setSharingModalOpen(false);
+    setSharingModalItem(null);
+    showToast(`Compartiendo con ${email}...`, "info");
     try {
       await shareItemWith(user.email, email, category, itemId, itemLabel);
       showToast(`Compartido con ${email} correctamente.`, "success");
-      setSharingModalOpen(false);
-      setSharingModalItem(null);
     } catch (err: any) {
       showToast("Error al compartir: " + (err?.message || String(err)), "error");
     }
