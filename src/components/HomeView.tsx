@@ -405,7 +405,6 @@ export default function HomeView({
   } | null>(null);
 
   const [customShareEmail, setCustomShareEmail] = useState("");
-  const [lastSharedEmail, setLastSharedEmail] = useState<string | null>(null);
 
   const handleEventContextMenu = (
     e: React.MouseEvent,
@@ -703,7 +702,6 @@ export default function HomeView({
       | "medication",
     itemData: any,
     mode: "only" | "append",
-    opts?: { closeModal?: boolean },
   ) => {
     if (!user || !user.email) {
       showToast("Debés iniciar sesión para compartir.", "error");
@@ -733,11 +731,8 @@ export default function HomeView({
       const { shareItemWith } = await import("../lib/itemSharingService");
       await shareItemWith(user.email, email, category, itemId, itemLabel);
       showToast(`Compartido con ${email} correctamente.`, "success");
-      setLastSharedEmail(email);
-      if (opts?.closeModal !== false) {
-        setSharingModalOpen(false);
-        setSharingModalItem(null);
-      }
+      setSharingModalOpen(false);
+      setSharingModalItem(null);
     } catch (err: any) {
       showToast("Error al compartir: " + (err?.message || String(err)), "error");
     }
@@ -4216,7 +4211,6 @@ export default function HomeView({
                     data: contextMenu.data,
                   });
                   setCustomShareEmail("");
-                  setLastSharedEmail(null);
                   setSharingModalOpen(true);
                   setContextMenu(null);
                 }}
@@ -4475,7 +4469,6 @@ export default function HomeView({
                                     sharingModalItem.type,
                                     sharingModalItem.data,
                                     "only",
-                                    { closeModal: false },
                                   )
                                 }
                                 className="px-2.5 py-1 text-[9px] bg-primary hover:bg-primary text-white dark:text-blue-950 font-extrabold rounded-full transition-all cursor-pointer flex items-center gap-1 shrink-0"
@@ -4511,31 +4504,24 @@ export default function HomeView({
                     }`}
                   />
                   <button
-                    onClick={async () => {
+                    onClick={() => {
                       const email = customShareEmail.trim();
                       if (!email) {
                         alert("Por favor, introduce un correo electrónico.");
                         return;
                       }
-                      await handleShareSpecificItem(
+                      handleShareSpecificItem(
                         email,
                         sharingModalItem.type,
                         sharingModalItem.data,
                         "only",
-                        { closeModal: false },
                       );
-                      setCustomShareEmail("");
                     }}
                     className="px-4 py-2 bg-primary hover:bg-primary text-white dark:text-blue-950 font-extrabold text-xs rounded-full transition-all cursor-pointer"
                   >
                     Compartir
                   </button>
                 </div>
-                {lastSharedEmail && (
-                  <p className="text-[10px] font-bold text-emerald-500 flex items-center gap-1">
-                    <Check className="w-3 h-3" /> Compartido con {lastSharedEmail} correctamente.
-                  </p>
-                )}
               </div>
             </div>
           </div>,
