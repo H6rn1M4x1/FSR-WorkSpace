@@ -564,9 +564,12 @@ export interface VaultItemDecrypted {
 // --- Notes (Google Keep-style perpetual sticky notes) ---
 export interface StickyNote {
   id: string;
+  title?: string;
   text: string; // rich HTML content (see RichTextEditor)
   color: string; // key into the NOTE_COLORS palette (see NotesView.tsx)
   pinned: boolean;
+  /** Manual display order (lower = shown first). Only meaningful for notes you own — see useNotes.ts. */
+  order?: number;
   attachments?: { name: string; url: string }[];
   createdAt: number;
   updatedAt: number;

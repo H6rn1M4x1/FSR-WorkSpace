@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { StickyNote as StickyNoteIcon, Pin, Trash2, Plus, X, Send, Share2 } from "lucide-react";
+import { StickyNote as StickyNoteIcon, Pin, Trash2, Plus, X, Send, Share2, Check } from "lucide-react";
 import { useNotes } from "../hooks/useNotes";
 import { useToast } from "../context/ToastContext";
 import { ConfirmationModal } from "./ConfirmationModal";
@@ -66,9 +66,20 @@ const COLOR_KEYS = Object.keys(NOTE_COLORS);
 const DARK_PANEL = "bg-black/55 backdrop-blur-md rounded-2xl border border-white/10 shadow-lg";
 
 type NoteMenu = "format" | "color" | "list" | "share" | "bgcolor" | null;
+type Draft = { title: string; text: string };
 
 function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+}
+
+/** Own notes sort by their manual drag order; shared-in ones (which have no order of their own) fall back to most-recently-updated. */
+function compareNotes(a: StickyNote, b: StickyNote): number {
+  const aOrder = a.__sharedByEmail ? null : a.order;
+  const bOrder = b.__sharedByEmail ? null : b.order;
+  if (aOrder != null && bOrder != null) return aOrder - bOrder;
+  if (aOrder != null) return -1;
+  if (bOrder != null) return 1;
+  return b.updatedAt - a.updatedAt;
 }
 
 function ColorPicker({
@@ -118,10 +129,12 @@ function ShareRowContent({
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmed, setConfirmed] = useState<string | null>(null);
 
   const handleShare = async (target?: string) => {
     const value = (target ?? email).trim();
     setError(null);
+    setConfirmed(null);
     if (!isValidEmail(value)) {
       setError("Ingresá un email válido.");
       return;
@@ -130,6 +143,8 @@ function ShareRowContent({
     try {
       await onShare(value);
       if (!target) setEmail("");
+      setConfirmed(value);
+      setTimeout(() => setConfirmed((c) => (c === value ? null : c)), 3000);
     } catch (err: any) {
       setError(err?.message || "No se pudo compartir la nota.");
     } finally {
@@ -161,6 +176,11 @@ function ShareRowContent({
         </button>
       </div>
       {error && <p className="text-[10px] font-bold text-red-400">{error}</p>}
+      {confirmed && (
+        <p className="text-[10px] font-bold text-emerald-400 flex items-center gap-1">
+          <Check className="w-3 h-3" /> Compartida con {confirmed}.
+        </p>
+      )}
 
       {quickPicks.length > 0 && (
         <div className="space-y-1">
@@ -206,11 +226,22 @@ function ShareRowContent({
 }
 
 export function NotesView({ userId, darkMode = false }: NotesViewProps) {
-  const { notes, addNote, updateNote, deleteNote, togglePin, shareNote, unshareNote, getRecipients, getAllRecipients } =
-    useNotes(userId);
+  const {
+    notes,
+    addNote,
+    updateNote,
+    deleteNote,
+    togglePin,
+    shareNote,
+    unshareNote,
+    getRecipients,
+    getAllRecipients,
+    reorderNotes,
+  } = useNotes(userId);
   const { showToast } = useToast();
 
   const [composeOpen, setComposeOpen] = useState(false);
+  const [composeTitle, setComposeTitle] = useState("");
   const [composeHtml, setComposeHtml] = useState("");
   const [composeColor, setComposeColor] = useState("default");
   const [composeAttachments, setComposeAttachments] = useState<{ name: string; url: string }[]>([]);
@@ -221,7 +252,11 @@ export function NotesView({ userId, darkMode = false }: NotesViewProps) {
   const [openMenu, setOpenMenu] = useState<{ id: string; menu: NoteMenu } | null>(null);
   const [rightClickMenu, setRightClickMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [drafts, setDrafts] = useState<Record<string, Draft>>({});
+
+  // Drag-and-drop reordering (press and hold, then drag).
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!rightClickMenu) return;
@@ -238,7 +273,8 @@ export function NotesView({ userId, darkMode = false }: NotesViewProps) {
   const setMenuFor = (id: string, menu: NoteMenu) => setOpenMenu(menu ? { id, menu } : null);
 
   const handleCreate = async () => {
-    await addNote(composeHtml, composeColor, composeAttachments);
+    await addNote(composeTitle, composeHtml, composeColor, composeAttachments);
+    setComposeTitle("");
     setComposeHtml("");
     setComposeColor("default");
     setComposeAttachments([]);
@@ -259,34 +295,87 @@ export function NotesView({ userId, darkMode = false }: NotesViewProps) {
     showToast(isSharedIn ? "Dejaste de ver esta nota compartida." : "Nota eliminada.", "success");
   };
 
-  const pinned = notes.filter((n) => n.pinned).sort((a, b) => b.updatedAt - a.updatedAt);
-  const others = notes.filter((n) => !n.pinned).sort((a, b) => b.updatedAt - a.updatedAt);
+  const pinned = notes.filter((n) => n.pinned).sort(compareNotes);
+  const others = notes.filter((n) => !n.pinned).sort(compareNotes);
 
-  const renderNote = (note: StickyNote) => {
+  const handleDrop = async (group: StickyNote[], targetId: string) => {
+    const dragId = draggingId;
+    setDraggingId(null);
+    setDragOverId(null);
+    if (!dragId || dragId === targetId) return;
+    const ids = group.map((n) => n.id);
+    const fromIndex = ids.indexOf(dragId);
+    const toIndex = ids.indexOf(targetId);
+    if (fromIndex === -1 || toIndex === -1) return; // dropped onto a different group — ignore
+    const reordered = [...ids];
+    reordered.splice(fromIndex, 1);
+    reordered.splice(toIndex, 0, dragId);
+    await reorderNotes(reordered);
+  };
+
+  const renderNote = (note: StickyNote, group: StickyNote[]) => {
     const palette = NOTE_COLORS[note.color] || NOTE_COLORS.default;
-    const value = drafts[note.id] !== undefined ? drafts[note.id] : note.text;
+    const draft = drafts[note.id];
+    const titleValue = draft?.title !== undefined ? draft.title : note.title || "";
+    const textValue = draft?.text !== undefined ? draft.text : note.text;
     const isSharedIn = !!note.__sharedByEmail;
     const recipients = getRecipients(note.id);
     const menu = menuFor(note.id);
 
+    const setDraft = (patch: Partial<Draft>) =>
+      setDrafts((prev) => ({
+        ...prev,
+        [note.id]: {
+          title: prev[note.id]?.title !== undefined ? prev[note.id].title : note.title || "",
+          text: prev[note.id]?.text !== undefined ? prev[note.id].text : note.text,
+          ...patch,
+        },
+      }));
+
     return (
       <div
         key={note.id}
+        draggable={!isSharedIn}
+        onDragStart={() => setDraggingId(note.id)}
+        onDragEnd={() => {
+          setDraggingId(null);
+          setDragOverId(null);
+        }}
+        onDragOver={(e) => {
+          if (!draggingId || draggingId === note.id) return;
+          e.preventDefault();
+          if (dragOverId !== note.id) setDragOverId(note.id);
+        }}
+        onDragLeave={() => setDragOverId((prev) => (prev === note.id ? null : prev))}
+        onDrop={(e) => {
+          e.preventDefault();
+          handleDrop(group, note.id);
+        }}
         onContextMenu={(e) => {
           if (isSharedIn) return; // can't re-share something shared to me
           e.preventDefault();
           setRightClickMenu({ id: note.id, x: e.clientX, y: e.clientY });
         }}
-        className={`break-inside-avoid mb-4 min-w-[280px] rounded-2xl border p-3 shadow-sm hover:shadow-md transition-shadow ${palette.card}`}
+        className={`break-inside-avoid mb-4 min-w-[280px] rounded-2xl border p-3 shadow-sm hover:shadow-md transition-all ${
+          palette.card
+        } ${draggingId === note.id ? "opacity-40" : ""} ${
+          dragOverId === note.id ? "ring-2 ring-primary" : ""
+        } ${!isSharedIn ? "cursor-grab active:cursor-grabbing" : ""}`}
       >
         {isSharedIn && (
           <div className="mb-1.5">
             <SharedBadge item={note} />
           </div>
         )}
+        <input
+          value={titleValue}
+          onChange={(e) => setDraft({ title: e.target.value })}
+          placeholder="Título"
+          className="w-full bg-transparent text-sm font-extrabold text-zinc-900 dark:text-white focus:outline-none placeholder:text-zinc-400 placeholder:font-extrabold mb-1"
+        />
         <RichTextEditor
-          value={value}
-          onChange={(html) => setDrafts((prev) => ({ ...prev, [note.id]: html }))}
+          value={textValue}
+          onChange={(html) => setDraft({ text: html })}
           placeholder="Escribí algo..."
           darkToolbar
           attachments={note.attachments || []}
@@ -315,10 +404,10 @@ export function NotesView({ userId, darkMode = false }: NotesViewProps) {
             local draft so a later external update (e.g. from whoever this is shared with)
             can show through again instead of being shadowed forever. */}
         <SaveOnIdle
-          html={value}
-          original={note.text}
-          onSave={async (html) => {
-            await updateNote(note.id, { text: html });
+          draft={{ title: titleValue, text: textValue }}
+          original={{ title: note.title || "", text: note.text }}
+          onSave={async (patch) => {
+            await updateNote(note.id, patch);
             setDrafts((prev) => {
               const next = { ...prev };
               delete next[note.id];
@@ -380,7 +469,8 @@ export function NotesView({ userId, darkMode = false }: NotesViewProps) {
           <div>
             <h2 className="font-extrabold text-lg text-zinc-900 dark:text-zinc-100">Notas</h2>
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              Recordatorios e información que querés tener siempre a la vista.
+              Recordatorios e información que querés tener siempre a la vista. Mantené el clic
+              sostenido sobre una nota para reordenarla.
             </p>
           </div>
         </div>
@@ -401,6 +491,13 @@ export function NotesView({ userId, darkMode = false }: NotesViewProps) {
             </button>
           ) : (
             <div className="space-y-3">
+              <input
+                autoFocus
+                value={composeTitle}
+                onChange={(e) => setComposeTitle(e.target.value)}
+                placeholder="Título"
+                className="w-full bg-transparent text-sm font-extrabold text-zinc-900 dark:text-white focus:outline-none placeholder:text-zinc-400 placeholder:font-extrabold"
+              />
               <RichTextEditor
                 value={composeHtml}
                 onChange={setComposeHtml}
@@ -428,6 +525,7 @@ export function NotesView({ userId, darkMode = false }: NotesViewProps) {
                     type="button"
                     onClick={() => {
                       setComposeOpen(false);
+                      setComposeTitle("");
                       setComposeHtml("");
                       setComposeColor("default");
                       setComposeAttachments([]);
@@ -462,7 +560,7 @@ export function NotesView({ userId, darkMode = false }: NotesViewProps) {
             <p className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
               <Pin className="w-3 h-3" /> Fijadas
             </p>
-            <div className="columns-[380px] gap-4">{pinned.map(renderNote)}</div>
+            <div className="columns-[380px] gap-4">{pinned.map((n) => renderNote(n, pinned))}</div>
           </div>
         )}
 
@@ -471,7 +569,7 @@ export function NotesView({ userId, darkMode = false }: NotesViewProps) {
             {pinned.length > 0 && (
               <p className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-400">Otras</p>
             )}
-            <div className="columns-[380px] gap-4">{others.map(renderNote)}</div>
+            <div className="columns-[380px] gap-4">{others.map((n) => renderNote(n, others))}</div>
           </div>
         )}
       </div>
@@ -515,24 +613,24 @@ export function NotesView({ userId, darkMode = false }: NotesViewProps) {
 }
 
 /**
- * Debounces saving a note's rich-text content: commits `html` via onSave 900ms after
+ * Debounces saving a note's title/rich-text content: commits via onSave 900ms after
  * the user stops typing, instead of on every keystroke or relying on blur (which the
  * editor's own toolbar clicks would trigger prematurely).
  */
 function SaveOnIdle({
-  html,
+  draft,
   original,
   onSave,
 }: {
-  html: string;
-  original: string;
-  onSave: (html: string) => void;
+  draft: Draft;
+  original: Draft;
+  onSave: (patch: Draft) => void;
 }) {
   useEffect(() => {
-    if (html === original) return;
-    const timer = setTimeout(() => onSave(html), 900);
+    if (draft.title === original.title && draft.text === original.text) return;
+    const timer = setTimeout(() => onSave(draft), 900);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [html]);
+  }, [draft.title, draft.text]);
   return null;
 }
