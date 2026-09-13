@@ -25,6 +25,7 @@ interface UseNotesResult {
   shareNote: (id: string, email: string) => Promise<void>;
   unshareNote: (id: string, email: string) => Promise<void>;
   getRecipients: (id: string) => string[];
+  getAllRecipients: () => string[];
 }
 
 export function useNotes(userId: string | null | undefined): UseNotesResult {
@@ -148,10 +149,36 @@ export function useNotes(userId: string | null | undefined): UseNotesResult {
     [sharedOutRefs]
   );
 
+  // Every email I've ever shared a note with, most-recent first — lets the share panel
+  // offer a quick pick instead of retyping an address you've already used.
+  const getAllRecipients = useCallback(() => {
+    const seen = new Set<string>();
+    const emails: string[] = [];
+    [...sharedOutRefs]
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .forEach((r) => {
+        if (!seen.has(r.sharedWithEmail)) {
+          seen.add(r.sharedWithEmail);
+          emails.push(r.sharedWithEmail);
+        }
+      });
+    return emails;
+  }, [sharedOutRefs]);
+
   const notes = useMemo(() => [...ownNotes, ...sharedInNotes], [ownNotes, sharedInNotes]);
 
   return useMemo(
-    () => ({ notes, addNote, updateNote, deleteNote: removeNote, togglePin, shareNote, unshareNote, getRecipients }),
-    [notes, addNote, updateNote, removeNote, togglePin, shareNote, unshareNote, getRecipients]
+    () => ({
+      notes,
+      addNote,
+      updateNote,
+      deleteNote: removeNote,
+      togglePin,
+      shareNote,
+      unshareNote,
+      getRecipients,
+      getAllRecipients,
+    }),
+    [notes, addNote, updateNote, removeNote, togglePin, shareNote, unshareNote, getRecipients, getAllRecipients]
   );
 }

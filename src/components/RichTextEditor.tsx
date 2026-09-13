@@ -7,12 +7,16 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
+type ToolbarMenu = "format" | "color" | "list" | "share" | null;
+
 interface RichTextEditorProps {
   onPreview?: (url: string, name: string) => void;
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
   onShareClick?: () => void;
+  /** Rendered as its own expandable row, in the same place/style as the format/color/list rows, when the share menu is open. Requires onShareClick. */
+  shareMenuContent?: React.ReactNode;
   attachments?: {name: string, url: string}[];
   onAttachmentsChange?: (attachments: {name: string, url: string}[]) => void;
   /**
@@ -22,14 +26,32 @@ interface RichTextEditorProps {
    * "floating" with nothing behind it.
    */
   darkToolbar?: boolean;
+  /**
+   * Controls which single toolbar row is expanded (format/color/list/share), so a parent
+   * that has its OWN extra popovers on the same card (e.g. a background-color swatch) can
+   * keep everything mutually exclusive — only one open at a time. Omit both this and
+   * `onActiveMenuChange` to let the editor manage this internally (the default, used by
+   * the plain turno/appointment forms).
+   */
+  activeMenu?: ToolbarMenu;
+  onActiveMenuChange?: (menu: ToolbarMenu) => void;
 }
 
-export function RichTextEditor({ value, onChange, placeholder, onShareClick, attachments, onAttachmentsChange, onPreview, darkToolbar = false }: RichTextEditorProps) {
+export function RichTextEditor({ value, onChange, placeholder, onShareClick, shareMenuContent, attachments, onAttachmentsChange, onPreview, darkToolbar = false, activeMenu: controlledMenu, onActiveMenuChange }: RichTextEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [showFormatMenu, setShowFormatMenu] = useState(false);
-  const [showColorMenu, setShowColorMenu] = useState(false);
-  const [showListMenu, setShowListMenu] = useState(false);
+  const isControlled = onActiveMenuChange !== undefined;
+  const [internalMenu, setInternalMenu] = useState<ToolbarMenu>(null);
+  const activeMenu = isControlled ? controlledMenu ?? null : internalMenu;
+  const setMenu = (menu: ToolbarMenu) => {
+    const next = activeMenu === menu ? null : menu;
+    if (isControlled) onActiveMenuChange!(next);
+    else setInternalMenu(next);
+  };
+  const showFormatMenu = activeMenu === "format";
+  const showColorMenu = activeMenu === "color";
+  const showListMenu = activeMenu === "list";
+  const showShareMenu = activeMenu === "share";
 
   // Sync the editor's content whenever the external value changes (e.g. data finishes
   // loading from Firestore, or the user switches to editing a different record) —
@@ -82,7 +104,7 @@ export function RichTextEditor({ value, onChange, placeholder, onShareClick, att
   const handleInsertCheckbox = () => {
     const html = `<div><input type="checkbox" style="margin-right: 6px; cursor: pointer;" />&nbsp;</div>`;
     execCommand("insertHTML", html);
-    setShowListMenu(false);
+    setMenu(null);
   };
 
   const colors = [
@@ -118,7 +140,7 @@ export function RichTextEditor({ value, onChange, placeholder, onShareClick, att
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: "auto", opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              className={`flex items-center gap-1 p-2 border-b ${rowBorderClass} overflow-x-auto scrollbar-none`}
+              className={`flex items-center flex-wrap gap-1 p-2 border-b ${rowBorderClass}`}
             >
               <button type="button" onClick={() => execCommand("formatBlock", "H1")} className={`p-1.5 rounded transition-colors ${iconBtnClass}`} title="Título 1"><Heading1 className="w-4 h-4" /></button>
               <button type="button" onClick={() => execCommand("formatBlock", "H2")} className={`p-1.5 rounded transition-colors ${iconBtnClass}`} title="Título 2"><Heading2 className="w-4 h-4" /></button>
@@ -162,7 +184,7 @@ export function RichTextEditor({ value, onChange, placeholder, onShareClick, att
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: "auto", opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              className={`flex items-center gap-1 p-2 border-b ${rowBorderClass}`}
+              className={`flex items-center flex-wrap gap-1 p-2 border-b ${rowBorderClass}`}
             >
               <button type="button" onClick={() => execCommand("insertUnorderedList")} className={`p-1.5 rounded transition-colors flex items-center gap-1 text-xs font-medium ${iconBtnClass}`} title="Lista de viñetas"><List className="w-4 h-4" /> Viñetas</button>
               <button type="button" onClick={() => execCommand("insertOrderedList")} className={`p-1.5 rounded transition-colors flex items-center gap-1 text-xs font-medium ${iconBtnClass}`} title="Lista numerada"><ListOrdered className="w-4 h-4" /> Numerada</button>
@@ -172,11 +194,27 @@ export function RichTextEditor({ value, onChange, placeholder, onShareClick, att
           )}
         </AnimatePresence>
 
+        {/* Share Menu (Conditional) — content fully supplied by the parent (e.g. Notes), same
+            row style/position as the other menus above, so it never feels disconnected from
+            the button that opened it. */}
+        <AnimatePresence>
+          {showShareMenu && shareMenuContent && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className={`p-2 border-b ${rowBorderClass}`}
+            >
+              {shareMenuContent}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Main Toolbar */}
-        <div className="flex items-center gap-1 p-1.5 overflow-x-auto scrollbar-none">
+        <div className="flex items-center flex-wrap gap-1 p-1.5">
           <button
             type="button"
-            onClick={() => { setShowFormatMenu(!showFormatMenu); setShowColorMenu(false); setShowListMenu(false); }}
+            onClick={() => setMenu("format")}
             className={`p-2 rounded-lg transition-colors ${showFormatMenu ? iconBtnActiveClass : iconBtnClass}`}
             title="Formato de texto"
           >
@@ -184,7 +222,7 @@ export function RichTextEditor({ value, onChange, placeholder, onShareClick, att
           </button>
           <button
             type="button"
-            onClick={() => { setShowColorMenu(!showColorMenu); setShowFormatMenu(false); setShowListMenu(false); }}
+            onClick={() => setMenu("color")}
             className={`p-2 rounded-lg transition-colors ${showColorMenu ? iconBtnActiveClass : iconBtnClass}`}
             title="Color de texto"
           >
@@ -195,18 +233,21 @@ export function RichTextEditor({ value, onChange, placeholder, onShareClick, att
 
           <button
             type="button"
-            onClick={() => { setShowListMenu(!showListMenu); setShowFormatMenu(false); setShowColorMenu(false); }}
+            onClick={() => setMenu("list")}
             className={`p-2 rounded-lg transition-colors ${showListMenu ? iconBtnActiveClass : iconBtnClass}`}
             title="Viñetas, numeración o casillas"
           >
             <CheckSquare className="w-4 h-4" />
           </button>
 
-          {onShareClick && (
+          {(onShareClick || shareMenuContent) && (
             <button
               type="button"
-              onClick={onShareClick}
-              className={`p-2 rounded-lg transition-colors ${iconBtnClass}`}
+              onClick={() => {
+                if (shareMenuContent) setMenu("share");
+                else onShareClick?.();
+              }}
+              className={`p-2 rounded-lg transition-colors ${showShareMenu ? iconBtnActiveClass : iconBtnClass}`}
               title="Compartir"
             >
               <Share2 className="w-4 h-4" />
