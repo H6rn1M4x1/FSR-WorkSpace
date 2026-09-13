@@ -2,6 +2,11 @@ import { useState, useEffect, useRef, Suspense, lazy } from "react";
 import { StorageService, AestheticStorageService, setStoredDataSilent, setSyncUserId } from "./lib/storage";
 import { subscribeToCategory, saveItemToFirestore, refetchCategory } from "./lib/firestoreSyncService";
 import { clearPersistedVaultUnlock } from "./lib/vaultCrypto";
+import {
+  subscribeToItemsSharedWithMe,
+  subscribeToItemsIShared,
+  subscribeToSharedItemData,
+} from "./lib/itemSharingService";
 import { reconcileCollection, sanitizeSyncPayload, saveStateToServer } from "./utils/sync";
 import { getLocalDateString } from "./utils/date";
 import { useToast } from "./context/ToastContext";
@@ -427,15 +432,11 @@ export default function App() {
       setItemsIShared([]);
       return;
     }
-    let unsubIn: (() => void) | null = null;
-    let unsubOut: (() => void) | null = null;
-    import("./lib/itemSharingService").then(({ subscribeToItemsSharedWithMe, subscribeToItemsIShared }) => {
-      unsubIn = subscribeToItemsSharedWithMe(user.email!, setItemsSharedWithMe);
-      unsubOut = subscribeToItemsIShared(user.email!, setItemsIShared);
-    });
+    const unsubIn = subscribeToItemsSharedWithMe(user.email, setItemsSharedWithMe);
+    const unsubOut = subscribeToItemsIShared(user.email, setItemsIShared);
     return () => {
-      try { unsubIn?.(); } catch (_) {}
-      try { unsubOut?.(); } catch (_) {}
+      try { unsubIn(); } catch (_) {}
+      try { unsubOut(); } catch (_) {}
     };
   }, [user?.email]);
 
@@ -445,12 +446,9 @@ export default function App() {
       setSharedInData({});
       return;
     }
-    let unsub: (() => void) | null = null;
-    import("./lib/itemSharingService").then(({ subscribeToSharedItemData }) => {
-      unsub = subscribeToSharedItemData(itemsSharedWithMe, setSharedInData);
-    });
+    const unsub = subscribeToSharedItemData(itemsSharedWithMe, setSharedInData);
     return () => {
-      try { unsub?.(); } catch (_) {}
+      try { unsub(); } catch (_) {}
     };
   }, [itemsSharedWithMe]);
 
