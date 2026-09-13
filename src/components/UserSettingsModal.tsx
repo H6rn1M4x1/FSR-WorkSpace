@@ -76,6 +76,7 @@ import { DriveBackupService, BackupLog } from "../lib/driveBackupService";
 import { sendVerificationEmail, auth } from "../lib/supabase";
 import { SharedSectionsManager } from "./SharedSectionsManager";
 import { AgendaSharingManager } from "./AgendaSharingManager";
+import { PasswordVaultPanel } from "./PasswordVaultPanel";
 import { AgendaShare } from "../types";
 
 function detectCurrentDevice() {
@@ -2969,6 +2970,14 @@ export function UserSettingsModal({
                   </div>
                 </div>
               </div>
+
+              {/* Password Vault (end-to-end encrypted) */}
+              <PasswordVaultPanel
+                userId={profile.email || auth.currentUser?.email || ""}
+                darkMode={darkMode}
+                twoFactorEnabled={!!profile.twoFactorEnabled}
+                twoFactorSecret={profile.twoFactorSecret || ""}
+              />
             </div>
           )}
 

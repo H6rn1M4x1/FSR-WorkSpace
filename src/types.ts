@@ -512,8 +512,53 @@ export interface AgendaShare {
   updatedAt: string;
 }
 
+// --- Password Vault (client-side end-to-end encrypted) ---
+// Every field here is either non-sensitive metadata or an opaque ciphertext.
+// The server/Firestore NEVER sees a plaintext site password, master password,
+// recovery phrase, or derived encryption key — see src/lib/vaultCrypto.ts.
 
+/** An AES-GCM encrypted blob: base64 IV + base64 ciphertext. */
+export interface EncryptedBlob {
+  iv: string;
+  data: string;
+}
 
+/** A password-derived (or recovery-phrase-derived) key wrapping the vault's master key. */
+export interface WrappedKey extends EncryptedBlob {
+  salt: string;
+  iterations: number;
+}
 
+/** Per-user vault configuration document (id === user email). Contains no plaintext secrets. */
+export interface VaultConfig {
+  id: string;
+  /** Master encryption key, wrapped (encrypted) with a key derived from the master password. */
+  wrappedByPassword: WrappedKey;
+  /** Same master encryption key, wrapped with a key derived from the recovery phrase. */
+  wrappedByRecovery: WrappedKey;
+  /** Whether revealing/copying a stored password additionally requires a live 2FA code. */
+  requireTotpToReveal: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** One vault entry as stored remotely: fully opaque except for bookkeeping timestamps. */
+export interface VaultItemEncrypted extends EncryptedBlob {
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** One vault entry once decrypted client-side for display/editing. */
+export interface VaultItemDecrypted {
+  id: string;
+  site: string;
+  username: string;
+  password: string;
+  url?: string;
+  notes?: string;
+  createdAt: number;
+  updatedAt: number;
+}
 
 
