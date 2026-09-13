@@ -564,11 +564,15 @@ export interface VaultItemDecrypted {
 // --- Notes (Google Keep-style perpetual sticky notes) ---
 export interface StickyNote {
   id: string;
-  text: string;
+  text: string; // rich HTML content (see RichTextEditor)
   color: string; // key into the NOTE_COLORS palette (see NotesView.tsx)
   pinned: boolean;
+  attachments?: { name: string; url: string }[];
   createdAt: number;
   updatedAt: number;
+  // Present only on a note read via a share (never persisted) — who shared it in.
+  __sharedByEmail?: string;
+  __sharedByName?: string;
 }
 
 

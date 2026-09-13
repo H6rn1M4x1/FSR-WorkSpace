@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { 
-  Type, Palette, Paperclip, Image as ImageIcon, 
-  CheckSquare, List, ListOrdered, Bold, Italic, 
+import {
+  Type, Palette, Paperclip, Image as ImageIcon,
+  CheckSquare, List, ListOrdered, Bold, Italic,
   Underline, Heading1, Heading2, RemoveFormatting,
-  X
+  Share2, X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -15,9 +15,16 @@ interface RichTextEditorProps {
   onShareClick?: () => void;
   attachments?: {name: string, url: string}[];
   onAttachmentsChange?: (attachments: {name: string, url: string}[]) => void;
+  /**
+   * Renders the toolbar as a dark, semi-transparent floating pill instead of the
+   * default theme-matched bar — for embedding the editor on top of a colored
+   * background (e.g. a sticky note) where it would otherwise look like it's
+   * "floating" with nothing behind it.
+   */
+  darkToolbar?: boolean;
 }
 
-export function RichTextEditor({ value, onChange, placeholder, onShareClick, attachments, onAttachmentsChange, onPreview }: RichTextEditorProps) {
+export function RichTextEditor({ value, onChange, placeholder, onShareClick, attachments, onAttachmentsChange, onPreview, darkToolbar = false }: RichTextEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showFormatMenu, setShowFormatMenu] = useState(false);
@@ -79,33 +86,48 @@ export function RichTextEditor({ value, onChange, placeholder, onShareClick, att
   };
 
   const colors = [
-    "#ef4444", "#f97316", "#f59e0b", "#84cc16", "#22c55e", 
+    "#ef4444", "#f97316", "#f59e0b", "#84cc16", "#22c55e",
     "#06b6d4", "#3b82f6", "#6366f1", "#a855f7", "#ec4899",
     "#ffffff", "#000000", "#64748b"
   ];
 
+  // Two toolbar looks: the default one matches the surrounding form (light/dark theme),
+  // while `darkToolbar` renders a dark translucent pill that reads well on any note color.
+  const outerWrapClass = darkToolbar
+    ? "bg-transparent"
+    : "border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-950/50 focus-within:border-primary";
+  const toolbarWrapClass = darkToolbar
+    ? "bg-black/55 backdrop-blur-md rounded-2xl border border-white/10 mb-2"
+    : "bg-slate-100/50 dark:bg-zinc-900/50 border-b border-slate-200 dark:border-zinc-800";
+  const rowBorderClass = darkToolbar ? "border-white/10" : "border-slate-200 dark:border-zinc-800";
+  const dividerClass = darkToolbar ? "bg-white/15" : "bg-slate-300 dark:bg-zinc-700";
+  const iconBtnClass = darkToolbar
+    ? "text-zinc-200 hover:bg-white/15"
+    : "text-slate-700 dark:text-zinc-300 hover:bg-slate-200 dark:hover:bg-zinc-800";
+  const iconBtnActiveClass = darkToolbar ? "bg-white/20 text-white" : "bg-primary/20 text-primary";
+
   return (
-    <div className="flex flex-col w-full border border-slate-200 dark:border-zinc-800 rounded-xl overflow-hidden bg-slate-50 dark:bg-zinc-950/50 transition-all focus-within:border-primary">
+    <div className={`flex flex-col w-full rounded-xl overflow-visible transition-all ${outerWrapClass}`}>
       {/* Toolbars Container */}
-      <div className="flex flex-col bg-slate-100/50 dark:bg-zinc-900/50 border-b border-slate-200 dark:border-zinc-800">
-        
+      <div className={`flex flex-col ${toolbarWrapClass}`}>
+
         {/* Top Floating Format Menu (Conditional) */}
         <AnimatePresence>
           {showFormatMenu && (
-            <motion.div 
+            <motion.div
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: "auto", opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              className="flex items-center gap-1 p-2 border-b border-slate-200 dark:border-zinc-800 overflow-x-auto scrollbar-none"
+              className={`flex items-center gap-1 p-2 border-b ${rowBorderClass} overflow-x-auto scrollbar-none`}
             >
-              <button type="button" onClick={() => execCommand("formatBlock", "H1")} className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-300 transition-colors" title="Título 1"><Heading1 className="w-4 h-4" /></button>
-              <button type="button" onClick={() => execCommand("formatBlock", "H2")} className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-300 transition-colors" title="Título 2"><Heading2 className="w-4 h-4" /></button>
-              <div className="w-px h-4 bg-slate-300 dark:bg-zinc-700 mx-1"></div>
-              <button type="button" onClick={() => execCommand("bold")} className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-300 transition-colors" title="Negrita"><Bold className="w-4 h-4" /></button>
-              <button type="button" onClick={() => execCommand("italic")} className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-300 transition-colors" title="Cursiva"><Italic className="w-4 h-4" /></button>
-              <button type="button" onClick={() => execCommand("underline")} className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-300 transition-colors" title="Subrayado"><Underline className="w-4 h-4" /></button>
-              <div className="w-px h-4 bg-slate-300 dark:bg-zinc-700 mx-1"></div>
-              <button type="button" onClick={() => execCommand("removeFormat")} className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-300 transition-colors ml-auto" title="Limpiar formato"><RemoveFormatting className="w-4 h-4" /></button>
+              <button type="button" onClick={() => execCommand("formatBlock", "H1")} className={`p-1.5 rounded transition-colors ${iconBtnClass}`} title="Título 1"><Heading1 className="w-4 h-4" /></button>
+              <button type="button" onClick={() => execCommand("formatBlock", "H2")} className={`p-1.5 rounded transition-colors ${iconBtnClass}`} title="Título 2"><Heading2 className="w-4 h-4" /></button>
+              <div className={`w-px h-4 mx-1 ${dividerClass}`}></div>
+              <button type="button" onClick={() => execCommand("bold")} className={`p-1.5 rounded transition-colors ${iconBtnClass}`} title="Negrita"><Bold className="w-4 h-4" /></button>
+              <button type="button" onClick={() => execCommand("italic")} className={`p-1.5 rounded transition-colors ${iconBtnClass}`} title="Cursiva"><Italic className="w-4 h-4" /></button>
+              <button type="button" onClick={() => execCommand("underline")} className={`p-1.5 rounded transition-colors ${iconBtnClass}`} title="Subrayado"><Underline className="w-4 h-4" /></button>
+              <div className={`w-px h-4 mx-1 ${dividerClass}`}></div>
+              <button type="button" onClick={() => execCommand("removeFormat")} className={`p-1.5 rounded transition-colors ml-auto ${iconBtnClass}`} title="Limpiar formato"><RemoveFormatting className="w-4 h-4" /></button>
             </motion.div>
           )}
         </AnimatePresence>
@@ -113,18 +135,18 @@ export function RichTextEditor({ value, onChange, placeholder, onShareClick, att
         {/* Color Palette Menu (Conditional) */}
         <AnimatePresence>
           {showColorMenu && (
-            <motion.div 
+            <motion.div
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: "auto", opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              className="flex items-center gap-1.5 p-2 border-b border-slate-200 dark:border-zinc-800 flex-wrap"
+              className={`flex items-center gap-1.5 p-2 border-b ${rowBorderClass} flex-wrap`}
             >
               {colors.map(color => (
                 <button
                   key={color}
                   type="button"
                   onClick={() => execCommand("foreColor", color)}
-                  className="w-5 h-5 rounded-full border border-slate-300 dark:border-zinc-700 cursor-pointer shadow-sm hover:scale-110 transition-transform"
+                  className={`w-5 h-5 rounded-full border cursor-pointer shadow-sm hover:scale-110 transition-transform ${darkToolbar ? "border-white/20" : "border-slate-300 dark:border-zinc-700"}`}
                   style={{ backgroundColor: color }}
                   title={color}
                 />
@@ -136,57 +158,68 @@ export function RichTextEditor({ value, onChange, placeholder, onShareClick, att
         {/* List/Options Menu (Conditional) */}
         <AnimatePresence>
           {showListMenu && (
-            <motion.div 
+            <motion.div
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: "auto", opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              className="flex items-center gap-1 p-2 border-b border-slate-200 dark:border-zinc-800"
+              className={`flex items-center gap-1 p-2 border-b ${rowBorderClass}`}
             >
-              <button type="button" onClick={() => execCommand("insertUnorderedList")} className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-300 transition-colors flex items-center gap-1 text-xs font-medium" title="Lista de viñetas"><List className="w-4 h-4" /> Viñetas</button>
-              <button type="button" onClick={() => execCommand("insertOrderedList")} className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-300 transition-colors flex items-center gap-1 text-xs font-medium" title="Lista numerada"><ListOrdered className="w-4 h-4" /> Numerada</button>
-              <div className="w-px h-4 bg-slate-300 dark:bg-zinc-700 mx-1"></div>
-              <button type="button" onClick={handleInsertCheckbox} className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-300 transition-colors flex items-center gap-1 text-xs font-medium" title="Casilla de verificación"><CheckSquare className="w-4 h-4" /> Checkbox</button>
+              <button type="button" onClick={() => execCommand("insertUnorderedList")} className={`p-1.5 rounded transition-colors flex items-center gap-1 text-xs font-medium ${iconBtnClass}`} title="Lista de viñetas"><List className="w-4 h-4" /> Viñetas</button>
+              <button type="button" onClick={() => execCommand("insertOrderedList")} className={`p-1.5 rounded transition-colors flex items-center gap-1 text-xs font-medium ${iconBtnClass}`} title="Lista numerada"><ListOrdered className="w-4 h-4" /> Numerada</button>
+              <div className={`w-px h-4 mx-1 ${dividerClass}`}></div>
+              <button type="button" onClick={handleInsertCheckbox} className={`p-1.5 rounded transition-colors flex items-center gap-1 text-xs font-medium ${iconBtnClass}`} title="Casilla de verificación"><CheckSquare className="w-4 h-4" /> Checkbox</button>
             </motion.div>
           )}
         </AnimatePresence>
 
         {/* Main Toolbar */}
         <div className="flex items-center gap-1 p-1.5 overflow-x-auto scrollbar-none">
-          <button 
-            type="button" 
-            onClick={() => { setShowFormatMenu(!showFormatMenu); setShowColorMenu(false); setShowListMenu(false); }} 
-            className={`p-2 rounded-lg transition-colors ${showFormatMenu ? 'bg-primary/20 text-primary' : 'hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-300'}`}
+          <button
+            type="button"
+            onClick={() => { setShowFormatMenu(!showFormatMenu); setShowColorMenu(false); setShowListMenu(false); }}
+            className={`p-2 rounded-lg transition-colors ${showFormatMenu ? iconBtnActiveClass : iconBtnClass}`}
             title="Formato de texto"
           >
             <Type className="w-4 h-4" />
           </button>
-          <button 
-            type="button" 
-            onClick={() => { setShowColorMenu(!showColorMenu); setShowFormatMenu(false); setShowListMenu(false); }} 
-            className={`p-2 rounded-lg transition-colors ${showColorMenu ? 'bg-primary/20 text-primary' : 'hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-300'}`}
+          <button
+            type="button"
+            onClick={() => { setShowColorMenu(!showColorMenu); setShowFormatMenu(false); setShowListMenu(false); }}
+            className={`p-2 rounded-lg transition-colors ${showColorMenu ? iconBtnActiveClass : iconBtnClass}`}
             title="Color de texto"
           >
             <Palette className="w-4 h-4" />
           </button>
-                    
-          <div className="w-px h-5 bg-slate-300 dark:bg-zinc-700 mx-1"></div>
-          
-          <button 
-            type="button" 
-            onClick={handleAddImage}
-            className="p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-300 transition-colors"
-            title="Adjuntar archivo"
-          >
-            <Paperclip className="w-4 h-4" />
-          </button>
-                    
-          <button 
-            type="button" 
+
+          <div className={`w-px h-5 mx-1 ${dividerClass}`}></div>
+
+          <button
+            type="button"
             onClick={() => { setShowListMenu(!showListMenu); setShowFormatMenu(false); setShowColorMenu(false); }}
-             className={`p-2 rounded-lg transition-colors ${showListMenu ? 'bg-primary/20 text-primary' : 'hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-300'}`}
-            title="Opciones de lista"
+            className={`p-2 rounded-lg transition-colors ${showListMenu ? iconBtnActiveClass : iconBtnClass}`}
+            title="Viñetas, numeración o casillas"
           >
             <CheckSquare className="w-4 h-4" />
+          </button>
+
+          {onShareClick && (
+            <button
+              type="button"
+              onClick={onShareClick}
+              className={`p-2 rounded-lg transition-colors ${iconBtnClass}`}
+              title="Compartir"
+            >
+              <Share2 className="w-4 h-4" />
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={handleAddImage}
+            className={`p-2 rounded-lg transition-colors ${iconBtnClass}`}
+            title="Adjuntar imagen o archivo"
+          >
+            <Paperclip className="w-4 h-4" />
           </button>
         </div>
       </div>
