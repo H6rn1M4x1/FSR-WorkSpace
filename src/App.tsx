@@ -2341,7 +2341,12 @@ export default function App() {
               )}
 
               {currentTab === "notes" && (
-                <NotesView userId={user?.email || ""} darkMode={darkMode} />
+                <NotesView
+                  userId={user?.email || ""}
+                  darkMode={darkMode}
+                  activeSubTab={activeSubTab}
+                  onSubTabChange={setActiveSubTab}
+                />
               )}
             </>
             </Suspense>

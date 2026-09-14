@@ -47,6 +47,7 @@ import {
   Trash2,
   Receipt,
   Shield,
+  KeyRound,
 } from "lucide-react";
 import {
   AppNotification,
@@ -166,6 +167,10 @@ export const SUBMENUS_BY_TAB: Record<string, SubMenuItem[]> = {
     { id: "image", label: "Generar Imagen", icon: Image },
     { id: "video", label: "Generar Video (Veo)", icon: Video },
     { id: "analysis", label: "Entender Video", icon: CloudLightning },
+  ],
+  notes: [
+    { id: "quick", label: "Notas Rápidas", icon: StickyNote },
+    { id: "vault", label: "Caja Fuerte", icon: KeyRound },
   ],
 };
 

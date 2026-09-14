@@ -14,6 +14,8 @@ import type { StickyNote } from "../types";
 interface NotesViewProps {
   userId: string;
   darkMode?: boolean;
+  activeSubTab?: string;
+  onSubTabChange?: (tab: string) => void;
 }
 
 const NOTE_COLORS: Record<string, { card: string; swatch: string; label: string }> = {
@@ -229,7 +231,12 @@ function ShareRowContent({
   );
 }
 
-export function NotesView({ userId, darkMode = false }: NotesViewProps) {
+export function NotesView({
+  userId,
+  darkMode = false,
+  activeSubTab: propActiveSubTab,
+  onSubTabChange,
+}: NotesViewProps) {
   const {
     notes,
     addNote,
@@ -244,7 +251,20 @@ export function NotesView({ userId, darkMode = false }: NotesViewProps) {
   } = useNotes(userId);
   const { showToast } = useToast();
 
-  const [activeSubTab, setActiveSubTab] = useState<"quick" | "vault">("quick");
+  // The submenu ("Notas Rápidas" / "Caja Fuerte") is normally driven by the main top navbar
+  // (see SUBMENUS_BY_TAB in TopNavbar.tsx), same as Turnos/Salud/etc. Fall back to local state
+  // only if this view is ever rendered without that wiring.
+  const [localActiveSubTab, setLocalActiveTab] = useState<"quick" | "vault">("quick");
+  const activeSubTab = (propActiveSubTab as "quick" | "vault") || localActiveSubTab;
+  const setActiveSubTab = (tab: "quick" | "vault") => {
+    if (onSubTabChange) onSubTabChange(tab);
+    setLocalActiveTab(tab);
+  };
+  useEffect(() => {
+    if (propActiveSubTab) {
+      setLocalActiveTab(propActiveSubTab as "quick" | "vault");
+    }
+  }, [propActiveSubTab]);
 
   // The password vault's TOTP reveal-gate reuses the same Google Authenticator secret set
   // up under Ajustes > Seguridad — read straight from the locally-persisted profile.
@@ -491,15 +511,17 @@ export function NotesView({ userId, darkMode = false }: NotesViewProps) {
 
   return (
     <div className="space-y-6 animate-fade-in px-3 sm:px-6 pt-1 sm:pt-1.5 pb-6">
-      <SubNav
-        activeTab={activeSubTab}
-        onTabChange={(id) => setActiveSubTab(id as "quick" | "vault")}
-        className="mb-6"
-        tabs={[
-          { id: "quick", label: "Notas Rápidas", icon: StickyNoteIcon },
-          { id: "vault", label: "Caja Fuerte", icon: KeyRound },
-        ]}
-      />
+      {!propActiveSubTab && (
+        <SubNav
+          activeTab={activeSubTab}
+          onTabChange={(id) => setActiveSubTab(id as "quick" | "vault")}
+          className="mb-6"
+          tabs={[
+            { id: "quick", label: "Notas Rápidas", icon: StickyNoteIcon },
+            { id: "vault", label: "Caja Fuerte", icon: KeyRound },
+          ]}
+        />
+      )}
 
       <AnimatePresence mode="wait">
         <motion.div
