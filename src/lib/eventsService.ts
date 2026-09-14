@@ -12,6 +12,7 @@ import { getLeagueCodesForTeam } from "./matchScheduler";
 import { FOOTBALL_LEAGUES } from "../data/footballLeagues";
 import { F1_TEAMS, F1_DRIVERS } from "../data/f1";
 import { fetchWikiThumbnail } from "./wikipedia";
+import { f1TeamLogoUrl, f1DriverPhotoUrl } from "./cloudinary";
 
 const PREFS_CATEGORY = "event_preferences";
 
@@ -147,15 +148,20 @@ async function fetchFootballFixturesForTeam(team: Team): Promise<SportEvent[]> {
 
 export { F1_TEAMS, F1_DRIVERS, fetchWikiThumbnail };
 
-let f1ImagesPromise: Promise<{ alt: string; src: string }[]> | null = null;
-function fetchF1SourceImages(): Promise<{ alt: string; src: string }[]> {
-  if (!f1ImagesPromise) {
-    f1ImagesPromise = fetch("/.netlify/functions/f1-images")
-      .then((r) => (r.ok ? r.json() : { images: [] }))
-      .then((d) => d.images || [])
-      .catch(() => []);
+interface F1ScrapedAssets {
+  images: { alt: string; src: string }[];
+  teamLogos: Record<string, string>; // team slug (from the Cloudinary path) -> logo URL
+}
+
+let f1AssetsPromise: Promise<F1ScrapedAssets> | null = null;
+function fetchF1Assets(): Promise<F1ScrapedAssets> {
+  if (!f1AssetsPromise) {
+    f1AssetsPromise = fetch("/.netlify/functions/f1-images")
+      .then((r) => (r.ok ? r.json() : { images: [], teamLogos: {} }))
+      .then((d) => ({ images: d.images || [], teamLogos: d.teamLogos || {} }))
+      .catch(() => ({ images: [], teamLogos: {} }));
   }
-  return f1ImagesPromise;
+  return f1AssetsPromise;
 }
 
 function normalizeForMatch(s: string): string {
@@ -167,8 +173,12 @@ function normalizeForMatch(s: string): string {
     .trim();
 }
 
-/** Finds the best-matching image for a name (team or driver) among the scraped page images,
- *  matching by last word (surname) for people and by full name for teams. */
+function slugify(s: string): string {
+  return normalizeForMatch(s).replace(/ /g, "");
+}
+
+/** Finds the best-matching image for a name among the scraped page images, matching by last
+ *  word (surname) for people, or full name for anything else. */
 function findImageForName(name: string, images: { alt: string; src: string }[]): string | null {
   const target = normalizeForMatch(name);
   const targetWords = target.split(" ");
@@ -182,12 +192,23 @@ function findImageForName(name: string, images: { alt: string; src: string }[]):
   return bySurname ? bySurname.src : null;
 }
 
-/** Team crest / driver photo, sourced from the article page first, Wikipedia as a fallback. */
-export async function fetchF1Image(name: string): Promise<string | null> {
-  const sourceImages = await fetchF1SourceImages();
-  const fromSource = findImageForName(name, sourceImages);
-  if (fromSource) return fromSource;
-  return fetchWikiThumbnail(name);
+/** Team crest — the minimalist logo from formula1.com/en/teams, matched by URL slug (far more
+ *  reliable than alt-text guessing), upsized via Cloudinary. Wikipedia as a last-resort fallback. */
+export async function fetchF1TeamLogo(teamName: string): Promise<string | null> {
+  const { teamLogos } = await fetchF1Assets();
+  const target = slugify(teamName);
+  const slug = Object.keys(teamLogos).find((s) => target.includes(s) || s.includes(target));
+  if (slug) return f1TeamLogoUrl(teamLogos[slug]);
+  return fetchWikiThumbnail(teamName);
+}
+
+/** Driver photo — the official transparent cutout from formula1.com/en/drivers, cropped
+ *  torso-up via Cloudinary. Wikipedia as a last-resort fallback. */
+export async function fetchF1DriverPhoto(driverName: string): Promise<string | null> {
+  const { images } = await fetchF1Assets();
+  const fromSource = findImageForName(driverName, images);
+  if (fromSource) return f1DriverPhotoUrl(fromSource);
+  return fetchWikiThumbnail(driverName);
 }
 
 export async function fetchF1Races(): Promise<SportEvent[]> {
