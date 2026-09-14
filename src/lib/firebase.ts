@@ -39,7 +39,11 @@ try {
     app,
     {
       localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
-      experimentalForceLongPolling: true,
+      // Auto-detect instead of forcing long-polling: on some networks/proxies, forcing it
+      // makes writes hang indefinitely (the long-poll connection never resolves, with no
+      // error surfaced to the app) instead of falling back to a working transport. Only
+      // fall back to long-polling when a real WebChannel connection actually fails.
+      experimentalAutoDetectLongPolling: true,
     },
     FIRESTORE_DATABASE_ID
   );
