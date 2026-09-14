@@ -9,15 +9,26 @@ import {
   ChevronLeft,
   ChevronRight,
   Users,
+  User as UserIcon,
+  ArrowLeft,
 } from "lucide-react";
 import { useToast } from "../context/ToastContext";
 import { SPORTS_CATALOG } from "../lib/sportsCatalog";
 import {
   getSanJuanEvents,
+  getMotoGpCalendar,
   fetchEventPreferences,
   saveEventPreferences,
-  fetchTeamsForSport,
   fetchFollowedSportEvents,
+  FOOTBALL_LEAGUES,
+  getFootballClubs,
+  F1_TEAMS,
+  F1_DRIVERS,
+  MOTOGP_TEAMS,
+  MOTOGP_RIDERS,
+  fetchWikiThumbnail,
+  fetchNbaTeams,
+  fetchNflTeams,
 } from "../lib/eventsService";
 import type { EventPreferences, FollowedTeam, SanJuanEvent, SportEvent } from "../types";
 
@@ -34,7 +45,7 @@ const MESES: Record<string, number> = {
 /** Best-effort: turns "15 de marzo" or "15/03" into an ISO date in the current/next occurrence. */
 function guessIsoDate(raw?: string): string | null {
   if (!raw) return null;
-  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10); // already ISO (e.g. JSON-LD startDate)
+  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10); // already ISO
   const now = new Date();
   const dOfMonth = raw.match(/(\d{1,2})\s+de\s+(\w+)/i);
   if (dOfMonth) {
@@ -59,6 +70,12 @@ function guessIsoDate(raw?: string): string | null {
 const CARD = (darkMode: boolean) =>
   `rounded-3xl border p-4 sm:p-6 space-y-5 ${darkMode ? "bg-zinc-900/60 border-zinc-800" : "bg-white/80 border-slate-200"}`;
 const SUBCARD = "rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4 space-y-4";
+const PICK_BTN = (active: boolean) =>
+  `flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-[11px] font-bold text-left cursor-pointer transition-all ${
+    active
+      ? "bg-primary/10 border-primary text-primary"
+      : "bg-slate-50 dark:bg-zinc-900 border-slate-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-300"
+  }`;
 
 /**
  * Everything about "Eventos" (San Juan's monthly agenda, the sports calendars the user
@@ -73,12 +90,10 @@ export function EventsView({ userId, darkMode = false }: EventsViewProps) {
   const [sjLoading, setSjLoading] = useState(true);
   useEffect(() => {
     setSjLoading(true);
-    getSanJuanEvents()
-      .then(setSjEvents)
-      .finally(() => setSjLoading(false));
+    getSanJuanEvents().then(setSjEvents).finally(() => setSjLoading(false));
   }, []);
 
-  // --- Preferences + followed sports ---
+  // --- Preferences ---
   const [prefs, setPrefs] = useState<EventPreferences | null>(null);
   const [prefsLoaded, setPrefsLoaded] = useState(false);
   useEffect(() => {
@@ -97,66 +112,92 @@ export function EventsView({ userId, darkMode = false }: EventsViewProps) {
   const toggleSport = async (sportId: string) => {
     if (!prefs) return;
     const following = prefs.followedSports.includes(sportId);
-    const next: EventPreferences = {
+    await persistPrefs({
       ...prefs,
-      followedSports: following
-        ? prefs.followedSports.filter((s) => s !== sportId)
-        : [...prefs.followedSports, sportId],
+      followedSports: following ? prefs.followedSports.filter((s) => s !== sportId) : [...prefs.followedSports, sportId],
       updatedAt: Date.now(),
-    };
-    await persistPrefs(next);
+    });
     showToast(following ? "Dejaste de seguir este deporte." : "Ahora seguís este deporte.", "success");
   };
 
-  const [teamsBySport, setTeamsBySport] = useState<Record<string, { id: string; name: string; badgeUrl?: string }[]>>({});
-  const [loadingTeamsFor, setLoadingTeamsFor] = useState<string | null>(null);
-  const [expandedSport, setExpandedSport] = useState<string | null>(null);
-
-  const loadTeamsIfNeeded = async (sportId: string) => {
-    if (teamsBySport[sportId]) return;
-    setLoadingTeamsFor(sportId);
-    const teams = await fetchTeamsForSport(sportId);
-    setTeamsBySport((prev) => ({ ...prev, [sportId]: teams }));
-    setLoadingTeamsFor(null);
-  };
-
+  // Multi-select follow (fútbol clubs, NBA/NFL teams).
   const toggleTeam = async (sportId: string, team: FollowedTeam) => {
     if (!prefs) return;
     const current = prefs.followedTeams[sportId] || [];
     const already = current.some((t) => t.id === team.id);
-    const nextTeams = already ? current.filter((t) => t.id !== team.id) : [...current, team];
-    await persistPrefs({
-      ...prefs,
-      followedTeams: { ...prefs.followedTeams, [sportId]: nextTeams },
-      updatedAt: Date.now(),
-    });
+    const next = already ? current.filter((t) => t.id !== team.id) : [...current, team];
+    await persistPrefs({ ...prefs, followedTeams: { ...prefs.followedTeams, [sportId]: next }, updatedAt: Date.now() });
   };
 
-  // --- Sport events for followed sports/teams ---
+  // Single-select follow, one "team" + one "driver" (F1, MotoGP).
+  const pickSingle = async (sportId: string, kind: "team" | "driver", entry: FollowedTeam) => {
+    if (!prefs) return;
+    const current = prefs.followedTeams[sportId] || [];
+    const alreadyPicked = current.find((t) => t.kind === kind)?.id === entry.id;
+    const others = current.filter((t) => t.kind !== kind);
+    const next = alreadyPicked ? others : [...others, entry];
+    await persistPrefs({ ...prefs, followedTeams: { ...prefs.followedTeams, [sportId]: next }, updatedAt: Date.now() });
+  };
+
+  const [expandedSport, setExpandedSport] = useState<string | null>(null);
+  const onToggleExpand = (sportId: string) => setExpandedSport((prev) => (prev === sportId ? null : sportId));
+
+  // Wikipedia thumbnails for F1/MotoGP teams+drivers, fetched lazily once a sport is expanded.
+  const [wikiThumbs, setWikiThumbs] = useState<Record<string, string | null>>({});
+  const ensureWikiThumbs = (titles: string[]) => {
+    titles.forEach((title) => {
+      if (title in wikiThumbs) return;
+      fetchWikiThumbnail(title).then((url) => setWikiThumbs((prev) => ({ ...prev, [title]: url })));
+    });
+  };
+  useEffect(() => {
+    if (expandedSport === "f1") ensureWikiThumbs([...F1_TEAMS.map((t) => t.wikiTitle), ...F1_DRIVERS.map((d) => d.wikiTitle)]);
+    if (expandedSport === "motogp") ensureWikiThumbs([...MOTOGP_TEAMS.map((t) => t.wikiTitle), ...MOTOGP_RIDERS.map((r) => r.wikiTitle)]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expandedSport]);
+
+  // Fútbol: leagues first, drill into one league's clubs.
+  const [footballLeague, setFootballLeague] = useState<string | null>(null);
+
+  // NBA/NFL team rosters (with real badges), fetched on demand from ESPN.
+  const [nbaTeams, setNbaTeams] = useState<{ id: string; name: string; badgeUrl?: string }[] | null>(null);
+  const [nflTeams, setNflTeams] = useState<{ id: string; name: string; badgeUrl?: string }[] | null>(null);
+  useEffect(() => {
+    if (expandedSport === "nba" && !nbaTeams) fetchNbaTeams().then(setNbaTeams);
+    if (expandedSport === "nfl" && !nflTeams) fetchNflTeams().then(setNflTeams);
+  }, [expandedSport, nbaTeams, nflTeams]);
+
+  // --- Sport events for followed sports/teams/drivers ---
   const [sportEvents, setSportEvents] = useState<SportEvent[]>([]);
   const [sportEventsLoading, setSportEventsLoading] = useState(false);
   useEffect(() => {
     if (!prefsLoaded || !prefs) return;
     setSportEventsLoading(true);
-    fetchFollowedSportEvents(prefs)
-      .then(setSportEvents)
-      .finally(() => setSportEventsLoading(false));
+    fetchFollowedSportEvents(prefs).then(setSportEvents).finally(() => setSportEventsLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefsLoaded, prefs?.followedSports.join(","), JSON.stringify(prefs?.followedTeams || {})]);
 
-  // --- Calendar: San Juan (with a parseable date) + sport events, merged by ISO date ---
+  // --- Calendar: San Juan + MotoGP calendar (both scraped, date-guessed) + sport events ---
+  const [motoGpRaces, setMotoGpRaces] = useState<SanJuanEvent[]>([]);
+  useEffect(() => {
+    getMotoGpCalendar().then(setMotoGpRaces);
+  }, []);
+
   const eventsByDate = useMemo(() => {
     const map: Record<string, { label: string; kind: "sanjuan" | "sport" }[]> = {};
     sjEvents.forEach((ev) => {
       const iso = guessIsoDate(ev.rawDate || ev.date);
-      if (!iso) return;
-      (map[iso] = map[iso] || []).push({ label: ev.title, kind: "sanjuan" });
+      if (iso) (map[iso] = map[iso] || []).push({ label: ev.title, kind: "sanjuan" });
+    });
+    motoGpRaces.forEach((ev) => {
+      const iso = guessIsoDate(ev.rawDate || ev.date);
+      if (iso) (map[iso] = map[iso] || []).push({ label: ev.title, kind: "sport" });
     });
     sportEvents.forEach((ev) => {
-      if (!ev.date) return;
-      (map[ev.date] = map[ev.date] || []).push({ label: ev.title, kind: "sport" });
+      if (ev.date) (map[ev.date] = map[ev.date] || []).push({ label: ev.title, kind: "sport" });
     });
     return map;
-  }, [sjEvents, sportEvents]);
+  }, [sjEvents, motoGpRaces, sportEvents]);
 
   const [calMonth, setCalMonth] = useState(() => new Date());
   const [selectedDay, setSelectedDay] = useState(() => new Date().toISOString().slice(0, 10));
@@ -169,11 +210,14 @@ export function EventsView({ userId, darkMode = false }: EventsViewProps) {
     const totalDays = new Date(year, month + 1, 0).getDate();
     const cells: (string | null)[] = [];
     for (let i = 0; i < startOffset; i++) cells.push(null);
-    for (let d = 1; d <= totalDays; d++) {
-      cells.push(`${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`);
-    }
+    for (let d = 1; d <= totalDays; d++) cells.push(`${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`);
     return cells;
   }, [calMonth]);
+
+  const followedF1Team = prefs?.followedTeams["f1"]?.find((t) => t.kind === "team");
+  const followedF1Driver = prefs?.followedTeams["f1"]?.find((t) => t.kind === "driver");
+  const followedMotoGpTeam = prefs?.followedTeams["motogp"]?.find((t) => t.kind === "team");
+  const followedMotoGpRider = prefs?.followedTeams["motogp"]?.find((t) => t.kind === "driver");
 
   return (
     <div className="space-y-6 animate-fade-in px-3 sm:px-6 pt-1 sm:pt-1.5 pb-6">
@@ -205,21 +249,11 @@ export function EventsView({ userId, darkMode = false }: EventsViewProps) {
           </div>
 
           <div className="flex items-center justify-between mb-3">
-            <button
-              type="button"
-              onClick={() => setCalMonth(new Date(calMonth.getFullYear(), calMonth.getMonth() - 1, 1))}
-              className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer"
-            >
+            <button type="button" onClick={() => setCalMonth(new Date(calMonth.getFullYear(), calMonth.getMonth() - 1, 1))} className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer">
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <span className="text-sm font-extrabold capitalize">
-              {calMonth.toLocaleDateString("es-AR", { month: "long", year: "numeric" })}
-            </span>
-            <button
-              type="button"
-              onClick={() => setCalMonth(new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 1))}
-              className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer"
-            >
+            <span className="text-sm font-extrabold capitalize">{calMonth.toLocaleDateString("es-AR", { month: "long", year: "numeric" })}</span>
+            <button type="button" onClick={() => setCalMonth(new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 1))} className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer">
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
@@ -239,17 +273,11 @@ export function EventsView({ userId, darkMode = false }: EventsViewProps) {
                   type="button"
                   onClick={() => setSelectedDay(iso)}
                   className={`h-9 w-full rounded-full text-xs font-bold flex flex-col items-center justify-center relative cursor-pointer transition-all ${
-                    isSelected
-                      ? "border-2 border-primary text-primary bg-primary/10"
-                      : isToday
-                      ? "bg-primary text-white shadow-md"
-                      : "hover:bg-primary/10 text-zinc-700 dark:text-zinc-300"
+                    isSelected ? "border-2 border-primary text-primary bg-primary/10" : isToday ? "bg-primary text-white shadow-md" : "hover:bg-primary/10 text-zinc-700 dark:text-zinc-300"
                   }`}
                 >
                   <span>{dayNum}</span>
-                  {hasEvents && (
-                    <span className={`absolute bottom-1 w-1 h-1 rounded-full ${isSelected ? "bg-primary" : "bg-primary"}`} />
-                  )}
+                  {hasEvents && <span className="absolute bottom-1 w-1 h-1 rounded-full bg-primary" />}
                 </button>
               );
             })}
@@ -264,10 +292,7 @@ export function EventsView({ userId, darkMode = false }: EventsViewProps) {
             ) : (
               <div className="space-y-1.5">
                 {(eventsByDate[selectedDay] || []).map((ev, i) => (
-                  <div
-                    key={i}
-                    className="p-2.5 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-2"
-                  >
+                  <div key={i} className="p-2.5 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-2">
                     {ev.kind === "sanjuan" ? <MapPin className="w-3.5 h-3.5 text-primary shrink-0" /> : <Trophy className="w-3.5 h-3.5 text-primary shrink-0" />}
                     <span className="truncate">{ev.label}</span>
                   </div>
@@ -279,131 +304,196 @@ export function EventsView({ userId, darkMode = false }: EventsViewProps) {
 
         {/* Deportes */}
         <div className={`${SUBCARD} lg:col-span-7`}>
-        <h3 className="font-extrabold text-sm flex items-center gap-2">
-          <Trophy className="w-4 h-4 text-primary" /> Deportes que seguís
-        </h3>
+          <h3 className="font-extrabold text-sm flex items-center gap-2">
+            <Trophy className="w-4 h-4 text-primary" /> Deportes que seguís
+          </h3>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {SPORTS_CATALOG.map((sport) => {
-            const following = !!prefs?.followedSports.includes(sport.id);
-            return (
-              <button
-                key={sport.id}
-                type="button"
-                onClick={async () => {
-                  await toggleSport(sport.id);
-                  if (sport.hasTeams) {
-                    setExpandedSport((prev) => (prev === sport.id ? null : sport.id));
-                    loadTeamsIfNeeded(sport.id);
-                  }
-                }}
-                className={`px-3 py-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                  following
-                    ? "bg-primary text-white border-primary"
-                    : "bg-slate-50 dark:bg-zinc-900 border-slate-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-300 hover:border-primary/40"
-                }`}
-              >
-                {following && <Check className="w-3.5 h-3.5" />}
-                {sport.label}
-              </button>
-            );
-          })}
-        </div>
-
-        {(prefs?.followedSports || [])
-          .filter((id) => SPORTS_CATALOG.find((s) => s.id === id)?.hasTeams)
-          .map((sportId) => {
-            const sport = SPORTS_CATALOG.find((s) => s.id === sportId)!;
-            const teams = teamsBySport[sportId] || [];
-            const followedTeams = prefs?.followedTeams[sportId] || [];
-            return (
-              <div key={sportId} className="rounded-2xl border border-slate-200 dark:border-zinc-800 p-3 space-y-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {SPORTS_CATALOG.map((sport) => {
+              const following = !!prefs?.followedSports.includes(sport.id);
+              return (
                 <button
+                  key={sport.id}
                   type="button"
-                  onClick={() => {
-                    setExpandedSport((prev) => (prev === sportId ? null : sportId));
-                    loadTeamsIfNeeded(sportId);
+                  onClick={async () => {
+                    await toggleSport(sport.id);
+                    onToggleExpand(sport.id);
+                    if (sport.id === "futbol") setFootballLeague(null);
                   }}
-                  className="w-full flex items-center justify-between text-xs font-extrabold cursor-pointer"
+                  className={`px-3 py-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    following ? "bg-primary text-white border-primary" : "bg-slate-50 dark:bg-zinc-900 border-slate-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-300 hover:border-primary/40"
+                  }`}
                 >
-                  <span className="flex items-center gap-1.5">
-                    <Users className="w-3.5 h-3.5 text-primary" /> Equipos/pilotos de {sport.label}
-                    {followedTeams.length > 0 && (
-                      <span className="text-[10px] font-bold text-zinc-400">({followedTeams.length} seguidos)</span>
-                    )}
-                  </span>
-                  <ChevronRight className={`w-4 h-4 transition-transform ${expandedSport === sportId ? "rotate-90" : ""}`} />
+                  {following && <Check className="w-3.5 h-3.5" />}
+                  {sport.label}
                 </button>
-                {expandedSport === sportId && (
-                  loadingTeamsFor === sportId ? (
-                    <div className="flex items-center gap-2 text-xs text-zinc-500 py-3">
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Buscando equipos...
+              );
+            })}
+          </div>
+
+          {(prefs?.followedSports || []).map((sportId) => {
+            const sport = SPORTS_CATALOG.find((s) => s.id === sportId);
+            if (!sport) return null;
+            const isOpen = expandedSport === sportId;
+
+            return (
+              <div key={sportId} className="rounded-2xl border border-slate-200 dark:border-zinc-800 p-3 space-y-3">
+                <button type="button" onClick={() => onToggleExpand(sportId)} className="w-full flex items-center justify-between text-xs font-extrabold cursor-pointer">
+                  <span className="flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5 text-primary" /> {sport.label}
+                  </span>
+                  <ChevronRight className={`w-4 h-4 transition-transform ${isOpen ? "rotate-90" : ""}`} />
+                </button>
+
+                {isOpen && sportId === "f1" && (
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-[10px] font-bold text-zinc-400 uppercase mb-1.5">Escudería</p>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-56 overflow-y-auto">
+                        {F1_TEAMS.map((t) => (
+                          <button key={t.id} type="button" onClick={() => pickSingle("f1", "team", { id: t.id, name: t.name, badgeUrl: wikiThumbs[t.wikiTitle] || undefined, kind: "team" })} className={PICK_BTN(followedF1Team?.id === t.id)}>
+                            {wikiThumbs[t.wikiTitle] ? <img src={wikiThumbs[t.wikiTitle]!} alt="" className="w-5 h-5 rounded-full object-cover shrink-0" /> : <Trophy className="w-4 h-4 shrink-0" />}
+                            <span className="truncate">{t.name}</span>
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  ) : teams.length === 0 ? (
-                    <p className="text-xs text-zinc-500 py-3">No se encontraron equipos para {sport.label}.</p>
-                  ) : (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-64 overflow-y-auto">
-                      {teams.map((team) => {
-                        const isFollowed = followedTeams.some((t) => t.id === team.id);
-                        return (
-                          <button
-                            key={team.id}
-                            type="button"
-                            onClick={() => toggleTeam(sportId, team)}
-                            className={`flex items-center gap-2 px-2 py-1.5 rounded-lg border text-[11px] font-bold text-left cursor-pointer ${
-                              isFollowed
-                                ? "bg-primary/10 border-primary text-primary"
-                                : "bg-slate-50 dark:bg-zinc-900 border-slate-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-300"
-                            }`}
-                          >
+                    <div>
+                      <p className="text-[10px] font-bold text-zinc-400 uppercase mb-1.5">Piloto</p>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-56 overflow-y-auto">
+                        {F1_DRIVERS.map((d) => (
+                          <button key={d.id} type="button" onClick={() => pickSingle("f1", "driver", { id: d.id, name: d.name, badgeUrl: wikiThumbs[d.wikiTitle] || undefined, kind: "driver" })} className={PICK_BTN(followedF1Driver?.id === d.id)}>
+                            {wikiThumbs[d.wikiTitle] ? <img src={wikiThumbs[d.wikiTitle]!} alt="" className="w-5 h-5 rounded-full object-cover shrink-0" /> : <UserIcon className="w-4 h-4 shrink-0" />}
+                            <span className="truncate">{d.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {isOpen && sportId === "motogp" && (
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-[10px] font-bold text-zinc-400 uppercase mb-1.5">Escudería</p>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-56 overflow-y-auto">
+                        {MOTOGP_TEAMS.map((t) => (
+                          <button key={t.id} type="button" onClick={() => pickSingle("motogp", "team", { id: t.id, name: t.name, badgeUrl: wikiThumbs[t.wikiTitle] || undefined, kind: "team" })} className={PICK_BTN(followedMotoGpTeam?.id === t.id)}>
+                            {wikiThumbs[t.wikiTitle] ? <img src={wikiThumbs[t.wikiTitle]!} alt="" className="w-5 h-5 rounded-full object-cover shrink-0" /> : <Trophy className="w-4 h-4 shrink-0" />}
+                            <span className="truncate">{t.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-zinc-400 uppercase mb-1.5">Piloto</p>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-56 overflow-y-auto">
+                        {MOTOGP_RIDERS.map((r) => (
+                          <button key={r.id} type="button" onClick={() => pickSingle("motogp", "driver", { id: r.id, name: r.name, badgeUrl: wikiThumbs[r.wikiTitle] || undefined, kind: "driver" })} className={PICK_BTN(followedMotoGpRider?.id === r.id)}>
+                            {wikiThumbs[r.wikiTitle] ? <img src={wikiThumbs[r.wikiTitle]!} alt="" className="w-5 h-5 rounded-full object-cover shrink-0" /> : <UserIcon className="w-4 h-4 shrink-0" />}
+                            <span className="truncate">{r.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {isOpen && sportId === "futbol" && (
+                  <div className="space-y-2">
+                    {!footballLeague ? (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                        {FOOTBALL_LEAGUES.map((l) => (
+                          <button key={l.id} type="button" onClick={() => { setFootballLeague(l.id); ensureWikiThumbs([l.wikiTitle]); }} className={PICK_BTN(false)}>
+                            {wikiThumbs[l.wikiTitle] ? <img src={wikiThumbs[l.wikiTitle]!} alt="" className="w-5 h-5 rounded-full object-cover shrink-0" /> : <Trophy className="w-4 h-4 shrink-0" />}
+                            <span className="truncate">{l.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <button type="button" onClick={() => setFootballLeague(null)} className="flex items-center gap-1 text-[10px] font-bold text-primary cursor-pointer">
+                          <ArrowLeft className="w-3 h-3" /> Volver a ligas
+                        </button>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-56 overflow-y-auto">
+                          {getFootballClubs(footballLeague).map((club) => {
+                            const followed = (prefs?.followedTeams["futbol"] || []).some((t) => t.id === club.id);
+                            return (
+                              <button key={club.id} type="button" onClick={() => toggleTeam("futbol", { id: club.id, name: club.name, badgeUrl: club.logo })} className={PICK_BTN(followed)}>
+                                <img src={club.logo} alt="" className="w-5 h-5 object-contain shrink-0" />
+                                <span className="truncate">{club.name}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {isOpen && sportId === "tenis" && (
+                  <p className="text-[11px] text-zinc-500">
+                    El tenis se sigue por circuito completo (ATP y WTA) — no hace falta elegir jugador, ya te vamos a mostrar los próximos torneos.
+                  </p>
+                )}
+
+                {isOpen && (sportId === "nba" || sportId === "nfl") && (
+                  (() => {
+                    const roster = sportId === "nba" ? nbaTeams : nflTeams;
+                    const followed = prefs?.followedTeams[sportId] || [];
+                    if (!roster) {
+                      return (
+                        <div className="flex items-center gap-2 text-xs text-zinc-500 py-3">
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Buscando equipos...
+                        </div>
+                      );
+                    }
+                    if (roster.length === 0) {
+                      return <p className="text-xs text-zinc-500 py-3">No se encontraron equipos de {sport.label}.</p>;
+                    }
+                    return (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-64 overflow-y-auto">
+                        {roster.map((team) => (
+                          <button key={team.id} type="button" onClick={() => toggleTeam(sportId, team)} className={PICK_BTN(followed.some((t) => t.id === team.id))}>
                             {team.badgeUrl && <img src={team.badgeUrl} alt="" className="w-5 h-5 object-contain shrink-0" />}
                             <span className="truncate">{team.name}</span>
                           </button>
-                        );
-                      })}
-                    </div>
-                  )
+                        ))}
+                      </div>
+                    );
+                  })()
                 )}
               </div>
             );
           })}
 
-        <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-zinc-800/80">
-          <p className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-400">Próximos eventos seguidos</p>
-          {sportEventsLoading ? (
-            <div className="flex items-center gap-2 text-xs text-zinc-500 py-4">
-              <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Cargando calendarios...
-            </div>
-          ) : sportEvents.length === 0 ? (
-            <p className="text-xs text-zinc-500 py-4">
-              {prefs?.followedSports.length ? "No hay próximos eventos por ahora." : "Elegí al menos un deporte arriba."}
-            </p>
-          ) : (
-            <div className="space-y-1.5">
-              {sportEvents
-                .slice()
-                .sort((a, b) => a.date.localeCompare(b.date))
-                .slice(0, 30)
-                .map((ev) => (
-                  <div
-                    key={ev.id}
-                    className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800"
-                  >
+          <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-zinc-800/80">
+            <p className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-400">Próximos eventos seguidos</p>
+            {sportEventsLoading ? (
+              <div className="flex items-center gap-2 text-xs text-zinc-500 py-4">
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Cargando calendarios...
+              </div>
+            ) : sportEvents.length === 0 ? (
+              <p className="text-xs text-zinc-500 py-4">
+                {prefs?.followedSports.length ? "No hay próximos eventos por ahora." : "Elegí al menos un deporte arriba."}
+              </p>
+            ) : (
+              <div className="space-y-1.5">
+                {sportEvents.slice().sort((a, b) => a.date.localeCompare(b.date)).slice(0, 30).map((ev) => (
+                  <div key={ev.id} className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800">
                     <div className="flex items-center -space-x-2 shrink-0">
                       {ev.homeTeamBadge && <img src={ev.homeTeamBadge} alt="" className="w-6 h-6 rounded-full bg-white object-contain border border-white" />}
                       {ev.awayTeamBadge && <img src={ev.awayTeamBadge} alt="" className="w-6 h-6 rounded-full bg-white object-contain border border-white" />}
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-xs font-extrabold text-zinc-900 dark:text-zinc-100 truncate">{ev.title}</p>
-                      <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
-                        {ev.leagueName} · {ev.date}{ev.time ? ` ${ev.time}` : ""}
-                      </p>
+                      <p className="text-[10px] text-zinc-500 dark:text-zinc-400">{ev.leagueName} · {ev.date}{ev.time ? ` ${ev.time}` : ""}</p>
                     </div>
                   </div>
                 ))}
-            </div>
-          )}
-        </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -427,16 +517,8 @@ export function EventsView({ userId, darkMode = false }: EventsViewProps) {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {sjEvents.map((ev) => (
-              <a
-                key={ev.id}
-                href={ev.sourceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-2xl border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 overflow-hidden hover:shadow-md transition-all flex flex-col"
-              >
-                {ev.imageUrl && (
-                  <img src={ev.imageUrl} alt={ev.title} className="w-full h-32 object-cover" />
-                )}
+              <a key={ev.id} href={ev.sourceUrl} target="_blank" rel="noopener noreferrer" className="rounded-2xl border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 overflow-hidden hover:shadow-md transition-all flex flex-col">
+                {ev.imageUrl && <img src={ev.imageUrl} alt={ev.title} className="w-full h-32 object-cover" />}
                 <div className="p-3 space-y-1 flex-1">
                   <p className="font-extrabold text-sm text-zinc-900 dark:text-zinc-100 line-clamp-2">{ev.title}</p>
                   {ev.rawDate && <p className="text-xs text-primary font-bold">{ev.rawDate}</p>}

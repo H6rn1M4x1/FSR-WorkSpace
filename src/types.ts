@@ -593,19 +593,17 @@ export interface SanJuanEvent {
 
 /** A sport the user can choose to follow (fixed catalog, see lib/sportsCatalog.ts). */
 export interface SportCatalogEntry {
-  id: string; // e.g. "f1", "tenis", "futbol", "nba", "wwe", "motogp", "ufc", "nfl"
+  id: string; // "f1" | "motogp" | "futbol" | "tenis" | "nba" | "nfl"
   label: string;
-  hasTeams: boolean; // true for team/league sports (fetch teams+badges from TheSportsDB)
-  sportsDbSport: string; // the "strSport" value TheSportsDB uses to resolve its league id
-  leagueQuery: string; // substring used to find the right league by name
-  country?: string; // narrows the league search to one country (e.g. "Argentina" for fútbol)
 }
 
-/** A team/driver/league the user picked to follow within a sport they're subscribed to. */
+/** A team/club/driver/rider the user picked to follow within a sport they're subscribed to. */
 export interface FollowedTeam {
-  id: string; // TheSportsDB idTeam (or a slug for sports without teams)
+  id: string;
   name: string;
   badgeUrl?: string;
+  /** Distinguishes a constructor/team from an individual driver/rider (F1, MotoGP). */
+  kind?: "team" | "driver";
 }
 
 /** Per-user event preferences: which sports/teams to show in the events calendar. */
@@ -615,7 +613,7 @@ export interface EventPreferences {
   updatedAt: number;
 }
 
-/** One upcoming sports event, normalized from TheSportsDB, for a followed sport/team. */
+/** One upcoming sports event/race/match for a followed sport/team. */
 export interface SportEvent {
   id: string;
   sportId: string;
