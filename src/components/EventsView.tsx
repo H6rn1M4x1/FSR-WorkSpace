@@ -26,6 +26,7 @@ import {
   fetchF1TeamLogo,
   fetchF1DriverPhoto,
   NBA_TEAMS,
+  fetchWikiThumbnail,
 } from "../lib/eventsService";
 import type { EventPreferences, FollowedTeam, SanJuanEvent, SportEvent } from "../types";
 
@@ -138,6 +139,23 @@ export function EventsView({ userId, darkMode = false }: EventsViewProps) {
 
   const [expandedSport, setExpandedSport] = useState<string | null>(null);
   const onToggleExpand = (sportId: string) => setExpandedSport((prev) => (prev === sportId ? null : sportId));
+
+  // Sport header icons: the real F1/FIFA/NBA marks (via Wikipedia), forced to solid
+  // black/white with a CSS filter so any source coloring becomes a clean black-in-light,
+  // white-in-dark icon regardless of the original logo's colors.
+  const SPORT_LOGO_WIKI_TITLE: Record<string, string> = {
+    f1: "Formula One",
+    futbol: "FIFA",
+    nba: "National Basketball Association",
+  };
+  const [sportLogos, setSportLogos] = useState<Record<string, string | null>>({});
+  useEffect(() => {
+    Object.entries(SPORT_LOGO_WIKI_TITLE).forEach(([sportId, title]) => {
+      if (sportId in sportLogos) return;
+      fetchWikiThumbnail(title).then((url) => setSportLogos((prev) => ({ ...prev, [sportId]: url })));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // F1 driver photos: sourced from formula1.com first, Wikipedia as fallback. Team logos are a
   // fixed known-good URL per team (see data/f1.ts) — no fetch/state needed for those.
@@ -316,7 +334,17 @@ export function EventsView({ userId, darkMode = false }: EventsViewProps) {
               <div key={sportId} className="rounded-2xl border border-slate-200 dark:border-zinc-800 p-3 space-y-3">
                 <button type="button" onClick={() => onToggleExpand(sportId)} className="w-full flex items-center justify-between text-xs font-extrabold cursor-pointer">
                   <span className="flex items-center gap-1.5">
-                    <Users className="w-3.5 h-3.5 text-primary" /> {sport.label}
+                    {sportLogos[sportId] ? (
+                      <img
+                        src={sportLogos[sportId]!}
+                        alt=""
+                        className="w-3.5 h-3.5 object-contain shrink-0 brightness-0 dark:invert"
+                        onError={() => setSportLogos((prev) => ({ ...prev, [sportId]: null }))}
+                      />
+                    ) : (
+                      <Users className="w-3.5 h-3.5 text-primary" />
+                    )}
+                    {sport.label}
                   </span>
                   <ChevronRight className={`w-4 h-4 transition-transform ${isOpen ? "rotate-90" : ""}`} />
                 </button>
