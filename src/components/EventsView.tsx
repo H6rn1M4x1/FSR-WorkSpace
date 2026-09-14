@@ -206,22 +206,36 @@ export function EventsView({ userId, darkMode = false }: EventsViewProps) {
   // --- Sport events for followed sports/teams/drivers ---
   const [sportEvents, setSportEvents] = useState<SportEvent[]>([]);
   const [sportEventsLoading, setSportEventsLoading] = useState(false);
+  // "Eventos deportivos" se muestra de a 5, con un botón "Ver más" para ir sumando de a 5.
+  const [visibleSportEventsCount, setVisibleSportEventsCount] = useState(5);
   useEffect(() => {
     if (!prefsLoaded || !prefs) return;
     setSportEventsLoading(true);
+    setVisibleSportEventsCount(5);
     fetchFollowedSportEvents(prefs).then(setSportEvents).finally(() => setSportEventsLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefsLoaded, prefs?.followedSports.join(","), JSON.stringify(prefs?.followedTeams || {})]);
 
   // --- Calendar: San Juan + followed sport events, merged by ISO date ---
   const eventsByDate = useMemo(() => {
-    const map: Record<string, { label: string; kind: "sanjuan" | "sport" }[]> = {};
+    const map: Record<
+      string,
+      { label: string; kind: "sanjuan" | "sport"; sportId?: string; homeTeamBadge?: string; awayTeamBadge?: string }[]
+    > = {};
     sjEvents.forEach((ev) => {
       const iso = guessIsoDate(ev.rawDate || ev.date);
       if (iso) (map[iso] = map[iso] || []).push({ label: ev.title, kind: "sanjuan" });
     });
     sportEvents.forEach((ev) => {
-      if (ev.date) (map[ev.date] = map[ev.date] || []).push({ label: ev.title, kind: "sport" });
+      if (ev.date) {
+        (map[ev.date] = map[ev.date] || []).push({
+          label: ev.title,
+          kind: "sport",
+          sportId: ev.sportId,
+          homeTeamBadge: ev.homeTeamBadge,
+          awayTeamBadge: ev.awayTeamBadge,
+        });
+      }
     });
     return map;
   }, [sjEvents, sportEvents]);
@@ -318,7 +332,30 @@ export function EventsView({ userId, darkMode = false }: EventsViewProps) {
               <div className="space-y-1.5">
                 {(eventsByDate[selectedDay] || []).map((ev, i) => (
                   <div key={i} className="p-2.5 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-2">
-                    {ev.kind === "sanjuan" ? <MapPin className="w-3.5 h-3.5 text-primary shrink-0" /> : <Trophy className="w-3.5 h-3.5 text-primary shrink-0" />}
+                    {ev.kind === "sanjuan" ? (
+                      <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
+                    ) : ev.sportId === "f1" ? (
+                      // La F1 no tiene escudos de equipo local/visitante (es una carrera) — solo el logo de F1.
+                      sportLogos.f1 ? (
+                        <img src={sportLogos.f1} alt="" className="w-4 h-4 object-contain shrink-0 brightness-0 dark:invert" />
+                      ) : (
+                        <Trophy className="w-3.5 h-3.5 text-primary shrink-0" />
+                      )
+                    ) : ev.sportId === "nba" ? (
+                      <div className="flex items-center gap-1 shrink-0">
+                        <NbaLogo className="h-3.5 w-auto max-w-[24px] shrink-0 text-black dark:text-white" />
+                        {ev.homeTeamBadge && <img src={ev.homeTeamBadge} alt="" className="w-4 h-4 rounded-full bg-white object-contain border border-white shrink-0" />}
+                        {ev.awayTeamBadge && <img src={ev.awayTeamBadge} alt="" className="w-4 h-4 rounded-full bg-white object-contain border border-white shrink-0" />}
+                      </div>
+                    ) : ev.sportId === "futbol" ? (
+                      <div className="flex items-center gap-1 shrink-0">
+                        {sportLogos.futbol && <img src={sportLogos.futbol} alt="" className="w-3.5 h-3.5 object-contain shrink-0 brightness-0 dark:invert" />}
+                        {ev.homeTeamBadge && <img src={ev.homeTeamBadge} alt="" className="w-4 h-4 rounded-full bg-white object-contain border border-white shrink-0" />}
+                        {ev.awayTeamBadge && <img src={ev.awayTeamBadge} alt="" className="w-4 h-4 rounded-full bg-white object-contain border border-white shrink-0" />}
+                      </div>
+                    ) : (
+                      <Trophy className="w-3.5 h-3.5 text-primary shrink-0" />
+                    )}
                     <span className="truncate">{ev.label}</span>
                   </div>
                 ))}
@@ -330,7 +367,7 @@ export function EventsView({ userId, darkMode = false }: EventsViewProps) {
         {/* Deportes */}
         <div className={`${SUBCARD} lg:col-span-7`}>
           <div className="flex items-center justify-between gap-2">
-            <p className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-400">Próximos eventos seguidos</p>
+            <p className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-400">Eventos deportivos</p>
             <button
               type="button"
               onClick={openSportsModal}
@@ -349,26 +386,41 @@ export function EventsView({ userId, darkMode = false }: EventsViewProps) {
               {prefs?.followedSports.length ? "No hay próximos eventos por ahora." : "Elegí al menos un deporte desde el botón de configuración."}
             </p>
           ) : (
-            <div className="space-y-1.5">
-              {sportEvents.slice().sort((a, b) => a.date.localeCompare(b.date)).slice(0, 30).map((ev) => (
-                <div key={ev.id} className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800">
-                  <div className="flex items-center -space-x-2 shrink-0">
-                    {ev.sportId === "f1" && sportLogos.f1 ? (
-                      <img src={sportLogos.f1} alt="" className="w-6 h-6 object-contain brightness-0 dark:invert" />
-                    ) : (
-                      <>
-                        {ev.homeTeamBadge && <img src={ev.homeTeamBadge} alt="" className="w-6 h-6 rounded-full bg-white object-contain border border-white" />}
-                        {ev.awayTeamBadge && <img src={ev.awayTeamBadge} alt="" className="w-6 h-6 rounded-full bg-white object-contain border border-white" />}
-                      </>
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-extrabold text-zinc-900 dark:text-zinc-100 truncate">{ev.title}</p>
-                    <p className="text-[10px] text-zinc-500 dark:text-zinc-400">{ev.leagueName} · {ev.date}{ev.time ? ` ${ev.time}` : ""}</p>
-                  </div>
+            (() => {
+              const sorted = sportEvents.slice().sort((a, b) => a.date.localeCompare(b.date)).slice(0, 30);
+              const visible = sorted.slice(0, visibleSportEventsCount);
+              return (
+                <div className="space-y-1.5">
+                  {visible.map((ev) => (
+                    <div key={ev.id} className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800">
+                      <div className="flex items-center -space-x-2 shrink-0">
+                        {ev.sportId === "f1" && sportLogos.f1 ? (
+                          <img src={sportLogos.f1} alt="" className="w-6 h-6 object-contain brightness-0 dark:invert" />
+                        ) : (
+                          <>
+                            {ev.homeTeamBadge && <img src={ev.homeTeamBadge} alt="" className="w-6 h-6 rounded-full bg-white object-contain border border-white" />}
+                            {ev.awayTeamBadge && <img src={ev.awayTeamBadge} alt="" className="w-6 h-6 rounded-full bg-white object-contain border border-white" />}
+                          </>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-extrabold text-zinc-900 dark:text-zinc-100 truncate">{ev.title}</p>
+                        <p className="text-[10px] text-zinc-500 dark:text-zinc-400">{ev.leagueName} · {ev.date}{ev.time ? ` ${ev.time}` : ""}</p>
+                      </div>
+                    </div>
+                  ))}
+                  {visibleSportEventsCount < sorted.length && (
+                    <button
+                      type="button"
+                      onClick={() => setVisibleSportEventsCount((c) => c + 5)}
+                      className="w-full py-2 rounded-xl text-[11px] font-bold text-primary bg-primary/10 hover:bg-primary/20 transition-all cursor-pointer"
+                    >
+                      Ver más
+                    </button>
+                  )}
                 </div>
-              ))}
-            </div>
+              );
+            })()
           )}
         </div>
       </div>
