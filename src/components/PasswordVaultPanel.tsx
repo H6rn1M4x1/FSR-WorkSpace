@@ -15,6 +15,7 @@ import {
   RefreshCw,
   Dices,
   X,
+  Upload,
 } from "lucide-react";
 import { useVault } from "../hooks/useVault";
 import { verify2FAToken } from "../lib/totp";
@@ -55,6 +56,93 @@ function clipboardCopy(text: string) {
   }, 20000);
 }
 
+/**
+ * Parses a CSV export of saved passwords (the format Chrome, Edge and Firefox all produce
+ * from their own "Export passwords" button — the standard, interoperable way to move
+ * passwords between password managers, since no browser lets a website read its password
+ * store directly). Column names vary a bit between browsers, so headers are matched loosely.
+ */
+interface ImportedPasswordRow {
+  site: string;
+  username: string;
+  password: string;
+  url: string;
+  notes: string;
+}
+
+function parseCsvLine(line: string): string[] {
+  const fields: string[] = [];
+  let field = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (line[i + 1] === '"') {
+          field += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += c;
+      }
+    } else if (c === '"') {
+      inQuotes = true;
+    } else if (c === ",") {
+      fields.push(field);
+      field = "";
+    } else {
+      field += c;
+    }
+  }
+  fields.push(field);
+  return fields;
+}
+
+function siteNameFromUrl(url: string): string {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, "");
+    return host || url;
+  } catch (_) {
+    return url;
+  }
+}
+
+function parsePasswordsCsv(text: string): ImportedPasswordRow[] {
+  // Split on real line breaks only (quoted fields in this format don't legitimately
+  // contain newlines for passwords/urls, so this simple split is safe in practice).
+  const lines = text.split(/\r\n|\r|\n/).filter((l) => l.trim().length > 0);
+  if (lines.length < 2) return [];
+
+  const headers = parseCsvLine(lines[0]).map((h) => h.trim().toLowerCase());
+  const findCol = (...names: string[]) => headers.findIndex((h) => names.includes(h));
+
+  const nameIdx = findCol("name", "title");
+  const urlIdx = findCol("url", "login_uri", "web site");
+  const userIdx = findCol("username", "login", "login_username");
+  const passIdx = findCol("password", "login_password");
+  const noteIdx = findCol("note", "notes", "extra");
+
+  if (passIdx === -1 || (userIdx === -1 && urlIdx === -1 && nameIdx === -1)) {
+    return [];
+  }
+
+  const rows: ImportedPasswordRow[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = parseCsvLine(lines[i]);
+    const password = passIdx >= 0 ? (cols[passIdx] || "").trim() : "";
+    const url = urlIdx >= 0 ? (cols[urlIdx] || "").trim() : "";
+    const rawName = nameIdx >= 0 ? (cols[nameIdx] || "").trim() : "";
+    const site = rawName || (url ? siteNameFromUrl(url) : "");
+    const username = userIdx >= 0 ? (cols[userIdx] || "").trim() : "";
+    const notes = noteIdx >= 0 ? (cols[noteIdx] || "").trim() : "";
+    if (!password || !site) continue; // skip incomplete rows instead of failing the whole import
+    rows.push({ site, username, password, url, notes });
+  }
+  return rows;
+}
+
 export function PasswordVaultPanel({
   userId,
   darkMode = false,
@@ -82,6 +170,12 @@ export function PasswordVaultPanel({
   const [totpCodeInput, setTotpCodeInput] = useState("");
   const [totpError, setTotpError] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
+  // Import from a browser's "Export passwords" CSV file.
+  const importFileInputRef = useRef<HTMLInputElement>(null);
+  const [pendingImport, setPendingImport] = useState<ImportedPasswordRow[] | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
 
   // Auto-hide timers per revealed item id, so "ver contraseña" only lasts 5 minutes
   // before it hides itself again (independent of the vault's own unlock state).
@@ -231,6 +325,56 @@ export function PasswordVaultPanel({
       setTotpCodeInput("");
       setTotpError(null);
     }
+  };
+
+  const handleImportFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file later
+    if (!file) return;
+    setImportError(null);
+    try {
+      const text = await file.text();
+      const rows = parsePasswordsCsv(text);
+      if (rows.length === 0) {
+        setImportError(
+          "No se encontraron contraseñas válidas en ese archivo. Exportalo desde tu navegador (Chrome/Edge/Firefox: Contraseñas → Exportar contraseñas) y probá de nuevo."
+        );
+        return;
+      }
+      setPendingImport(rows);
+    } catch (err: any) {
+      setImportError("No se pudo leer el archivo: " + (err?.message || String(err)));
+    }
+  };
+
+  const handleConfirmImport = async () => {
+    if (!pendingImport) return;
+    setImporting(true);
+    let ok = 0;
+    for (let i = 0; i < pendingImport.length; i++) {
+      const row = pendingImport[i];
+      try {
+        await vault.saveItem({
+          id: `vault_import_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 6)}`,
+          site: row.site,
+          username: row.username,
+          password: row.password,
+          url: row.url,
+          notes: row.notes,
+        });
+        ok++;
+      } catch (_) {
+        // keep going with the rest of the batch
+      }
+    }
+    setImporting(false);
+    setPendingImport(null);
+    showToast(
+      ok === pendingImport.length
+        ? `Se importaron ${ok} contraseña${ok === 1 ? "" : "s"} correctamente.`
+        : `Se importaron ${ok} de ${pendingImport.length} contraseñas (algunas fallaron).`,
+      ok > 0 ? "success" : "error"
+    );
   };
 
   const handleConfirmDelete = async () => {
@@ -489,10 +633,25 @@ export function PasswordVaultPanel({
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <button type="button" onClick={() => vault.lock()} className={BTN_GHOST}>
               <Lock className="w-3.5 h-3.5" /> Bloquear
             </button>
+            <button
+              type="button"
+              onClick={() => importFileInputRef.current?.click()}
+              className={BTN_GHOST}
+              title="Importar contraseñas exportadas desde tu navegador (Chrome, Edge, Firefox)"
+            >
+              <Upload className="w-3.5 h-3.5" /> Importar
+            </button>
+            <input
+              ref={importFileInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              onChange={handleImportFileSelected}
+            />
             <button
               type="button"
               onClick={() =>
@@ -504,6 +663,12 @@ export function PasswordVaultPanel({
             </button>
           </div>
         </div>
+
+        {importError && (
+          <p className="text-xs font-bold text-red-600 dark:text-red-400 flex items-start gap-1.5">
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" /> {importError}
+          </p>
+        )}
 
         {/* 2FA reveal-gate toggle */}
         <label
@@ -740,6 +905,19 @@ export function PasswordVaultPanel({
           darkMode={darkMode}
           onClose={() => setDeleteConfirmId(null)}
           onConfirm={handleConfirmDelete}
+        />
+
+        <ConfirmationModal
+          isOpen={!!pendingImport}
+          title="Importar contraseñas"
+          message={`Se encontraron ${pendingImport?.length || 0} contraseña${
+            pendingImport?.length === 1 ? "" : "s"
+          } en el archivo. Se van a agregar a tu caja fuerte, cifradas igual que las demás. ¿Confirmás?`}
+          confirmText={importing ? "Importando..." : "Importar"}
+          cancelText="Cancelar"
+          darkMode={darkMode}
+          onClose={() => !importing && setPendingImport(null)}
+          onConfirm={handleConfirmImport}
         />
       </div>
     );
