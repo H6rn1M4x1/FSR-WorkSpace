@@ -176,6 +176,7 @@ export function EventsView({ userId, darkMode = false }: EventsViewProps) {
   }, [calMonth]);
 
   return (
+    <div className="space-y-6 animate-fade-in px-3 sm:px-6 pt-1 sm:pt-1.5 pb-6">
     <div className={CARD(darkMode)}>
       <div className="flex items-center gap-3">
         <MapPin className="w-5 h-5 text-primary" />
@@ -448,6 +449,7 @@ export function EventsView({ userId, darkMode = false }: EventsViewProps) {
           </div>
         )}
       </div>
+    </div>
     </div>
   );
 }
