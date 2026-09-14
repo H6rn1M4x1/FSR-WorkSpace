@@ -338,7 +338,11 @@ export function EventsView({ userId, darkMode = false }: EventsViewProps) {
                       <img
                         src={sportLogos[sportId]!}
                         alt=""
-                        className="w-3.5 h-3.5 object-contain shrink-0 brightness-0 dark:invert"
+                        // These marks are far from square (F1's is a wide wordmark, NBA's is
+                        // a tall silhouette) — a fixed square box squashed them into an
+                        // unrecognizable sliver. Fix the height, let width follow the logo's
+                        // own aspect ratio instead.
+                        className="h-4 w-auto max-w-[34px] object-contain shrink-0 brightness-0 dark:invert"
                         onError={() => setSportLogos((prev) => ({ ...prev, [sportId]: null }))}
                       />
                     ) : (
