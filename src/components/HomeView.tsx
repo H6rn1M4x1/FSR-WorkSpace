@@ -728,6 +728,9 @@ export default function HomeView({
     const itemLabel =
       itemData.descripcion || itemData.title || itemData.name || itemData?.details?.marca || "Elemento";
 
+    // TEMP diagnostic logging — remove once the sharing propagation bug is confirmed fixed.
+    console.log("[Sharing v2] handleShareSpecificItem", { ownerEmail: user.email, target: email, itemType, category, itemId, itemLabel });
+
     // Close and confirm right away instead of waiting on the Firestore round-trip — on a slow
     // or flaky connection the write can take a moment, and the modal sitting there with no
     // feedback reads as "nothing happened". If the write itself fails, a second toast says so.
