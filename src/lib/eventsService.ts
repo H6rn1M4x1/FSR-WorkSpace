@@ -69,6 +69,7 @@ export async function getSanJuanEvents(): Promise<SanJuanEvent[]> {
       title: it.title,
       date: it.rawDate || "",
       rawDate: it.rawDate || undefined,
+      location: it.location || undefined,
       imageUrl: it.imageUrl || undefined,
       sourceUrl: it.sourceUrl || undefined,
     }));
