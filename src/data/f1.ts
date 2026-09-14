@@ -55,7 +55,6 @@ export const F1_DRIVERS: F1Driver[] = [
   { id: "norris", name: "Lando Norris", teamId: "mclaren", wikiTitle: "Lando Norris" },
   { id: "piastri", name: "Oscar Piastri", teamId: "mclaren", wikiTitle: "Oscar Piastri" },
   { id: "verstappen", name: "Max Verstappen", teamId: "redbullracing", wikiTitle: "Max Verstappen" },
-  { id: "tsunoda", name: "Yuki Tsunoda", teamId: "redbullracing", wikiTitle: "Yuki Tsunoda" },
   { id: "hadjar", name: "Isack Hadjar", teamId: "racingbulls", wikiTitle: "Isack Hadjar" },
   { id: "lawson", name: "Liam Lawson", teamId: "racingbulls", wikiTitle: "Liam Lawson" },
   { id: "gasly", name: "Pierre Gasly", teamId: "alpine", wikiTitle: "Pierre Gasly" },

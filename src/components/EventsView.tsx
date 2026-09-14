@@ -334,7 +334,10 @@ export function EventsView({ userId, darkMode = false }: EventsViewProps) {
                               <img
                                 src={logo}
                                 alt=""
-                                className="w-6 h-6 object-contain shrink-0"
+                                // The source asset is a solid-white mark (readable on F1.com's
+                                // dark cards) — invert it to black in light mode so it doesn't
+                                // vanish against a light background; cancel that in dark mode.
+                                className="w-6 h-6 object-contain shrink-0 invert dark:invert-0"
                                 onError={(e) => { e.currentTarget.style.display = "none"; }}
                               />
                             ) : (
