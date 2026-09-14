@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   MapPin,
   ExternalLink,
@@ -11,8 +12,11 @@ import {
   Users,
   User as UserIcon,
   ArrowLeft,
+  Settings,
+  X,
 } from "lucide-react";
 import { useToast } from "../context/ToastContext";
+import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import { NbaLogo } from "./icons/NbaLogo";
 import { SPORTS_CATALOG } from "../lib/sportsCatalog";
 import {
@@ -108,34 +112,57 @@ export function EventsView({ userId, darkMode = false }: EventsViewProps) {
     await saveEventPreferences(userId, next);
   };
 
-  const toggleSport = async (sportId: string) => {
-    if (!prefs) return;
-    const following = prefs.followedSports.includes(sportId);
-    await persistPrefs({
-      ...prefs,
-      followedSports: following ? prefs.followedSports.filter((s) => s !== sportId) : [...prefs.followedSports, sportId],
-      updatedAt: Date.now(),
+  // "Deportes que seguís" now lives in a Guardar/Cancelar modal instead of writing to
+  // Firestore on every click — all edits happen on this local draft, committed only on Guardar.
+  const [sportsModalOpen, setSportsModalOpen] = useState(false);
+  const [draftPrefs, setDraftPrefs] = useState<EventPreferences | null>(null);
+  useLockBodyScroll(sportsModalOpen);
+
+  const openSportsModal = () => {
+    setDraftPrefs(prefs || { followedSports: [], followedTeams: {}, updatedAt: Date.now() });
+    setExpandedSport(null);
+    setFootballLeague(null);
+    setSportsModalOpen(true);
+  };
+  const cancelSportsModal = () => {
+    setSportsModalOpen(false);
+    setDraftPrefs(null);
+    showToast("Cambios descartados.", "info");
+  };
+  const saveSportsModal = async () => {
+    if (!draftPrefs) return;
+    await persistPrefs({ ...draftPrefs, updatedAt: Date.now() });
+    setSportsModalOpen(false);
+    setDraftPrefs(null);
+    showToast("Preferencias de deportes guardadas.", "success");
+  };
+
+  const toggleDraftSport = (sportId: string) => {
+    if (!draftPrefs) return;
+    const following = draftPrefs.followedSports.includes(sportId);
+    setDraftPrefs({
+      ...draftPrefs,
+      followedSports: following ? draftPrefs.followedSports.filter((s) => s !== sportId) : [...draftPrefs.followedSports, sportId],
     });
-    showToast(following ? "Dejaste de seguir este deporte." : "Ahora seguís este deporte.", "success");
   };
 
   // Multi-select follow (fútbol clubs, NBA teams).
-  const toggleTeam = async (sportId: string, team: FollowedTeam) => {
-    if (!prefs) return;
-    const current = prefs.followedTeams[sportId] || [];
+  const toggleDraftTeam = (sportId: string, team: FollowedTeam) => {
+    if (!draftPrefs) return;
+    const current = draftPrefs.followedTeams[sportId] || [];
     const already = current.some((t) => t.id === team.id);
     const next = already ? current.filter((t) => t.id !== team.id) : [...current, team];
-    await persistPrefs({ ...prefs, followedTeams: { ...prefs.followedTeams, [sportId]: next }, updatedAt: Date.now() });
+    setDraftPrefs({ ...draftPrefs, followedTeams: { ...draftPrefs.followedTeams, [sportId]: next } });
   };
 
   // Single-select follow, one "team" + one "driver" (F1).
-  const pickSingle = async (sportId: string, kind: "team" | "driver", entry: FollowedTeam) => {
-    if (!prefs) return;
-    const current = prefs.followedTeams[sportId] || [];
+  const pickDraftSingle = (sportId: string, kind: "team" | "driver", entry: FollowedTeam) => {
+    if (!draftPrefs) return;
+    const current = draftPrefs.followedTeams[sportId] || [];
     const alreadyPicked = current.find((t) => t.kind === kind)?.id === entry.id;
     const others = current.filter((t) => t.kind !== kind);
     const next = alreadyPicked ? others : [...others, entry];
-    await persistPrefs({ ...prefs, followedTeams: { ...prefs.followedTeams, [sportId]: next }, updatedAt: Date.now() });
+    setDraftPrefs({ ...draftPrefs, followedTeams: { ...draftPrefs.followedTeams, [sportId]: next } });
   };
 
   const [expandedSport, setExpandedSport] = useState<string | null>(null);
@@ -214,8 +241,8 @@ export function EventsView({ userId, darkMode = false }: EventsViewProps) {
     return cells;
   }, [calMonth]);
 
-  const followedF1Team = prefs?.followedTeams["f1"]?.find((t) => t.kind === "team");
-  const followedF1Driver = prefs?.followedTeams["f1"]?.find((t) => t.kind === "driver");
+  const draftFollowedF1Team = draftPrefs?.followedTeams["f1"]?.find((t) => t.kind === "team");
+  const draftFollowedF1Driver = draftPrefs?.followedTeams["f1"]?.find((t) => t.kind === "driver");
 
   return (
     <div className="space-y-6 animate-fade-in px-3 sm:px-6 pt-1 sm:pt-1.5 pb-6">
@@ -302,193 +329,232 @@ export function EventsView({ userId, darkMode = false }: EventsViewProps) {
 
         {/* Deportes */}
         <div className={`${SUBCARD} lg:col-span-7`}>
-          <h3 className="font-extrabold text-sm flex items-center gap-2">
-            <Trophy className="w-4 h-4 text-primary" /> Deportes que seguís
-          </h3>
-
-          <div className="grid grid-cols-3 gap-2">
-            {SPORTS_CATALOG.map((sport) => {
-              const following = !!prefs?.followedSports.includes(sport.id);
-              return (
-                <button
-                  key={sport.id}
-                  type="button"
-                  onClick={async () => {
-                    await toggleSport(sport.id);
-                    onToggleExpand(sport.id);
-                    if (sport.id === "futbol") setFootballLeague(null);
-                  }}
-                  className={`px-3 py-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                    following ? "bg-primary text-white border-primary" : "bg-slate-50 dark:bg-zinc-900 border-slate-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-300 hover:border-primary/40"
-                  }`}
-                >
-                  {following && <Check className="w-3.5 h-3.5" />}
-                  {sport.label}
-                </button>
-              );
-            })}
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-400">Próximos eventos seguidos</p>
+            <button
+              type="button"
+              onClick={openSportsModal}
+              className="p-1.5 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-all cursor-pointer shrink-0"
+              title="Configurar deportes que seguís"
+            >
+              <Settings className="w-4 h-4" />
+            </button>
           </div>
-
-          {(prefs?.followedSports || []).map((sportId) => {
-            const sport = SPORTS_CATALOG.find((s) => s.id === sportId);
-            if (!sport) return null;
-            const isOpen = expandedSport === sportId;
-
-            return (
-              <div key={sportId} className="rounded-2xl border border-slate-200 dark:border-zinc-800 p-3 space-y-3">
-                <button type="button" onClick={() => onToggleExpand(sportId)} className="w-full flex items-center justify-between text-xs font-extrabold cursor-pointer">
-                  <span className="flex items-center gap-1.5">
-                    {sportId === "nba" ? (
-                      <NbaLogo className="h-4 w-auto max-w-[34px] shrink-0 text-black dark:text-white" />
-                    ) : sportLogos[sportId] ? (
-                      <img
-                        src={sportLogos[sportId]!}
-                        alt=""
-                        // These marks are far from square (F1's is a wide wordmark) — a fixed
-                        // square box squashed it into an unrecognizable sliver. Fix the
-                        // height, let width follow the logo's own aspect ratio instead.
-                        className="h-4 w-auto max-w-[34px] object-contain shrink-0 brightness-0 dark:invert"
-                        onError={() => setSportLogos((prev) => ({ ...prev, [sportId]: null }))}
-                      />
+          {sportEventsLoading ? (
+            <div className="flex items-center gap-2 text-xs text-zinc-500 py-4">
+              <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Cargando calendarios...
+            </div>
+          ) : sportEvents.length === 0 ? (
+            <p className="text-xs text-zinc-500 py-4">
+              {prefs?.followedSports.length ? "No hay próximos eventos por ahora." : "Elegí al menos un deporte desde el botón de configuración."}
+            </p>
+          ) : (
+            <div className="space-y-1.5">
+              {sportEvents.slice().sort((a, b) => a.date.localeCompare(b.date)).slice(0, 30).map((ev) => (
+                <div key={ev.id} className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800">
+                  <div className="flex items-center -space-x-2 shrink-0">
+                    {ev.sportId === "f1" && sportLogos.f1 ? (
+                      <img src={sportLogos.f1} alt="" className="w-6 h-6 object-contain brightness-0 dark:invert" />
                     ) : (
-                      <Users className="w-3.5 h-3.5 text-primary" />
+                      <>
+                        {ev.homeTeamBadge && <img src={ev.homeTeamBadge} alt="" className="w-6 h-6 rounded-full bg-white object-contain border border-white" />}
+                        {ev.awayTeamBadge && <img src={ev.awayTeamBadge} alt="" className="w-6 h-6 rounded-full bg-white object-contain border border-white" />}
+                      </>
                     )}
-                    {sport.label}
-                  </span>
-                  <ChevronRight className={`w-4 h-4 transition-transform ${isOpen ? "rotate-90" : ""}`} />
-                </button>
-
-                {isOpen && sportId === "f1" && (
-                  <div className="space-y-3">
-                    <div>
-                      <p className="text-[10px] font-bold text-zinc-400 uppercase mb-1.5">Escudería</p>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-56 overflow-y-auto">
-                        {F1_TEAMS.map((t) => {
-                          const logo = fetchF1TeamLogo(t.id);
-                          return (
-                          <button key={t.id} type="button" onClick={() => pickSingle("f1", "team", { id: t.id, name: t.name, badgeUrl: logo || undefined, kind: "team" })} className={PICK_BTN(followedF1Team?.id === t.id)}>
-                            {logo ? (
-                              <img
-                                src={logo}
-                                alt=""
-                                // The source asset is a solid-white mark (readable on F1.com's
-                                // dark cards) — invert it to black in light mode so it doesn't
-                                // vanish against a light background; cancel that in dark mode.
-                                className="w-6 h-6 object-contain shrink-0 invert dark:invert-0"
-                                onError={(e) => { e.currentTarget.style.display = "none"; }}
-                              />
-                            ) : (
-                              <Trophy className="w-4 h-4 shrink-0" />
-                            )}
-                            <span className="truncate">{t.name}</span>
-                          </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-bold text-zinc-400 uppercase mb-1.5">Piloto</p>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-56 overflow-y-auto">
-                        {F1_DRIVERS.map((d) => (
-                          <button key={d.id} type="button" onClick={() => pickSingle("f1", "driver", { id: d.id, name: d.name, badgeUrl: f1Images[d.name] || undefined, kind: "driver" })} className={PICK_BTN(followedF1Driver?.id === d.id)}>
-                            {f1Images[d.name] ? (
-                              <img
-                                src={f1Images[d.name]!}
-                                alt=""
-                                className="w-6 h-6 object-contain shrink-0"
-                                onError={() => setF1Images((prev) => ({ ...prev, [d.name]: null }))}
-                              />
-                            ) : (
-                              <UserIcon className="w-4 h-4 shrink-0" />
-                            )}
-                            <span className="truncate">{d.name}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
                   </div>
-                )}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-extrabold text-zinc-900 dark:text-zinc-100 truncate">{ev.title}</p>
+                    <p className="text-[10px] text-zinc-500 dark:text-zinc-400">{ev.leagueName} · {ev.date}{ev.time ? ` ${ev.time}` : ""}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
 
-                {isOpen && sportId === "futbol" && (
-                  <div className="space-y-2">
-                    {!footballLeague ? (
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-                        {FOOTBALL_LEAGUES.map((l) => (
-                          <button key={l.id} type="button" onClick={() => setFootballLeague(l.id)} className={PICK_BTN(false)}>
-                            <Trophy className="w-4 h-4 shrink-0" />
-                            <span className="truncate">{l.name}</span>
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        <button type="button" onClick={() => setFootballLeague(null)} className="flex items-center gap-1 text-[10px] font-bold text-primary cursor-pointer">
-                          <ArrowLeft className="w-3 h-3" /> Volver a ligas
-                        </button>
+      {/* Modal "Deportes que seguís": todos los cambios quedan en un draft local y solo se
+          guardan al apretar "Guardar" (o se descartan con "Cancelar"), cada uno con su propio
+          cartel de notificación. */}
+      {sportsModalOpen && draftPrefs && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={cancelSportsModal} />
+          <div className={`relative w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-3xl border p-4 sm:p-6 space-y-4 ${darkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-slate-200"}`}>
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="font-extrabold text-sm flex items-center gap-2">
+                <Trophy className="w-4 h-4 text-primary" /> Deportes que seguís
+              </h3>
+              <button type="button" onClick={cancelSportsModal} className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              {SPORTS_CATALOG.map((sport) => {
+                const following = draftPrefs.followedSports.includes(sport.id);
+                return (
+                  <button
+                    key={sport.id}
+                    type="button"
+                    onClick={() => {
+                      toggleDraftSport(sport.id);
+                      onToggleExpand(sport.id);
+                      if (sport.id === "futbol") setFootballLeague(null);
+                    }}
+                    className={`px-3 py-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      following ? "bg-primary text-white border-primary" : "bg-slate-50 dark:bg-zinc-900 border-slate-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-300 hover:border-primary/40"
+                    }`}
+                  >
+                    {following && <Check className="w-3.5 h-3.5" />}
+                    {sport.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {draftPrefs.followedSports.map((sportId) => {
+              const sport = SPORTS_CATALOG.find((s) => s.id === sportId);
+              if (!sport) return null;
+              const isOpen = expandedSport === sportId;
+
+              return (
+                <div key={sportId} className="rounded-2xl border border-slate-200 dark:border-zinc-800 p-3 space-y-3">
+                  <button type="button" onClick={() => onToggleExpand(sportId)} className="w-full flex items-center justify-between text-xs font-extrabold cursor-pointer">
+                    <span className="flex items-center gap-1.5">
+                      {sportId === "nba" ? (
+                        <NbaLogo className="h-4 w-auto max-w-[34px] shrink-0 text-black dark:text-white" />
+                      ) : sportLogos[sportId] ? (
+                        <img
+                          src={sportLogos[sportId]!}
+                          alt=""
+                          // These marks are far from square (F1's is a wide wordmark) — a fixed
+                          // square box squashed it into an unrecognizable sliver. Fix the
+                          // height, let width follow the logo's own aspect ratio instead.
+                          className="h-4 w-auto max-w-[34px] object-contain shrink-0 brightness-0 dark:invert"
+                          onError={() => setSportLogos((prev) => ({ ...prev, [sportId]: null }))}
+                        />
+                      ) : (
+                        <Users className="w-3.5 h-3.5 text-primary" />
+                      )}
+                      {sport.label}
+                    </span>
+                    <ChevronRight className={`w-4 h-4 transition-transform ${isOpen ? "rotate-90" : ""}`} />
+                  </button>
+
+                  {isOpen && sportId === "f1" && (
+                    <div className="space-y-3">
+                      <div>
+                        <p className="text-[10px] font-bold text-zinc-400 uppercase mb-1.5">Escudería</p>
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-56 overflow-y-auto">
-                          {getFootballClubs(footballLeague).map((club) => {
-                            const followed = (prefs?.followedTeams["futbol"] || []).some((t) => t.id === club.id);
+                          {F1_TEAMS.map((t) => {
+                            const logo = fetchF1TeamLogo(t.id);
                             return (
-                              <button key={club.id} type="button" onClick={() => toggleTeam("futbol", { id: club.id, name: club.name, badgeUrl: club.logo })} className={PICK_BTN(followed)}>
-                                <img src={club.logo} alt="" className="w-5 h-5 object-contain shrink-0" />
-                                <span className="truncate">{club.name}</span>
-                              </button>
+                            <button key={t.id} type="button" onClick={() => pickDraftSingle("f1", "team", { id: t.id, name: t.name, badgeUrl: logo || undefined, kind: "team" })} className={PICK_BTN(draftFollowedF1Team?.id === t.id)}>
+                              {logo ? (
+                                <img
+                                  src={logo}
+                                  alt=""
+                                  // The source asset is a solid-white mark (readable on F1.com's
+                                  // dark cards) — invert it to black in light mode so it doesn't
+                                  // vanish against a light background; cancel that in dark mode.
+                                  className="w-6 h-6 object-contain shrink-0 invert dark:invert-0"
+                                  onError={(e) => { e.currentTarget.style.display = "none"; }}
+                                />
+                              ) : (
+                                <Trophy className="w-4 h-4 shrink-0" />
+                              )}
+                              <span className="truncate">{t.name}</span>
+                            </button>
                             );
                           })}
                         </div>
                       </div>
-                    )}
-                  </div>
-                )}
-
-                {isOpen && sportId === "nba" && (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-64 overflow-y-auto">
-                    {NBA_TEAMS.map((team) => (
-                      <button key={team.id} type="button" onClick={() => toggleTeam("nba", { id: team.id, name: team.name, badgeUrl: team.logo })} className={PICK_BTN((prefs?.followedTeams["nba"] || []).some((t) => t.id === team.id))}>
-                        <img
-                          src={team.logo}
-                          alt=""
-                          className="w-5 h-5 object-contain shrink-0"
-                          onError={(e) => { e.currentTarget.style.display = "none"; }}
-                        />
-                        <span className="truncate">{team.name}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-
-          <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-zinc-800/80">
-            <p className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-400">Próximos eventos seguidos</p>
-            {sportEventsLoading ? (
-              <div className="flex items-center gap-2 text-xs text-zinc-500 py-4">
-                <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Cargando calendarios...
-              </div>
-            ) : sportEvents.length === 0 ? (
-              <p className="text-xs text-zinc-500 py-4">
-                {prefs?.followedSports.length ? "No hay próximos eventos por ahora." : "Elegí al menos un deporte arriba."}
-              </p>
-            ) : (
-              <div className="space-y-1.5">
-                {sportEvents.slice().sort((a, b) => a.date.localeCompare(b.date)).slice(0, 30).map((ev) => (
-                  <div key={ev.id} className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800">
-                    <div className="flex items-center -space-x-2 shrink-0">
-                      {ev.homeTeamBadge && <img src={ev.homeTeamBadge} alt="" className="w-6 h-6 rounded-full bg-white object-contain border border-white" />}
-                      {ev.awayTeamBadge && <img src={ev.awayTeamBadge} alt="" className="w-6 h-6 rounded-full bg-white object-contain border border-white" />}
+                      <div>
+                        <p className="text-[10px] font-bold text-zinc-400 uppercase mb-1.5">Piloto</p>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-56 overflow-y-auto">
+                          {F1_DRIVERS.map((d) => (
+                            <button key={d.id} type="button" onClick={() => pickDraftSingle("f1", "driver", { id: d.id, name: d.name, badgeUrl: f1Images[d.name] || undefined, kind: "driver" })} className={PICK_BTN(draftFollowedF1Driver?.id === d.id)}>
+                              {f1Images[d.name] ? (
+                                <img
+                                  src={f1Images[d.name]!}
+                                  alt=""
+                                  className="w-6 h-6 object-contain shrink-0"
+                                  onError={() => setF1Images((prev) => ({ ...prev, [d.name]: null }))}
+                                />
+                              ) : (
+                                <UserIcon className="w-4 h-4 shrink-0" />
+                              )}
+                              <span className="truncate">{d.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-extrabold text-zinc-900 dark:text-zinc-100 truncate">{ev.title}</p>
-                      <p className="text-[10px] text-zinc-500 dark:text-zinc-400">{ev.leagueName} · {ev.date}{ev.time ? ` ${ev.time}` : ""}</p>
+                  )}
+
+                  {isOpen && sportId === "futbol" && (
+                    <div className="space-y-2">
+                      {!footballLeague ? (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                          {FOOTBALL_LEAGUES.map((l) => (
+                            <button key={l.id} type="button" onClick={() => setFootballLeague(l.id)} className={PICK_BTN(false)}>
+                              <Trophy className="w-4 h-4 shrink-0" />
+                              <span className="truncate">{l.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <button type="button" onClick={() => setFootballLeague(null)} className="flex items-center gap-1 text-[10px] font-bold text-primary cursor-pointer">
+                            <ArrowLeft className="w-3 h-3" /> Volver a ligas
+                          </button>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-56 overflow-y-auto">
+                            {getFootballClubs(footballLeague).map((club) => {
+                              const followed = (draftPrefs.followedTeams["futbol"] || []).some((t) => t.id === club.id);
+                              return (
+                                <button key={club.id} type="button" onClick={() => toggleDraftTeam("futbol", { id: club.id, name: club.name, badgeUrl: club.logo })} className={PICK_BTN(followed)}>
+                                  <img src={club.logo} alt="" className="w-5 h-5 object-contain shrink-0" />
+                                  <span className="truncate">{club.name}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
+                  )}
+
+                  {isOpen && sportId === "nba" && (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-64 overflow-y-auto">
+                      {NBA_TEAMS.map((team) => (
+                        <button key={team.id} type="button" onClick={() => toggleDraftTeam("nba", { id: team.id, name: team.name, badgeUrl: team.logo })} className={PICK_BTN((draftPrefs.followedTeams["nba"] || []).some((t) => t.id === team.id))}>
+                          <img
+                            src={team.logo}
+                            alt=""
+                            className="w-5 h-5 object-contain shrink-0"
+                            onError={(e) => { e.currentTarget.style.display = "none"; }}
+                          />
+                          <span className="truncate">{team.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-zinc-800/80">
+              <button type="button" onClick={cancelSportsModal} className="px-4 py-2 rounded-xl text-xs font-bold text-zinc-600 dark:text-zinc-300 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 transition-all cursor-pointer">
+                Cancelar
+              </button>
+              <button type="button" onClick={saveSportsModal} className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-primary hover:bg-primary/90 transition-all cursor-pointer">
+                Guardar
+              </button>
+            </div>
           </div>
-        </div>
-      </div>
+        </div>,
+        document.body
+      )}
 
       {/* San Juan */}
       <div className={SUBCARD}>
