@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   KeyRound,
   Lock,
@@ -16,6 +16,7 @@ import {
   Dices,
   X,
   Upload,
+  Search,
 } from "lucide-react";
 import { useVault } from "../hooks/useVault";
 import { verify2FAToken } from "../lib/totp";
@@ -176,6 +177,12 @@ export function PasswordVaultPanel({
   const [pendingImport, setPendingImport] = useState<ImportedPasswordRow[] | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
+
+  // Search + pagination (same 15-per-page pattern used elsewhere in the app), so a large
+  // vault doesn't render/decrypt hundreds of items onto the screen at once.
+  const [vaultSearch, setVaultSearch] = useState("");
+  const [vaultPage, setVaultPage] = useState(1);
+  const VAULT_PAGE_SIZE = 15;
 
   // Auto-hide timers per revealed item id, so "ver contraseña" only lasts 5 minutes
   // before it hides itself again (independent of the vault's own unlock state).
@@ -406,6 +413,31 @@ export function PasswordVaultPanel({
     useDigits: true,
     useSymbols: true,
   };
+
+  // Smart search: splits the query into words and requires every word to appear somewhere
+  // in the item (site, usuario, URL or notas) — so "netflix hernan" finds the Netflix entry
+  // for that specific account, in any word order, without needing an exact phrase match.
+  const sortedItems = useMemo(
+    () => vault.items.slice().sort((a, b) => a.site.localeCompare(b.site)),
+    [vault.items]
+  );
+  const filteredVaultItems = useMemo(() => {
+    const terms = vaultSearch.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (terms.length === 0) return sortedItems;
+    return sortedItems.filter((item) => {
+      const haystack = `${item.site} ${item.username} ${item.url || ""} ${item.notes || ""}`.toLowerCase();
+      return terms.every((t) => haystack.includes(t));
+    });
+  }, [sortedItems, vaultSearch]);
+  const vaultTotalPages = Math.max(1, Math.ceil(filteredVaultItems.length / VAULT_PAGE_SIZE));
+  const safeVaultPage = Math.min(vaultPage, vaultTotalPages);
+  const paginatedVaultItems = useMemo(() => {
+    const start = (safeVaultPage - 1) * VAULT_PAGE_SIZE;
+    return filteredVaultItems.slice(start, start + VAULT_PAGE_SIZE);
+  }, [filteredVaultItems, safeVaultPage]);
+  useEffect(() => {
+    setVaultPage(1);
+  }, [vaultSearch]);
 
   // ---------- NOT SET UP ----------
   if (vault.status === "not_setup") {
@@ -697,6 +729,20 @@ export function PasswordVaultPanel({
           </span>
         </label>
 
+        {/* Search */}
+        {vault.items.length > 0 && (
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-primary" />
+            <input
+              type="text"
+              value={vaultSearch}
+              onChange={(e) => setVaultSearch(e.target.value)}
+              placeholder="Buscar por sitio, usuario, URL o notas..."
+              className="w-full pl-9 pr-4 py-2 rounded-xl bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-700 dark:placeholder:text-zinc-400 outline-none text-xs transition-all focus:border-slate-400 dark:focus:border-zinc-700"
+            />
+          </div>
+        )}
+
         {/* Items list */}
         <div className="space-y-2">
           {vault.items.length === 0 && (
@@ -704,10 +750,12 @@ export function PasswordVaultPanel({
               Todavía no guardaste ninguna contraseña.
             </p>
           )}
-          {vault.items
-            .slice()
-            .sort((a, b) => a.site.localeCompare(b.site))
-            .map((item) => (
+          {vault.items.length > 0 && filteredVaultItems.length === 0 && (
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 text-center py-6">
+              Ninguna contraseña coincide con "{vaultSearch}".
+            </p>
+          )}
+          {paginatedVaultItems.map((item) => (
               <div
                 key={item.id}
                 className="p-3.5 rounded-xl bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 flex items-center justify-between gap-3 flex-wrap"
@@ -760,6 +808,32 @@ export function PasswordVaultPanel({
               </div>
             ))}
         </div>
+
+        {vaultTotalPages > 1 && (
+          <div className="pt-3 border-t border-slate-100 dark:border-zinc-800/80 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-zinc-500 dark:text-zinc-400 font-medium">
+            <span>
+              Mostrando {paginatedVaultItems.length} de {filteredVaultItems.length} contraseñas (Página {safeVaultPage} de {vaultTotalPages})
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={safeVaultPage === 1}
+                onClick={() => setVaultPage((p) => Math.max(1, p - 1))}
+                className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-black/85 backdrop-blur-md disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-zinc-800 transition-all font-bold cursor-pointer"
+              >
+                Anterior
+              </button>
+              <button
+                type="button"
+                disabled={safeVaultPage === vaultTotalPages}
+                onClick={() => setVaultPage((p) => Math.min(vaultTotalPages, p + 1))}
+                className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-black/85 backdrop-blur-md disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-zinc-800 transition-all font-bold cursor-pointer"
+              >
+                Siguiente
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Add/Edit modal */}
         {editingItem && (
