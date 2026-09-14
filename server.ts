@@ -2120,6 +2120,141 @@ Responde únicamente con un arreglo JSON con las propiedades requeridas: descrip
 });
 
 
+// --- Events tab: San Juan local agenda (scraped) + sports calendars (TheSportsDB proxy) ---
+
+// Simple in-memory cache so a burst of visits doesn't refetch/reparse the source page every time.
+let sanJuanEventsCache: { fetchedAt: number; items: any[] } | null = null;
+const SAN_JUAN_CACHE_MS = 6 * 60 * 60 * 1000; // 6h — the app itself decides "once a month" client-side
+
+app.get("/api/events/san-juan", async (req, res) => {
+  try {
+    const force = req.query.force === "1";
+    if (!force && sanJuanEventsCache && Date.now() - sanJuanEventsCache.fetchedAt < SAN_JUAN_CACHE_MS) {
+      return res.json({ items: sanJuanEventsCache.items, cached: true });
+    }
+
+    const pageRes = await fetch("https://sanjuan.yendly.com/este-mes", {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; FSRWorkspaceBot/1.0)" },
+    });
+    if (!pageRes.ok) {
+      throw new Error(`yendly.com respondió ${pageRes.status}`);
+    }
+    const html = await pageRes.text();
+
+    // Best-effort HTML scrape: yendly renders each event as a card with a title link, a date
+    // string and (usually) a cover image. No official API/RSS exists, so this parses the
+    // rendered markup with regexes rather than pulling in a full DOM/HTML parser dependency.
+    // If the site's markup changes this may need adjusting — it degrades to an empty list
+    // rather than throwing, so the rest of the Eventos tab keeps working either way.
+    const items: any[] = [];
+    const cardRe = /<a[^>]+href="([^"]*\/evento\/[^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+    const seen = new Set<string>();
+    let m: RegExpExecArray | null;
+    while ((m = cardRe.exec(html)) && items.length < 60) {
+      const href = m[1];
+      const block = m[2];
+      if (seen.has(href)) continue;
+      seen.add(href);
+
+      const titleMatch = block.match(/<h\d[^>]*>([\s\S]*?)<\/h\d>/i) || block.match(/alt="([^"]+)"/i);
+      const title = titleMatch ? titleMatch[1].replace(/<[^>]+>/g, "").trim() : null;
+      if (!title) continue;
+
+      const imgMatch = block.match(/<img[^>]+src="([^"]+)"/i);
+      const dateMatch = block.match(/(\d{1,2}\s+de\s+\w+|\d{1,2}\/\d{1,2}(\/\d{2,4})?)/i);
+
+      items.push({
+        id: `sj_${Buffer.from(href).toString("base64").slice(0, 16)}`,
+        title,
+        rawDate: dateMatch ? dateMatch[0] : null,
+        imageUrl: imgMatch ? imgMatch[1] : null,
+        sourceUrl: href.startsWith("http") ? href : `https://sanjuan.yendly.com${href}`,
+      });
+    }
+
+    sanJuanEventsCache = { fetchedAt: Date.now(), items };
+    return res.json({ items, cached: false });
+  } catch (error: any) {
+    console.error("Error in /api/events/san-juan:", error);
+    // Serve whatever we last had cached, if anything, instead of failing the whole tab.
+    if (sanJuanEventsCache) return res.json({ items: sanJuanEventsCache.items, cached: true, stale: true });
+    res.status(500).json({ error: error.message || "No se pudo obtener la agenda de San Juan." });
+  }
+});
+
+const SPORTSDB_BASE = "https://www.thesportsdb.com/api/v1/json/3";
+const leagueIdCache: Record<string, string> = {};
+
+app.get("/api/sportsdb/search-league", async (req, res) => {
+  try {
+    const query = (req.query.q as string) || "";
+    const sport = (req.query.sport as string) || "";
+    if (!query) return res.status(400).json({ error: "Missing q" });
+    const cacheKey = `${sport}::${query}`;
+    if (leagueIdCache[cacheKey]) {
+      return res.json({ leagueId: leagueIdCache[cacheKey] });
+    }
+    const r = await fetch(`${SPORTSDB_BASE}/search_all_leagues.php?s=${encodeURIComponent(query)}`);
+    const data = await r.json();
+    const leagues: any[] = data?.countries || data?.leagues || [];
+    const match =
+      leagues.find((l: any) => (l.strSport || "").toLowerCase() === sport.toLowerCase()) || leagues[0];
+    if (!match) return res.json({ leagueId: null });
+    leagueIdCache[cacheKey] = match.idLeague;
+    return res.json({ leagueId: match.idLeague, leagueName: match.strLeague });
+  } catch (error: any) {
+    console.error("Error in /api/sportsdb/search-league:", error);
+    res.status(500).json({ error: error.message || "No se pudo buscar la liga." });
+  }
+});
+
+app.get("/api/sportsdb/teams", async (req, res) => {
+  try {
+    const leagueId = req.query.leagueId as string;
+    if (!leagueId) return res.status(400).json({ error: "Missing leagueId" });
+    const r = await fetch(`${SPORTSDB_BASE}/lookup_all_teams.php?id=${encodeURIComponent(leagueId)}`);
+    const data = await r.json();
+    const teams = (data?.teams || []).map((t: any) => ({
+      id: t.idTeam,
+      name: t.strTeam,
+      badgeUrl: t.strTeamBadge || t.strTeamLogo || null,
+    }));
+    return res.json({ teams });
+  } catch (error: any) {
+    console.error("Error in /api/sportsdb/teams:", error);
+    res.status(500).json({ error: error.message || "No se pudieron obtener los equipos." });
+  }
+});
+
+app.get("/api/sportsdb/next-events", async (req, res) => {
+  try {
+    const leagueId = req.query.leagueId as string;
+    const teamId = req.query.teamId as string;
+    const url = teamId
+      ? `${SPORTSDB_BASE}/eventsnext.php?id=${encodeURIComponent(teamId)}`
+      : leagueId
+      ? `${SPORTSDB_BASE}/eventsnextleague.php?id=${encodeURIComponent(leagueId)}`
+      : null;
+    if (!url) return res.status(400).json({ error: "Missing leagueId or teamId" });
+    const r = await fetch(url);
+    const data = await r.json();
+    const events = (data?.events || []).map((e: any) => ({
+      id: e.idEvent,
+      title: e.strEvent,
+      leagueName: e.strLeague,
+      date: e.dateEvent,
+      time: e.strTime ? e.strTime.slice(0, 5) : null,
+      homeTeamBadge: e.strHomeTeamBadge || null,
+      awayTeamBadge: e.strAwayTeamBadge || null,
+      venue: e.strVenue || null,
+    }));
+    return res.json({ events });
+  } catch (error: any) {
+    console.error("Error in /api/sportsdb/next-events:", error);
+    res.status(500).json({ error: error.message || "No se pudieron obtener los próximos eventos." });
+  }
+});
+
 // Mounting Vite middleware or static serving
 async function start() {
   if (process.env.NODE_ENV !== "production") {

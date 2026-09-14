@@ -23,6 +23,7 @@ const FinanceView = lazy(() => import("./components/FinanceView"));
 const AppointmentsView = lazy(() => import("./components/AppointmentsView"));
 const HealthView = lazy(() => import("./components/HealthView"));
 import { NotesView } from "./components/NotesView";
+import { EventsView } from "./components/EventsView";
 import PageSkeleton from "./components/PageSkeleton";
 const UserSettingsModal = lazy(() =>
   import("./components/UserSettingsModal").then((m) => ({ default: m.UserSettingsModal }))
@@ -2343,6 +2344,15 @@ export default function App() {
               {currentTab === "notes" && (
                 <NotesView
                   userId={user?.email || ""}
+                  darkMode={darkMode}
+                  activeSubTab={activeSubTab}
+                  onSubTabChange={setActiveSubTab}
+                />
+              )}
+
+              {currentTab === "events" && (
+                <EventsView
+                  userId={user?.email || userProfile?.email || "hernanmaximiliano10@gmail.com"}
                   darkMode={darkMode}
                   activeSubTab={activeSubTab}
                   onSubTabChange={setActiveSubTab}
