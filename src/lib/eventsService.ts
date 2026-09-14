@@ -7,6 +7,8 @@ import {
 } from "./firestoreSyncService";
 import type { EventPreferences, SanJuanEvent, SportEvent } from "../types";
 import { SPORTS_CATALOG, getSportById } from "./sportsCatalog";
+import { TEAMS, Team } from "../data/teams";
+import { getLeagueCodesForTeam } from "./matchScheduler";
 
 const PREFS_CATEGORY = "event_preferences";
 
@@ -97,12 +99,73 @@ async function resolveLeagueId(sportId: string): Promise<string | null> {
 }
 
 export async function fetchTeamsForSport(sportId: string): Promise<{ id: string; name: string; badgeUrl?: string }[]> {
+  // Fútbol reuses the curated club roster (real names + official badge URLs) that
+  // FavoriteTeamWidget/matchScheduler already use elsewhere in the app — no network call, and
+  // no risk of resolving the wrong league (which is what happened going through TheSportsDB).
+  if (sportId === "futbol") {
+    return TEAMS.map((t) => ({ id: t.id, name: `${t.name} · ${t.league}`, badgeUrl: t.logo }));
+  }
   const leagueId = await resolveLeagueId(sportId);
   if (!leagueId) return [];
   const res = await fetch(`/.netlify/functions/sportsdb-teams?leagueId=${encodeURIComponent(leagueId)}`);
   if (!res.ok) return [];
   const data = await res.json();
   return data.teams || [];
+}
+
+/**
+ * Fixtures for one followed fútbol club, from ESPN's public (no-key, CORS-open) scoreboard
+ * API — the same source matchScheduler.ts already uses for the favorite-team widget on
+ * Inicio. Far more reliable for football specifically than TheSportsDB's league search.
+ */
+async function fetchFootballFixturesForTeam(team: Team): Promise<SportEvent[]> {
+  const codes = getLeagueCodesForTeam(team);
+  const now = new Date();
+  const horizon = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+  const fmt = (d: Date) =>
+    `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(d.getUTCDate()).padStart(2, "0")}`;
+  const dateRange = `${fmt(now)}-${fmt(horizon)}`;
+  const cleanQuery = team.name.toLowerCase().replace(/fc|club|de|cd|real|atletico|deportivo/g, "").trim();
+
+  const results: SportEvent[] = [];
+  for (const code of codes) {
+    try {
+      const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${code}/scoreboard?dates=${dateRange}`);
+      if (!res.ok) continue;
+      const data = await res.json();
+      const events: any[] = data.events || [];
+      for (const ev of events) {
+        const comp = ev.competitions?.[0];
+        const comps = comp?.competitors || [];
+        const involved = comps.some((c: any) => {
+          const cn = (c.team?.displayName || "").toLowerCase();
+          return cn.includes(cleanQuery) || cleanQuery.includes(cn);
+        });
+        if (!comp || !involved) continue;
+
+        const home = comps.find((c: any) => c.homeAway === "home");
+        const away = comps.find((c: any) => c.homeAway === "away");
+        const eventDate = new Date(ev.date);
+        const dateStr = `${eventDate.getFullYear()}-${String(eventDate.getMonth() + 1).padStart(2, "0")}-${String(eventDate.getDate()).padStart(2, "0")}`;
+        const timeStr = `${String(eventDate.getHours()).padStart(2, "0")}:${String(eventDate.getMinutes()).padStart(2, "0")}`;
+
+        results.push({
+          id: `fb_${ev.id}`,
+          sportId: "futbol",
+          leagueName: data.leagues?.[0]?.name || team.league,
+          title: `${home?.team?.displayName || "?"} vs ${away?.team?.displayName || "?"}`,
+          date: dateStr,
+          time: timeStr,
+          homeTeamBadge: home?.team?.logo,
+          awayTeamBadge: away?.team?.logo,
+          venue: comp.venue?.displayName,
+        });
+      }
+    } catch (err) {
+      console.warn(`[eventsService] Error fetching ESPN fixtures for league ${code}:`, err);
+    }
+  }
+  return results;
 }
 
 /** Upcoming events for every sport/team the user follows, deduplicated. */
@@ -113,6 +176,15 @@ export async function fetchFollowedSportEvents(prefs: EventPreferences | null): 
   for (const sportId of prefs.followedSports) {
     const teams = prefs.followedTeams[sportId] || [];
     try {
+      if (sportId === "futbol") {
+        for (const followed of teams) {
+          const team = TEAMS.find((t) => t.id === followed.id);
+          if (!team) continue;
+          results.push(...(await fetchFootballFixturesForTeam(team)));
+        }
+        continue;
+      }
+
       if (teams.length > 0) {
         for (const team of teams) {
           const res = await fetch(`/.netlify/functions/sportsdb-next-events?teamId=${encodeURIComponent(team.id)}`);
