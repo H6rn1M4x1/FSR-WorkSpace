@@ -632,6 +632,7 @@ export function EventsView({ userId, darkMode = false }: EventsViewProps) {
                 {ev.imageUrl && <img src={ev.imageUrl} alt={ev.title} className="w-full h-32 object-cover" />}
                 <div className="p-3 space-y-1 flex-1">
                   <p className="font-extrabold text-sm text-zinc-900 dark:text-zinc-100 line-clamp-2">{ev.title}</p>
+                  {ev.location && <p className="text-[11px] text-zinc-500 dark:text-zinc-400 line-clamp-1">{ev.location}</p>}
                   {ev.rawDate && <p className="text-xs text-primary font-bold">{ev.rawDate}</p>}
                   <p className="text-[10px] text-zinc-400 flex items-center gap-1">
                     <ExternalLink className="w-3 h-3" /> Ver más

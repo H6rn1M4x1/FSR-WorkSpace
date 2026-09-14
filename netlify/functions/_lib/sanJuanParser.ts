@@ -5,8 +5,12 @@
  *      these for SEO/rich snippets — when present they're clean, structured JSON).
  *   2. A Next.js-style __NEXT_DATA__ script tag, scanned generically for event-shaped objects
  *      (anything with a name/title + a date-ish field).
- *   3. A plain regex sweep over rendered <a href=".../evento/...">...</a> cards, as a last
- *      resort against raw HTML.
+ *   3. A plain regex sweep over rendered <a href="/eventos/{id}">...</a> cards, as a last
+ *      resort against raw HTML. Each card's inner markup is split into "text runs" (the text
+ *      between tag boundaries) rather than read as one flattened `textContent`, because the
+ *      site renders venue / title / date as separate sibling elements with no whitespace
+ *      between them — flattening them first would glue e.g. "Velódromo...ChancayDia 16 -
+ *      Campeonato..." into one unreadable string.
  * Whichever strategy finds something first wins; if none do, it returns an empty list rather
  * than throwing, so the rest of the Eventos tab keeps working either way.
  */
@@ -90,9 +94,42 @@ function parseSanJuanFromNextData(html: string): any[] {
   return found;
 }
 
+// Matches a date/time-ish fragment: "14/09/2026", "16 de marzo", "Dia 16", "Día 16", or a
+// weekday abbreviation like "Lun, 14 sept, 20:00 hs".
+const DATE_RUN_RE =
+  /(\d{1,2}\/\d{1,2}(\/\d{2,4})?|\d{1,2}\s+de\s+\w+|d[ií]a\s+\d{1,2}|^(lun|mar|mi[eé]|jue|vie|s[aá]b|dom)[,.]?\s)/i;
+
+// The subset of date runs that EventsView's own `guessIsoDate()` (dd/mm[/yyyy] or "dd de mes")
+// can actually turn into a real calendar date — prefer these over e.g. "Lun, 14 sept, 20:00 hs",
+// which reads fine but has no ISO-parseable shape.
+const STRICT_DATE_RE = /\d{1,2}\/\d{1,2}(\/\d{2,4})?|\d{1,2}\s+de\s+\w+/i;
+
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Splits a card's inner HTML into the text found between tag boundaries, dropping empties. */
+function extractTextRuns(blockHtml: string): string[] {
+  const cleaned = blockHtml
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ");
+  return cleaned
+    .split(/<[^>]+>/)
+    .map(decodeEntities)
+    .filter((s) => s.length > 0);
+}
+
 function parseSanJuanFromCards(html: string): any[] {
   const items: any[] = [];
-  const cardRe = /<a[^>]+href="([^"]*\/evento\/[^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+  const cardRe = /<a[^>]+href="([^"]*\/eventos\/\d+[^"]*)"[^>]*>([\s\S]*?)<\/a>/gi;
   const seen = new Set<string>();
   let m: RegExpExecArray | null;
   while ((m = cardRe.exec(html)) && items.length < 60) {
@@ -101,14 +138,31 @@ function parseSanJuanFromCards(html: string): any[] {
     if (seen.has(href)) continue;
     seen.add(href);
 
-    const titleMatch = block.match(/<h\d[^>]*>([\s\S]*?)<\/h\d>/i) || block.match(/alt="([^"]+)"/i);
-    const title = titleMatch ? titleMatch[1].replace(/<[^>]+>/g, "").trim() : null;
+    const imgMatch = block.match(/<img[^>]+src="([^"]+)"/i);
+    const altMatch = block.match(/alt="([^"]+)"/i);
+    const headingMatch = block.match(/<h[1-6][^>]*>([\s\S]*?)<\/h[1-6]>/i);
+
+    const runs = extractTextRuns(block);
+    const dateRuns = runs.filter((r) => DATE_RUN_RE.test(r));
+    const nonDateRuns = runs.filter((r) => !DATE_RUN_RE.test(r));
+
+    // Title: prefer an explicit heading if the markup has one; otherwise the site renders
+    // venue then title as the first two non-date text runs, in that order — so fall back to
+    // "second non-date run" (or the only one, if just one is present) rather than picking
+    // "whichever run happens to be longest", which misfires when the venue name outruns a
+    // short title (e.g. "Mendoza Nte. 27o" vs. "Torneo de Truco").
+    let title = headingMatch ? decodeEntities(headingMatch[1].replace(/<[^>]+>/g, "")) : null;
+    if (!title) {
+      if (nonDateRuns.length >= 2) title = nonDateRuns[1];
+      else if (nonDateRuns.length === 1) title = nonDateRuns[0];
+    }
+    if (!title && altMatch) title = altMatch[1].trim();
     if (!title) continue;
 
-    const imgMatch = block.match(/<img[^>]+src="([^"]+)"/i);
-    const dateMatch = block.match(/(\d{1,2}\s+de\s+\w+|\d{1,2}\/\d{1,2}(\/\d{2,4})?)/i);
+    const location = nonDateRuns.find((r) => r !== title) || null;
+    const rawDate = dateRuns.find((r) => STRICT_DATE_RE.test(r)) || dateRuns.sort((a, b) => b.length - a.length)[0] || null;
 
-    items.push(toEventItem(href, title, dateMatch ? dateMatch[0] : null, imgMatch ? imgMatch[1] : null));
+    items.push({ ...toEventItem(href, title, rawDate, imgMatch ? imgMatch[1] : null), location });
   }
   return items;
 }
