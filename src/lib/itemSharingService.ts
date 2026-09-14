@@ -69,7 +69,15 @@ export async function shareItemWith(
     createdAt: Date.now(),
   };
 
-  await setDoc(doc(db, SHARED_ITEMS, shareId), payload, { merge: true });
+  // TEMP diagnostic logging — remove once the sharing propagation bug is confirmed fixed.
+  console.log("[Sharing v2] shareItemWith: writing", { shareId, payload });
+  try {
+    await setDoc(doc(db, SHARED_ITEMS, shareId), payload, { merge: true });
+    console.log("[Sharing v2] shareItemWith: write succeeded", shareId);
+  } catch (err) {
+    console.error("[Sharing v2] shareItemWith: write FAILED", shareId, err);
+    throw err;
+  }
 }
 
 /** Stops sharing one item with one person. The item itself is never deleted. */
@@ -97,7 +105,10 @@ export function subscribeToItemsSharedWithMe(
   return onSnapshot(
     q,
     (snap) => {
-      onUpdate(snap.docs.map((d) => d.data() as SharedItemRef));
+      const refs = snap.docs.map((d) => d.data() as SharedItemRef);
+      // TEMP diagnostic logging — remove once the sharing propagation bug is confirmed fixed.
+      console.log(`[Sharing v2] subscribeToItemsSharedWithMe(${me}): ${refs.length} ref(s)`, refs);
+      onUpdate(refs);
     },
     (err) => {
       console.error("[Sharing v2] Error listening to items shared with me:", err);
@@ -179,11 +190,14 @@ export function subscribeToSharedItemData(
   }
 
   for (const ref of refs) {
+    const path = `users/${ref.ownerEmail}/${ref.category}/${ref.itemId}`;
     const itemDoc = doc(db, "users", ref.ownerEmail, ref.category, ref.itemId);
     const unsub = onSnapshot(
       itemDoc,
       (snap) => {
         if (!store[ref.category]) store[ref.category] = {};
+        // TEMP diagnostic logging — remove once the sharing propagation bug is confirmed fixed.
+        console.log(`[Sharing v2] subscribeToSharedItemData: read ${path} -> exists=${snap.exists()}`, snap.data());
         if (snap.exists()) {
           store[ref.category][ref.itemId] = {
             ...snap.data(),
@@ -196,7 +210,7 @@ export function subscribeToSharedItemData(
         emit();
       },
       (err) => {
-        console.error(`[Sharing v2] Error reading shared item ${ref.itemId}:`, err);
+        console.error(`[Sharing v2] Error reading shared item at ${path}:`, err);
       }
     );
     unsubs.push(unsub);
