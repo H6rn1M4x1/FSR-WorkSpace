@@ -13,6 +13,7 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import { useToast } from "../context/ToastContext";
+import { NbaLogo } from "./icons/NbaLogo";
 import { SPORTS_CATALOG } from "../lib/sportsCatalog";
 import {
   getSanJuanEvents,
@@ -140,14 +141,13 @@ export function EventsView({ userId, darkMode = false }: EventsViewProps) {
   const [expandedSport, setExpandedSport] = useState<string | null>(null);
   const onToggleExpand = (sportId: string) => setExpandedSport((prev) => (prev === sportId ? null : sportId));
 
-  // Sport header icons, forced to solid black/white with a CSS filter so any source coloring
-  // becomes a clean black-in-light, white-in-dark icon regardless of the original colors.
-  // F1 and NBA are fixed URLs given directly (Wikipedia's "lead image" for those articles
-  // wasn't actually the logo, which is why they came out unrecognizable before); FIFA still
-  // comes from Wikipedia since that one worked fine.
+  // Sport header icons, forced to solid black/white so any source coloring becomes a clean
+  // black-in-light, white-in-dark icon. F1 (Wikimedia's official F1.svg thumbnail — a
+  // transparent PNG, so the brightness/invert trick applies) and FIFA (Wikipedia) are fixed
+  // image URLs; NBA is the official logoman given as raw SVG, rendered as its own component
+  // (see icons/NbaLogo.tsx) so it can be themed directly instead of filtering a raster image.
   const SPORT_LOGO_FIXED_URL: Record<string, string> = {
-    f1: "https://e7.pngegg.com/pngimages/432/779/png-clipart-2018-fia-formula-one-world-championship-abu-dhabi-grand-prix-logo-2017-formula-one-world-championship-formula-two-formula-one-logo-angle-text-thumbnail.png",
-    nba: "https://static.vecteezy.com/system/resources/previews/010/994/354/non_2x/nba-logo-symbol-black-and-white-design-america-basketball-american-countries-basketball-teams-illustration-free-vector.jpg",
+    f1: "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/33/F1.svg/120px-F1.svg.png",
   };
   const SPORT_LOGO_WIKI_TITLE: Record<string, string> = {
     futbol: "FIFA",
@@ -338,18 +338,16 @@ export function EventsView({ userId, darkMode = false }: EventsViewProps) {
               <div key={sportId} className="rounded-2xl border border-slate-200 dark:border-zinc-800 p-3 space-y-3">
                 <button type="button" onClick={() => onToggleExpand(sportId)} className="w-full flex items-center justify-between text-xs font-extrabold cursor-pointer">
                   <span className="flex items-center gap-1.5">
-                    {sportLogos[sportId] ? (
+                    {sportId === "nba" ? (
+                      <NbaLogo className="h-4 w-auto max-w-[34px] shrink-0 text-black dark:text-white" />
+                    ) : sportLogos[sportId] ? (
                       <img
                         src={sportLogos[sportId]!}
                         alt=""
-                        // These marks are far from square (F1's is a wide wordmark, NBA's is
-                        // a tall silhouette) — a fixed square box squashed them into an
-                        // unrecognizable sliver. Fix the height, let width follow the logo's
-                        // own aspect ratio instead. The black/white forcing filter only makes
-                        // sense on a transparent-background source (F1, FIFA) — the NBA one is
-                        // a flat JPG with an opaque background, so forcing it would just paint
-                        // the whole box solid black/white instead of isolating the mark.
-                        className={`h-4 w-auto max-w-[34px] object-contain shrink-0 ${sportId === "nba" ? "" : "brightness-0 dark:invert"}`}
+                        // These marks are far from square (F1's is a wide wordmark) — a fixed
+                        // square box squashed it into an unrecognizable sliver. Fix the
+                        // height, let width follow the logo's own aspect ratio instead.
+                        className="h-4 w-auto max-w-[34px] object-contain shrink-0 brightness-0 dark:invert"
                         onError={() => setSportLogos((prev) => ({ ...prev, [sportId]: null }))}
                       />
                     ) : (
