@@ -10,40 +10,29 @@ import {
   Unsubscribe,
 } from "firebase/firestore";
 import { generateUniqueId } from "../utils/id";
-import { setFirestoreQuotaExceeded } from "./sharing";
 
 /**
- * Firestore's free (Spark) plan has a daily write/delete quota separate from its read
- * quota. When it's exhausted, writes can hang indefinitely — the SDK retries the
- * "resource-exhausted" error internally with backoff instead of surfacing it — while
- * reads keep working fine, which made this look like a network problem for a long time.
- * Racing every write against a timeout turns that silent hang into a clear, fast error.
+ * The native Firestore write promise only resolves once the backend acknowledges it, so a
+ * flaky connection (mobile network hiccup, a stalled long-polling channel, an
+ * ad-blocker/proxy interfering) can leave it pending far longer than feels reasonable —
+ * that's what showed up as sharing "hanging" with no error and no result. Racing it
+ * against a short timeout means we never block the UI on it: if it's still pending after
+ * a few seconds we let the caller move on (the write keeps retrying in the background and
+ * will still land once the connection recovers), instead of pretending it failed.
  */
-const WRITE_TIMEOUT_MS = 10_000;
+const WRITE_TIMEOUT_MS = 8_000;
+const TIMEOUT_MARKER = Symbol("firestore-write-still-pending");
 
-function withWriteTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      setFirestoreQuotaExceeded(true);
-      reject(
-        new Error(
-          "No se pudo guardar en la base de datos (tardó demasiado). Es posible que se haya " +
-            "alcanzado el límite diario gratuito de escrituras — probá de nuevo más tarde, o " +
-            "contactá al dueño de la cuenta para pasar a un plan pago de Firebase."
-        )
-      );
-    }, WRITE_TIMEOUT_MS);
-    promise.then(
-      (value) => {
-        clearTimeout(timer);
-        resolve(value);
-      },
-      (err) => {
-        clearTimeout(timer);
-        reject(err);
-      }
-    );
-  });
+function withWriteTimeout<T>(promise: Promise<T>, label: string): Promise<T | typeof TIMEOUT_MARKER> {
+  return Promise.race([
+    promise,
+    new Promise<typeof TIMEOUT_MARKER>((resolve) => {
+      setTimeout(() => {
+        console.warn(`[Sharing v2] ${label} is taking longer than expected; continuing in the background.`);
+        resolve(TIMEOUT_MARKER);
+      }, WRITE_TIMEOUT_MS);
+    })
+  ]);
 }
 
 /**
@@ -107,7 +96,14 @@ export async function shareItemWith(
   // TEMP diagnostic logging — remove once the sharing propagation bug is confirmed fixed.
   console.log("[Sharing v2] shareItemWith: writing", { shareId, payload });
   try {
-    await withWriteTimeout(setDoc(doc(db, SHARED_ITEMS, shareId), payload, { merge: true }), "shareItemWith");
+    const writePromise = setDoc(doc(db, SHARED_ITEMS, shareId), payload, { merge: true });
+    const result = await withWriteTimeout(writePromise, "shareItemWith");
+    if (result === TIMEOUT_MARKER) {
+      writePromise
+        .then(() => console.log("[Sharing v2] shareItemWith: delayed write succeeded", shareId))
+        .catch((err) => console.error("[Sharing v2] shareItemWith: delayed write FAILED", shareId, err));
+      return;
+    }
     console.log("[Sharing v2] shareItemWith: write succeeded", shareId);
   } catch (err) {
     console.error("[Sharing v2] shareItemWith: write FAILED", shareId, err);
@@ -127,7 +123,14 @@ export async function unshareItem(
   const shareId = `${owner}__${target}__${category}__${itemId}`.replace(/[^a-zA-Z0-9_@.-]/g, "_");
   console.log("[Sharing v2] unshareItem: deleting", shareId);
   try {
-    await withWriteTimeout(deleteDoc(doc(db, SHARED_ITEMS, shareId)), "unshareItem");
+    const deletePromise = deleteDoc(doc(db, SHARED_ITEMS, shareId));
+    const result = await withWriteTimeout(deletePromise, "unshareItem");
+    if (result === TIMEOUT_MARKER) {
+      deletePromise
+        .then(() => console.log("[Sharing v2] unshareItem: delayed delete succeeded", shareId))
+        .catch((err) => console.error("[Sharing v2] unshareItem: delayed delete FAILED", shareId, err));
+      return;
+    }
     console.log("[Sharing v2] unshareItem: delete succeeded", shareId);
   } catch (err) {
     console.error("[Sharing v2] unshareItem: delete FAILED", shareId, err);

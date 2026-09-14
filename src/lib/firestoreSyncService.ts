@@ -11,6 +11,30 @@ import {
 } from "firebase/firestore";
 import { setStoredDataSilent, addDeletedId, getDeletedIds } from "./storage";
 
+/**
+ * The native Firestore `setDoc`/`deleteDoc` promise only resolves once the write reaches
+ * the backend. If the connection is flaky (mobile network hiccup, a long-polling stall,
+ * an ad-blocker/proxy interfering), that promise can sit pending for a very long time —
+ * which is exactly what showed up as "se queda guardando infinitamente" even though the
+ * data was already applied optimistically to local state/cache above.
+ *
+ * Racing it against a short timeout means the UI is never held hostage by the network:
+ * once the timeout fires we let the caller move on (the write keeps trying in the
+ * background and will still land once connectivity is back — this is NOT a failure, so we
+ * do not revert the optimistic update or treat it as an error).
+ */
+const SERVER_ACK_TIMEOUT_MS = 8_000;
+const TIMEOUT_MARKER = Symbol("firestore-write-still-pending");
+
+function withServerAckTimeout<T>(promise: Promise<T>): Promise<T | typeof TIMEOUT_MARKER> {
+  return Promise.race([
+    promise,
+    new Promise<typeof TIMEOUT_MARKER>((resolve) => {
+      setTimeout(() => resolve(TIMEOUT_MARKER), SERVER_ACK_TIMEOUT_MS);
+    })
+  ]);
+}
+
 export function sanitizeForFirestore(obj: any): any {
   if (obj === undefined) return null;
   if (obj === null || typeof obj !== "object") return obj;
@@ -303,7 +327,20 @@ export async function saveItemToFirestore(
 
   try {
     const docRef = doc(db, "users", effectiveUserId, category, docId);
-    await setDoc(docRef, sanitized, { merge: true });
+    const writePromise = setDoc(docRef, sanitized, { merge: true });
+    const result = await withServerAckTimeout(writePromise);
+
+    if (result === TIMEOUT_MARKER) {
+      // The server hasn't confirmed yet, but the write is still in flight (Firestore will
+      // keep retrying/queueing it) and the optimistic update already reflects it locally.
+      // Don't block the UI on it and don't treat this as an error — just touch the sync
+      // status whenever it does eventually land.
+      console.warn(`[FirestoreSync] saveItemToFirestore (${docPath}) is taking longer than expected; continuing in the background.`);
+      writePromise
+        .then(() => touchSyncStatus(effectiveUserId, category))
+        .catch((err) => console.warn(`[FirestoreSync] Background write failed for ${docPath}:`, err?.message || err));
+      return true;
+    }
 
     // Touch sync status document so other devices know data changed
     touchSyncStatus(effectiveUserId, category);
@@ -375,7 +412,16 @@ export async function deleteItemFromFirestore(
 
   try {
     const docRef = doc(db, "users", effectiveUserId, category, docId);
-    await deleteDoc(docRef);
+    const deletePromise = deleteDoc(docRef);
+    const result = await withServerAckTimeout(deletePromise);
+
+    if (result === TIMEOUT_MARKER) {
+      console.warn(`[FirestoreSync] deleteItemFromFirestore (${docPath}) is taking longer than expected; continuing in the background.`);
+      deletePromise
+        .then(() => touchSyncStatus(effectiveUserId, category))
+        .catch((err) => console.warn(`[FirestoreSync] Background delete failed for ${docPath}:`, err?.message || err));
+      return true;
+    }
 
     // Touch sync status document so other devices know data changed
     touchSyncStatus(effectiveUserId, category);
