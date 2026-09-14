@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   KeyRound,
   Lock,
@@ -835,8 +836,9 @@ export function PasswordVaultPanel({
           </div>
         )}
 
-        {/* Add/Edit modal */}
-        {editingItem && (
+        {/* Add/Edit modal — portaled to <body> so it's fixed to the real viewport, not to
+            whatever animated (transformed) ancestor happens to wrap this panel. */}
+        {editingItem && createPortal(
           <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
             <div
               className={`w-full max-w-md rounded-2xl border p-5 space-y-3 ${
@@ -920,11 +922,12 @@ export function PasswordVaultPanel({
                 </button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         )}
 
-        {/* TOTP reveal gate */}
-        {totpGateFor && (
+        {/* TOTP reveal gate — also portaled, same reason as above. */}
+        {totpGateFor && createPortal(
           <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
             <div
               className={`w-full max-w-sm rounded-2xl border p-5 space-y-3 ${
@@ -967,7 +970,8 @@ export function PasswordVaultPanel({
                 </button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         )}
 
         <ConfirmationModal
