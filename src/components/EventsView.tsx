@@ -23,7 +23,8 @@ import {
   getFootballClubs,
   F1_TEAMS,
   F1_DRIVERS,
-  fetchF1Image,
+  fetchF1TeamLogo,
+  fetchF1DriverPhoto,
   NBA_TEAMS,
 } from "../lib/eventsService";
 import type { EventPreferences, FollowedTeam, SanJuanEvent, SportEvent } from "../types";
@@ -138,13 +139,17 @@ export function EventsView({ userId, darkMode = false }: EventsViewProps) {
   const [expandedSport, setExpandedSport] = useState<string | null>(null);
   const onToggleExpand = (sportId: string) => setExpandedSport((prev) => (prev === sportId ? null : sportId));
 
-  // F1 team crests / driver photos: sourced from the article page first, Wikipedia as fallback.
+  // F1 team crests / driver photos: sourced from formula1.com first, Wikipedia as fallback.
   const [f1Images, setF1Images] = useState<Record<string, string | null>>({});
   useEffect(() => {
     if (expandedSport !== "f1") return;
-    [...F1_TEAMS.map((t) => t.name), ...F1_DRIVERS.map((d) => d.name)].forEach((name) => {
-      if (name in f1Images) return;
-      fetchF1Image(name).then((url) => setF1Images((prev) => ({ ...prev, [name]: url })));
+    F1_TEAMS.forEach((t) => {
+      if (t.name in f1Images) return;
+      fetchF1TeamLogo(t.name).then((url) => setF1Images((prev) => ({ ...prev, [t.name]: url })));
+    });
+    F1_DRIVERS.forEach((d) => {
+      if (d.name in f1Images) return;
+      fetchF1DriverPhoto(d.name).then((url) => setF1Images((prev) => ({ ...prev, [d.name]: url })));
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expandedSport]);
