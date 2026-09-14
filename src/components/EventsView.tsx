@@ -187,79 +187,77 @@ export function EventsView({ userId, darkMode = false }: EventsViewProps) {
         </div>
       </div>
 
-      {/* Calendario de Eventos */}
-      <div className={SUBCARD}>
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <h3 className="font-extrabold text-sm flex items-center gap-2">
-            <CalendarIcon className="w-4 h-4 text-primary" /> Calendario de Eventos
-          </h3>
-          <button
-            type="button"
-            onClick={() => { setCalMonth(new Date()); setSelectedDay(new Date().toISOString().slice(0, 10)); }}
-            className="px-3 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-bold cursor-pointer"
-          >
-            Ir a Hoy
-          </button>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          <div className="lg:col-span-7">
-            <div className="flex items-center justify-between mb-3">
-              <button
-                type="button"
-                onClick={() => setCalMonth(new Date(calMonth.getFullYear(), calMonth.getMonth() - 1, 1))}
-                className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <span className="text-sm font-extrabold capitalize">
-                {calMonth.toLocaleDateString("es-AR", { month: "long", year: "numeric" })}
-              </span>
-              <button
-                type="button"
-                onClick={() => setCalMonth(new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 1))}
-                className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-zinc-400 mb-1">
-              {["D", "L", "M", "M", "J", "V", "S"].map((d, i) => <span key={i}>{d}</span>)}
-            </div>
-            <div className="grid grid-cols-7 gap-1">
-              {monthGrid.map((iso, i) => {
-                if (!iso) return <div key={i} />;
-                const dayNum = parseInt(iso.slice(-2), 10);
-                const hasEvents = (eventsByDate[iso] || []).length > 0;
-                const isSelected = iso === selectedDay;
-                const isToday = iso === new Date().toISOString().slice(0, 10);
-                return (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => setSelectedDay(iso)}
-                    className={`aspect-square rounded-xl text-xs font-bold flex flex-col items-center justify-center gap-0.5 cursor-pointer transition-all ${
-                      isSelected
-                        ? "bg-primary text-white"
-                        : isToday
-                        ? "border border-primary text-primary"
-                        : "hover:bg-slate-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
-                    }`}
-                  >
-                    {dayNum}
-                    {hasEvents && <span className={`w-1 h-1 rounded-full ${isSelected ? "bg-white" : "bg-primary"}`} />}
-                  </button>
-                );
-              })}
-            </div>
+      {/* Calendario (izquierda, mismo ancho que el resto de calendarios de la app) + Deportes (derecha) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+        <div className={`${SUBCARD} lg:col-span-5 flex flex-col`}>
+          <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+            <h3 className="font-extrabold text-sm flex items-center gap-2">
+              <CalendarIcon className="w-4 h-4 text-primary" /> Calendario de Eventos
+            </h3>
+            <button
+              type="button"
+              onClick={() => { setCalMonth(new Date()); setSelectedDay(new Date().toISOString().slice(0, 10)); }}
+              className="px-3 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-bold cursor-pointer"
+            >
+              Ir a Hoy
+            </button>
           </div>
 
-          <div className="lg:col-span-5 space-y-2">
+          <div className="flex items-center justify-between mb-3">
+            <button
+              type="button"
+              onClick={() => setCalMonth(new Date(calMonth.getFullYear(), calMonth.getMonth() - 1, 1))}
+              className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <span className="text-sm font-extrabold capitalize">
+              {calMonth.toLocaleDateString("es-AR", { month: "long", year: "numeric" })}
+            </span>
+            <button
+              type="button"
+              onClick={() => setCalMonth(new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 1))}
+              className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-zinc-400 mb-1">
+            {["D", "L", "M", "M", "J", "V", "S"].map((d, i) => <span key={i}>{d}</span>)}
+          </div>
+          <div className="grid grid-cols-7 gap-1">
+            {monthGrid.map((iso, i) => {
+              if (!iso) return <div key={i} />;
+              const dayNum = parseInt(iso.slice(-2), 10);
+              const hasEvents = (eventsByDate[iso] || []).length > 0;
+              const isSelected = iso === selectedDay;
+              const isToday = iso === new Date().toISOString().slice(0, 10);
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setSelectedDay(iso)}
+                  className={`aspect-square rounded-xl text-xs font-bold flex flex-col items-center justify-center gap-0.5 cursor-pointer transition-all ${
+                    isSelected
+                      ? "bg-primary text-white"
+                      : isToday
+                      ? "border border-primary text-primary"
+                      : "hover:bg-slate-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
+                  }`}
+                >
+                  {dayNum}
+                  {hasEvents && <span className={`w-1 h-1 rounded-full ${isSelected ? "bg-white" : "bg-primary"}`} />}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="space-y-2 pt-4 mt-4 border-t border-slate-100 dark:border-zinc-800/80">
             <p className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-400">
               {new Date(selectedDay + "T00:00:00").toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" })}
             </p>
             {(eventsByDate[selectedDay] || []).length === 0 ? (
-              <p className="text-xs text-zinc-500 py-6 text-center">Sin eventos este día.</p>
+              <p className="text-xs text-zinc-500 py-4 text-center">Sin eventos este día.</p>
             ) : (
               <div className="space-y-1.5">
                 {(eventsByDate[selectedDay] || []).map((ev, i) => (
@@ -275,53 +273,9 @@ export function EventsView({ userId, darkMode = false }: EventsViewProps) {
             )}
           </div>
         </div>
-      </div>
 
-      {/* San Juan */}
-      <div className={SUBCARD}>
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <h3 className="font-extrabold text-sm flex items-center gap-2">
-            <MapPin className="w-4 h-4 text-primary" /> Qué hacer en San Juan
-          </h3>
-          <span className="text-[10px] text-zinc-400 font-bold">Se actualiza sola una vez por mes</span>
-        </div>
-
-        {sjLoading ? (
-          <div className="flex items-center gap-2 text-xs text-zinc-500 py-8 justify-center">
-            <RefreshCw className="w-4 h-4 animate-spin" /> Cargando agenda...
-          </div>
-        ) : sjEvents.length === 0 ? (
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 text-center py-8">
-            No se encontraron eventos este mes (o no se pudo leer la fuente).
-          </p>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {sjEvents.map((ev) => (
-              <a
-                key={ev.id}
-                href={ev.sourceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-2xl border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 overflow-hidden hover:shadow-md transition-all flex flex-col"
-              >
-                {ev.imageUrl && (
-                  <img src={ev.imageUrl} alt={ev.title} className="w-full h-32 object-cover" />
-                )}
-                <div className="p-3 space-y-1 flex-1">
-                  <p className="font-extrabold text-sm text-zinc-900 dark:text-zinc-100 line-clamp-2">{ev.title}</p>
-                  {ev.rawDate && <p className="text-xs text-primary font-bold">{ev.rawDate}</p>}
-                  <p className="text-[10px] text-zinc-400 flex items-center gap-1">
-                    <ExternalLink className="w-3 h-3" /> Ver más
-                  </p>
-                </div>
-              </a>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Deportes */}
-      <div className={SUBCARD}>
+        {/* Deportes */}
+        <div className={`${SUBCARD} lg:col-span-7`}>
         <h3 className="font-extrabold text-sm flex items-center gap-2">
           <Trophy className="w-4 h-4 text-primary" /> Deportes que seguís
         </h3>
@@ -447,6 +401,50 @@ export function EventsView({ userId, darkMode = false }: EventsViewProps) {
             </div>
           )}
         </div>
+        </div>
+      </div>
+
+      {/* San Juan */}
+      <div className={SUBCARD}>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <h3 className="font-extrabold text-sm flex items-center gap-2">
+            <MapPin className="w-4 h-4 text-primary" /> Qué hacer en San Juan
+          </h3>
+          <span className="text-[10px] text-zinc-400 font-bold">Se actualiza sola una vez por mes</span>
+        </div>
+
+        {sjLoading ? (
+          <div className="flex items-center gap-2 text-xs text-zinc-500 py-8 justify-center">
+            <RefreshCw className="w-4 h-4 animate-spin" /> Cargando agenda...
+          </div>
+        ) : sjEvents.length === 0 ? (
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 text-center py-8">
+            No se encontraron eventos este mes (o no se pudo leer la fuente).
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {sjEvents.map((ev) => (
+              <a
+                key={ev.id}
+                href={ev.sourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-2xl border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 overflow-hidden hover:shadow-md transition-all flex flex-col"
+              >
+                {ev.imageUrl && (
+                  <img src={ev.imageUrl} alt={ev.title} className="w-full h-32 object-cover" />
+                )}
+                <div className="p-3 space-y-1 flex-1">
+                  <p className="font-extrabold text-sm text-zinc-900 dark:text-zinc-100 line-clamp-2">{ev.title}</p>
+                  {ev.rawDate && <p className="text-xs text-primary font-bold">{ev.rawDate}</p>}
+                  <p className="text-[10px] text-zinc-400 flex items-center gap-1">
+                    <ExternalLink className="w-3 h-3" /> Ver más
+                  </p>
+                </div>
+              </a>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
