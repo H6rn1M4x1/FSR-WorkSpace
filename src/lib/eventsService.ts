@@ -12,7 +12,6 @@ import { getLeagueCodesForTeam } from "./matchScheduler";
 import { FOOTBALL_LEAGUES } from "../data/footballLeagues";
 import { F1_TEAMS, F1_DRIVERS } from "../data/f1";
 import { fetchWikiThumbnail } from "./wikipedia";
-import { nbaLogoUrl } from "../data/nbaLogos";
 
 const PREFS_CATEGORY = "event_preferences";
 
@@ -215,26 +214,12 @@ export async function fetchF1Races(): Promise<SportEvent[]> {
   }
 }
 
-// --- NBA: teams (badges from cdn.nba.com, per request) + fixtures via ESPN, regular + preseason. ---
+// --- NBA: static roster (badges from cdn.nba.com — renders instantly, no network dependency
+// for the picker itself) + fixtures via ESPN, matched by name, regular + preseason. ---
+
+export { NBA_TEAMS } from "../data/nba";
 
 const ESPN_BASE = "https://site.api.espn.com/apis/site/v2/sports";
-
-export async function fetchNbaTeams(): Promise<{ id: string; name: string; badgeUrl?: string }[]> {
-  try {
-    const res = await fetch(`${ESPN_BASE}/basketball/nba/teams?limit=100`);
-    if (!res.ok) return [];
-    const data = await res.json();
-    const list = data?.sports?.[0]?.leagues?.[0]?.teams || [];
-    return list.map((entry: any) => ({
-      id: String(entry.team.id),
-      name: entry.team.displayName,
-      badgeUrl: nbaLogoUrl(entry.team.abbreviation) || entry.team.logos?.[0]?.href || undefined,
-    }));
-  } catch (err) {
-    console.warn("[eventsService] Error fetching NBA teams from ESPN:", err);
-    return [];
-  }
-}
 
 async function fetchEspnScoreboardEvents(dateRange: string, seasontype?: number): Promise<any[]> {
   try {
@@ -249,13 +234,14 @@ async function fetchEspnScoreboardEvents(dateRange: string, seasontype?: number)
   }
 }
 
-async function fetchNbaFollowedEvents(followedTeamIds: string[]): Promise<SportEvent[]> {
-  if (followedTeamIds.length === 0) return [];
+async function fetchNbaFollowedEvents(followedTeamNames: string[]): Promise<SportEvent[]> {
+  if (followedTeamNames.length === 0) return [];
   const now = new Date();
   const horizon = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
   const fmt = (d: Date) =>
     `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(d.getUTCDate()).padStart(2, "0")}`;
   const dateRange = `${fmt(now)}-${fmt(horizon)}`;
+  const cleanNames = followedTeamNames.map((n) => n.toLowerCase());
 
   // Regular season + preseason (seasontype=1), merged — the default scoreboard call can miss
   // preseason games depending on the time of year, so it's fetched explicitly too.
@@ -270,7 +256,10 @@ async function fetchNbaFollowedEvents(followedTeamIds: string[]): Promise<SportE
     seenIds.add(ev.id);
     const comp = ev.competitions?.[0];
     const comps = comp?.competitors || [];
-    const involved = comps.some((c: any) => followedTeamIds.includes(String(c.id)));
+    const involved = comps.some((c: any) => {
+      const cn = (c.team?.displayName || "").toLowerCase();
+      return cleanNames.some((n) => cn.includes(n) || n.includes(cn));
+    });
     if (!comp || !involved) continue;
     const home = comps.find((c: any) => c.homeAway === "home");
     const away = comps.find((c: any) => c.homeAway === "away");
@@ -283,8 +272,8 @@ async function fetchNbaFollowedEvents(followedTeamIds: string[]): Promise<SportE
       title: `${home?.team?.displayName || "?"} vs ${away?.team?.displayName || "?"}`,
       date: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`,
       time: `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`,
-      homeTeamBadge: nbaLogoUrl(home?.team?.abbreviation) || home?.team?.logo,
-      awayTeamBadge: nbaLogoUrl(away?.team?.abbreviation) || away?.team?.logo,
+      homeTeamBadge: home?.team?.logo,
+      awayTeamBadge: away?.team?.logo,
       venue: comp.venue?.fullName,
     });
   }
@@ -307,7 +296,7 @@ export async function fetchFollowedSportEvents(prefs: EventPreferences | null): 
       } else if (sportId === "f1") {
         results.push(...(await fetchF1Races()));
       } else if (sportId === "nba") {
-        results.push(...(await fetchNbaFollowedEvents(teams.map((t) => t.id))));
+        results.push(...(await fetchNbaFollowedEvents(teams.map((t) => t.name))));
       }
     } catch (err) {
       console.warn(`[eventsService] Error fetching events for sport ${sportId}:`, err);

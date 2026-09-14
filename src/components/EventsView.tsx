@@ -24,7 +24,7 @@ import {
   F1_TEAMS,
   F1_DRIVERS,
   fetchF1Image,
-  fetchNbaTeams,
+  NBA_TEAMS,
 } from "../lib/eventsService";
 import type { EventPreferences, FollowedTeam, SanJuanEvent, SportEvent } from "../types";
 
@@ -151,12 +151,6 @@ export function EventsView({ userId, darkMode = false }: EventsViewProps) {
 
   // Fútbol: leagues first, drill into one league's clubs.
   const [footballLeague, setFootballLeague] = useState<string | null>(null);
-
-  // NBA team roster (with cdn.nba.com badges), fetched on demand.
-  const [nbaTeams, setNbaTeams] = useState<{ id: string; name: string; badgeUrl?: string }[] | null>(null);
-  useEffect(() => {
-    if (expandedSport === "nba" && !nbaTeams) fetchNbaTeams().then(setNbaTeams);
-  }, [expandedSport, nbaTeams]);
 
   // --- Sport events for followed sports/teams/drivers ---
   const [sportEvents, setSportEvents] = useState<SportEvent[]>([]);
@@ -332,7 +326,16 @@ export function EventsView({ userId, darkMode = false }: EventsViewProps) {
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-56 overflow-y-auto">
                         {F1_TEAMS.map((t) => (
                           <button key={t.id} type="button" onClick={() => pickSingle("f1", "team", { id: t.id, name: t.name, badgeUrl: f1Images[t.name] || undefined, kind: "team" })} className={PICK_BTN(followedF1Team?.id === t.id)}>
-                            {f1Images[t.name] ? <img src={f1Images[t.name]!} alt="" className="w-5 h-5 rounded-full object-cover shrink-0" /> : <Trophy className="w-4 h-4 shrink-0" />}
+                            {f1Images[t.name] ? (
+                              <img
+                                src={f1Images[t.name]!}
+                                alt=""
+                                className="w-6 h-6 object-contain shrink-0"
+                                onError={() => setF1Images((prev) => ({ ...prev, [t.name]: null }))}
+                              />
+                            ) : (
+                              <Trophy className="w-4 h-4 shrink-0" />
+                            )}
                             <span className="truncate">{t.name}</span>
                           </button>
                         ))}
@@ -343,7 +346,16 @@ export function EventsView({ userId, darkMode = false }: EventsViewProps) {
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-56 overflow-y-auto">
                         {F1_DRIVERS.map((d) => (
                           <button key={d.id} type="button" onClick={() => pickSingle("f1", "driver", { id: d.id, name: d.name, badgeUrl: f1Images[d.name] || undefined, kind: "driver" })} className={PICK_BTN(followedF1Driver?.id === d.id)}>
-                            {f1Images[d.name] ? <img src={f1Images[d.name]!} alt="" className="w-5 h-5 rounded-full object-cover shrink-0" /> : <UserIcon className="w-4 h-4 shrink-0" />}
+                            {f1Images[d.name] ? (
+                              <img
+                                src={f1Images[d.name]!}
+                                alt=""
+                                className="w-6 h-6 object-contain shrink-0"
+                                onError={() => setF1Images((prev) => ({ ...prev, [d.name]: null }))}
+                              />
+                            ) : (
+                              <UserIcon className="w-4 h-4 shrink-0" />
+                            )}
                             <span className="truncate">{d.name}</span>
                           </button>
                         ))}
@@ -385,22 +397,19 @@ export function EventsView({ userId, darkMode = false }: EventsViewProps) {
                 )}
 
                 {isOpen && sportId === "nba" && (
-                  nbaTeams === null ? (
-                    <div className="flex items-center gap-2 text-xs text-zinc-500 py-3">
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Buscando equipos...
-                    </div>
-                  ) : nbaTeams.length === 0 ? (
-                    <p className="text-xs text-zinc-500 py-3">No se encontraron equipos de NBA.</p>
-                  ) : (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-64 overflow-y-auto">
-                      {nbaTeams.map((team) => (
-                        <button key={team.id} type="button" onClick={() => toggleTeam("nba", team)} className={PICK_BTN((prefs?.followedTeams["nba"] || []).some((t) => t.id === team.id))}>
-                          {team.badgeUrl && <img src={team.badgeUrl} alt="" className="w-5 h-5 object-contain shrink-0" />}
-                          <span className="truncate">{team.name}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-64 overflow-y-auto">
+                    {NBA_TEAMS.map((team) => (
+                      <button key={team.id} type="button" onClick={() => toggleTeam("nba", { id: team.id, name: team.name, badgeUrl: team.logo })} className={PICK_BTN((prefs?.followedTeams["nba"] || []).some((t) => t.id === team.id))}>
+                        <img
+                          src={team.logo}
+                          alt=""
+                          className="w-5 h-5 object-contain shrink-0"
+                          onError={(e) => { e.currentTarget.style.display = "none"; }}
+                        />
+                        <span className="truncate">{team.name}</span>
+                      </button>
+                    ))}
+                  </div>
                 )}
               </div>
             );
