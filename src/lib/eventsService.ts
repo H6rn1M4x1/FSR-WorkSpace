@@ -56,7 +56,7 @@ export async function getSanJuanEvents(): Promise<SanJuanEvent[]> {
   }
 
   try {
-    const res = await fetch("/api/events/san-juan");
+    const res = await fetch("/.netlify/functions/events-san-juan");
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     const items: SanJuanEvent[] = (data.items || []).map((it: any) => ({
@@ -89,7 +89,7 @@ async function resolveLeagueId(sportId: string): Promise<string | null> {
   if (leagueIdMemo[sportId]) return leagueIdMemo[sportId];
   const params = new URLSearchParams({ q: sport.leagueQuery, sport: sport.sportsDbSport });
   if (sport.country) params.set("country", sport.country);
-  const res = await fetch(`/api/sportsdb/search-league?${params.toString()}`);
+  const res = await fetch(`/.netlify/functions/sportsdb-search-league?${params.toString()}`);
   if (!res.ok) return null;
   const data = await res.json();
   if (data.leagueId) leagueIdMemo[sportId] = data.leagueId;
@@ -99,7 +99,7 @@ async function resolveLeagueId(sportId: string): Promise<string | null> {
 export async function fetchTeamsForSport(sportId: string): Promise<{ id: string; name: string; badgeUrl?: string }[]> {
   const leagueId = await resolveLeagueId(sportId);
   if (!leagueId) return [];
-  const res = await fetch(`/api/sportsdb/teams?leagueId=${encodeURIComponent(leagueId)}`);
+  const res = await fetch(`/.netlify/functions/sportsdb-teams?leagueId=${encodeURIComponent(leagueId)}`);
   if (!res.ok) return [];
   const data = await res.json();
   return data.teams || [];
@@ -115,7 +115,7 @@ export async function fetchFollowedSportEvents(prefs: EventPreferences | null): 
     try {
       if (teams.length > 0) {
         for (const team of teams) {
-          const res = await fetch(`/api/sportsdb/next-events?teamId=${encodeURIComponent(team.id)}`);
+          const res = await fetch(`/.netlify/functions/sportsdb-next-events?teamId=${encodeURIComponent(team.id)}`);
           if (!res.ok) continue;
           const data = await res.json();
           (data.events || []).forEach((e: any) => results.push({ ...e, sportId }));
@@ -123,7 +123,7 @@ export async function fetchFollowedSportEvents(prefs: EventPreferences | null): 
       } else {
         const leagueId = await resolveLeagueId(sportId);
         if (!leagueId) continue;
-        const res = await fetch(`/api/sportsdb/next-events?leagueId=${encodeURIComponent(leagueId)}`);
+        const res = await fetch(`/.netlify/functions/sportsdb-next-events?leagueId=${encodeURIComponent(leagueId)}`);
         if (!res.ok) continue;
         const data = await res.json();
         (data.events || []).forEach((e: any) => results.push({ ...e, sportId }));

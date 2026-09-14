@@ -188,7 +188,7 @@ export function EventsView({ userId, darkMode = false }: EventsViewProps) {
       </div>
 
       {/* Calendario (izquierda, mismo ancho que el resto de calendarios de la app) + Deportes (derecha) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className={`${SUBCARD} lg:col-span-5 flex flex-col`}>
           <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
             <h3 className="font-extrabold text-sm flex items-center gap-2">
@@ -237,16 +237,18 @@ export function EventsView({ userId, darkMode = false }: EventsViewProps) {
                   key={i}
                   type="button"
                   onClick={() => setSelectedDay(iso)}
-                  className={`aspect-square rounded-xl text-xs font-bold flex flex-col items-center justify-center gap-0.5 cursor-pointer transition-all ${
+                  className={`h-9 w-full rounded-full text-xs font-bold flex flex-col items-center justify-center relative cursor-pointer transition-all ${
                     isSelected
-                      ? "bg-primary text-white"
+                      ? "border-2 border-primary text-primary bg-primary/10"
                       : isToday
-                      ? "border border-primary text-primary"
-                      : "hover:bg-slate-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
+                      ? "bg-primary text-white shadow-md"
+                      : "hover:bg-primary/10 text-zinc-700 dark:text-zinc-300"
                   }`}
                 >
-                  {dayNum}
-                  {hasEvents && <span className={`w-1 h-1 rounded-full ${isSelected ? "bg-white" : "bg-primary"}`} />}
+                  <span>{dayNum}</span>
+                  {hasEvents && (
+                    <span className={`absolute bottom-1 w-1 h-1 rounded-full ${isSelected ? "bg-primary" : "bg-primary"}`} />
+                  )}
                 </button>
               );
             })}
