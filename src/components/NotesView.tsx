@@ -393,8 +393,12 @@ export function NotesView({ userId, darkMode = false }: NotesViewProps) {
                   showToast(`Nota compartida con ${email}.`, "success");
                 }}
                 onUnshare={async (email) => {
-                  await unshareNote(note.id, email);
-                  showToast(`Se dejó de compartir con ${email}.`, "success");
+                  try {
+                    await unshareNote(note.id, email);
+                    showToast(`Se dejó de compartir con ${email}.`, "success");
+                  } catch (err: any) {
+                    showToast("Error al dejar de compartir: " + (err?.message || String(err)), "error");
+                  }
                 }}
               />
             )

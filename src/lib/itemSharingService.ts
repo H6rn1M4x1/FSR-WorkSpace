@@ -10,6 +10,41 @@ import {
   Unsubscribe,
 } from "firebase/firestore";
 import { generateUniqueId } from "../utils/id";
+import { setFirestoreQuotaExceeded } from "./sharing";
+
+/**
+ * Firestore's free (Spark) plan has a daily write/delete quota separate from its read
+ * quota. When it's exhausted, writes can hang indefinitely — the SDK retries the
+ * "resource-exhausted" error internally with backoff instead of surfacing it — while
+ * reads keep working fine, which made this look like a network problem for a long time.
+ * Racing every write against a timeout turns that silent hang into a clear, fast error.
+ */
+const WRITE_TIMEOUT_MS = 10_000;
+
+function withWriteTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      setFirestoreQuotaExceeded(true);
+      reject(
+        new Error(
+          "No se pudo guardar en la base de datos (tardó demasiado). Es posible que se haya " +
+            "alcanzado el límite diario gratuito de escrituras — probá de nuevo más tarde, o " +
+            "contactá al dueño de la cuenta para pasar a un plan pago de Firebase."
+        )
+      );
+    }, WRITE_TIMEOUT_MS);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      }
+    );
+  });
+}
 
 /**
  * Item-level sharing, v2.
@@ -72,7 +107,7 @@ export async function shareItemWith(
   // TEMP diagnostic logging — remove once the sharing propagation bug is confirmed fixed.
   console.log("[Sharing v2] shareItemWith: writing", { shareId, payload });
   try {
-    await setDoc(doc(db, SHARED_ITEMS, shareId), payload, { merge: true });
+    await withWriteTimeout(setDoc(doc(db, SHARED_ITEMS, shareId), payload, { merge: true }), "shareItemWith");
     console.log("[Sharing v2] shareItemWith: write succeeded", shareId);
   } catch (err) {
     console.error("[Sharing v2] shareItemWith: write FAILED", shareId, err);
@@ -90,7 +125,14 @@ export async function unshareItem(
   const owner = norm(ownerEmail);
   const target = norm(sharedWithEmail);
   const shareId = `${owner}__${target}__${category}__${itemId}`.replace(/[^a-zA-Z0-9_@.-]/g, "_");
-  await deleteDoc(doc(db, SHARED_ITEMS, shareId));
+  console.log("[Sharing v2] unshareItem: deleting", shareId);
+  try {
+    await withWriteTimeout(deleteDoc(doc(db, SHARED_ITEMS, shareId)), "unshareItem");
+    console.log("[Sharing v2] unshareItem: delete succeeded", shareId);
+  } catch (err) {
+    console.error("[Sharing v2] unshareItem: delete FAILED", shareId, err);
+    throw err;
+  }
 }
 
 /** Live list of everything OTHER people have shared with me. */
