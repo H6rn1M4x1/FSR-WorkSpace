@@ -1,10 +1,14 @@
 import React, { useEffect, useState } from "react";
-import { StickyNote as StickyNoteIcon, Pin, Trash2, Plus, X, Send, Share2, Check } from "lucide-react";
+import { StickyNote as StickyNoteIcon, KeyRound, Pin, Trash2, Plus, X, Send, Share2, Check } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
 import { useNotes } from "../hooks/useNotes";
 import { useToast } from "../context/ToastContext";
 import { ConfirmationModal } from "./ConfirmationModal";
 import { RichTextEditor } from "./RichTextEditor";
 import { SharedBadge } from "./SharedBadge";
+import { SubNav } from "./SubNav";
+import { PasswordVaultPanel } from "./PasswordVaultPanel";
+import { auth } from "../lib/firebase";
 import type { StickyNote } from "../types";
 
 interface NotesViewProps {
@@ -240,6 +244,32 @@ export function NotesView({ userId, darkMode = false }: NotesViewProps) {
   } = useNotes(userId);
   const { showToast } = useToast();
 
+  const [activeSubTab, setActiveSubTab] = useState<"quick" | "vault">("quick");
+
+  // The password vault's TOTP reveal-gate reuses the same Google Authenticator secret set
+  // up under Ajustes > Seguridad — read straight from the locally-persisted profile.
+  const [twoFactor, setTwoFactor] = useState<{ enabled: boolean; secret: string }>({
+    enabled: false,
+    secret: "",
+  });
+  useEffect(() => {
+    const readProfile = () => {
+      try {
+        const saved = localStorage.getItem("liquid_user_profile");
+        const parsed = saved ? JSON.parse(saved) : {};
+        setTwoFactor({
+          enabled: !!parsed.twoFactorEnabled,
+          secret: parsed.twoFactorSecret || "",
+        });
+      } catch (_) {
+        // ignore malformed/missing profile
+      }
+    };
+    readProfile();
+    window.addEventListener("storage", readProfile);
+    return () => window.removeEventListener("storage", readProfile);
+  }, []);
+
   const [composeOpen, setComposeOpen] = useState(false);
   const [composeTitle, setComposeTitle] = useState("");
   const [composeHtml, setComposeHtml] = useState("");
@@ -461,22 +491,48 @@ export function NotesView({ userId, darkMode = false }: NotesViewProps) {
 
   return (
     <div className="space-y-6 animate-fade-in px-3 sm:px-6 pt-1 sm:pt-1.5 pb-6">
+      <div className="flex items-center gap-3">
+        <StickyNoteIcon className="w-5 h-5 text-primary" />
+        <div>
+          <h2 className="font-extrabold text-lg text-zinc-900 dark:text-zinc-100">Notas</h2>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            {activeSubTab === "quick"
+              ? "Recordatorios e información que querés tener siempre a la vista. Mantené el clic sostenido sobre una nota para reordenarla."
+              : "Guardá las contraseñas de otros sitios, cifradas de punta a punta."}
+          </p>
+        </div>
+      </div>
+
+      <SubNav
+        activeTab={activeSubTab}
+        onTabChange={(id) => setActiveSubTab(id as "quick" | "vault")}
+        tabs={[
+          { id: "quick", label: "Notas Rápidas", icon: StickyNoteIcon },
+          { id: "vault", label: "Caja Fuerte", icon: KeyRound },
+        ]}
+      />
+
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={activeSubTab}
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -15 }}
+          transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+        >
+          {activeSubTab === "vault" ? (
+            <PasswordVaultPanel
+              userId={userId || auth.currentUser?.email || ""}
+              darkMode={darkMode}
+              twoFactorEnabled={twoFactor.enabled}
+              twoFactorSecret={twoFactor.secret}
+            />
+          ) : (
       <div
         className={`rounded-3xl border p-4 sm:p-6 space-y-6 ${
           darkMode ? "bg-zinc-900/60 border-zinc-800" : "bg-white/80 border-slate-200"
         }`}
       >
-        <div className="flex items-center gap-3">
-          <StickyNoteIcon className="w-5 h-5 text-zinc-900 dark:text-white" />
-          <div>
-            <h2 className="font-extrabold text-lg text-zinc-900 dark:text-zinc-100">Notas</h2>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              Recordatorios e información que querés tener siempre a la vista. Mantené el clic
-              sostenido sobre una nota para reordenarla.
-            </p>
-          </div>
-        </div>
-
         {/* Compose box */}
         <div
           className={`rounded-2xl border p-4 shadow-sm transition-all ${
@@ -575,6 +631,9 @@ export function NotesView({ userId, darkMode = false }: NotesViewProps) {
           </div>
         )}
       </div>
+          )}
+        </motion.div>
+      </AnimatePresence>
 
       {/* Right-click context menu: just "Compartir con..." for now */}
       {rightClickMenu && (
