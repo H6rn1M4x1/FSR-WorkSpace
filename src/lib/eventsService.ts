@@ -11,8 +11,8 @@ import { TEAMS, Team } from "../data/teams";
 import { getLeagueCodesForTeam } from "./matchScheduler";
 import { FOOTBALL_LEAGUES } from "../data/footballLeagues";
 import { F1_TEAMS, F1_DRIVERS } from "../data/f1";
-import { MOTOGP_TEAMS, MOTOGP_RIDERS } from "../data/motogp";
 import { fetchWikiThumbnail } from "./wikipedia";
+import { nbaLogoUrl } from "../data/nbaLogos";
 
 const PREFS_CATEGORY = "event_preferences";
 
@@ -53,23 +53,19 @@ function currentMonthKey(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
-async function getMonthlyScrapedEvents(
-  docRef: ReturnType<typeof doc>,
-  functionPath: string,
-  label: string
-): Promise<SanJuanEvent[]> {
-  const snap = await getDoc(docRef);
+export async function getSanJuanEvents(): Promise<SanJuanEvent[]> {
+  const snap = await getDoc(SAN_JUAN_DOC);
   const cached = snap.exists() ? (snap.data() as ScrapedCacheDoc) : null;
   if (cached && cached.monthKey === currentMonthKey() && cached.items?.length > 0) {
     return cached.items;
   }
 
   try {
-    const res = await fetch(functionPath);
+    const res = await fetch("/.netlify/functions/events-san-juan");
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     const items: SanJuanEvent[] = (data.items || []).map((it: any) => ({
-      id: it.id || `${label}_${Math.random().toString(36).slice(2, 10)}`,
+      id: it.id || `sj_${Math.random().toString(36).slice(2, 10)}`,
       title: it.title,
       date: it.rawDate || "",
       rawDate: it.rawDate || undefined,
@@ -77,24 +73,14 @@ async function getMonthlyScrapedEvents(
       sourceUrl: it.sourceUrl || undefined,
     }));
     if (items.length > 0) {
-      await setDoc(docRef, { items, monthKey: currentMonthKey(), fetchedAt: Date.now() });
+      await setDoc(SAN_JUAN_DOC, { items, monthKey: currentMonthKey(), fetchedAt: Date.now() });
       return items;
     }
   } catch (err) {
-    console.warn(`[eventsService] No se pudo actualizar ${label}:`, err);
+    console.warn("[eventsService] No se pudo actualizar la agenda de San Juan:", err);
   }
 
-  // Fall back to whatever was cached (even from a previous month) rather than showing nothing.
   return cached?.items || [];
-}
-
-export function getSanJuanEvents(): Promise<SanJuanEvent[]> {
-  return getMonthlyScrapedEvents(SAN_JUAN_DOC, "/.netlify/functions/events-san-juan", "San Juan");
-}
-
-const MOTOGP_CALENDAR_DOC = doc(db, "shared_data", "motogp_calendar");
-export function getMotoGpCalendar(): Promise<SanJuanEvent[]> {
-  return getMonthlyScrapedEvents(MOTOGP_CALENDAR_DOC, "/.netlify/functions/motogp-calendar", "el calendario de MotoGP");
 }
 
 // --- Fútbol: leagues first, then clubs within a league (data/teams.ts + data/footballLeagues.ts) ---
@@ -156,9 +142,54 @@ async function fetchFootballFixturesForTeam(team: Team): Promise<SportEvent[]> {
   return results;
 }
 
-// --- F1 / MotoGP: curated grid (data/f1.ts, data/motogp.ts), photos/logos via Wikipedia. ---
+// --- F1: curated grid (data/f1.ts). Team logos + driver photos come primarily from the page
+// the user pointed at (via a Netlify scrape + name matching), falling back to Wikipedia's
+// REST API for anything that scrape doesn't turn up a confident match for. ---
 
-export { F1_TEAMS, F1_DRIVERS, MOTOGP_TEAMS, MOTOGP_RIDERS, fetchWikiThumbnail };
+export { F1_TEAMS, F1_DRIVERS, fetchWikiThumbnail };
+
+let f1ImagesPromise: Promise<{ alt: string; src: string }[]> | null = null;
+function fetchF1SourceImages(): Promise<{ alt: string; src: string }[]> {
+  if (!f1ImagesPromise) {
+    f1ImagesPromise = fetch("/.netlify/functions/f1-images")
+      .then((r) => (r.ok ? r.json() : { images: [] }))
+      .then((d) => d.images || [])
+      .catch(() => []);
+  }
+  return f1ImagesPromise;
+}
+
+function normalizeForMatch(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "") // strip accents
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+/** Finds the best-matching image for a name (team or driver) among the scraped page images,
+ *  matching by last word (surname) for people and by full name for teams. */
+function findImageForName(name: string, images: { alt: string; src: string }[]): string | null {
+  const target = normalizeForMatch(name);
+  const targetWords = target.split(" ");
+  const lastWord = targetWords[targetWords.length - 1];
+  const exact = images.find((img) => normalizeForMatch(img.alt) === target);
+  if (exact) return exact.src;
+  const bySurname = images.find((img) => {
+    const alt = normalizeForMatch(img.alt);
+    return alt.length > 2 && (alt.includes(lastWord) || target.includes(alt));
+  });
+  return bySurname ? bySurname.src : null;
+}
+
+/** Team crest / driver photo, sourced from the article page first, Wikipedia as a fallback. */
+export async function fetchF1Image(name: string): Promise<string | null> {
+  const sourceImages = await fetchF1SourceImages();
+  const fromSource = findImageForName(name, sourceImages);
+  if (fromSource) return fromSource;
+  return fetchWikiThumbnail(name);
+}
 
 export async function fetchF1Races(): Promise<SportEvent[]> {
   try {
@@ -184,62 +215,41 @@ export async function fetchF1Races(): Promise<SportEvent[]> {
   }
 }
 
-// --- Tenis: ESPN's ATP/WTA scoreboards, no follow-team concept — just the tour calendar. ---
-
-export async function fetchTennisEvents(): Promise<SportEvent[]> {
-  const results: SportEvent[] = [];
-  for (const tour of ["atp", "wta"]) {
-    try {
-      const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/tennis/${tour}/scoreboard`);
-      if (!res.ok) continue;
-      const data = await res.json();
-      const events: any[] = data.events || [];
-      events.forEach((ev) => {
-        const d = new Date(ev.date);
-        results.push({
-          id: `tenis_${tour}_${ev.id}`,
-          sportId: "tenis",
-          leagueName: tour.toUpperCase(),
-          title: ev.name || ev.shortName || "Torneo",
-          date: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`,
-          venue: ev.competitions?.[0]?.venue?.fullName || undefined,
-        });
-      });
-    } catch (err) {
-      console.warn(`[eventsService] Error fetching ${tour} calendar from ESPN:`, err);
-    }
-  }
-  return results;
-}
-
-// --- NBA / NFL: teams + fixtures straight from ESPN's site API (badges included). ---
+// --- NBA: teams (badges from cdn.nba.com, per request) + fixtures via ESPN, regular + preseason. ---
 
 const ESPN_BASE = "https://site.api.espn.com/apis/site/v2/sports";
 
-async function fetchEspnTeams(sportPath: string, leaguePath: string): Promise<{ id: string; name: string; badgeUrl?: string }[]> {
+export async function fetchNbaTeams(): Promise<{ id: string; name: string; badgeUrl?: string }[]> {
   try {
-    const res = await fetch(`${ESPN_BASE}/${sportPath}/${leaguePath}/teams?limit=100`);
+    const res = await fetch(`${ESPN_BASE}/basketball/nba/teams?limit=100`);
     if (!res.ok) return [];
     const data = await res.json();
     const list = data?.sports?.[0]?.leagues?.[0]?.teams || [];
     return list.map((entry: any) => ({
       id: String(entry.team.id),
       name: entry.team.displayName,
-      badgeUrl: entry.team.logos?.[0]?.href || undefined,
+      badgeUrl: nbaLogoUrl(entry.team.abbreviation) || entry.team.logos?.[0]?.href || undefined,
     }));
   } catch (err) {
-    console.warn(`[eventsService] Error fetching ${leaguePath} teams from ESPN:`, err);
+    console.warn("[eventsService] Error fetching NBA teams from ESPN:", err);
     return [];
   }
 }
 
-async function fetchEspnFollowedEvents(
-  sportPath: string,
-  leaguePath: string,
-  sportId: string,
-  leagueLabel: string,
-  followedTeamIds: string[]
-): Promise<SportEvent[]> {
+async function fetchEspnScoreboardEvents(dateRange: string, seasontype?: number): Promise<any[]> {
+  try {
+    const q = seasontype ? `dates=${dateRange}&seasontype=${seasontype}` : `dates=${dateRange}`;
+    const res = await fetch(`${ESPN_BASE}/basketball/nba/scoreboard?${q}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.events || [];
+  } catch (err) {
+    console.warn("[eventsService] Error fetching NBA scoreboard from ESPN:", err);
+    return [];
+  }
+}
+
+async function fetchNbaFollowedEvents(followedTeamIds: string[]): Promise<SportEvent[]> {
   if (followedTeamIds.length === 0) return [];
   const now = new Date();
   const horizon = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
@@ -247,41 +257,39 @@ async function fetchEspnFollowedEvents(
     `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(d.getUTCDate()).padStart(2, "0")}`;
   const dateRange = `${fmt(now)}-${fmt(horizon)}`;
 
-  try {
-    const res = await fetch(`${ESPN_BASE}/${sportPath}/${leaguePath}/scoreboard?dates=${dateRange}`);
-    if (!res.ok) return [];
-    const data = await res.json();
-    const events: any[] = data.events || [];
-    const results: SportEvent[] = [];
-    for (const ev of events) {
-      const comp = ev.competitions?.[0];
-      const comps = comp?.competitors || [];
-      const involved = comps.some((c: any) => followedTeamIds.includes(String(c.id)));
-      if (!comp || !involved) continue;
-      const home = comps.find((c: any) => c.homeAway === "home");
-      const away = comps.find((c: any) => c.homeAway === "away");
-      const d = new Date(ev.date);
-      results.push({
-        id: `${sportId}_${ev.id}`,
-        sportId,
-        leagueName: leagueLabel,
-        title: `${home?.team?.displayName || "?"} vs ${away?.team?.displayName || "?"}`,
-        date: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`,
-        time: `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`,
-        homeTeamBadge: home?.team?.logo,
-        awayTeamBadge: away?.team?.logo,
-        venue: comp.venue?.fullName,
-      });
-    }
-    return results;
-  } catch (err) {
-    console.warn(`[eventsService] Error fetching ${leaguePath} scoreboard from ESPN:`, err);
-    return [];
+  // Regular season + preseason (seasontype=1), merged — the default scoreboard call can miss
+  // preseason games depending on the time of year, so it's fetched explicitly too.
+  const [regular, preseason] = await Promise.all([
+    fetchEspnScoreboardEvents(dateRange),
+    fetchEspnScoreboardEvents(dateRange, 1),
+  ]);
+  const seenIds = new Set<string>();
+  const results: SportEvent[] = [];
+  for (const ev of [...preseason, ...regular]) {
+    if (seenIds.has(ev.id)) continue;
+    seenIds.add(ev.id);
+    const comp = ev.competitions?.[0];
+    const comps = comp?.competitors || [];
+    const involved = comps.some((c: any) => followedTeamIds.includes(String(c.id)));
+    if (!comp || !involved) continue;
+    const home = comps.find((c: any) => c.homeAway === "home");
+    const away = comps.find((c: any) => c.homeAway === "away");
+    const d = new Date(ev.date);
+    const isPreseason = ev.seasonType?.id === "1" || ev.season?.slug === "preseason";
+    results.push({
+      id: `nba_${ev.id}`,
+      sportId: "nba",
+      leagueName: isPreseason ? "NBA (Pretemporada)" : "NBA",
+      title: `${home?.team?.displayName || "?"} vs ${away?.team?.displayName || "?"}`,
+      date: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`,
+      time: `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`,
+      homeTeamBadge: nbaLogoUrl(home?.team?.abbreviation) || home?.team?.logo,
+      awayTeamBadge: nbaLogoUrl(away?.team?.abbreviation) || away?.team?.logo,
+      venue: comp.venue?.fullName,
+    });
   }
+  return results;
 }
-
-export const fetchNbaTeams = () => fetchEspnTeams("basketball", "nba");
-export const fetchNflTeams = () => fetchEspnTeams("football", "nfl");
 
 /** Upcoming events for every sport/team/driver the user follows, deduplicated. */
 export async function fetchFollowedSportEvents(prefs: EventPreferences | null): Promise<SportEvent[]> {
@@ -298,23 +306,8 @@ export async function fetchFollowedSportEvents(prefs: EventPreferences | null): 
         }
       } else if (sportId === "f1") {
         results.push(...(await fetchF1Races()));
-      } else if (sportId === "motogp") {
-        const races = await getMotoGpCalendar();
-        races.forEach((r) =>
-          results.push({
-            id: `motogp_${r.id}`,
-            sportId: "motogp",
-            leagueName: "MotoGP",
-            title: r.title,
-            date: r.date || r.rawDate || "",
-          })
-        );
-      } else if (sportId === "tenis") {
-        results.push(...(await fetchTennisEvents()));
       } else if (sportId === "nba") {
-        results.push(...(await fetchEspnFollowedEvents("basketball", "nba", "nba", "NBA", teams.map((t) => t.id))));
-      } else if (sportId === "nfl") {
-        results.push(...(await fetchEspnFollowedEvents("football", "nfl", "nfl", "NFL", teams.map((t) => t.id))));
+        results.push(...(await fetchNbaFollowedEvents(teams.map((t) => t.id))));
       }
     } catch (err) {
       console.warn(`[eventsService] Error fetching events for sport ${sportId}:`, err);
