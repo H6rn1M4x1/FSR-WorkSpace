@@ -20,6 +20,7 @@ import {
   Search,
 } from "lucide-react";
 import { useVault } from "../hooks/useVault";
+import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import { verify2FAToken } from "../lib/totp";
 import { useToast } from "../context/ToastContext";
 import { ConfirmationModal } from "./ConfirmationModal";
@@ -178,6 +179,10 @@ export function PasswordVaultPanel({
   const [pendingImport, setPendingImport] = useState<ImportedPasswordRow[] | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
+
+  // Freeze the page behind whichever modal is open, so the background never scrolls
+  // (and drags along) while one of these is up.
+  useLockBodyScroll(Boolean(editingItem || totpGateFor || deleteConfirmId || pendingImport));
 
   // Search + pagination (same 15-per-page pattern used elsewhere in the app), so a large
   // vault doesn't render/decrypt hundreds of items onto the screen at once.
