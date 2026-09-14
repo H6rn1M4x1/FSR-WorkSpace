@@ -49,7 +49,6 @@ import {
   Shield,
   KeyRound,
   MapPin,
-  Trophy,
 } from "lucide-react";
 import {
   AppNotification,
@@ -173,11 +172,7 @@ export const SUBMENUS_BY_TAB: Record<string, SubMenuItem[]> = {
   notes: [
     { id: "quick", label: "Notas Rápidas", icon: StickyNote },
     { id: "vault", label: "Caja Fuerte", icon: KeyRound },
-  ],
-  events: [
-    { id: "sanjuan", label: "San Juan", icon: MapPin },
-    { id: "deportes", label: "Deportes", icon: Trophy },
-    { id: "calendario", label: "Calendario de Eventos", icon: Calendar },
+    { id: "events", label: "Eventos", icon: MapPin },
   ],
 };
 
@@ -396,7 +391,6 @@ export default function TopNavbar({
     { id: "health", label: "Salud", icon: Heart },
     { id: "meals", label: "Comidas", icon: UtensilsCrossed },
     { id: "notes", label: "Notas", icon: StickyNote },
-    { id: "events", label: "Eventos", icon: MapPin },
   ].filter((item) => item.id === "home" || menuVisibility?.[item.id] !== false);
 
   return (

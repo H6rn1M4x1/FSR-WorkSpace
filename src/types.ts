@@ -597,7 +597,8 @@ export interface SportCatalogEntry {
   label: string;
   hasTeams: boolean; // true for team/league sports (fetch teams+badges from TheSportsDB)
   sportsDbSport: string; // the "strSport" value TheSportsDB uses to resolve its league id
-  leagueQuery: string; // search term used to resolve the TheSportsDB league id
+  leagueQuery: string; // substring used to find the right league by name
+  country?: string; // narrows the league search to one country (e.g. "Argentina" for fútbol)
 }
 
 /** A team/driver/league the user picked to follow within a sport they're subscribed to. */

@@ -2126,6 +2126,121 @@ Responde únicamente con un arreglo JSON con las propiedades requeridas: descrip
 let sanJuanEventsCache: { fetchedAt: number; items: any[] } | null = null;
 const SAN_JUAN_CACHE_MS = 6 * 60 * 60 * 1000; // 6h — the app itself decides "once a month" client-side
 
+/**
+ * Best-effort parser for yendly.com's event listing. There's no official API/RSS, so this
+ * tries, in order, the most-to-least reliable sources of the same data:
+ *   1. schema.org JSON-LD <script type="application/ld+json"> blocks (many event sites embed
+ *      these for SEO/rich snippets — when present they're clean, structured JSON).
+ *   2. A Next.js-style __NEXT_DATA__ script tag, scanned generically for event-shaped objects
+ *      (anything with a name/title + a date-ish field).
+ *   3. A plain regex sweep over rendered <a href=".../evento/...">...</a> cards, as a last
+ *      resort against raw HTML.
+ * Whichever strategy finds something first wins; if none do, it returns an empty list rather
+ * than throwing, so the rest of the Eventos tab keeps working either way.
+ */
+function parseSanJuanEvents(html: string): any[] {
+  const fromJsonLd = parseSanJuanFromJsonLd(html);
+  if (fromJsonLd.length > 0) return fromJsonLd;
+
+  const fromNextData = parseSanJuanFromNextData(html);
+  if (fromNextData.length > 0) return fromNextData;
+
+  return parseSanJuanFromCards(html);
+}
+
+function toEventItem(href: string, title: string, rawDate?: string | null, imageUrl?: string | null) {
+  return {
+    id: `sj_${Buffer.from(href || title).toString("base64").slice(0, 16)}`,
+    title: title.trim(),
+    rawDate: rawDate || null,
+    imageUrl: imageUrl || null,
+    sourceUrl: href ? (href.startsWith("http") ? href : `https://sanjuan.yendly.com${href}`) : null,
+  };
+}
+
+function parseSanJuanFromJsonLd(html: string): any[] {
+  const items: any[] = [];
+  const scriptRe = /<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = scriptRe.exec(html))) {
+    try {
+      const parsed = JSON.parse(m[1].trim());
+      const entries = Array.isArray(parsed) ? parsed : parsed["@graph"] || [parsed];
+      for (const entry of entries) {
+        if (!entry || entry["@type"] !== "Event") continue;
+        const title = entry.name;
+        if (!title) continue;
+        const loc = entry.location?.name || entry.location?.address?.addressLocality || null;
+        items.push({
+          ...toEventItem(entry.url, title, entry.startDate, entry.image?.url || entry.image || null),
+          location: loc,
+        });
+      }
+    } catch (_) {
+      // not valid JSON — ignore this block
+    }
+  }
+  return items;
+}
+
+function parseSanJuanFromNextData(html: string): any[] {
+  const match = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i);
+  if (!match) return [];
+  let data: any;
+  try {
+    data = JSON.parse(match[1]);
+  } catch (_) {
+    return [];
+  }
+
+  const found: any[] = [];
+  const dateKeyRe = /^(date|start|startDate|fecha|fechaInicio)$/i;
+  const titleKeyRe = /^(title|name|nombre|titulo)$/i;
+  const visited = new Set<any>();
+
+  const walk = (node: any) => {
+    if (!node || typeof node !== "object" || visited.has(node) || found.length >= 60) return;
+    visited.add(node);
+    if (Array.isArray(node)) {
+      node.forEach(walk);
+      return;
+    }
+    const titleKey = Object.keys(node).find((k) => titleKeyRe.test(k));
+    const dateKey = Object.keys(node).find((k) => dateKeyRe.test(k));
+    if (titleKey && typeof node[titleKey] === "string" && node[titleKey].length > 2) {
+      const href = node.url || node.slug || node.link || "";
+      const img = node.image || node.imageUrl || node.cover || null;
+      found.push(toEventItem(String(href), node[titleKey], dateKey ? String(node[dateKey]) : null, img ? String(img) : null));
+    }
+    Object.values(node).forEach(walk);
+  };
+  walk(data);
+  return found;
+}
+
+function parseSanJuanFromCards(html: string): any[] {
+  const items: any[] = [];
+  const cardRe = /<a[^>]+href="([^"]*\/evento\/[^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+  const seen = new Set<string>();
+  let m: RegExpExecArray | null;
+  while ((m = cardRe.exec(html)) && items.length < 60) {
+    const href = m[1];
+    const block = m[2];
+    if (seen.has(href)) continue;
+    seen.add(href);
+
+    const titleMatch = block.match(/<h\d[^>]*>([\s\S]*?)<\/h\d>/i) || block.match(/alt="([^"]+)"/i);
+    const title = titleMatch ? titleMatch[1].replace(/<[^>]+>/g, "").trim() : null;
+    if (!title) continue;
+
+    const imgMatch = block.match(/<img[^>]+src="([^"]+)"/i);
+    const dateMatch = block.match(/(\d{1,2}\s+de\s+\w+|\d{1,2}\/\d{1,2}(\/\d{2,4})?)/i);
+
+    items.push(toEventItem(href, title, dateMatch ? dateMatch[0] : null, imgMatch ? imgMatch[1] : null));
+  }
+  return items;
+}
+
 app.get("/api/events/san-juan", async (req, res) => {
   try {
     const force = req.query.force === "1";
@@ -2140,37 +2255,8 @@ app.get("/api/events/san-juan", async (req, res) => {
       throw new Error(`yendly.com respondió ${pageRes.status}`);
     }
     const html = await pageRes.text();
-
-    // Best-effort HTML scrape: yendly renders each event as a card with a title link, a date
-    // string and (usually) a cover image. No official API/RSS exists, so this parses the
-    // rendered markup with regexes rather than pulling in a full DOM/HTML parser dependency.
-    // If the site's markup changes this may need adjusting — it degrades to an empty list
-    // rather than throwing, so the rest of the Eventos tab keeps working either way.
-    const items: any[] = [];
-    const cardRe = /<a[^>]+href="([^"]*\/evento\/[^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
-    const seen = new Set<string>();
-    let m: RegExpExecArray | null;
-    while ((m = cardRe.exec(html)) && items.length < 60) {
-      const href = m[1];
-      const block = m[2];
-      if (seen.has(href)) continue;
-      seen.add(href);
-
-      const titleMatch = block.match(/<h\d[^>]*>([\s\S]*?)<\/h\d>/i) || block.match(/alt="([^"]+)"/i);
-      const title = titleMatch ? titleMatch[1].replace(/<[^>]+>/g, "").trim() : null;
-      if (!title) continue;
-
-      const imgMatch = block.match(/<img[^>]+src="([^"]+)"/i);
-      const dateMatch = block.match(/(\d{1,2}\s+de\s+\w+|\d{1,2}\/\d{1,2}(\/\d{2,4})?)/i);
-
-      items.push({
-        id: `sj_${Buffer.from(href).toString("base64").slice(0, 16)}`,
-        title,
-        rawDate: dateMatch ? dateMatch[0] : null,
-        imageUrl: imgMatch ? imgMatch[1] : null,
-        sourceUrl: href.startsWith("http") ? href : `https://sanjuan.yendly.com${href}`,
-      });
-    }
+    const items = parseSanJuanEvents(html);
+    console.log(`[san-juan] parsed ${items.length} event(s) from yendly.com (html length ${html.length})`);
 
     sanJuanEventsCache = { fetchedAt: Date.now(), items };
     return res.json({ items, cached: false });
@@ -2185,21 +2271,44 @@ app.get("/api/events/san-juan", async (req, res) => {
 const SPORTSDB_BASE = "https://www.thesportsdb.com/api/v1/json/3";
 const leagueIdCache: Record<string, string> = {};
 
+// The full list (~600 leagues) is small enough to fetch once and filter locally — far more
+// reliable than guessing the exact query-string semantics of TheSportsDB's search endpoint.
+let allLeaguesCache: any[] | null = null;
+async function getAllLeagues(): Promise<any[]> {
+  if (allLeaguesCache) return allLeaguesCache;
+  const r = await fetch(`${SPORTSDB_BASE}/all_leagues.php`);
+  const data = await r.json();
+  allLeaguesCache = data?.leagues || [];
+  return allLeaguesCache;
+}
+
 app.get("/api/sportsdb/search-league", async (req, res) => {
   try {
-    const query = (req.query.q as string) || "";
-    const sport = (req.query.sport as string) || "";
-    if (!query) return res.status(400).json({ error: "Missing q" });
-    const cacheKey = `${sport}::${query}`;
+    const query = ((req.query.q as string) || "").toLowerCase();
+    const sport = ((req.query.sport as string) || "").toLowerCase();
+    const country = ((req.query.country as string) || "").toLowerCase();
+    if (!sport) return res.status(400).json({ error: "Missing sport" });
+    const cacheKey = `${sport}::${country}::${query}`;
     if (leagueIdCache[cacheKey]) {
       return res.json({ leagueId: leagueIdCache[cacheKey] });
     }
-    const r = await fetch(`${SPORTSDB_BASE}/search_all_leagues.php?s=${encodeURIComponent(query)}`);
-    const data = await r.json();
-    const leagues: any[] = data?.countries || data?.leagues || [];
-    const match =
-      leagues.find((l: any) => (l.strSport || "").toLowerCase() === sport.toLowerCase()) || leagues[0];
-    if (!match) return res.json({ leagueId: null });
+
+    const leagues = await getAllLeagues();
+    const bySport = leagues.filter((l: any) => (l.strSport || "").toLowerCase() === sport);
+
+    let match: any = null;
+    if (country) {
+      match = bySport.find((l: any) => (l.strLeague || "").toLowerCase().includes(country));
+    }
+    if (!match && query) {
+      match = bySport.find((l: any) => (l.strLeague || "").toLowerCase().includes(query));
+    }
+    if (!match) match = bySport[0] || null;
+
+    if (!match) {
+      console.warn(`[sportsdb] No league match for sport="${sport}" country="${country}" q="${query}"`);
+      return res.json({ leagueId: null });
+    }
     leagueIdCache[cacheKey] = match.idLeague;
     return res.json({ leagueId: match.idLeague, leagueName: match.strLeague });
   } catch (error: any) {
