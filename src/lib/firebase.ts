@@ -15,8 +15,6 @@ import {
 import {
   initializeFirestore,
   getFirestore,
-  persistentLocalCache,
-  persistentMultipleTabManager,
   setLogLevel,
 } from "firebase/firestore";
 import firebaseConfig from "../../firebase-applet-config.json";
@@ -38,11 +36,14 @@ try {
   firestoreDb = initializeFirestore(
     app,
     {
-      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
-      // Auto-detect instead of forcing long-polling: on some networks/proxies, forcing it
-      // makes writes hang indefinitely (the long-poll connection never resolves, with no
-      // error surfaced to the app) instead of falling back to a working transport. Only
-      // fall back to long-polling when a real WebChannel connection actually fails.
+      // Diagnostic: dropped the persistent (IndexedDB, multi-tab-coordinated) local cache.
+      // Writes were hanging forever — never resolving, never rejecting, no network error
+      // either — while reads/listens worked fine. That split points at the local cache
+      // layer itself (e.g. a stuck multi-tab lock) rather than the network transport, since
+      // a write's promise should resolve as soon as it's queued locally, before any server
+      // round-trip. Falling back to the default in-memory cache removes that layer entirely
+      // to confirm it, at the cost of offline support (edits made offline won't queue to
+      // sync later) until we find the actual fix.
       experimentalAutoDetectLongPolling: true,
     },
     FIRESTORE_DATABASE_ID
