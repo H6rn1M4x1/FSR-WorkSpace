@@ -140,15 +140,19 @@ export function EventsView({ userId, darkMode = false }: EventsViewProps) {
   const [expandedSport, setExpandedSport] = useState<string | null>(null);
   const onToggleExpand = (sportId: string) => setExpandedSport((prev) => (prev === sportId ? null : sportId));
 
-  // Sport header icons: the real F1/FIFA/NBA marks (via Wikipedia), forced to solid
-  // black/white with a CSS filter so any source coloring becomes a clean black-in-light,
-  // white-in-dark icon regardless of the original logo's colors.
-  const SPORT_LOGO_WIKI_TITLE: Record<string, string> = {
-    f1: "Formula One",
-    futbol: "FIFA",
-    nba: "National Basketball Association",
+  // Sport header icons, forced to solid black/white with a CSS filter so any source coloring
+  // becomes a clean black-in-light, white-in-dark icon regardless of the original colors.
+  // F1 and NBA are fixed URLs given directly (Wikipedia's "lead image" for those articles
+  // wasn't actually the logo, which is why they came out unrecognizable before); FIFA still
+  // comes from Wikipedia since that one worked fine.
+  const SPORT_LOGO_FIXED_URL: Record<string, string> = {
+    f1: "https://e7.pngegg.com/pngimages/432/779/png-clipart-2018-fia-formula-one-world-championship-abu-dhabi-grand-prix-logo-2017-formula-one-world-championship-formula-two-formula-one-logo-angle-text-thumbnail.png",
+    nba: "https://static.vecteezy.com/system/resources/previews/010/994/354/non_2x/nba-logo-symbol-black-and-white-design-america-basketball-american-countries-basketball-teams-illustration-free-vector.jpg",
   };
-  const [sportLogos, setSportLogos] = useState<Record<string, string | null>>({});
+  const SPORT_LOGO_WIKI_TITLE: Record<string, string> = {
+    futbol: "FIFA",
+  };
+  const [sportLogos, setSportLogos] = useState<Record<string, string | null>>(SPORT_LOGO_FIXED_URL);
   useEffect(() => {
     Object.entries(SPORT_LOGO_WIKI_TITLE).forEach(([sportId, title]) => {
       if (sportId in sportLogos) return;
@@ -341,8 +345,11 @@ export function EventsView({ userId, darkMode = false }: EventsViewProps) {
                         // These marks are far from square (F1's is a wide wordmark, NBA's is
                         // a tall silhouette) — a fixed square box squashed them into an
                         // unrecognizable sliver. Fix the height, let width follow the logo's
-                        // own aspect ratio instead.
-                        className="h-4 w-auto max-w-[34px] object-contain shrink-0 brightness-0 dark:invert"
+                        // own aspect ratio instead. The black/white forcing filter only makes
+                        // sense on a transparent-background source (F1, FIFA) — the NBA one is
+                        // a flat JPG with an opaque background, so forcing it would just paint
+                        // the whole box solid black/white instead of isolating the mark.
+                        className={`h-4 w-auto max-w-[34px] object-contain shrink-0 ${sportId === "nba" ? "" : "brightness-0 dark:invert"}`}
                         onError={() => setSportLogos((prev) => ({ ...prev, [sportId]: null }))}
                       />
                     ) : (
