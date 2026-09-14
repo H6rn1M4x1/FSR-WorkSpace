@@ -1737,7 +1737,7 @@ export function UserSettingsModal({
                       <span>Visibilidad Individual de Menús</span>
                     </h4>
                     <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5 font-medium">
-                      Oculta o muestra cada menú (Turnos, Finanzas, Universidad, Salud, Comidas, Notas) de forma independiente.
+                      Oculta o muestra cada menú (Turnos, Finanzas, Universidad, Salud, Comidas, Notas, Eventos) de forma independiente.
                     </p>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
@@ -1748,6 +1748,7 @@ export function UserSettingsModal({
                       { id: "health", label: "Salud", icon: Heart },
                       { id: "meals", label: "Comidas", icon: UtensilsCrossed },
                       { id: "notes", label: "Notas", icon: StickyNote },
+                      { id: "events", label: "Eventos", icon: MapPin },
                     ].map((menu) => {
                       const Icon = menu.icon;
                       const isVisible = menuVisibility?.[menu.id] !== false;

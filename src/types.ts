@@ -578,4 +578,53 @@ export interface StickyNote {
   __sharedByName?: string;
 }
 
+// --- Events (San Juan local agenda + followed sports calendars) ---
+
+/** One event scraped from the San Juan local events site (yendly.com), refreshed ~monthly. */
+export interface SanJuanEvent {
+  id: string;
+  title: string;
+  date: string; // ISO date (YYYY-MM-DD) when known, else best-effort raw text
+  rawDate?: string; // original text from the site, kept for display if parsing was uncertain
+  location?: string;
+  imageUrl?: string;
+  sourceUrl?: string;
+}
+
+/** A sport the user can choose to follow (fixed catalog, see lib/sportsCatalog.ts). */
+export interface SportCatalogEntry {
+  id: string; // e.g. "f1", "tenis", "futbol", "nba", "wwe", "motogp", "ufc", "nfl"
+  label: string;
+  hasTeams: boolean; // true for team/league sports (fetch teams+badges from TheSportsDB)
+  sportsDbSport: string; // the "strSport" value TheSportsDB uses to resolve its league id
+  leagueQuery: string; // search term used to resolve the TheSportsDB league id
+}
+
+/** A team/driver/league the user picked to follow within a sport they're subscribed to. */
+export interface FollowedTeam {
+  id: string; // TheSportsDB idTeam (or a slug for sports without teams)
+  name: string;
+  badgeUrl?: string;
+}
+
+/** Per-user event preferences: which sports/teams to show in the events calendar. */
+export interface EventPreferences {
+  followedSports: string[]; // SportCatalogEntry ids
+  followedTeams: Record<string, FollowedTeam[]>; // sportId -> teams followed within it
+  updatedAt: number;
+}
+
+/** One upcoming sports event, normalized from TheSportsDB, for a followed sport/team. */
+export interface SportEvent {
+  id: string;
+  sportId: string;
+  leagueName: string;
+  title: string; // e.g. "Boca Juniors vs River Plate" or "Gran Premio de Mónaco"
+  date: string; // ISO date (YYYY-MM-DD)
+  time?: string; // HH:MM, when known
+  homeTeamBadge?: string;
+  awayTeamBadge?: string;
+  venue?: string;
+}
+
 
