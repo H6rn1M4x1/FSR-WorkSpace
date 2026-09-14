@@ -2341,18 +2341,16 @@ export default function App() {
                 />
               )}
 
-              {currentTab === "notes" && (
-                <NotesView
-                  userId={user?.email || ""}
+              {currentTab === "notes" && activeSubTab === "events" && (
+                <EventsView
+                  userId={user?.email || userProfile?.email || "hernanmaximiliano10@gmail.com"}
                   darkMode={darkMode}
-                  activeSubTab={activeSubTab}
-                  onSubTabChange={setActiveSubTab}
                 />
               )}
 
-              {currentTab === "events" && (
-                <EventsView
-                  userId={user?.email || userProfile?.email || "hernanmaximiliano10@gmail.com"}
+              {currentTab === "notes" && activeSubTab !== "events" && (
+                <NotesView
+                  userId={user?.email || ""}
                   darkMode={darkMode}
                   activeSubTab={activeSubTab}
                   onSubTabChange={setActiveSubTab}

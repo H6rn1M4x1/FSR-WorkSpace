@@ -8,7 +8,7 @@ import type { SportCatalogEntry } from "../types";
 export const SPORTS_CATALOG: SportCatalogEntry[] = [
   { id: "f1", label: "Fórmula 1", hasTeams: true, sportsDbSport: "Motorsport", leagueQuery: "Formula 1" },
   { id: "motogp", label: "MotoGP", hasTeams: true, sportsDbSport: "Motorsport", leagueQuery: "MotoGP" },
-  { id: "futbol", label: "Fútbol", hasTeams: true, sportsDbSport: "Soccer", leagueQuery: "Argentina" },
+  { id: "futbol", label: "Fútbol", hasTeams: true, sportsDbSport: "Soccer", leagueQuery: "Primera", country: "Argentina" },
   { id: "tenis", label: "Tenis", hasTeams: false, sportsDbSport: "Tennis", leagueQuery: "ATP" },
   { id: "nba", label: "NBA", hasTeams: true, sportsDbSport: "Basketball", leagueQuery: "NBA" },
   { id: "nfl", label: "NFL", hasTeams: true, sportsDbSport: "American Football", leagueQuery: "NFL" },

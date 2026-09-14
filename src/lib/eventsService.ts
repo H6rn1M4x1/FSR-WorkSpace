@@ -87,9 +87,9 @@ async function resolveLeagueId(sportId: string): Promise<string | null> {
   const sport = getSportById(sportId);
   if (!sport) return null;
   if (leagueIdMemo[sportId]) return leagueIdMemo[sportId];
-  const res = await fetch(
-    `/api/sportsdb/search-league?q=${encodeURIComponent(sport.leagueQuery)}&sport=${encodeURIComponent(sport.sportsDbSport)}`
-  );
+  const params = new URLSearchParams({ q: sport.leagueQuery, sport: sport.sportsDbSport });
+  if (sport.country) params.set("country", sport.country);
+  const res = await fetch(`/api/sportsdb/search-league?${params.toString()}`);
   if (!res.ok) return null;
   const data = await res.json();
   if (data.leagueId) leagueIdMemo[sportId] = data.leagueId;

@@ -226,7 +226,6 @@ export class AestheticStorageService {
       health: true,
       meals: true,
       notes: true,
-      events: true,
     };
   }
 
