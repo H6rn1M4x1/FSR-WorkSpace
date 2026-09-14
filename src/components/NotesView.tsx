@@ -491,21 +491,10 @@ export function NotesView({ userId, darkMode = false }: NotesViewProps) {
 
   return (
     <div className="space-y-6 animate-fade-in px-3 sm:px-6 pt-1 sm:pt-1.5 pb-6">
-      <div className="flex items-center gap-3">
-        <StickyNoteIcon className="w-5 h-5 text-primary" />
-        <div>
-          <h2 className="font-extrabold text-lg text-zinc-900 dark:text-zinc-100">Notas</h2>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            {activeSubTab === "quick"
-              ? "Recordatorios e información que querés tener siempre a la vista. Mantené el clic sostenido sobre una nota para reordenarla."
-              : "Guardá las contraseñas de otros sitios, cifradas de punta a punta."}
-          </p>
-        </div>
-      </div>
-
       <SubNav
         activeTab={activeSubTab}
         onTabChange={(id) => setActiveSubTab(id as "quick" | "vault")}
+        className="mb-6"
         tabs={[
           { id: "quick", label: "Notas Rápidas", icon: StickyNoteIcon },
           { id: "vault", label: "Caja Fuerte", icon: KeyRound },
@@ -519,6 +508,7 @@ export function NotesView({ userId, darkMode = false }: NotesViewProps) {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -15 }}
           transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+          className="space-y-6"
         >
           {activeSubTab === "vault" ? (
             <PasswordVaultPanel
@@ -533,6 +523,17 @@ export function NotesView({ userId, darkMode = false }: NotesViewProps) {
           darkMode ? "bg-zinc-900/60 border-zinc-800" : "bg-white/80 border-slate-200"
         }`}
       >
+        <div className="flex items-center gap-3">
+          <StickyNoteIcon className="w-5 h-5 text-primary" />
+          <div>
+            <h2 className="font-extrabold text-lg text-zinc-900 dark:text-zinc-100">Notas</h2>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              Recordatorios e información que querés tener siempre a la vista. Mantené el clic
+              sostenido sobre una nota para reordenarla.
+            </p>
+          </div>
+        </div>
+
         {/* Compose box */}
         <div
           className={`rounded-2xl border p-4 shadow-sm transition-all ${

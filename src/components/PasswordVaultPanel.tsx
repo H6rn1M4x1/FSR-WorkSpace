@@ -268,9 +268,7 @@ export function PasswordVaultPanel({
     return (
       <div className={CARD}>
         <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-2xl bg-primary text-white dark:text-blue-950 shadow-md">
-            <KeyRound className="w-5 h-5" />
-          </div>
+          <KeyRound className="w-5 h-5 text-primary" />
           <div>
             <h3 className="font-extrabold text-sm text-zinc-900 dark:text-zinc-100">
               Caja Fuerte de Contraseñas
@@ -375,9 +373,7 @@ export function PasswordVaultPanel({
     return (
       <div className={CARD}>
         <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-2xl bg-primary text-white dark:text-blue-950 shadow-md">
-            <Lock className="w-5 h-5" />
-          </div>
+          <Lock className="w-5 h-5 text-primary" />
           <div>
             <h3 className="font-extrabold text-sm text-zinc-900 dark:text-zinc-100">
               Caja Fuerte de Contraseñas (Bloqueada)
@@ -483,9 +479,7 @@ export function PasswordVaultPanel({
       <div className={CARD}>
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-2xl bg-primary text-white dark:text-blue-950 shadow-md">
-              <Unlock className="w-5 h-5" />
-            </div>
+            <Unlock className="w-5 h-5 text-primary" />
             <div>
               <h3 className="font-extrabold text-sm text-zinc-900 dark:text-zinc-100">
                 Caja Fuerte de Contraseñas
