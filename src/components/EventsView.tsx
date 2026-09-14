@@ -139,14 +139,11 @@ export function EventsView({ userId, darkMode = false }: EventsViewProps) {
   const [expandedSport, setExpandedSport] = useState<string | null>(null);
   const onToggleExpand = (sportId: string) => setExpandedSport((prev) => (prev === sportId ? null : sportId));
 
-  // F1 team crests / driver photos: sourced from formula1.com first, Wikipedia as fallback.
+  // F1 driver photos: sourced from formula1.com first, Wikipedia as fallback. Team logos are a
+  // fixed known-good URL per team (see data/f1.ts) — no fetch/state needed for those.
   const [f1Images, setF1Images] = useState<Record<string, string | null>>({});
   useEffect(() => {
     if (expandedSport !== "f1") return;
-    F1_TEAMS.forEach((t) => {
-      if (t.name in f1Images) return;
-      fetchF1TeamLogo(t.name).then((url) => setF1Images((prev) => ({ ...prev, [t.name]: url })));
-    });
     F1_DRIVERS.forEach((d) => {
       if (d.name in f1Images) return;
       fetchF1DriverPhoto(d.name).then((url) => setF1Images((prev) => ({ ...prev, [d.name]: url })));
@@ -329,21 +326,24 @@ export function EventsView({ userId, darkMode = false }: EventsViewProps) {
                     <div>
                       <p className="text-[10px] font-bold text-zinc-400 uppercase mb-1.5">Escudería</p>
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-56 overflow-y-auto">
-                        {F1_TEAMS.map((t) => (
-                          <button key={t.id} type="button" onClick={() => pickSingle("f1", "team", { id: t.id, name: t.name, badgeUrl: f1Images[t.name] || undefined, kind: "team" })} className={PICK_BTN(followedF1Team?.id === t.id)}>
-                            {f1Images[t.name] ? (
+                        {F1_TEAMS.map((t) => {
+                          const logo = fetchF1TeamLogo(t.id);
+                          return (
+                          <button key={t.id} type="button" onClick={() => pickSingle("f1", "team", { id: t.id, name: t.name, badgeUrl: logo || undefined, kind: "team" })} className={PICK_BTN(followedF1Team?.id === t.id)}>
+                            {logo ? (
                               <img
-                                src={f1Images[t.name]!}
+                                src={logo}
                                 alt=""
                                 className="w-6 h-6 object-contain shrink-0"
-                                onError={() => setF1Images((prev) => ({ ...prev, [t.name]: null }))}
+                                onError={(e) => { e.currentTarget.style.display = "none"; }}
                               />
                             ) : (
                               <Trophy className="w-4 h-4 shrink-0" />
                             )}
                             <span className="truncate">{t.name}</span>
                           </button>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                     <div>
