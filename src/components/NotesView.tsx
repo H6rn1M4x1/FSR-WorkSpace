@@ -460,16 +460,14 @@ export function NotesView({ userId, darkMode = false }: NotesViewProps) {
   };
 
   return (
-    <div className="max-w-6xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
+    <div className="space-y-6 animate-fade-in px-3 sm:px-6 pt-1 sm:pt-1.5 pb-6">
       <div
         className={`rounded-3xl border p-4 sm:p-6 space-y-6 ${
           darkMode ? "bg-zinc-900/60 border-zinc-800" : "bg-white/80 border-slate-200"
         }`}
       >
         <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-2xl bg-primary text-white dark:text-blue-950 shadow-md">
-            <StickyNoteIcon className="w-5 h-5" />
-          </div>
+          <StickyNoteIcon className="w-5 h-5 text-zinc-900 dark:text-white" />
           <div>
             <h2 className="font-extrabold text-lg text-zinc-900 dark:text-zinc-100">Notas</h2>
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
