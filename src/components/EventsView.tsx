@@ -16,10 +16,12 @@ import {
   X,
   Bell,
   BellOff,
+  Clock,
 } from "lucide-react";
 import { useToast } from "../context/ToastContext";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import { NbaLogo } from "./icons/NbaLogo";
+import { PillFilterBar } from "./PillFilterBar";
 import { SPORTS_CATALOG } from "../lib/sportsCatalog";
 import { StorageService } from "../lib/storage";
 import { saveItemToFirestore, deleteItemFromFirestore } from "../lib/firestoreSyncService";
@@ -49,6 +51,19 @@ interface EventsViewProps {
 /** Id estable para el turno "Ocio" que agenda este evento de San Juan — así togglear la
  * campanita puede encontrar/quitar exactamente esa entrada sin duplicarla. */
 const sanJuanTurnoId = (ev: SanJuanEvent) => `sanjuan-${ev.id}`;
+
+interface DayEvent {
+  label: string;
+  kind: "sanjuan" | "sport";
+  sportId?: string;
+  homeTeamBadge?: string;
+  awayTeamBadge?: string;
+  location?: string;
+  time?: string;
+  categoryLabel: string;
+}
+
+type DayEventFilter = "Todos" | "San Juan" | "Deportes";
 
 const MESES: Record<string, number> = {
   enero: 0, febrero: 1, marzo: 2, abril: 3, mayo: 4, junio: 5,
@@ -343,13 +358,10 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
 
   // --- Calendar: San Juan + followed sport events, merged by ISO date ---
   const eventsByDate = useMemo(() => {
-    const map: Record<
-      string,
-      { label: string; kind: "sanjuan" | "sport"; sportId?: string; homeTeamBadge?: string; awayTeamBadge?: string }[]
-    > = {};
+    const map: Record<string, DayEvent[]> = {};
     sjEvents.forEach((ev) => {
       const iso = guessIsoDate(ev.rawDate || ev.date);
-      if (iso) (map[iso] = map[iso] || []).push({ label: ev.title, kind: "sanjuan" });
+      if (iso) (map[iso] = map[iso] || []).push({ label: ev.title, kind: "sanjuan", location: ev.location, categoryLabel: "San Juan" });
     });
     sportEvents.forEach((ev) => {
       if (ev.date) {
@@ -359,6 +371,8 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
           sportId: ev.sportId,
           homeTeamBadge: ev.homeTeamBadge,
           awayTeamBadge: ev.awayTeamBadge,
+          time: ev.time,
+          categoryLabel: ev.leagueName || "Deportes",
         });
       }
     });
@@ -368,12 +382,17 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
   const [calMonth, setCalMonth] = useState(() => new Date());
   const [selectedDay, setSelectedDay] = useState(() => new Date().toISOString().slice(0, 10));
 
-  // Lista de eventos del día seleccionado: máximo 3 a la vez, paginado con Anterior/Siguiente
+  // Lista de eventos del día seleccionado: filtro Todos/San Juan/Deportes (igual que la
+  // "Agenda de Turnos y Compromisos") + máximo 3 a la vez, paginado con Anterior/Siguiente
   // en vez de listar todo junto (un día con muchos eventos empujaba el resto de la tarjeta).
+  const [dayEventFilter, setDayEventFilter] = useState<DayEventFilter>("Todos");
   const [calDayPage, setCalDayPage] = useState(1);
-  useEffect(() => { setCalDayPage(1); }, [selectedDay]);
+  useEffect(() => { setCalDayPage(1); }, [selectedDay, dayEventFilter]);
   const CAL_DAY_PAGE_SIZE = 3;
-  const selectedDayEvents = eventsByDate[selectedDay] || [];
+  const selectedDayAllEvents = eventsByDate[selectedDay] || [];
+  const selectedDayEvents = selectedDayAllEvents.filter((ev) =>
+    dayEventFilter === "Todos" ? true : dayEventFilter === "San Juan" ? ev.kind === "sanjuan" : ev.kind === "sport"
+  );
   const calDayTotalPages = Math.max(1, Math.ceil(selectedDayEvents.length / CAL_DAY_PAGE_SIZE));
   const selectedDayPageEvents = selectedDayEvents.slice(
     (calDayPage - 1) * CAL_DAY_PAGE_SIZE,
@@ -399,12 +418,7 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
     <div className="space-y-6 animate-fade-in px-3 sm:px-6 pt-1 sm:pt-1.5 pb-6">
       <div className="flex items-center gap-3">
         <MapPin className="w-5 h-5 text-primary" />
-        <div>
-          <h2 className="font-extrabold text-lg text-zinc-900 dark:text-zinc-100">Eventos</h2>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            Qué hacer en San Juan, los deportes que seguís, y todo junto en un calendario.
-          </p>
-        </div>
+        <h2 className="font-extrabold text-lg text-zinc-900 dark:text-zinc-100">Eventos</h2>
       </div>
 
       {/* Calendario (izquierda) + eventos del día seleccionado (derecha) — mismo layout Y
@@ -487,44 +501,72 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
             <CalendarIcon className="w-5 h-5 text-primary" />
             <h3 className="font-extrabold text-sm">Eventos del Día</h3>
           </div>
-          <p className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-400">Día seleccionado</p>
-          <p className="text-sm font-extrabold capitalize mb-3">
-            {new Date(selectedDay + "T00:00:00").toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" })}
-          </p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 py-2.5 px-4 bg-slate-50 dark:bg-black/40 border border-slate-150 dark:border-zinc-800/50 rounded-2xl mb-4">
+            <div>
+              <p className="text-[9px] text-zinc-400 font-bold uppercase tracking-widest">Día Seleccionado</p>
+              <p className="text-xs md:text-sm font-extrabold text-black dark:text-zinc-200 mt-0.5 capitalize">
+                {new Date(selectedDay + "T00:00:00").toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" })}
+              </p>
+            </div>
+            <PillFilterBar
+              options={[
+                { id: "Todos", label: "Todos" },
+                { id: "San Juan", label: "San Juan" },
+                { id: "Deportes", label: "Deportes" },
+              ]}
+              activeValue={dayEventFilter}
+              onChange={setDayEventFilter}
+              layoutIdPrefix="eventsDayFilter"
+              className="self-start sm:self-auto"
+            />
+          </div>
           <div className="space-y-2">
             {selectedDayEvents.length === 0 ? (
               <p className="text-xs text-zinc-500 py-4 text-center">Sin eventos este día.</p>
             ) : (
-              <div className="space-y-1.5">
-                {selectedDayPageEvents.map((ev, i) => (
-                  <div key={i} className="p-2.5 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-2">
-                    {ev.kind === "sanjuan" ? (
-                      <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
-                    ) : ev.sportId === "f1" ? (
-                      // La F1 no tiene escudos de equipo local/visitante (es una carrera) — solo el logo de F1.
-                      sportLogos.f1 ? (
-                        <img src={sportLogos.f1} alt="" className="w-4 h-4 object-contain shrink-0 brightness-0 dark:invert" />
-                      ) : (
-                        <Trophy className="w-3.5 h-3.5 text-primary shrink-0" />
-                      )
-                    ) : ev.sportId === "nba" ? (
-                      <div className="flex items-center gap-1 shrink-0">
-                        <NbaLogo className="h-3.5 w-auto max-w-[24px] shrink-0 text-black dark:text-white" />
-                        {ev.homeTeamBadge && <img src={ev.homeTeamBadge} alt="" className="w-4 h-4 rounded-full bg-white object-contain border border-white shrink-0" />}
-                        {ev.awayTeamBadge && <img src={ev.awayTeamBadge} alt="" className="w-4 h-4 rounded-full bg-white object-contain border border-white shrink-0" />}
+              <div className="space-y-2.5">
+                {selectedDayPageEvents.map((ev, i) => {
+                  const CatIcon = ev.kind === "sanjuan" ? MapPin : Trophy;
+                  return (
+                    <div key={i} className="p-3.5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/85 flex items-start gap-3">
+                      <div className="p-2 bg-primary/10 text-primary rounded-xl shrink-0 mt-0.5">
+                        {ev.kind === "sport" && ev.sportId === "f1" && sportLogos.f1 ? (
+                          <img src={sportLogos.f1} alt="" className="w-4 h-4 object-contain brightness-0 dark:invert" />
+                        ) : ev.kind === "sport" && ev.sportId === "nba" ? (
+                          <NbaLogo className="h-4 w-auto max-w-[16px]" />
+                        ) : (
+                          <CatIcon className="w-4 h-4" />
+                        )}
                       </div>
-                    ) : ev.sportId === "futbol" ? (
-                      <div className="flex items-center gap-1 shrink-0">
-                        {sportLogos.futbol && <img src={sportLogos.futbol} alt="" className="w-3.5 h-3.5 object-contain shrink-0 brightness-0 dark:invert" />}
-                        {ev.homeTeamBadge && <img src={ev.homeTeamBadge} alt="" className="w-4 h-4 rounded-full bg-white object-contain border border-white shrink-0" />}
-                        {ev.awayTeamBadge && <img src={ev.awayTeamBadge} alt="" className="w-4 h-4 rounded-full bg-white object-contain border border-white shrink-0" />}
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-primary/10 text-primary">
+                          {ev.categoryLabel}
+                        </span>
+                        <p className="text-xs font-extrabold text-zinc-900 dark:text-zinc-100 truncate">{ev.label}</p>
+                        {(ev.time || ev.location || ev.homeTeamBadge || ev.awayTeamBadge) && (
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-zinc-500 dark:text-zinc-400 font-bold">
+                            {ev.time && (
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-3 h-3 shrink-0" /> {ev.time}
+                              </span>
+                            )}
+                            {ev.location && (
+                              <span className="flex items-center gap-1">
+                                <MapPin className="w-3 h-3 shrink-0" /> {ev.location}
+                              </span>
+                            )}
+                            {(ev.homeTeamBadge || ev.awayTeamBadge) && (
+                              <span className="flex items-center gap-1">
+                                {ev.homeTeamBadge && <img src={ev.homeTeamBadge} alt="" className="w-3.5 h-3.5 rounded-full bg-white object-contain border border-white" />}
+                                {ev.awayTeamBadge && <img src={ev.awayTeamBadge} alt="" className="w-3.5 h-3.5 rounded-full bg-white object-contain border border-white" />}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
-                    ) : (
-                      <Trophy className="w-3.5 h-3.5 text-primary shrink-0" />
-                    )}
-                    <span className="truncate">{ev.label}</span>
-                  </div>
-                ))}
+                    </div>
+                  );
+                })}
               </div>
             )}
             {calDayTotalPages > 1 && (
