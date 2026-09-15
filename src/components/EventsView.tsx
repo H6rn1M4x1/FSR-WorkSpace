@@ -96,6 +96,17 @@ export function EventsView({ userId, darkMode = false }: EventsViewProps) {
     getSanJuanEvents().then(setSjEvents).finally(() => setSjLoading(false));
   }, []);
 
+  // "Qué hacer en San Juan": paginado de a 6, mismo patrón (Anterior/Siguiente) que el resto
+  // de las tablas de la app (ver PaymentsTable, etc.) en vez de un "Ver más" que va acumulando.
+  const [sjPage, setSjPage] = useState(1);
+  const SJ_PAGE_SIZE = 6;
+  useEffect(() => { setSjPage(1); }, [sjEvents]);
+  const sjTotalPages = Math.max(1, Math.ceil(sjEvents.length / SJ_PAGE_SIZE));
+  const sjPageEvents = useMemo(() => {
+    const start = (sjPage - 1) * SJ_PAGE_SIZE;
+    return sjEvents.slice(start, start + SJ_PAGE_SIZE);
+  }, [sjEvents, sjPage]);
+
   // --- Preferences ---
   const [prefs, setPrefs] = useState<EventPreferences | null>(null);
   const [prefsLoaded, setPrefsLoaded] = useState(false);
@@ -626,21 +637,56 @@ export function EventsView({ userId, darkMode = false }: EventsViewProps) {
             No se encontraron eventos este mes (o no se pudo leer la fuente).
           </p>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {sjEvents.map((ev) => (
-              <a key={ev.id} href={ev.sourceUrl} target="_blank" rel="noopener noreferrer" className="rounded-2xl border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 overflow-hidden hover:shadow-md transition-all flex flex-col">
-                {ev.imageUrl && <img src={ev.imageUrl} alt={ev.title} className="w-full h-32 object-cover" />}
-                <div className="p-3 space-y-1 flex-1">
-                  <p className="font-extrabold text-sm text-zinc-900 dark:text-zinc-100 line-clamp-2">{ev.title}</p>
-                  {ev.location && <p className="text-[11px] text-zinc-500 dark:text-zinc-400 line-clamp-1">{ev.location}</p>}
-                  {ev.rawDate && <p className="text-xs text-primary font-bold">{ev.rawDate}</p>}
-                  <p className="text-[10px] text-zinc-400 flex items-center gap-1">
-                    <ExternalLink className="w-3 h-3" /> Ver más
-                  </p>
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {sjPageEvents.map((ev) => (
+                <a key={ev.id} href={ev.sourceUrl} target="_blank" rel="noopener noreferrer" className="rounded-2xl border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 overflow-hidden hover:shadow-md transition-all flex flex-col">
+                  {ev.imageUrl && (
+                    <img
+                      src={ev.imageUrl}
+                      alt={ev.title}
+                      className="w-full h-32 object-cover"
+                      onError={(e) => { e.currentTarget.style.display = "none"; }}
+                    />
+                  )}
+                  <div className="p-3 space-y-1 flex-1">
+                    <p className="font-extrabold text-sm text-zinc-900 dark:text-zinc-100 line-clamp-2">{ev.title}</p>
+                    {ev.location && <p className="text-[11px] text-zinc-500 dark:text-zinc-400 line-clamp-1">{ev.location}</p>}
+                    {ev.rawDate && <p className="text-xs text-primary font-bold">{ev.rawDate}</p>}
+                    <p className="text-[10px] text-zinc-400 flex items-center gap-1">
+                      <ExternalLink className="w-3 h-3" /> Ver más
+                    </p>
+                  </div>
+                </a>
+              ))}
+            </div>
+
+            {sjTotalPages > 1 && (
+              <div className="pt-4 mt-1 border-t border-slate-100 dark:border-zinc-800/80 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500 dark:text-zinc-400 font-medium">
+                <span>
+                  Mostrando {sjPageEvents.length} de {sjEvents.length} eventos (Página {sjPage} de {sjTotalPages})
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={sjPage === 1}
+                    onClick={() => setSjPage((prev) => Math.max(1, prev - 1))}
+                    className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-zinc-800 transition-all font-bold cursor-pointer"
+                  >
+                    Anterior
+                  </button>
+                  <button
+                    type="button"
+                    disabled={sjPage === sjTotalPages}
+                    onClick={() => setSjPage((prev) => Math.min(sjTotalPages, prev + 1))}
+                    className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-zinc-800 transition-all font-bold cursor-pointer"
+                  >
+                    Siguiente
+                  </button>
                 </div>
-              </a>
-            ))}
-          </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
