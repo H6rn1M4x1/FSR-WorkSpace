@@ -21,6 +21,8 @@ import { useToast } from "../context/ToastContext";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import { NbaLogo } from "./icons/NbaLogo";
 import { SPORTS_CATALOG } from "../lib/sportsCatalog";
+import { StorageService } from "../lib/storage";
+import { saveItemToFirestore, deleteItemFromFirestore } from "../lib/firestoreSyncService";
 import {
   getSanJuanEvents,
   fetchEventPreferences,
@@ -103,14 +105,34 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
   const isSanJuanScheduled = (ev: SanJuanEvent) =>
     turnosCompromisos.some((t) => t.id === sanJuanTurnoId(ev));
 
-  const toggleSanJuanSchedule = (ev: SanJuanEvent) => {
+  // Igual que en AppointmentsView: el cambio se aplica local (instantáneo) Y se persiste en
+  // Firestore con saveItemToFirestore/deleteItemFromFirestore. Solo tocar el estado local (lo
+  // que hacía antes) se perdía al cambiar de sección, porque el listener de sincronización
+  // vuelve a traer lo último que hay guardado en el servidor y pisa lo que no llegó a guardarse.
+  const toggleSanJuanSchedule = async (ev: SanJuanEvent) => {
     const id = sanJuanTurnoId(ev);
     const alreadyScheduled = turnosCompromisos.some((t) => t.id === id);
+
     if (alreadyScheduled) {
-      setTurnosCompromisos((prev) => prev.filter((t) => t.id !== id));
-      showToast(`"${ev.title}" quitado de tus turnos.`, "info");
+      setTurnosCompromisos((prev) => {
+        const next = prev.filter((t) => t.id !== id);
+        StorageService.setTurnosCompromisos(next);
+        return next;
+      });
+      try {
+        await deleteItemFromFirestore(userId, "turnos_compromisos", id);
+        showToast(`"${ev.title}" quitado de tus turnos.`, "info");
+      } catch (err: any) {
+        setTurnosCompromisos((prev) => {
+          const reverted = [...prev, turnosCompromisos.find((t) => t.id === id)!].filter(Boolean);
+          StorageService.setTurnosCompromisos(reverted);
+          return reverted;
+        });
+        showToast(err?.message || "No se pudo quitar el evento de tus turnos.", "error");
+      }
       return;
     }
+
     const fecha = guessIsoDate(ev.rawDate || ev.date) || new Date().toISOString().slice(0, 10);
     const nuevoTurno: TurnoCompromiso = {
       id,
@@ -126,8 +148,22 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
         rawDate: ev.rawDate,
       }),
     };
-    setTurnosCompromisos((prev) => [...prev, nuevoTurno]);
-    showToast(`"${ev.title}" agendado en tus turnos (Ocio).`, "success");
+    setTurnosCompromisos((prev) => {
+      const next = [...prev, nuevoTurno];
+      StorageService.setTurnosCompromisos(next);
+      return next;
+    });
+    try {
+      await saveItemToFirestore(userId, "turnos_compromisos", nuevoTurno);
+      showToast(`"${ev.title}" agendado en tus turnos (Ocio).`, "success");
+    } catch (err: any) {
+      setTurnosCompromisos((prev) => {
+        const reverted = prev.filter((t) => t.id !== id);
+        StorageService.setTurnosCompromisos(reverted);
+        return reverted;
+      });
+      showToast(err?.message || "No se pudo agendar el evento.", "error");
+    }
   };
 
   // --- San Juan ---
@@ -263,9 +299,38 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
   const [visibleSportEventsCount, setVisibleSportEventsCount] = useState(5);
   useEffect(() => {
     if (!prefsLoaded || !prefs) return;
-    setSportEventsLoading(true);
     setVisibleSportEventsCount(5);
-    fetchFollowedSportEvents(prefs).then(setSportEvents).finally(() => setSportEventsLoading(false));
+
+    // Se guardan en localStorage por firma de preferencias (deportes/equipos seguidos) + un
+    // TTL — así recargar la página, o volver a esta pestaña, no dispara de nuevo las llamadas
+    // a ESPN/F1/NBA cada vez, solo cuando cambió algo que seguís o pasó bastante tiempo.
+    const signature = JSON.stringify({ sports: prefs.followedSports, teams: prefs.followedTeams });
+    const cacheKey = `sj_sport_events_cache_${userId}`;
+    const SPORT_EVENTS_TTL_MS = 3 * 60 * 60 * 1000; // 3h
+    try {
+      const cachedRaw = localStorage.getItem(cacheKey);
+      if (cachedRaw) {
+        const cached = JSON.parse(cachedRaw);
+        if (cached.signature === signature && Date.now() - cached.fetchedAt < SPORT_EVENTS_TTL_MS) {
+          setSportEvents(cached.events || []);
+          return; // caché fresco — no vuelve a pedir nada por red
+        }
+      }
+    } catch (_) {
+      // localStorage inaccesible o corrupto — seguir al fetch normal
+    }
+
+    setSportEventsLoading(true);
+    fetchFollowedSportEvents(prefs)
+      .then((events) => {
+        setSportEvents(events);
+        try {
+          localStorage.setItem(cacheKey, JSON.stringify({ signature, fetchedAt: Date.now(), events }));
+        } catch (_) {
+          // Quota llena o storage bloqueado — no rompe la carga, solo no cachea esta vez
+        }
+      })
+      .finally(() => setSportEventsLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefsLoaded, prefs?.followedSports.join(","), JSON.stringify(prefs?.followedTeams || {})]);
 
