@@ -401,7 +401,8 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
         </div>
       </div>
 
-      {/* Calendario (izquierda, mismo ancho que el resto de calendarios de la app) + Deportes (derecha) */}
+      {/* Calendario (izquierda) + eventos del día seleccionado (derecha) — mismo layout que
+          "Calendario Unificado" + "Agenda Central Integrada" en Inicio. */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className={`${SUBCARD} lg:col-span-5 flex flex-col`}>
           <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
@@ -451,11 +452,14 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
               );
             })}
           </div>
+        </div>
 
-          <div className="space-y-2 pt-4 mt-4 border-t border-slate-100 dark:border-zinc-800/80">
-            <p className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-400">
-              {new Date(selectedDay + "T00:00:00").toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" })}
-            </p>
+        {/* Eventos del día seleccionado */}
+        <div className={`${SUBCARD} lg:col-span-7 flex flex-col`}>
+          <p className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-400">
+            {new Date(selectedDay + "T00:00:00").toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" })}
+          </p>
+          <div className="space-y-2 mt-2">
             {selectedDayEvents.length === 0 ? (
               <p className="text-xs text-zinc-500 py-4 text-center">Sin eventos este día.</p>
             ) : (
@@ -515,66 +519,6 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
               </div>
             )}
           </div>
-        </div>
-
-        {/* Deportes */}
-        <div className={`${SUBCARD} lg:col-span-7`}>
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-400">Eventos deportivos</p>
-            <button
-              type="button"
-              onClick={openSportsModal}
-              className="p-1.5 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-all cursor-pointer shrink-0"
-              title="Configurar deportes que seguís"
-            >
-              <Settings className="w-4 h-4" />
-            </button>
-          </div>
-          {sportEventsLoading ? (
-            <div className="flex items-center gap-2 text-xs text-zinc-500 py-4">
-              <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Cargando calendarios...
-            </div>
-          ) : sportEvents.length === 0 ? (
-            <p className="text-xs text-zinc-500 py-4">
-              {prefs?.followedSports.length ? "No hay próximos eventos por ahora." : "Elegí al menos un deporte desde el botón de configuración."}
-            </p>
-          ) : (
-            (() => {
-              const sorted = sportEvents.slice().sort((a, b) => a.date.localeCompare(b.date)).slice(0, 30);
-              const visible = sorted.slice(0, visibleSportEventsCount);
-              return (
-                <div className="space-y-1.5">
-                  {visible.map((ev) => (
-                    <div key={ev.id} className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800">
-                      <div className="flex items-center -space-x-2 shrink-0">
-                        {ev.sportId === "f1" && sportLogos.f1 ? (
-                          <img src={sportLogos.f1} alt="" className="w-6 h-6 object-contain brightness-0 dark:invert" />
-                        ) : (
-                          <>
-                            {ev.homeTeamBadge && <img src={ev.homeTeamBadge} alt="" className="w-6 h-6 rounded-full bg-white object-contain border border-white" />}
-                            {ev.awayTeamBadge && <img src={ev.awayTeamBadge} alt="" className="w-6 h-6 rounded-full bg-white object-contain border border-white" />}
-                          </>
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-extrabold text-zinc-900 dark:text-zinc-100 truncate">{ev.title}</p>
-                        <p className="text-[10px] text-zinc-500 dark:text-zinc-400">{ev.leagueName} · {ev.date}{ev.time ? ` ${ev.time}` : ""}</p>
-                      </div>
-                    </div>
-                  ))}
-                  {visibleSportEventsCount < sorted.length && (
-                    <button
-                      type="button"
-                      onClick={() => setVisibleSportEventsCount((c) => c + 5)}
-                      className="w-full py-2 rounded-xl text-[11px] font-bold text-primary bg-primary/10 hover:bg-primary/20 transition-all cursor-pointer"
-                    >
-                      Ver más
-                    </button>
-                  )}
-                </div>
-              );
-            })()
-          )}
         </div>
       </div>
 
@@ -761,8 +705,10 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
         document.body
       )}
 
-      {/* San Juan */}
-      <div className={SUBCARD}>
+      {/* Qué hacer en San Juan (izquierda) + Eventos deportivos (derecha) — segunda fila,
+          alineada con la de arriba (5 y 7 columnas) igual que en Inicio. */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className={`${SUBCARD} lg:col-span-5`}>
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h3 className="font-extrabold text-sm flex items-center gap-2">
             <MapPin className="w-4 h-4 text-primary" /> Qué hacer en San Juan
@@ -843,6 +789,67 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
             )}
           </>
         )}
+      </div>
+
+      {/* Deportes */}
+      <div className={`${SUBCARD} lg:col-span-7`}>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-400">Eventos deportivos</p>
+          <button
+            type="button"
+            onClick={openSportsModal}
+            className="p-1.5 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-all cursor-pointer shrink-0"
+            title="Configurar deportes que seguís"
+          >
+            <Settings className="w-4 h-4" />
+          </button>
+        </div>
+        {sportEventsLoading ? (
+          <div className="flex items-center gap-2 text-xs text-zinc-500 py-4">
+            <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Cargando calendarios...
+          </div>
+        ) : sportEvents.length === 0 ? (
+          <p className="text-xs text-zinc-500 py-4">
+            {prefs?.followedSports.length ? "No hay próximos eventos por ahora." : "Elegí al menos un deporte desde el botón de configuración."}
+          </p>
+        ) : (
+          (() => {
+            const sorted = sportEvents.slice().sort((a, b) => a.date.localeCompare(b.date)).slice(0, 30);
+            const visible = sorted.slice(0, visibleSportEventsCount);
+            return (
+              <div className="space-y-1.5">
+                {visible.map((ev) => (
+                  <div key={ev.id} className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800">
+                    <div className="flex items-center -space-x-2 shrink-0">
+                      {ev.sportId === "f1" && sportLogos.f1 ? (
+                        <img src={sportLogos.f1} alt="" className="w-6 h-6 object-contain brightness-0 dark:invert" />
+                      ) : (
+                        <>
+                          {ev.homeTeamBadge && <img src={ev.homeTeamBadge} alt="" className="w-6 h-6 rounded-full bg-white object-contain border border-white" />}
+                          {ev.awayTeamBadge && <img src={ev.awayTeamBadge} alt="" className="w-6 h-6 rounded-full bg-white object-contain border border-white" />}
+                        </>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-extrabold text-zinc-900 dark:text-zinc-100 truncate">{ev.title}</p>
+                      <p className="text-[10px] text-zinc-500 dark:text-zinc-400">{ev.leagueName} · {ev.date}{ev.time ? ` ${ev.time}` : ""}</p>
+                    </div>
+                  </div>
+                ))}
+                {visibleSportEventsCount < sorted.length && (
+                  <button
+                    type="button"
+                    onClick={() => setVisibleSportEventsCount((c) => c + 5)}
+                    className="w-full py-2 rounded-xl text-[11px] font-bold text-primary bg-primary/10 hover:bg-primary/20 transition-all cursor-pointer"
+                  >
+                    Ver más
+                  </button>
+                )}
+              </div>
+            );
+          })()
+        )}
+      </div>
       </div>
     </div>
     </div>
