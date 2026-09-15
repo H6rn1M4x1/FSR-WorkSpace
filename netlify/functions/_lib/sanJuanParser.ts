@@ -134,27 +134,39 @@ function extractTextRuns(blockHtml: string): string[] {
     .filter((s) => s.length > 0);
 }
 
+// Filenames that are almost never the actual event photo — a shared logo/icon/watermark
+// repeated identically on every card, which is what made every event "look the same" in the
+// app instead of showing its own picture.
+const GENERIC_IMAGE_RE = /(logo|icon|favicon|placeholder|avatar|watermark|marca[-_]?agua|sprite)/i;
+
 /**
  * Next.js sites commonly lazy-load card images: `src` holds a tiny base64 blur placeholder
  * (or is left empty) while the real URL sits in `data-src`/`data-original` or as the first
- * candidate in `srcset`. Prefer those over a placeholder `src`, which is what rendered as a
- * broken-image icon in the app (a base64 data URI, or a relative path resolved against the
- * app's own origin instead of yendly.com's).
+ * candidate in `srcset`. Card-grid layouts also often paint the cover photo as a CSS
+ * `background-image` on a wrapping `<div>` rather than an `<img>` at all, with any `<img>` in
+ * the card being a small unrelated icon (category badge, location pin) — try that first.
+ * Prefer all of these over a placeholder `src`, which is what rendered as a broken-image icon
+ * (or the same generic image on every card) in the app.
  */
 function extractImageUrl(block: string): string | null {
+  const candidates: string[] = [];
+
+  const bgMatches = block.matchAll(/background(?:-image)?\s*:\s*url\((['"]?)([^'")]+)\1\)/gi);
+  for (const m of bgMatches) candidates.push(m[2]);
+
   const dataSrc = block.match(/<img[^>]+data-src="([^"]+)"/i) || block.match(/<img[^>]+data-original="([^"]+)"/i);
-  if (dataSrc) return dataSrc[1];
+  if (dataSrc) candidates.push(dataSrc[1]);
 
   const srcset = block.match(/<img[^>]+srcset="([^"]+)"/i);
   if (srcset) {
     const first = srcset[1].split(",")[0].trim().split(/\s+/)[0];
-    if (first) return first;
+    if (first) candidates.push(first);
   }
 
   const src = block.match(/<img[^>]+src="([^"]+)"/i);
-  if (src && !src[1].startsWith("data:")) return src[1];
+  if (src && !src[1].startsWith("data:")) candidates.push(src[1]);
 
-  return null;
+  return candidates.find((url) => !GENERIC_IMAGE_RE.test(url)) || candidates[0] || null;
 }
 
 function parseSanJuanFromCards(html: string): any[] {

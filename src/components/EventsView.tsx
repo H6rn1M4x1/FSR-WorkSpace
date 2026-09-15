@@ -14,6 +14,8 @@ import {
   ArrowLeft,
   Settings,
   X,
+  Bell,
+  BellOff,
 } from "lucide-react";
 import { useToast } from "../context/ToastContext";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
@@ -33,12 +35,18 @@ import {
   NBA_TEAMS,
   fetchWikiThumbnail,
 } from "../lib/eventsService";
-import type { EventPreferences, FollowedTeam, SanJuanEvent, SportEvent } from "../types";
+import type { EventPreferences, FollowedTeam, SanJuanEvent, SportEvent, TurnoCompromiso } from "../types";
 
 interface EventsViewProps {
   userId: string;
   darkMode?: boolean;
+  turnosCompromisos: TurnoCompromiso[];
+  setTurnosCompromisos: (updater: TurnoCompromiso[] | ((prev: TurnoCompromiso[]) => TurnoCompromiso[])) => void;
 }
+
+/** Id estable para el turno "Ocio" que agenda este evento de San Juan — así togglear la
+ * campanita puede encontrar/quitar exactamente esa entrada sin duplicarla. */
+const sanJuanTurnoId = (ev: SanJuanEvent) => `sanjuan-${ev.id}`;
 
 const MESES: Record<string, number> = {
   enero: 0, febrero: 1, marzo: 2, abril: 3, mayo: 4, junio: 5,
@@ -85,8 +93,42 @@ const PICK_BTN = (active: boolean) =>
  * follows, and a merged month calendar) lives on ONE unified page — no further sub-tabs —
  * reached as the "Eventos" entry inside Notas' own submenu.
  */
-export function EventsView({ userId, darkMode = false }: EventsViewProps) {
+export function EventsView({ userId, darkMode = false, turnosCompromisos, setTurnosCompromisos }: EventsViewProps) {
   const { showToast } = useToast();
+
+  // Campanita en cada tarjeta de "Qué hacer en San Juan": agenda/desagenda el evento como
+  // Turno-Compromiso categoría "Ocio" — con eso ya aparece solo en Inicio, Agenda Central
+  // Integrada y Turnos, porque las tres leen el mismo estado turnosCompromisos (mismo patrón
+  // que usan los partidos de fútbol seguidos, ver lib/matchScheduler.ts).
+  const isSanJuanScheduled = (ev: SanJuanEvent) =>
+    turnosCompromisos.some((t) => t.id === sanJuanTurnoId(ev));
+
+  const toggleSanJuanSchedule = (ev: SanJuanEvent) => {
+    const id = sanJuanTurnoId(ev);
+    const alreadyScheduled = turnosCompromisos.some((t) => t.id === id);
+    if (alreadyScheduled) {
+      setTurnosCompromisos((prev) => prev.filter((t) => t.id !== id));
+      showToast(`"${ev.title}" quitado de tus turnos.`, "info");
+      return;
+    }
+    const fecha = guessIsoDate(ev.rawDate || ev.date) || new Date().toISOString().slice(0, 10);
+    const nuevoTurno: TurnoCompromiso = {
+      id,
+      estatus: false,
+      descripcion: ev.title,
+      categoria: "Ocio",
+      fecha,
+      lugar: ev.location || "San Juan",
+      informacionPersonalizada: JSON.stringify({
+        source: "sanjuan",
+        imageUrl: ev.imageUrl,
+        sourceUrl: ev.sourceUrl,
+        rawDate: ev.rawDate,
+      }),
+    };
+    setTurnosCompromisos((prev) => [...prev, nuevoTurno]);
+    showToast(`"${ev.title}" agendado en tus turnos (Ocio).`, "success");
+  };
 
   // --- San Juan ---
   const [sjEvents, setSjEvents] = useState<SanJuanEvent[]>([]);
@@ -254,6 +296,18 @@ export function EventsView({ userId, darkMode = false }: EventsViewProps) {
   const [calMonth, setCalMonth] = useState(() => new Date());
   const [selectedDay, setSelectedDay] = useState(() => new Date().toISOString().slice(0, 10));
 
+  // Lista de eventos del día seleccionado: máximo 3 a la vez, paginado con Anterior/Siguiente
+  // en vez de listar todo junto (un día con muchos eventos empujaba el resto de la tarjeta).
+  const [calDayPage, setCalDayPage] = useState(1);
+  useEffect(() => { setCalDayPage(1); }, [selectedDay]);
+  const CAL_DAY_PAGE_SIZE = 3;
+  const selectedDayEvents = eventsByDate[selectedDay] || [];
+  const calDayTotalPages = Math.max(1, Math.ceil(selectedDayEvents.length / CAL_DAY_PAGE_SIZE));
+  const selectedDayPageEvents = selectedDayEvents.slice(
+    (calDayPage - 1) * CAL_DAY_PAGE_SIZE,
+    calDayPage * CAL_DAY_PAGE_SIZE
+  );
+
   const monthGrid = useMemo(() => {
     const year = calMonth.getFullYear();
     const month = calMonth.getMonth();
@@ -337,11 +391,11 @@ export function EventsView({ userId, darkMode = false }: EventsViewProps) {
             <p className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-400">
               {new Date(selectedDay + "T00:00:00").toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" })}
             </p>
-            {(eventsByDate[selectedDay] || []).length === 0 ? (
+            {selectedDayEvents.length === 0 ? (
               <p className="text-xs text-zinc-500 py-4 text-center">Sin eventos este día.</p>
             ) : (
               <div className="space-y-1.5">
-                {(eventsByDate[selectedDay] || []).map((ev, i) => (
+                {selectedDayPageEvents.map((ev, i) => (
                   <div key={i} className="p-2.5 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-2">
                     {ev.kind === "sanjuan" ? (
                       <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
@@ -370,6 +424,29 @@ export function EventsView({ userId, darkMode = false }: EventsViewProps) {
                     <span className="truncate">{ev.label}</span>
                   </div>
                 ))}
+              </div>
+            )}
+            {calDayTotalPages > 1 && (
+              <div className="flex items-center justify-between gap-2 pt-1 text-[10px] text-zinc-500 dark:text-zinc-400 font-bold">
+                <span>Página {calDayPage} de {calDayTotalPages}</span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    disabled={calDayPage === 1}
+                    onClick={() => setCalDayPage((prev) => Math.max(1, prev - 1))}
+                    className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-zinc-800 transition-all cursor-pointer"
+                  >
+                    Anterior
+                  </button>
+                  <button
+                    type="button"
+                    disabled={calDayPage === calDayTotalPages}
+                    onClick={() => setCalDayPage((prev) => Math.min(calDayTotalPages, prev + 1))}
+                    className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-zinc-800 transition-all cursor-pointer"
+                  >
+                    Siguiente
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -639,26 +716,39 @@ export function EventsView({ userId, darkMode = false }: EventsViewProps) {
         ) : (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {sjPageEvents.map((ev) => (
-                <a key={ev.id} href={ev.sourceUrl} target="_blank" rel="noopener noreferrer" className="rounded-2xl border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 overflow-hidden hover:shadow-md transition-all flex flex-col">
-                  {ev.imageUrl && (
-                    <img
-                      src={ev.imageUrl}
-                      alt={ev.title}
-                      className="w-full h-32 object-cover"
-                      onError={(e) => { e.currentTarget.style.display = "none"; }}
-                    />
-                  )}
-                  <div className="p-3 space-y-1 flex-1">
-                    <p className="font-extrabold text-sm text-zinc-900 dark:text-zinc-100 line-clamp-2">{ev.title}</p>
-                    {ev.location && <p className="text-[11px] text-zinc-500 dark:text-zinc-400 line-clamp-1">{ev.location}</p>}
-                    {ev.rawDate && <p className="text-xs text-primary font-bold">{ev.rawDate}</p>}
-                    <p className="text-[10px] text-zinc-400 flex items-center gap-1">
-                      <ExternalLink className="w-3 h-3" /> Ver más
-                    </p>
-                  </div>
-                </a>
-              ))}
+              {sjPageEvents.map((ev) => {
+                const scheduled = isSanJuanScheduled(ev);
+                return (
+                  <a key={ev.id} href={ev.sourceUrl} target="_blank" rel="noopener noreferrer" className="relative rounded-2xl border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 overflow-hidden hover:shadow-md transition-all flex flex-col">
+                    <button
+                      type="button"
+                      title={scheduled ? "Quitar de mis turnos" : "Agendar en mis turnos (Ocio)"}
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleSanJuanSchedule(ev); }}
+                      className={`absolute top-2 right-2 z-10 p-1.5 rounded-full shadow-md transition-all cursor-pointer ${
+                        scheduled ? "bg-primary text-white" : "bg-white/90 dark:bg-zinc-950/90 text-zinc-500 dark:text-zinc-400 hover:text-primary"
+                      }`}
+                    >
+                      {scheduled ? <Bell className="w-3.5 h-3.5 fill-current" /> : <BellOff className="w-3.5 h-3.5" />}
+                    </button>
+                    {ev.imageUrl && (
+                      <img
+                        src={ev.imageUrl}
+                        alt={ev.title}
+                        className="w-full h-32 object-cover"
+                        onError={(e) => { e.currentTarget.style.display = "none"; }}
+                      />
+                    )}
+                    <div className="p-3 space-y-1 flex-1">
+                      <p className="font-extrabold text-sm text-zinc-900 dark:text-zinc-100 line-clamp-2 pr-5">{ev.title}</p>
+                      {ev.location && <p className="text-[11px] text-zinc-500 dark:text-zinc-400 line-clamp-1">{ev.location}</p>}
+                      {ev.rawDate && <p className="text-xs text-primary font-bold">{ev.rawDate}</p>}
+                      <p className="text-[10px] text-zinc-400 flex items-center gap-1">
+                        <ExternalLink className="w-3 h-3" /> Ver más
+                      </p>
+                    </div>
+                  </a>
+                );
+              })}
             </div>
 
             {sjTotalPages > 1 && (

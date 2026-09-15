@@ -2345,6 +2345,8 @@ export default function App() {
                 <EventsView
                   userId={user?.email || userProfile?.email || "hernanmaximiliano10@gmail.com"}
                   darkMode={darkMode}
+                  turnosCompromisos={turnosCompromisos}
+                  setTurnosCompromisos={setTurnosCompromisos}
                 />
               )}
 
