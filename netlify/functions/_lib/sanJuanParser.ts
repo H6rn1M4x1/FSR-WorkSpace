@@ -24,13 +24,20 @@ export function parseSanJuanEvents(html: string): any[] {
   return parseSanJuanFromCards(html);
 }
 
+function absolutizeUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  if (url.startsWith("data:")) return null; // inline placeholder, not a real image
+  return `https://sanjuan.yendly.com${url.startsWith("/") ? "" : "/"}${url}`;
+}
+
 function toEventItem(href: string, title: string, rawDate?: string | null, imageUrl?: string | null) {
   return {
     id: `sj_${Buffer.from(href || title).toString("base64").slice(0, 16)}`,
     title: title.trim(),
     rawDate: rawDate || null,
-    imageUrl: imageUrl || null,
-    sourceUrl: href ? (href.startsWith("http") ? href : `https://sanjuan.yendly.com${href}`) : null,
+    imageUrl: absolutizeUrl(imageUrl),
+    sourceUrl: absolutizeUrl(href),
   };
 }
 
@@ -127,6 +134,29 @@ function extractTextRuns(blockHtml: string): string[] {
     .filter((s) => s.length > 0);
 }
 
+/**
+ * Next.js sites commonly lazy-load card images: `src` holds a tiny base64 blur placeholder
+ * (or is left empty) while the real URL sits in `data-src`/`data-original` or as the first
+ * candidate in `srcset`. Prefer those over a placeholder `src`, which is what rendered as a
+ * broken-image icon in the app (a base64 data URI, or a relative path resolved against the
+ * app's own origin instead of yendly.com's).
+ */
+function extractImageUrl(block: string): string | null {
+  const dataSrc = block.match(/<img[^>]+data-src="([^"]+)"/i) || block.match(/<img[^>]+data-original="([^"]+)"/i);
+  if (dataSrc) return dataSrc[1];
+
+  const srcset = block.match(/<img[^>]+srcset="([^"]+)"/i);
+  if (srcset) {
+    const first = srcset[1].split(",")[0].trim().split(/\s+/)[0];
+    if (first) return first;
+  }
+
+  const src = block.match(/<img[^>]+src="([^"]+)"/i);
+  if (src && !src[1].startsWith("data:")) return src[1];
+
+  return null;
+}
+
 function parseSanJuanFromCards(html: string): any[] {
   const items: any[] = [];
   const cardRe = /<a[^>]+href="([^"]*\/eventos\/\d+[^"]*)"[^>]*>([\s\S]*?)<\/a>/gi;
@@ -138,7 +168,7 @@ function parseSanJuanFromCards(html: string): any[] {
     if (seen.has(href)) continue;
     seen.add(href);
 
-    const imgMatch = block.match(/<img[^>]+src="([^"]+)"/i);
+    const imageUrl = extractImageUrl(block);
     const altMatch = block.match(/alt="([^"]+)"/i);
     const headingMatch = block.match(/<h[1-6][^>]*>([\s\S]*?)<\/h[1-6]>/i);
 
@@ -162,7 +192,7 @@ function parseSanJuanFromCards(html: string): any[] {
     const location = nonDateRuns.find((r) => r !== title) || null;
     const rawDate = dateRuns.find((r) => STRICT_DATE_RE.test(r)) || dateRuns.sort((a, b) => b.length - a.length)[0] || null;
 
-    items.push({ ...toEventItem(href, title, rawDate, imgMatch ? imgMatch[1] : null), location });
+    items.push({ ...toEventItem(href, title, rawDate, imageUrl), location });
   }
   return items;
 }
