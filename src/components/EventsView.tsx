@@ -346,10 +346,18 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
     fetchFollowedSportEvents(prefs)
       .then((events) => {
         setSportEvents(events);
-        try {
-          localStorage.setItem(cacheKey, JSON.stringify({ signature, fetchedAt: Date.now(), events }));
-        } catch (_) {
-          // Quota llena o storage bloqueado — no rompe la carga, solo no cachea esta vez
+        // Ojo: NO cachear un resultado vacío. Antes cacheábamos cualquier resultado — si un
+        // fetch fallaba parcialmente (o legítimamente no había próximos eventos ese momento),
+        // ese "vacío" quedaba congelado 3h y parecía que la campanita/selección "no traía
+        // nada" aunque el usuario reintentara. Un vacío siempre reintenta en la próxima carga.
+        if (events.length > 0) {
+          try {
+            localStorage.setItem(cacheKey, JSON.stringify({ signature, fetchedAt: Date.now(), events }));
+          } catch (_) {
+            // Quota llena o storage bloqueado — no rompe la carga, solo no cachea esta vez
+          }
+        } else {
+          try { localStorage.removeItem(cacheKey); } catch (_) { /* noop */ }
         }
       })
       .finally(() => setSportEventsLoading(false));
