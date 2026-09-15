@@ -300,19 +300,31 @@ export async function fetchFollowedSportEvents(prefs: EventPreferences | null): 
 
   for (const sportId of prefs.followedSports) {
     const teams = prefs.followedTeams[sportId] || [];
-    try {
-      if (sportId === "futbol") {
-        for (const followed of teams) {
+    if (sportId === "futbol") {
+      // Un try/catch por CLUB, no uno solo envolviendo a todos los clubes seguidos: antes, si
+      // un club fallaba (o TEAMS.find no lo encontraba y algo más adelante explotaba), se
+      // perdían los partidos de todos los clubes seguidos después de ese, en vez de solo los
+      // de ese club — lo que coincide con "si marco varios equipos, no trae nada".
+      for (const followed of teams) {
+        try {
           const team = TEAMS.find((t) => t.id === followed.id);
           if (team) results.push(...(await fetchFootballFixturesForTeam(team)));
+        } catch (err) {
+          console.warn(`[eventsService] Error fetching fixtures for club ${followed.id}:`, err);
         }
-      } else if (sportId === "f1") {
-        results.push(...(await fetchF1Races()));
-      } else if (sportId === "nba") {
-        results.push(...(await fetchNbaFollowedEvents(teams.map((t) => t.name))));
       }
-    } catch (err) {
-      console.warn(`[eventsService] Error fetching events for sport ${sportId}:`, err);
+    } else if (sportId === "f1") {
+      try {
+        results.push(...(await fetchF1Races()));
+      } catch (err) {
+        console.warn("[eventsService] Error fetching F1 races:", err);
+      }
+    } else if (sportId === "nba") {
+      try {
+        results.push(...(await fetchNbaFollowedEvents(teams.map((t) => t.name))));
+      } catch (err) {
+        console.warn("[eventsService] Error fetching NBA events:", err);
+      }
     }
   }
 
