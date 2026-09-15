@@ -1,3 +1,5 @@
+import { createHash } from "crypto";
+
 /**
  * Best-effort parser for yendly.com's event listing. There's no official API/RSS, so this
  * tries, in order, the most-to-least reliable sources of the same data:
@@ -31,9 +33,16 @@ function absolutizeUrl(url: string | null | undefined): string | null {
   return `https://sanjuan.yendly.com${url.startsWith("/") ? "" : "/"}${url}`;
 }
 
+// A multi-day event (e.g. a 3-day championship) is listed once per day it's happening, each
+// occurrence linking to the SAME event detail page — same href, different title/date ("Dia 16
+// - Campeonato..." vs "Dia 17 - Campeonato..."). Hashing href alone collided those into one id,
+// so togglear la campanita en una tarjeta también marcaba/desmarcaba la otra. Hash href+title+
+// rawDate together instead, with a real hash (not a truncated base64 — truncating to 16 chars
+// only captures the first 12 bytes of input, so any two hrefs sharing that prefix collided too).
 function toEventItem(href: string, title: string, rawDate?: string | null, imageUrl?: string | null) {
+  const hash = createHash("sha1").update(`${href || ""}|${title}|${rawDate || ""}`).digest("hex").slice(0, 16);
   return {
-    id: `sj_${Buffer.from(href || title).toString("base64").slice(0, 16)}`,
+    id: `sj_${hash}`,
     title: title.trim(),
     rawDate: rawDate || null,
     imageUrl: absolutizeUrl(imageUrl),
