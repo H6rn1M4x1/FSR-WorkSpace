@@ -80,9 +80,16 @@ function guessIsoDate(raw?: string): string | null {
   return null;
 }
 
-const CARD = (darkMode: boolean) =>
-  `rounded-3xl border p-4 sm:p-6 space-y-5 ${darkMode ? "bg-zinc-900/60 border-zinc-800" : "bg-white/80 border-slate-200"}`;
-const SUBCARD = "rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4 space-y-4";
+// Mismo estilo de tarjeta "de verdad" (opaca, con sombra) que usan Calendario Unificado /
+// Agenda Central Integrada en Inicio — antes estas secciones vivían anidadas dentro de UN
+// único contenedor traslúcido (bg-zinc-900/60), lo que las hacía perderse contra el fondo
+// texturado de la app en vez de leerse como bloques separados.
+const SECTION_CARD = (darkMode: boolean) =>
+  `p-6 rounded-3xl border flex flex-col shadow-xs ${
+    darkMode ? "bg-zinc-900 border-zinc-800 text-white shadow-lg" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
+  }`;
+const INNER_BOX = (darkMode: boolean) =>
+  `p-4 rounded-3xl ${darkMode ? "bg-zinc-950 shadow-sm" : "bg-white shadow-sm border border-slate-100"}`;
 const PICK_BTN = (active: boolean) =>
   `flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-[11px] font-bold text-left cursor-pointer transition-all ${
     active
@@ -390,7 +397,6 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
 
   return (
     <div className="space-y-6 animate-fade-in px-3 sm:px-6 pt-1 sm:pt-1.5 pb-6">
-    <div className={CARD(darkMode)}>
       <div className="flex items-center gap-3">
         <MapPin className="w-5 h-5 text-primary" />
         <div>
@@ -401,34 +407,44 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
         </div>
       </div>
 
-      {/* Calendario (izquierda) + eventos del día seleccionado (derecha) — mismo layout que
-          "Calendario Unificado" + "Agenda Central Integrada" en Inicio. */}
+      {/* Calendario (izquierda) + eventos del día seleccionado (derecha) — mismo layout Y
+          mismo estilo de tarjeta que "Calendario Unificado" + "Agenda Central Integrada" en
+          Inicio: tarjetas opacas con sombra, grilla de días metida en su propia caja anidada,
+          mes en una placa en mayúsculas, en vez de la tarjeta chica y traslúcida de antes. */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div className={`${SUBCARD} lg:col-span-5 flex flex-col`}>
-          <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+        <div className={`${SECTION_CARD(darkMode)} lg:col-span-5`}>
+          <div className="flex items-center justify-between mb-5">
             <h3 className="font-extrabold text-sm flex items-center gap-2">
-              <CalendarIcon className="w-4 h-4 text-primary" /> Calendario de Eventos
+              <CalendarIcon className="w-5 h-5 text-primary animate-pulse" />
+              <span>Calendario de Eventos</span>
             </h3>
-            <button
-              type="button"
-              onClick={() => { setCalMonth(new Date()); setSelectedDay(new Date().toISOString().slice(0, 10)); }}
-              className="px-3 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-bold cursor-pointer"
-            >
-              Ir a Hoy
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setCalMonth(new Date(calMonth.getFullYear(), calMonth.getMonth() - 1, 1))}
+                className="p-1.5 rounded-xl bg-zinc-500/10 hover:bg-zinc-500/20 text-primary cursor-pointer transition-colors"
+                title="Mes Anterior"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setCalMonth(new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 1))}
+                className="p-1.5 rounded-xl bg-zinc-500/10 hover:bg-zinc-500/20 text-primary cursor-pointer transition-colors"
+                title="Mes Siguiente"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
-          <div className="flex items-center justify-between mb-3">
-            <button type="button" onClick={() => setCalMonth(new Date(calMonth.getFullYear(), calMonth.getMonth() - 1, 1))} className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer">
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <span className="text-sm font-extrabold capitalize">{calMonth.toLocaleDateString("es-AR", { month: "long", year: "numeric" })}</span>
-            <button type="button" onClick={() => setCalMonth(new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 1))} className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer">
-              <ChevronRight className="w-4 h-4" />
-            </button>
+          <div className="text-center font-extrabold text-xs mb-4 text-slate-800 dark:text-zinc-200 uppercase tracking-widest bg-slate-50 dark:bg-black/40 py-2 rounded-xl">
+            {calMonth.toLocaleDateString("es-AR", { month: "long", year: "numeric" })}
           </div>
-          <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-zinc-400 mb-1">
-            {["D", "L", "M", "M", "J", "V", "S"].map((d, i) => <span key={i}>{d}</span>)}
+
+          <div className={INNER_BOX(darkMode)}>
+          <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest mb-2">
+            {["D", "L", "M", "M", "J", "V", "S"].map((d, i) => <div key={i} className="py-1">{d}</div>)}
           </div>
           <div className="grid grid-cols-7 gap-1">
             {monthGrid.map((iso, i) => {
@@ -443,23 +459,39 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
                   type="button"
                   onClick={() => setSelectedDay(iso)}
                   className={`h-9 w-full rounded-full text-xs font-bold flex flex-col items-center justify-center relative cursor-pointer transition-all ${
-                    isSelected ? "border-2 border-primary text-primary bg-primary/10" : isToday ? "bg-primary text-white shadow-md" : "hover:bg-primary/10 text-zinc-700 dark:text-zinc-300"
+                    isSelected ? "border-2 border-primary text-primary bg-primary/10 scale-105 shadow-sm" : isToday ? "bg-primary text-white shadow-md" : "hover:bg-primary/10 text-zinc-700 dark:text-zinc-300"
                   }`}
                 >
                   <span>{dayNum}</span>
-                  {hasEvents && <span className="absolute bottom-1 w-1 h-1 rounded-full bg-primary" />}
+                  {hasEvents && <span className="absolute bottom-1 w-1 h-1 rounded-full bg-primary animate-pulse" />}
                 </button>
               );
             })}
           </div>
+          </div>
+
+          <div className="pt-4 mt-4 border-t border-zinc-800/10 dark:border-zinc-800/40">
+            <button
+              type="button"
+              onClick={() => { setCalMonth(new Date()); setSelectedDay(new Date().toISOString().slice(0, 10)); }}
+              className="w-full px-3 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-bold cursor-pointer hover:bg-primary/20 transition-colors"
+            >
+              Ir a Hoy
+            </button>
+          </div>
         </div>
 
         {/* Eventos del día seleccionado */}
-        <div className={`${SUBCARD} lg:col-span-7 flex flex-col`}>
-          <p className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-400">
+        <div className={`${SECTION_CARD(darkMode)} lg:col-span-7`}>
+          <div className="flex items-center gap-2 border-b border-zinc-800/10 dark:border-zinc-800/40 pb-3 mb-4">
+            <CalendarIcon className="w-5 h-5 text-primary" />
+            <h3 className="font-extrabold text-sm">Eventos del Día</h3>
+          </div>
+          <p className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-400">Día seleccionado</p>
+          <p className="text-sm font-extrabold capitalize mb-3">
             {new Date(selectedDay + "T00:00:00").toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" })}
           </p>
-          <div className="space-y-2 mt-2">
+          <div className="space-y-2">
             {selectedDayEvents.length === 0 ? (
               <p className="text-xs text-zinc-500 py-4 text-center">Sin eventos este día.</p>
             ) : (
@@ -705,13 +737,13 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
         document.body
       )}
 
-      {/* Qué hacer en San Juan (izquierda) + Eventos deportivos (derecha) — segunda fila,
-          alineada con la de arriba (5 y 7 columnas) igual que en Inicio. */}
+      {/* Qué hacer en San Juan (izquierda, más ancho) + Eventos deportivos (derecha, más
+          angosto) — segunda fila, cada una su propia tarjeta opaca igual que arriba. */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-      <div className={`${SUBCARD} lg:col-span-5`}>
-        <div className="flex items-center justify-between flex-wrap gap-2">
+      <div className={`${SECTION_CARD(darkMode)} lg:col-span-7`}>
+        <div className="flex items-center justify-between flex-wrap gap-2 border-b border-zinc-800/10 dark:border-zinc-800/40 pb-3 mb-4">
           <h3 className="font-extrabold text-sm flex items-center gap-2">
-            <MapPin className="w-4 h-4 text-primary" /> Qué hacer en San Juan
+            <MapPin className="w-5 h-5 text-primary" /> Qué hacer en San Juan
           </h3>
           <span className="text-[10px] text-zinc-400 font-bold">Se actualiza sola una vez por mes</span>
         </div>
@@ -792,8 +824,8 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
       </div>
 
       {/* Deportes */}
-      <div className={`${SUBCARD} lg:col-span-7`}>
-        <div className="flex items-center justify-between gap-2">
+      <div className={`${SECTION_CARD(darkMode)} lg:col-span-5`}>
+        <div className="flex items-center justify-between gap-2 border-b border-zinc-800/10 dark:border-zinc-800/40 pb-3 mb-4">
           <p className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-400">Eventos deportivos</p>
           <button
             type="button"
@@ -851,7 +883,6 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
         )}
       </div>
       </div>
-    </div>
     </div>
   );
 }
