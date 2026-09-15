@@ -33,6 +33,14 @@ function absolutizeUrl(url: string | null | undefined): string | null {
   return `https://sanjuan.yendly.com${url.startsWith("/") ? "" : "/"}${url}`;
 }
 
+// Strips the domain so the id hash below is identical whether the source markup gave us a
+// relative href ("/eventos/35054") or an absolute one ("https://sanjuan.yendly.com/eventos/35054")
+// — both strategies (JSON-LD vs __NEXT_DATA__ vs card regex) don't necessarily agree on which
+// form they hand toEventItem.
+function hrefPath(href: string | null | undefined): string {
+  return (href || "").replace(/^https?:\/\/[^/]+/, "");
+}
+
 // A multi-day event (e.g. a 3-day championship) is listed once per day it's happening, each
 // occurrence linking to the SAME event detail page — same href, different title/date ("Dia 16
 // - Campeonato..." vs "Dia 17 - Campeonato..."). Hashing href alone collided those into one id,
@@ -40,7 +48,7 @@ function absolutizeUrl(url: string | null | undefined): string | null {
 // rawDate together instead, with a real hash (not a truncated base64 — truncating to 16 chars
 // only captures the first 12 bytes of input, so any two hrefs sharing that prefix collided too).
 function toEventItem(href: string, title: string, rawDate?: string | null, imageUrl?: string | null) {
-  const hash = createHash("sha1").update(`${href || ""}|${title}|${rawDate || ""}`).digest("hex").slice(0, 16);
+  const hash = createHash("sha1").update(`${hrefPath(href)}|${title}|${rawDate || ""}`).digest("hex").slice(0, 16);
   return {
     id: `sj_${hash}`,
     title: title.trim(),
