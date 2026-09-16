@@ -106,7 +106,15 @@ async function fetchFootballFixturesForTeam(team: Team): Promise<SportEvent[]> {
   for (const code of codes) {
     try {
       const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${code}/scoreboard?dates=${dateRange}`);
-      if (!res.ok) continue;
+      if (!res.ok) {
+        // Antes esto fallaba en silencio (solo se veía como un "Failed to load resource"
+        // genérico del navegador, sin decir qué liga era ni por qué). Un 400 acá casi
+        // siempre significa que ESPN no reconoce el código de liga ("${code}"), no que no
+        // haya partidos — dejarlo mudo hacía muy difícil saber cuál de los ~5 códigos por
+        // equipo era el que estaba mal.
+        console.warn(`[eventsService] ESPN respondió ${res.status} para la liga "${code}" (equipo ${team.name}) — código de liga probablemente inválido.`);
+        continue;
+      }
       const data = await res.json();
       const events: any[] = data.events || [];
       for (const ev of events) {
@@ -238,7 +246,10 @@ async function fetchEspnScoreboardEvents(dateRange: string, seasontype?: number)
   try {
     const q = seasontype ? `dates=${dateRange}&seasontype=${seasontype}` : `dates=${dateRange}`;
     const res = await fetch(`${ESPN_BASE}/basketball/nba/scoreboard?${q}`);
-    if (!res.ok) return [];
+    if (!res.ok) {
+      console.warn(`[eventsService] ESPN respondió ${res.status} para NBA scoreboard (dates=${dateRange}${seasontype ? `, seasontype=${seasontype}` : ""}).`);
+      return [];
+    }
     const data = await res.json();
     return data.events || [];
   } catch (err) {
