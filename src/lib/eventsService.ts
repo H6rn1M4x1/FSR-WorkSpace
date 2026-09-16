@@ -95,17 +95,17 @@ export function getFootballClubs(leagueId: string): Team[] {
 /** Fixtures for one followed fútbol club, from ESPN's public (no-key, CORS-open) scoreboard API. */
 async function fetchFootballFixturesForTeam(team: Team): Promise<SportEvent[]> {
   const codes = getLeagueCodesForTeam(team);
-  const now = new Date();
-  const horizon = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-  const fmt = (d: Date) =>
-    `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(d.getUTCDate()).padStart(2, "0")}`;
-  const dateRange = `${fmt(now)}-${fmt(horizon)}`;
   const cleanQuery = team.name.toLowerCase().replace(/fc|club|de|cd|real|atletico|deportivo/g, "").trim();
 
   const results: SportEvent[] = [];
   for (const code of codes) {
     try {
-      const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${code}/scoreboard?dates=${dateRange}`);
+      // Confirmado en vivo por el usuario: el endpoint de scoreboard de fútbol de ESPN
+      // NO soporta el parámetro "dates" como rango (ni siquiera uno de 7 días) — cualquier
+      // "dates=inicio-fin" devuelve 400 "Failed to get events endpoint.", sin importar la
+      // liga. Sin el parámetro, ESPN devuelve la jornada/fecha actual del campeonato — menos
+      // alcance que "los próximos 30 días", pero es lo único que la API realmente sirve.
+      const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${code}/scoreboard`);
       if (!res.ok) {
         // Antes esto fallaba en silencio (solo se veía como un "Failed to load resource"
         // genérico del navegador, sin decir qué liga era ni por qué). Un 400 acá casi
@@ -242,12 +242,15 @@ export { NBA_TEAMS } from "../data/nba";
 
 const ESPN_BASE = "https://site.api.espn.com/apis/site/v2/sports";
 
-async function fetchEspnScoreboardEvents(dateRange: string, seasontype?: number): Promise<any[]> {
+async function fetchEspnScoreboardEvents(seasontype?: number): Promise<any[]> {
   try {
-    const q = seasontype ? `dates=${dateRange}&seasontype=${seasontype}` : `dates=${dateRange}`;
-    const res = await fetch(`${ESPN_BASE}/basketball/nba/scoreboard?${q}`);
+    // Igual que en fútbol (ver fetchFootballFixturesForTeam): el parámetro "dates" como
+    // rango le devuelve 400 a la API oculta de ESPN, confirmado en vivo — se saca del todo,
+    // dejando solo "seasontype" cuando corresponde.
+    const q = seasontype ? `seasontype=${seasontype}` : "";
+    const res = await fetch(`${ESPN_BASE}/basketball/nba/scoreboard${q ? `?${q}` : ""}`);
     if (!res.ok) {
-      console.warn(`[eventsService] ESPN respondió ${res.status} para NBA scoreboard (dates=${dateRange}${seasontype ? `, seasontype=${seasontype}` : ""}).`);
+      console.warn(`[eventsService] ESPN respondió ${res.status} para NBA scoreboard${seasontype ? ` (seasontype=${seasontype})` : ""}.`);
       return [];
     }
     const data = await res.json();
@@ -260,18 +263,13 @@ async function fetchEspnScoreboardEvents(dateRange: string, seasontype?: number)
 
 async function fetchNbaFollowedEvents(followedTeamNames: string[]): Promise<SportEvent[]> {
   if (followedTeamNames.length === 0) return [];
-  const now = new Date();
-  const horizon = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-  const fmt = (d: Date) =>
-    `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(d.getUTCDate()).padStart(2, "0")}`;
-  const dateRange = `${fmt(now)}-${fmt(horizon)}`;
   const cleanNames = followedTeamNames.map((n) => n.toLowerCase());
 
   // Regular season + preseason (seasontype=1), merged — the default scoreboard call can miss
   // preseason games depending on the time of year, so it's fetched explicitly too.
   const [regular, preseason] = await Promise.all([
-    fetchEspnScoreboardEvents(dateRange),
-    fetchEspnScoreboardEvents(dateRange, 1),
+    fetchEspnScoreboardEvents(),
+    fetchEspnScoreboardEvents(1),
   ]);
   const seenIds = new Set<string>();
   const results: SportEvent[] = [];
