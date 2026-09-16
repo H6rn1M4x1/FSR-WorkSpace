@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   MapPin,
@@ -319,9 +319,16 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
   const [sportEventsLoading, setSportEventsLoading] = useState(false);
   // "Eventos deportivos" se muestra de a 5, con un botón "Ver más" para ir sumando de a 5.
   const [visibleSportEventsCount, setVisibleSportEventsCount] = useState(5);
+  // Seguir varios equipos dispara varios fetches secuenciales a ESPN (uno por liga por club),
+  // así que este efecto puede tardar bastante y solaparse con una corrida más nueva (ej. el
+  // usuario agrega/edita equipos de nuevo mientras la anterior todavía está en vuelo). Sin
+  // esta guarda, la respuesta VIEJA que termina después podía pisar a la nueva con datos
+  // desactualizados o directamente vacíos — "seleccioné varios y no aparece nada".
+  const sportFetchGeneration = useRef(0);
   useEffect(() => {
     if (!prefsLoaded || !prefs) return;
     setVisibleSportEventsCount(5);
+    const myGeneration = ++sportFetchGeneration.current;
 
     // Se guardan en localStorage por firma de preferencias (deportes/equipos seguidos) + un
     // TTL — así recargar la página, o volver a esta pestaña, no dispara de nuevo las llamadas
@@ -334,7 +341,7 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
       if (cachedRaw) {
         const cached = JSON.parse(cachedRaw);
         if (cached.signature === signature && Date.now() - cached.fetchedAt < SPORT_EVENTS_TTL_MS) {
-          setSportEvents(cached.events || []);
+          if (myGeneration === sportFetchGeneration.current) setSportEvents(cached.events || []);
           return; // caché fresco — no vuelve a pedir nada por red
         }
       }
@@ -345,6 +352,9 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
     setSportEventsLoading(true);
     fetchFollowedSportEvents(prefs)
       .then((events) => {
+        // Una corrida más nueva ya arrancó (el usuario cambió equipos de nuevo antes de que
+        // esta terminara) — descartar esta respuesta en vez de pisar el resultado más actual.
+        if (myGeneration !== sportFetchGeneration.current) return;
         setSportEvents(events);
         // Ojo: NO cachear un resultado vacío. Antes cacheábamos cualquier resultado — si un
         // fetch fallaba parcialmente (o legítimamente no había próximos eventos ese momento),
@@ -360,7 +370,9 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
           try { localStorage.removeItem(cacheKey); } catch (_) { /* noop */ }
         }
       })
-      .finally(() => setSportEventsLoading(false));
+      .finally(() => {
+        if (myGeneration === sportFetchGeneration.current) setSportEventsLoading(false);
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefsLoaded, prefs?.followedSports.join(","), JSON.stringify(prefs?.followedTeams || {})]);
 

@@ -301,18 +301,22 @@ export async function fetchFollowedSportEvents(prefs: EventPreferences | null): 
   for (const sportId of prefs.followedSports) {
     const teams = prefs.followedTeams[sportId] || [];
     if (sportId === "futbol") {
-      // Un try/catch por CLUB, no uno solo envolviendo a todos los clubes seguidos: antes, si
-      // un club fallaba (o TEAMS.find no lo encontraba y algo más adelante explotaba), se
-      // perdían los partidos de todos los clubes seguidos después de ese, en vez de solo los
-      // de ese club — lo que coincide con "si marco varios equipos, no trae nada".
-      for (const followed of teams) {
-        try {
+      // Un club por vez, en secuencia, tardaba mucho con varios equipos seguidos (cada club
+      // dispara varias llamadas a ESPN, una por liga) — eso ensanchaba la ventana para la
+      // carrera de datos que EventsView ahora descarta, y de paso se sentía lento. En
+      // paralelo con Promise.allSettled: cada club sigue teniendo su propio resultado
+      // aislado (un club que falla no se lleva puesto a los demás, igual que antes) pero
+      // todos corren a la vez en vez de esperar turno.
+      const clubResults = await Promise.allSettled(
+        teams.map((followed) => {
           const team = TEAMS.find((t) => t.id === followed.id);
-          if (team) results.push(...(await fetchFootballFixturesForTeam(team)));
-        } catch (err) {
-          console.warn(`[eventsService] Error fetching fixtures for club ${followed.id}:`, err);
-        }
-      }
+          return team ? fetchFootballFixturesForTeam(team) : Promise.resolve([]);
+        })
+      );
+      clubResults.forEach((r, i) => {
+        if (r.status === "fulfilled") results.push(...r.value);
+        else console.warn(`[eventsService] Error fetching fixtures for club ${teams[i]?.id}:`, r.reason);
+      });
     } else if (sportId === "f1") {
       try {
         results.push(...(await fetchF1Races()));
