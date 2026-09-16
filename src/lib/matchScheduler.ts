@@ -215,29 +215,33 @@ export function getLeagueCodesForTeam(team: Team | undefined): string[] {
   const codes: string[] = [];
   if (!team) {
     // If no team, default to Argentina popular leagues
-    return ["arg.1", "arg.copa", "conmebol.libertadores", "conmebol.sudamericana", "fifa.friendly"];
+    return ["arg.1", "arg.copa", "conmebol.libertadores", "conmebol.sudamericana"];
   }
-  
+
   const normalizedCountry = team.country?.toLowerCase() || "";
   const normalizedLeague = team.league?.toLowerCase() || "";
 
+  // "uefa.europa" y "fifa.friendly" salieron confirmados con 400 (código de liga no
+  // reconocido por la API oculta de ESPN — no es que no haya partidos, la request se
+  // rechaza) al revisar la consola en vivo del usuario. "fifa.friendly" además se agregaba
+  // a TODOS los equipos sin excepción y nunca se había confirmado como válido, así que se
+  // saca del todo en vez de dejarlo como un código "gratis" que siempre falla.
   if (normalizedCountry.includes("argentina") || normalizedLeague.includes("profesional")) {
     codes.push("arg.1", "arg.copa", "conmebol.libertadores", "conmebol.sudamericana");
   } else if (normalizedCountry.includes("españa") || normalizedCountry.includes("espana") || normalizedLeague.includes("laliga")) {
-    codes.push("esp.1", "esp.copa_del_rey", "uefa.champions", "uefa.europa");
+    codes.push("esp.1", "esp.copa_del_rey", "uefa.champions");
   } else if (normalizedCountry.includes("inglaterra") || normalizedLeague.includes("premier")) {
-    codes.push("eng.1", "eng.fa", "eng.league_cup", "uefa.champions", "uefa.europa");
+    codes.push("eng.1", "eng.fa", "eng.league_cup", "uefa.champions");
   } else if (normalizedCountry.includes("italia") || normalizedLeague.includes("serie a")) {
-    codes.push("ita.1", "ita.coppa", "uefa.champions", "uefa.europa");
+    codes.push("ita.1", "ita.coppa", "uefa.champions");
   } else if (normalizedCountry.includes("alemania") || normalizedLeague.includes("bundesliga")) {
-    codes.push("ger.1", "ger.dfb_pokal", "uefa.champions", "uefa.europa");
+    codes.push("ger.1", "ger.dfb_pokal", "uefa.champions");
   } else if (normalizedCountry.includes("francia") || normalizedLeague.includes("ligue 1")) {
-    codes.push("fra.1", "fra.coupe_de_france", "uefa.champions", "uefa.europa");
+    codes.push("fra.1", "fra.coupe_de_france", "uefa.champions");
   } else {
     codes.push("arg.1", "arg.copa", "conmebol.libertadores", "conmebol.sudamericana");
   }
-  
-  codes.push("fifa.friendly");
+
   return codes;
 }
 
