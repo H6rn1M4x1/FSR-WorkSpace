@@ -54,18 +54,27 @@ function currentMonthKey(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
+// El sitio a veces repite el mismo evento dentro de una misma respuesta (ej. aparece tanto en
+// un bloque "destacados" como en el listado general) — si eso llegaba tal cual, dos tarjetas
+// con exactamente el mismo id quedaban en pantalla, y togglear la campanita en una marcaba/
+// desmarcaba "la otra" porque en realidad eran el mismo turno-compromiso por debajo.
+function dedupeById(items: SanJuanEvent[]): SanJuanEvent[] {
+  const seen = new Set<string>();
+  return items.filter((it) => (seen.has(it.id) ? false : (seen.add(it.id), true)));
+}
+
 export async function getSanJuanEvents(): Promise<SanJuanEvent[]> {
   const snap = await getDoc(SAN_JUAN_DOC);
   const cached = snap.exists() ? (snap.data() as ScrapedCacheDoc) : null;
   if (cached && cached.monthKey === currentMonthKey() && cached.items?.length > 0) {
-    return cached.items;
+    return dedupeById(cached.items);
   }
 
   try {
     const res = await fetch("/.netlify/functions/events-san-juan");
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    const items: SanJuanEvent[] = (data.items || []).map((it: any) => ({
+    const items: SanJuanEvent[] = dedupeById((data.items || []).map((it: any) => ({
       id: it.id || `sj_${Math.random().toString(36).slice(2, 10)}`,
       title: it.title,
       date: it.rawDate || "",
@@ -73,7 +82,7 @@ export async function getSanJuanEvents(): Promise<SanJuanEvent[]> {
       location: it.location || undefined,
       imageUrl: it.imageUrl || undefined,
       sourceUrl: it.sourceUrl || undefined,
-    }));
+    })));
     if (items.length > 0) {
       await setDoc(SAN_JUAN_DOC, { items, monthKey: currentMonthKey(), fetchedAt: Date.now() });
       return items;
@@ -82,7 +91,7 @@ export async function getSanJuanEvents(): Promise<SanJuanEvent[]> {
     console.warn("[eventsService] No se pudo actualizar la agenda de San Juan:", err);
   }
 
-  return cached?.items || [];
+  return dedupeById(cached?.items || []);
 }
 
 // --- Fútbol: leagues first, then clubs within a league (data/teams.ts + data/footballLeagues.ts) ---
