@@ -518,11 +518,6 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
 
   return (
     <div className="space-y-6 animate-fade-in px-3 sm:px-6 pt-1 sm:pt-1.5 pb-6">
-      <div className="flex items-center gap-3">
-        <MapPin className="w-5 h-5 text-primary" />
-        <h2 className="font-extrabold text-lg text-zinc-900 dark:text-zinc-100">Eventos</h2>
-      </div>
-
       {/* Calendario (izquierda) + eventos del día seleccionado (derecha) — mismo layout Y
           mismo estilo de tarjeta que "Calendario Unificado" + "Agenda Central Integrada" en
           Inicio: tarjetas opacas con sombra, grilla de días metida en su propia caja anidada,
@@ -623,6 +618,10 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
             />
           </div>
           <div className="space-y-2">
+            {/* Alto mínimo fijo (una página completa de 3 tarjetas) para que la caja no se
+                achique cuando el día tiene menos eventos — así la paginación de abajo queda
+                siempre en el mismo lugar en vez de saltar hacia arriba. */}
+            <div className="min-h-[280px]">
             {selectedDayEvents.length === 0 ? (
               <p className="text-xs text-zinc-500 py-4 text-center">Sin eventos este día.</p>
             ) : (
@@ -671,6 +670,7 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
                 })}
               </div>
             )}
+            </div>
             {calDayTotalPages > 1 && (
               <div className="flex items-center justify-between gap-2 pt-1 text-[10px] text-zinc-500 dark:text-zinc-400 font-bold">
                 <span>Página {calDayPage} de {calDayTotalPages}</span>
@@ -981,16 +981,19 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
           </button>
         </div>
         {sportEventsLoading ? (
-          <div className="flex items-center gap-2 text-xs text-zinc-500 py-4">
+          <div className="min-h-[292px] flex items-center gap-2 text-xs text-zinc-500">
             <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Cargando calendarios...
           </div>
         ) : sportEvents.length === 0 ? (
-          <p className="text-xs text-zinc-500 py-4">
+          <p className="min-h-[292px] flex items-center text-xs text-zinc-500">
             {prefs?.followedSports.length ? "No hay próximos eventos por ahora." : "Elegí al menos un deporte desde el botón de configuración."}
           </p>
         ) : (
           <div className="space-y-2">
-            <div className="overflow-hidden">
+            {/* Alto mínimo fijo (una página completa de 5 partidos) para que la tarjeta no se
+                achique en una página con menos partidos — así la paginación de abajo queda
+                siempre pegada al mismo lugar en vez de subir y bajar entre páginas. */}
+            <div className="overflow-hidden min-h-[292px]">
               <AnimatePresence mode="wait" initial={false}>
                 <motion.div
                   key={sportEventsPage}
