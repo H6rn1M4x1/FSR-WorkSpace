@@ -52,6 +52,9 @@ interface EventsViewProps {
  * campanita puede encontrar/quitar exactamente esa entrada sin duplicarla. */
 const sanJuanTurnoId = (ev: SanJuanEvent) => `sanjuan-${ev.id}`;
 
+/** Mismo patrón que sanJuanTurnoId, para la campanita de "Eventos deportivos". */
+const sportTurnoId = (ev: SportEvent) => `sport-${ev.id}`;
+
 interface DayEvent {
   label: string;
   kind: "sanjuan" | "sport";
@@ -168,6 +171,69 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
         imageUrl: ev.imageUrl,
         sourceUrl: ev.sourceUrl,
         rawDate: ev.rawDate,
+      }),
+    };
+    setTurnosCompromisos((prev) => {
+      const next = [...prev, nuevoTurno];
+      StorageService.setTurnosCompromisos(next);
+      return next;
+    });
+    try {
+      await saveItemToFirestore(userId, "turnos_compromisos", nuevoTurno);
+      showToast(`"${ev.title}" agendado en tus turnos (Ocio).`, "success");
+    } catch (err: any) {
+      setTurnosCompromisos((prev) => {
+        const reverted = prev.filter((t) => t.id !== id);
+        StorageService.setTurnosCompromisos(reverted);
+        return reverted;
+      });
+      showToast(err?.message || "No se pudo agendar el evento.", "error");
+    }
+  };
+
+  // Campanita en cada tarjeta de "Eventos deportivos": mismo patrón que San Juan (ver arriba) —
+  // agenda/desagenda el partido como turno-compromiso "Ocio" persistido en Firestore.
+  const isSportScheduled = (ev: SportEvent) =>
+    turnosCompromisos.some((t) => t.id === sportTurnoId(ev));
+
+  const toggleSportSchedule = async (ev: SportEvent) => {
+    const id = sportTurnoId(ev);
+    const alreadyScheduled = turnosCompromisos.some((t) => t.id === id);
+
+    if (alreadyScheduled) {
+      setTurnosCompromisos((prev) => {
+        const next = prev.filter((t) => t.id !== id);
+        StorageService.setTurnosCompromisos(next);
+        return next;
+      });
+      try {
+        await deleteItemFromFirestore(userId, "turnos_compromisos", id);
+        showToast(`"${ev.title}" quitado de tus turnos.`, "info");
+      } catch (err: any) {
+        setTurnosCompromisos((prev) => {
+          const reverted = [...prev, turnosCompromisos.find((t) => t.id === id)!].filter(Boolean);
+          StorageService.setTurnosCompromisos(reverted);
+          return reverted;
+        });
+        showToast(err?.message || "No se pudo quitar el evento de tus turnos.", "error");
+      }
+      return;
+    }
+
+    const nuevoTurno: TurnoCompromiso = {
+      id,
+      estatus: false,
+      descripcion: ev.title,
+      categoria: "Ocio",
+      fecha: ev.date,
+      lugar: ev.venue || ev.leagueName,
+      informacionPersonalizada: JSON.stringify({
+        source: "sport",
+        sportId: ev.sportId,
+        leagueName: ev.leagueName,
+        time: ev.time,
+        homeTeamBadge: ev.homeTeamBadge,
+        awayTeamBadge: ev.awayTeamBadge,
       }),
     };
     setTurnosCompromisos((prev) => {
@@ -912,7 +978,9 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
             const visible = sorted.slice(0, visibleSportEventsCount);
             return (
               <div className="space-y-1.5">
-                {visible.map((ev) => (
+                {visible.map((ev) => {
+                  const scheduled = isSportScheduled(ev);
+                  return (
                   <div key={ev.id} className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800">
                     <div className="flex items-center -space-x-2 shrink-0">
                       {ev.sportId === "f1" && sportLogos.f1 ? (
@@ -928,8 +996,19 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
                       <p className="text-xs font-extrabold text-zinc-900 dark:text-zinc-100 truncate">{ev.title}</p>
                       <p className="text-[10px] text-zinc-500 dark:text-zinc-400">{ev.leagueName} · {ev.date}{ev.time ? ` ${ev.time}` : ""}</p>
                     </div>
+                    <button
+                      type="button"
+                      title={scheduled ? "Quitar de mis turnos" : "Agendar en mis turnos (Ocio)"}
+                      onClick={() => toggleSportSchedule(ev)}
+                      className={`p-1.5 rounded-full shrink-0 transition-all cursor-pointer ${
+                        scheduled ? "bg-primary text-white" : "bg-white dark:bg-zinc-950 text-zinc-400 dark:text-zinc-500 hover:text-primary border border-slate-200 dark:border-zinc-800"
+                      }`}
+                    >
+                      {scheduled ? <Bell className="w-3.5 h-3.5 fill-current" /> : <BellOff className="w-3.5 h-3.5" />}
+                    </button>
                   </div>
-                ))}
+                  );
+                })}
                 {visibleSportEventsCount < sorted.length && (
                   <button
                     type="button"
