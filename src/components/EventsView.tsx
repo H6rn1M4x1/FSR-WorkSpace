@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { AnimatePresence, motion } from "motion/react";
 import {
   MapPin,
   ExternalLink,
@@ -383,8 +384,24 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
   // --- Sport events for followed sports/teams/drivers ---
   const [sportEvents, setSportEvents] = useState<SportEvent[]>([]);
   const [sportEventsLoading, setSportEventsLoading] = useState(false);
-  // "Eventos deportivos" se muestra de a 5, con un botón "Ver más" para ir sumando de a 5.
-  const [visibleSportEventsCount, setVisibleSportEventsCount] = useState(5);
+  // "Eventos deportivos" se muestra de a 5, paginado (como un carrusel que avanza solo).
+  const SPORT_EVENTS_PAGE_SIZE = 5;
+  const [sportEventsPage, setSportEventsPage] = useState(1);
+  const sortedSportEvents = useMemo(
+    () => sportEvents.slice().sort((a, b) => a.date.localeCompare(b.date)).slice(0, 30),
+    [sportEvents]
+  );
+  const sportEventsTotalPages = Math.max(1, Math.ceil(sortedSportEvents.length / SPORT_EVENTS_PAGE_SIZE));
+  useEffect(() => { setSportEventsPage(1); }, [sortedSportEvents]);
+  // Carrusel automático: cada 6s avanza a la página siguiente, y vuelve a la primera al llegar
+  // al final. Se detiene solo si hay una sola página (nada que rotar).
+  useEffect(() => {
+    if (sportEventsTotalPages <= 1) return;
+    const id = setInterval(() => {
+      setSportEventsPage((p) => (p >= sportEventsTotalPages ? 1 : p + 1));
+    }, 6000);
+    return () => clearInterval(id);
+  }, [sportEventsTotalPages]);
   // Seguir varios equipos dispara varios fetches secuenciales a ESPN (uno por liga por club),
   // así que este efecto puede tardar bastante y solaparse con una corrida más nueva (ej. el
   // usuario agrega/edita equipos de nuevo mientras la anterior todavía está en vuelo). Sin
@@ -393,7 +410,6 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
   const sportFetchGeneration = useRef(0);
   useEffect(() => {
     if (!prefsLoaded || !prefs) return;
-    setVisibleSportEventsCount(5);
     const myGeneration = ++sportFetchGeneration.current;
 
     // Se guardan en localStorage por firma de preferencias (deportes/equipos seguidos) + un
@@ -973,54 +989,88 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
             {prefs?.followedSports.length ? "No hay próximos eventos por ahora." : "Elegí al menos un deporte desde el botón de configuración."}
           </p>
         ) : (
-          (() => {
-            const sorted = sportEvents.slice().sort((a, b) => a.date.localeCompare(b.date)).slice(0, 30);
-            const visible = sorted.slice(0, visibleSportEventsCount);
-            return (
-              <div className="space-y-1.5">
-                {visible.map((ev) => {
-                  const scheduled = isSportScheduled(ev);
-                  return (
-                  <div key={ev.id} className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800">
-                    <div className="flex items-center -space-x-2 shrink-0">
-                      {ev.sportId === "f1" && sportLogos.f1 ? (
-                        <img src={sportLogos.f1} alt="" className="w-6 h-6 object-contain brightness-0 dark:invert" />
-                      ) : (
-                        <>
-                          {ev.homeTeamBadge && <img src={ev.homeTeamBadge} alt="" className="w-6 h-6 rounded-full bg-white object-contain border border-white" />}
-                          {ev.awayTeamBadge && <img src={ev.awayTeamBadge} alt="" className="w-6 h-6 rounded-full bg-white object-contain border border-white" />}
-                        </>
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-extrabold text-zinc-900 dark:text-zinc-100 truncate">{ev.title}</p>
-                      <p className="text-[10px] text-zinc-500 dark:text-zinc-400">{ev.leagueName} · {ev.date}{ev.time ? ` ${ev.time}` : ""}</p>
-                    </div>
+          <div className="space-y-2">
+            <div className="overflow-hidden">
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.div
+                  key={sportEventsPage}
+                  initial={{ opacity: 0, x: 24 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -24 }}
+                  transition={{ duration: 0.35, ease: "easeInOut" }}
+                  className="space-y-1.5"
+                >
+                  {sortedSportEvents
+                    .slice((sportEventsPage - 1) * SPORT_EVENTS_PAGE_SIZE, sportEventsPage * SPORT_EVENTS_PAGE_SIZE)
+                    .map((ev) => {
+                      const scheduled = isSportScheduled(ev);
+                      return (
+                        <div key={ev.id} className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800">
+                          <div className="flex items-center -space-x-2 shrink-0">
+                            {ev.sportId === "f1" && sportLogos.f1 ? (
+                              <img src={sportLogos.f1} alt="" className="w-6 h-6 object-contain brightness-0 dark:invert" />
+                            ) : (
+                              <>
+                                {ev.homeTeamBadge && <img src={ev.homeTeamBadge} alt="" className="w-6 h-6 rounded-full bg-white object-contain border border-white" />}
+                                {ev.awayTeamBadge && <img src={ev.awayTeamBadge} alt="" className="w-6 h-6 rounded-full bg-white object-contain border border-white" />}
+                              </>
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-extrabold text-zinc-900 dark:text-zinc-100 truncate">{ev.title}</p>
+                            <p className="text-[10px] text-zinc-500 dark:text-zinc-400">{ev.leagueName} · {ev.date}{ev.time ? ` ${ev.time}` : ""}</p>
+                          </div>
+                          <button
+                            type="button"
+                            title={scheduled ? "Quitar de mis turnos" : "Agendar en mis turnos (Ocio)"}
+                            onClick={() => toggleSportSchedule(ev)}
+                            className={`p-1.5 rounded-full shrink-0 transition-all cursor-pointer ${
+                              scheduled ? "bg-primary text-white" : "bg-white dark:bg-zinc-950 text-zinc-400 dark:text-zinc-500 hover:text-primary border border-slate-200 dark:border-zinc-800"
+                            }`}
+                          >
+                            {scheduled ? <Bell className="w-3.5 h-3.5 fill-current" /> : <BellOff className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
+                      );
+                    })}
+                </motion.div>
+              </AnimatePresence>
+            </div>
+
+            {sportEventsTotalPages > 1 && (
+              <div className="flex items-center justify-between gap-2 pt-1">
+                <button
+                  type="button"
+                  title="Página anterior"
+                  onClick={() => setSportEventsPage((p) => (p === 1 ? sportEventsTotalPages : p - 1))}
+                  className="p-1.5 rounded-full bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 cursor-pointer transition-colors"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <div className="flex items-center gap-1.5">
+                  {Array.from({ length: sportEventsTotalPages }).map((_, i) => (
                     <button
+                      key={i}
                       type="button"
-                      title={scheduled ? "Quitar de mis turnos" : "Agendar en mis turnos (Ocio)"}
-                      onClick={() => toggleSportSchedule(ev)}
-                      className={`p-1.5 rounded-full shrink-0 transition-all cursor-pointer ${
-                        scheduled ? "bg-primary text-white" : "bg-white dark:bg-zinc-950 text-zinc-400 dark:text-zinc-500 hover:text-primary border border-slate-200 dark:border-zinc-800"
+                      title={`Página ${i + 1}`}
+                      onClick={() => setSportEventsPage(i + 1)}
+                      className={`h-1.5 rounded-full transition-all cursor-pointer ${
+                        sportEventsPage === i + 1 ? "w-4 bg-primary" : "w-1.5 bg-zinc-300 dark:bg-zinc-700"
                       }`}
-                    >
-                      {scheduled ? <Bell className="w-3.5 h-3.5 fill-current" /> : <BellOff className="w-3.5 h-3.5" />}
-                    </button>
-                  </div>
-                  );
-                })}
-                {visibleSportEventsCount < sorted.length && (
-                  <button
-                    type="button"
-                    onClick={() => setVisibleSportEventsCount((c) => c + 5)}
-                    className="w-full py-2 rounded-xl text-[11px] font-bold text-primary bg-primary/10 hover:bg-primary/20 transition-all cursor-pointer"
-                  >
-                    Ver más
-                  </button>
-                )}
+                    />
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  title="Página siguiente"
+                  onClick={() => setSportEventsPage((p) => (p === sportEventsTotalPages ? 1 : p + 1))}
+                  className="p-1.5 rounded-full bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 cursor-pointer transition-colors"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
               </div>
-            );
-          })()
+            )}
+          </div>
         )}
       </div>
       </div>
