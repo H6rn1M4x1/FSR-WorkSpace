@@ -18,12 +18,22 @@ import { createHash } from "crypto";
  */
 export function parseSanJuanEvents(html: string): any[] {
   const fromJsonLd = parseSanJuanFromJsonLd(html);
-  if (fromJsonLd.length > 0) return fromJsonLd;
+  if (fromJsonLd.length > 0) return dedupeById(fromJsonLd);
 
   const fromNextData = parseSanJuanFromNextData(html);
-  if (fromNextData.length > 0) return fromNextData;
+  if (fromNextData.length > 0) return dedupeById(fromNextData);
 
-  return parseSanJuanFromCards(html);
+  return dedupeById(parseSanJuanFromCards(html));
+}
+
+// El sitio a veces repite el mismo evento dentro de una misma respuesta (ej. aparece tanto en
+// un bloque "destacados" como en el listado general, o dos <script type="application/ld+json">
+// distintos describen el mismo evento) — sin este filtro, dos tarjetas con el mismo id quedaban
+// en pantalla, y togglear la campanita en una marcaba/desmarcaba "la otra" porque en realidad
+// eran el mismo turno-compromiso por debajo (mismo id → mismo doc de Firestore).
+function dedupeById(items: any[]): any[] {
+  const seen = new Set<string>();
+  return items.filter((it) => (seen.has(it.id) ? false : (seen.add(it.id), true)));
 }
 
 function absolutizeUrl(url: string | null | undefined): string | null {

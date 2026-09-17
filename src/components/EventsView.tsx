@@ -264,9 +264,10 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
   }, []);
 
   // "Qué hacer en San Juan": mismo carrusel paginado (flechas + puntos, avance automático)
-  // que "Eventos deportivos" y "Eventos del Día", de a 6 tarjetas por página.
+  // que "Eventos deportivos" y "Eventos del Día", de a 3 tarjetas por página (una sola fila)
+  // para que la tarjeta tenga el mismo alto que "Eventos deportivos" en vez de ocupar el doble.
   const [sjPage, setSjPage] = useState(1);
-  const SJ_PAGE_SIZE = 6;
+  const SJ_PAGE_SIZE = 3;
   useEffect(() => { setSjPage(1); }, [sjEvents]);
   const sjTotalPages = Math.max(1, Math.ceil(sjEvents.length / SJ_PAGE_SIZE));
   useEffect(() => {
@@ -937,10 +938,9 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
           </p>
         ) : (
           <div className="space-y-2">
-            {/* Alto mínimo fijo (una página completa de 6 tarjetas) para que la caja no se
-                achique en una página con menos eventos — misma idea que en Eventos deportivos
-                y Eventos del Día, así el carrusel de abajo no salta de lugar entre páginas. */}
-            <div className="overflow-hidden min-h-[460px]">
+            {/* Mismo alto mínimo que "Eventos deportivos" (misma fila, misma tarjeta) — antes
+                eran 2 filas de 6 tarjetas, mucho más alto que el resto de las secciones. */}
+            <div className="overflow-hidden min-h-[292px]">
               <AnimatePresence mode="wait" initial={false}>
                 <motion.div
                   key={sjPage}
