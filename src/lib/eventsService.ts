@@ -5,11 +5,12 @@ import {
   refetchCategory,
   subscribeToCategory,
 } from "./firestoreSyncService";
-import type { EventPreferences, SanJuanEvent, SportEvent } from "../types";
+import type { EventPreferences, FollowedTeam, SanJuanEvent, SportEvent } from "../types";
 import { SPORTS_CATALOG } from "./sportsCatalog";
 import { TEAMS, Team } from "../data/teams";
 import { getLeagueCodesForTeam } from "./matchScheduler";
 import { FOOTBALL_LEAGUES } from "../data/footballLeagues";
+import { FOOTBALL_TEAM_ESPN_IDS, NBA_TEAM_ESPN_IDS } from "../data/espnTeamIds";
 import { F1_TEAMS, F1_DRIVERS, F1_TEAM_LOGOS } from "../data/f1";
 import { fetchWikiThumbnail } from "./wikipedia";
 import { f1TeamLogoUrl, f1DriverPhotoUrl } from "./cloudinary";
@@ -92,63 +93,60 @@ export function getFootballClubs(leagueId: string): Team[] {
   return TEAMS.filter((t) => t.league === leagueId);
 }
 
-/** Fixtures for one followed fútbol club, from ESPN's public (no-key, CORS-open) scoreboard API. */
+/**
+ * Fixtures for one followed fútbol club, from ESPN's per-team "schedule" endpoint — confirmed
+ * live by the user to return the team's full season (played + upcoming), unlike the scoreboard
+ * endpoint (used before) which only serves a single day and 400s on any date range. The league
+ * code in the URL just needs to be a valid slug for that team's country (ESPN ignores it beyond
+ * routing) — reusing the first code from matchScheduler's per-team list, no need to try all of
+ * them like the old scoreboard approach did.
+ */
 async function fetchFootballFixturesForTeam(team: Team): Promise<SportEvent[]> {
-  const codes = getLeagueCodesForTeam(team);
-  const cleanQuery = team.name.toLowerCase().replace(/fc|club|de|cd|real|atletico|deportivo/g, "").trim();
+  const espnId = FOOTBALL_TEAM_ESPN_IDS[team.name];
+  if (!espnId) return [];
+  const leagueCode = getLeagueCodesForTeam(team)[0] || "arg.1";
 
-  const results: SportEvent[] = [];
-  for (const code of codes) {
-    try {
-      // Confirmado en vivo por el usuario: el endpoint de scoreboard de fútbol de ESPN
-      // NO soporta el parámetro "dates" como rango (ni siquiera uno de 7 días) — cualquier
-      // "dates=inicio-fin" devuelve 400 "Failed to get events endpoint.", sin importar la
-      // liga. Sin el parámetro, ESPN devuelve la jornada/fecha actual del campeonato — menos
-      // alcance que "los próximos 30 días", pero es lo único que la API realmente sirve.
-      const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${code}/scoreboard`);
-      if (!res.ok) {
-        // Antes esto fallaba en silencio (solo se veía como un "Failed to load resource"
-        // genérico del navegador, sin decir qué liga era ni por qué). Un 400 acá casi
-        // siempre significa que ESPN no reconoce el código de liga ("${code}"), no que no
-        // haya partidos — dejarlo mudo hacía muy difícil saber cuál de los ~5 códigos por
-        // equipo era el que estaba mal.
-        console.warn(`[eventsService] ESPN respondió ${res.status} para la liga "${code}" (equipo ${team.name}) — código de liga probablemente inválido.`);
-        continue;
-      }
-      const data = await res.json();
-      const events: any[] = data.events || [];
-      for (const ev of events) {
-        const comp = ev.competitions?.[0];
-        const comps = comp?.competitors || [];
-        const involved = comps.some((c: any) => {
-          const cn = (c.team?.displayName || "").toLowerCase();
-          return cn.includes(cleanQuery) || cleanQuery.includes(cn);
-        });
-        if (!comp || !involved) continue;
-
-        const home = comps.find((c: any) => c.homeAway === "home");
-        const away = comps.find((c: any) => c.homeAway === "away");
-        const eventDate = new Date(ev.date);
-        const dateStr = `${eventDate.getFullYear()}-${String(eventDate.getMonth() + 1).padStart(2, "0")}-${String(eventDate.getDate()).padStart(2, "0")}`;
-        const timeStr = `${String(eventDate.getHours()).padStart(2, "0")}:${String(eventDate.getMinutes()).padStart(2, "0")}`;
-
-        results.push({
-          id: `fb_${ev.id}`,
-          sportId: "futbol",
-          leagueName: data.leagues?.[0]?.name || team.league,
-          title: `${home?.team?.displayName || "?"} vs ${away?.team?.displayName || "?"}`,
-          date: dateStr,
-          time: timeStr,
-          homeTeamBadge: home?.team?.logo,
-          awayTeamBadge: away?.team?.logo,
-          venue: comp.venue?.displayName,
-        });
-      }
-    } catch (err) {
-      console.warn(`[eventsService] Error fetching ESPN fixtures for league ${code}:`, err);
+  try {
+    const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${leagueCode}/teams/${espnId}/schedule`);
+    if (!res.ok) {
+      console.warn(`[eventsService] ESPN team-schedule respondió ${res.status} para ${team.name} (id ${espnId}, liga ${leagueCode}).`);
+      return [];
     }
+    const data = await res.json();
+    const events: any[] = data.events || [];
+    // "Próximos compromisos" nada más — el schedule por equipo trae toda la temporada
+    // (jugados + por jugar) mezclados, sin orden garantizado.
+    const now = Date.now() - 3 * 60 * 60 * 1000; // margen para partidos en curso
+    const results: SportEvent[] = [];
+    for (const ev of events) {
+      const eventDate = new Date(ev.date);
+      if (isNaN(eventDate.getTime()) || eventDate.getTime() < now) continue;
+      const comp = ev.competitions?.[0];
+      const comps = comp?.competitors || [];
+      if (!comp) continue;
+
+      const home = comps.find((c: any) => c.homeAway === "home");
+      const away = comps.find((c: any) => c.homeAway === "away");
+      const dateStr = `${eventDate.getFullYear()}-${String(eventDate.getMonth() + 1).padStart(2, "0")}-${String(eventDate.getDate()).padStart(2, "0")}`;
+      const timeStr = `${String(eventDate.getHours()).padStart(2, "0")}:${String(eventDate.getMinutes()).padStart(2, "0")}`;
+
+      results.push({
+        id: `fb_${ev.id}`,
+        sportId: "futbol",
+        leagueName: ev.league?.name || team.league,
+        title: `${home?.team?.displayName || "?"} vs ${away?.team?.displayName || "?"}`,
+        date: dateStr,
+        time: timeStr,
+        homeTeamBadge: home?.team?.logos?.[0]?.href || home?.team?.logo,
+        awayTeamBadge: away?.team?.logos?.[0]?.href || away?.team?.logo,
+        venue: comp.venue?.fullName,
+      });
+    }
+    return results;
+  } catch (err) {
+    console.warn(`[eventsService] Error fetching ESPN team schedule for ${team.name}:`, err);
+    return [];
   }
-  return results;
 }
 
 // --- F1: curated grid (data/f1.ts). Team logos are a fixed, known-good Cloudinary URL per
@@ -240,64 +238,63 @@ export async function fetchF1Races(): Promise<SportEvent[]> {
 
 export { NBA_TEAMS } from "../data/nba";
 
-const ESPN_BASE = "https://site.api.espn.com/apis/site/v2/sports";
+/** Same per-team "schedule" endpoint approach as fútbol (see fetchFootballFixturesForTeam). */
+async function fetchNbaTeamFixtures(followedTeam: FollowedTeam): Promise<SportEvent[]> {
+  const espnId = NBA_TEAM_ESPN_IDS[followedTeam.name];
+  if (!espnId) return [];
 
-async function fetchEspnScoreboardEvents(seasontype?: number): Promise<any[]> {
   try {
-    // Igual que en fútbol (ver fetchFootballFixturesForTeam): el parámetro "dates" como
-    // rango le devuelve 400 a la API oculta de ESPN, confirmado en vivo — se saca del todo,
-    // dejando solo "seasontype" cuando corresponde.
-    const q = seasontype ? `seasontype=${seasontype}` : "";
-    const res = await fetch(`${ESPN_BASE}/basketball/nba/scoreboard${q ? `?${q}` : ""}`);
+    const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/${espnId}/schedule`);
     if (!res.ok) {
-      console.warn(`[eventsService] ESPN respondió ${res.status} para NBA scoreboard${seasontype ? ` (seasontype=${seasontype})` : ""}.`);
+      console.warn(`[eventsService] ESPN team-schedule respondió ${res.status} para NBA ${followedTeam.name} (id ${espnId}).`);
       return [];
     }
     const data = await res.json();
-    return data.events || [];
+    const events: any[] = data.events || [];
+    const now = Date.now() - 3 * 60 * 60 * 1000;
+    const results: SportEvent[] = [];
+    for (const ev of events) {
+      const eventDate = new Date(ev.date);
+      if (isNaN(eventDate.getTime()) || eventDate.getTime() < now) continue;
+      const comp = ev.competitions?.[0];
+      const comps = comp?.competitors || [];
+      if (!comp) continue;
+
+      const home = comps.find((c: any) => c.homeAway === "home");
+      const away = comps.find((c: any) => c.homeAway === "away");
+      const isPreseason = ev.seasonType?.id === "1" || ev.season?.slug === "preseason";
+
+      results.push({
+        id: `nba_${ev.id}`,
+        sportId: "nba",
+        leagueName: isPreseason ? "NBA (Pretemporada)" : ev.league?.name || "NBA",
+        title: `${home?.team?.displayName || "?"} vs ${away?.team?.displayName || "?"}`,
+        date: `${eventDate.getFullYear()}-${String(eventDate.getMonth() + 1).padStart(2, "0")}-${String(eventDate.getDate()).padStart(2, "0")}`,
+        time: `${String(eventDate.getHours()).padStart(2, "0")}:${String(eventDate.getMinutes()).padStart(2, "0")}`,
+        homeTeamBadge: home?.team?.logos?.[0]?.href || home?.team?.logo,
+        awayTeamBadge: away?.team?.logos?.[0]?.href || away?.team?.logo,
+        venue: comp.venue?.fullName,
+      });
+    }
+    return results;
   } catch (err) {
-    console.warn("[eventsService] Error fetching NBA scoreboard from ESPN:", err);
+    console.warn(`[eventsService] Error fetching NBA team schedule for ${followedTeam.name}:`, err);
     return [];
   }
 }
 
-async function fetchNbaFollowedEvents(followedTeamNames: string[]): Promise<SportEvent[]> {
-  if (followedTeamNames.length === 0) return [];
-  const cleanNames = followedTeamNames.map((n) => n.toLowerCase());
-
-  // Regular season + preseason (seasontype=1), merged — the default scoreboard call can miss
-  // preseason games depending on the time of year, so it's fetched explicitly too.
-  const [regular, preseason] = await Promise.all([
-    fetchEspnScoreboardEvents(),
-    fetchEspnScoreboardEvents(1),
-  ]);
+async function fetchNbaFollowedEvents(followedTeams: FollowedTeam[]): Promise<SportEvent[]> {
+  if (followedTeams.length === 0) return [];
+  const settled = await Promise.allSettled(followedTeams.map(fetchNbaTeamFixtures));
   const seenIds = new Set<string>();
   const results: SportEvent[] = [];
-  for (const ev of [...preseason, ...regular]) {
-    if (seenIds.has(ev.id)) continue;
-    seenIds.add(ev.id);
-    const comp = ev.competitions?.[0];
-    const comps = comp?.competitors || [];
-    const involved = comps.some((c: any) => {
-      const cn = (c.team?.displayName || "").toLowerCase();
-      return cleanNames.some((n) => cn.includes(n) || n.includes(cn));
-    });
-    if (!comp || !involved) continue;
-    const home = comps.find((c: any) => c.homeAway === "home");
-    const away = comps.find((c: any) => c.homeAway === "away");
-    const d = new Date(ev.date);
-    const isPreseason = ev.seasonType?.id === "1" || ev.season?.slug === "preseason";
-    results.push({
-      id: `nba_${ev.id}`,
-      sportId: "nba",
-      leagueName: isPreseason ? "NBA (Pretemporada)" : "NBA",
-      title: `${home?.team?.displayName || "?"} vs ${away?.team?.displayName || "?"}`,
-      date: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`,
-      time: `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`,
-      homeTeamBadge: home?.team?.logo,
-      awayTeamBadge: away?.team?.logo,
-      venue: comp.venue?.fullName,
-    });
+  for (const r of settled) {
+    if (r.status !== "fulfilled") continue;
+    for (const ev of r.value) {
+      if (seenIds.has(ev.id)) continue;
+      seenIds.add(ev.id);
+      results.push(ev);
+    }
   }
   return results;
 }
@@ -334,7 +331,7 @@ export async function fetchFollowedSportEvents(prefs: EventPreferences | null): 
       }
     } else if (sportId === "nba") {
       try {
-        results.push(...(await fetchNbaFollowedEvents(teams.map((t) => t.name))));
+        results.push(...(await fetchNbaFollowedEvents(teams)));
       } catch (err) {
         console.warn("[eventsService] Error fetching NBA events:", err);
       }
