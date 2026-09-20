@@ -11,6 +11,7 @@ import { TEAMS, Team } from "../data/teams";
 import { fetchTeamScheduleAllCompetitions } from "./matchScheduler";
 import { FOOTBALL_LEAGUES } from "../data/footballLeagues";
 import { FOOTBALL_TEAM_ESPN_IDS, NBA_TEAM_ESPN_IDS } from "../data/espnTeamIds";
+import { FOLLOWABLE_COMPETITIONS } from "../data/footballCompetitions";
 import { F1_TEAMS, F1_DRIVERS, F1_TEAM_LOGOS } from "../data/f1";
 import { fetchWikiThumbnail } from "./wikipedia";
 import { f1TeamLogoUrl, f1DriverPhotoUrl } from "./cloudinary";
@@ -347,4 +348,126 @@ export async function fetchFollowedSportEvents(prefs: EventPreferences | null): 
   return results.filter((e) => (seen.has(e.id) ? false : (seen.add(e.id), true)));
 }
 
-export { SPORTS_CATALOG };
+export { SPORTS_CATALOG, FOLLOWABLE_COMPETITIONS };
+
+// --- Caché compartido de partidos (para toda la app, no por usuario): un Netlify scheduled
+// function (refresh-sport-events.ts) refresca este documento cada 15 minutos con los partidos
+// de ayer/hoy/mañana de las competencias más seguidas + NBA — todos los usuarios leen el mismo
+// documento en vez de que cada navegador le pegue directo a ESPN por cada equipo. ---
+
+interface CachedSportEvent {
+  id: string;
+  sportId: "futbol" | "nba";
+  competitionId: string;
+  competitionName: string;
+  date: string;
+  time: string;
+  status: "live" | "upcoming" | "finished";
+  statusText: string;
+  homeTeam: string;
+  homeTeamId?: string;
+  homeLogo?: string;
+  homeScore?: string;
+  awayTeam: string;
+  awayTeamId?: string;
+  awayLogo?: string;
+  awayScore?: string;
+  venue?: string;
+}
+
+const SPORT_EVENTS_CACHE_DOC = doc(db, "shared_data", "sport_events_cache");
+
+async function getCachedSportEvents(): Promise<CachedSportEvent[]> {
+  const snap = await getDoc(SPORT_EVENTS_CACHE_DOC);
+  if (!snap.exists()) return [];
+  const data = snap.data() as { items?: CachedSportEvent[]; fetchedAt?: number };
+  return data.items || [];
+}
+
+function cachedEventToSportEvent(ev: CachedSportEvent): SportEvent {
+  return {
+    id: ev.id,
+    sportId: ev.sportId,
+    leagueName: ev.competitionName,
+    title: `${ev.homeTeam} vs ${ev.awayTeam}`,
+    date: ev.date,
+    time: ev.time,
+    homeTeamBadge: ev.homeLogo,
+    awayTeamBadge: ev.awayLogo,
+    venue: ev.venue,
+    status: ev.status,
+    statusText: ev.statusText,
+    homeScore: ev.homeScore,
+    awayScore: ev.awayScore,
+    competitionId: ev.competitionId,
+  };
+}
+
+/**
+ * "Eventos deportivos" real: lee el caché compartido (ayer/hoy/mañana) y se queda con los
+ * partidos de las competencias seguidas enteras + los de cualquier equipo seguido (fútbol o
+ * NBA, matcheando por id de ESPN, no por nombre — más preciso). F1 sigue viniendo de su propio
+ * fetch en vivo (muy pocos eventos, no vale la pena cachearlo del mismo modo). Si el caché
+ * todavía no existe (antes de la primera corrida del scheduled function) o está vacío, cae al
+ * fetch directo por equipo de siempre — nunca se queda sin datos por esto.
+ */
+export async function fetchFollowedSportEventsFromCache(prefs: EventPreferences | null): Promise<SportEvent[]> {
+  if (!prefs || prefs.followedSports.length === 0) return [];
+
+  const followedCompetitions = new Set(prefs.followedCompetitions || []);
+  const followedFootballIds = new Set(
+    (prefs.followedTeams["futbol"] || []).map((t) => FOOTBALL_TEAM_ESPN_IDS[t.name]).filter(Boolean)
+  );
+  const followedNbaIds = new Set(
+    (prefs.followedTeams["nba"] || []).map((t) => NBA_TEAM_ESPN_IDS[t.name]).filter(Boolean)
+  );
+
+  const results: SportEvent[] = [];
+
+  if (prefs.followedSports.includes("futbol") || prefs.followedSports.includes("nba")) {
+    const cached = await getCachedSportEvents();
+    if (cached.length > 0) {
+      for (const ev of cached) {
+        if (ev.sportId === "futbol" && !prefs.followedSports.includes("futbol")) continue;
+        if (ev.sportId === "nba" && !prefs.followedSports.includes("nba")) continue;
+
+        const byCompetition = followedCompetitions.has(ev.competitionId);
+        const followedIds = ev.sportId === "futbol" ? followedFootballIds : followedNbaIds;
+        const byTeam = (ev.homeTeamId && followedIds.has(ev.homeTeamId)) || (ev.awayTeamId && followedIds.has(ev.awayTeamId));
+        if (!byCompetition && !byTeam) continue;
+
+        results.push(cachedEventToSportEvent(ev));
+      }
+    } else {
+      // Caché todavía vacío — respaldo con el fetch directo por equipo de siempre.
+      if (prefs.followedSports.includes("futbol")) {
+        const teams = prefs.followedTeams["futbol"] || [];
+        const clubResults = await Promise.allSettled(
+          teams.map((followed) => {
+            const team = TEAMS.find((t) => t.id === followed.id);
+            return team ? fetchFootballFixturesForTeam(team) : Promise.resolve([]);
+          })
+        );
+        clubResults.forEach((r) => { if (r.status === "fulfilled") results.push(...r.value); });
+      }
+      if (prefs.followedSports.includes("nba")) {
+        try {
+          results.push(...(await fetchNbaFollowedEvents(prefs.followedTeams["nba"] || [])));
+        } catch (err) {
+          console.warn("[eventsService] Error fetching NBA events:", err);
+        }
+      }
+    }
+  }
+
+  if (prefs.followedSports.includes("f1")) {
+    try {
+      results.push(...(await fetchF1Races()));
+    } catch (err) {
+      console.warn("[eventsService] Error fetching F1 races:", err);
+    }
+  }
+
+  const seen = new Set<string>();
+  return results.filter((e) => (seen.has(e.id) ? false : (seen.add(e.id), true)));
+}
