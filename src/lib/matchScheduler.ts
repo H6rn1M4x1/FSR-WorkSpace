@@ -194,6 +194,42 @@ export function getLeagueCodesForTeam(team: Team | undefined): string[] {
   return codes;
 }
 
+/**
+ * Calendario de un equipo cruzando TODAS sus competencias relevantes (liga + copas locales +
+ * continentales), fusionado y sin duplicados. Confirmado en vivo que el endpoint de ESPN
+ * `.../soccer/{liga}/teams/{id}/schedule` NO devuelve el cruce completo de competencias del
+ * equipo — solo trae los partidos de la competencia puesta en la URL. Pedir con un solo código
+ * (ej. "arg.1") se perdía por completo los partidos de Copa Argentina, Libertadores o
+ * Sudamericana (ej. un São Paulo vs Boca por Sudamericana no aparecía en ningún lado). Un
+ * pedido por cada código relevante, en paralelo, resuelve esto.
+ */
+export async function fetchTeamScheduleAllCompetitions(team: Team | undefined, espnId: string): Promise<any[]> {
+  const codes = getLeagueCodesForTeam(team);
+  const results = await Promise.all(
+    codes.map(async (code) => {
+      try {
+        const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${code}/teams/${espnId}/schedule`);
+        if (!res.ok) return [] as any[];
+        const data = await res.json().catch(() => null);
+        return (data?.events || []) as any[];
+      } catch (_) {
+        return [] as any[];
+      }
+    })
+  );
+
+  const seen = new Set<string>();
+  const merged: any[] = [];
+  for (const events of results) {
+    for (const ev of events) {
+      if (seen.has(ev.id)) continue;
+      seen.add(ev.id);
+      merged.push(ev);
+    }
+  }
+  return merged;
+}
+
 // Fetch this month's real matches for a team from ESPN's per-team schedule endpoint.
 export async function generateMonthlyMatchesForTeam(
   favoriteTeamName: string,
@@ -218,12 +254,8 @@ export async function generateMonthlyMatchesForTeam(
   const espnId = FOOTBALL_TEAM_ESPN_IDS[favoriteTeamName];
   if (!espnId) return matchItems;
 
-  const leagueCode = getLeagueCodesForTeam(teamObj)[0] || "arg.1";
   try {
-    const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${leagueCode}/teams/${espnId}/schedule`);
-    if (!res.ok) return matchItems;
-    const data = await res.json();
-    const events: any[] = data.events || [];
+    const events = await fetchTeamScheduleAllCompetitions(teamObj, espnId);
 
     for (const ev of events) {
       const eventDate = new Date(ev.date);

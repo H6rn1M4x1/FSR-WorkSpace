@@ -594,26 +594,39 @@ export const MultiTeamMatchWidget: React.FC<MultiTeamMatchWidgetProps> = ({ dark
       { name: selectedSelection, type: "selection" as const, espnId: TEAM_NAME_TO_ESPN_ID[selectedSelection] }
     ];
 
-    // Un solo pedido por equipo al calendario propio de ESPN (.../teams/{id}/schedule) — probado
-    // en vivo que trae TODAS las competencias que jugó/juega ese equipo (liga, copas locales,
-    // continentales, amistosos, etc.), sin importar qué liga se ponga en la URL. El scoreboard
-    // con "dates" como rango que se usaba antes le devuelve 400 a la API de ESPN sin importar la
-    // liga ni el ancho del rango — eso dejaba afuera todo lo que no fuera la jornada actual de la
-    // liga doméstica (Copa Argentina, Libertadores, Sudamericana, amistosos de selección, etc.
-    // directamente no aparecían).
+    // Calendario propio de ESPN (.../teams/{id}/schedule) por equipo, cruzando TODAS las
+    // competencias relevantes de ese equipo (liga + copas locales + continentales + amistosos
+    // de selección) — confirmado en vivo que ese endpoint solo devuelve los partidos de la
+    // competencia puesta en la URL, no el cruce completo (un São Paulo vs Boca por Sudamericana
+    // no aparecía pidiendo solo "arg.1"). El scoreboard con "dates" como rango que se usaba antes
+    // le devuelve 400 a la API sin importar la liga ni el ancho del rango, así que tampoco servía.
     const teamSchedules = await Promise.all(
       trackedTeams.map(async (teamInfo) => {
         if (!teamInfo.espnId) return { teamInfo, events: [] as any[] };
         const isClub = teamInfo.type === "club";
-        const leagueCode = getAllLeagueCodesForTeam(teamInfo.name, isClub)[0] || "arg.1";
-        try {
-          const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${leagueCode}/teams/${teamInfo.espnId}/schedule`);
-          if (!res.ok) return { teamInfo, events: [] as any[] };
-          const data = await res.json().catch(() => null);
-          return { teamInfo, events: (data?.events || []) as any[] };
-        } catch (_) {
-          return { teamInfo, events: [] as any[] };
+        const codes = getAllLeagueCodesForTeam(teamInfo.name, isClub);
+        const perCode = await Promise.all(
+          codes.map(async (code) => {
+            try {
+              const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${code}/teams/${teamInfo.espnId}/schedule`);
+              if (!res.ok) return [] as any[];
+              const data = await res.json().catch(() => null);
+              return (data?.events || []) as any[];
+            } catch (_) {
+              return [] as any[];
+            }
+          })
+        );
+        const seen = new Set<string>();
+        const events: any[] = [];
+        for (const codeEvents of perCode) {
+          for (const ev of codeEvents) {
+            if (seen.has(ev.id)) continue;
+            seen.add(ev.id);
+            events.push(ev);
+          }
         }
+        return { teamInfo, events };
       })
     );
 

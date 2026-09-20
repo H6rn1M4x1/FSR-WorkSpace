@@ -8,7 +8,7 @@ import {
 import type { EventPreferences, FollowedTeam, SanJuanEvent, SportEvent } from "../types";
 import { SPORTS_CATALOG } from "./sportsCatalog";
 import { TEAMS, Team } from "../data/teams";
-import { getLeagueCodesForTeam } from "./matchScheduler";
+import { fetchTeamScheduleAllCompetitions } from "./matchScheduler";
 import { FOOTBALL_LEAGUES } from "../data/footballLeagues";
 import { FOOTBALL_TEAM_ESPN_IDS, NBA_TEAM_ESPN_IDS } from "../data/espnTeamIds";
 import { F1_TEAMS, F1_DRIVERS, F1_TEAM_LOGOS } from "../data/f1";
@@ -113,16 +113,12 @@ export function getFootballClubs(leagueId: string): Team[] {
 async function fetchFootballFixturesForTeam(team: Team): Promise<SportEvent[]> {
   const espnId = FOOTBALL_TEAM_ESPN_IDS[team.name];
   if (!espnId) return [];
-  const leagueCode = getLeagueCodesForTeam(team)[0] || "arg.1";
 
   try {
-    const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${leagueCode}/teams/${espnId}/schedule`);
-    if (!res.ok) {
-      console.warn(`[eventsService] ESPN team-schedule respondió ${res.status} para ${team.name} (id ${espnId}, liga ${leagueCode}).`);
-      return [];
-    }
-    const data = await res.json();
-    const events: any[] = data.events || [];
+    // Cruza liga + copas locales + continentales (ver fetchTeamScheduleAllCompetitions) — un
+    // solo pedido con un código de liga se perdía Copa Argentina, Libertadores, Sudamericana,
+    // etc. por completo (confirmado en vivo: un São Paulo vs Boca por Sudamericana no aparecía).
+    const events = await fetchTeamScheduleAllCompetitions(team, espnId);
     // "Próximos compromisos" nada más — el schedule por equipo trae toda la temporada
     // (jugados + por jugar) mezclados, sin orden garantizado.
     const now = Date.now() - 3 * 60 * 60 * 1000; // margen para partidos en curso
