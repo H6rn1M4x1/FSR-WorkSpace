@@ -94,14 +94,18 @@ export const FavoriteTeamWidget: React.FC<FavoriteTeamWidgetProps> = ({
           const awayLogo = getLogoForTeamName(awayName, awayComp?.team?.logos?.[0]?.href || awayComp?.team?.logo);
 
           const isFavHome = homeName === selectedTeamName;
-          const state = comp?.status?.type?.state; // 'in', 'pre', 'post'
+          // Algunos eventos traen el estado en competitions[0].status y otros (visto en vivo
+          // con un partido en curso) solo lo tienen a nivel evento — se revisan los dos en vez
+          // de asumir uno solo, así un partido en vivo no se pierde y termina sin mostrarse.
+          const statusObj = comp?.status || ev.status;
+          const state = statusObj?.type?.state; // 'in', 'pre', 'post'
           const rawDate = new Date(ev.date);
 
           return {
             id: ev.id,
             status: state === "in" ? "live" : state === "post" ? "finished" : "upcoming",
-            statusText: comp?.status?.type?.shortDetail || comp?.status?.type?.description || "",
-            clock: comp?.status?.displayClock || `${comp?.status?.clock || 0}'`,
+            statusText: statusObj?.type?.shortDetail || statusObj?.type?.description || "",
+            clock: statusObj?.displayClock || `${statusObj?.clock || 0}'`,
             dateStr: rawDate.toLocaleDateString("es-AR", {
               weekday: "short",
               day: "numeric",
@@ -214,7 +218,7 @@ export const FavoriteTeamWidget: React.FC<FavoriteTeamWidgetProps> = ({
               {selectedTeamName}
             </h3>
             <span className="text-xs text-zinc-500 dark:text-zinc-400 font-medium truncate block mt-1">
-              {teamObj?.league || "Mi Equipo Favorito"}
+              {currentLive?.competition || nextMatch?.competition || teamObj?.league || "Mi Equipo Favorito"}
             </span>
           </div>
         </div>
