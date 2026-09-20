@@ -635,6 +635,10 @@ export interface SportEvent {
   awayScore?: string;
   /** Código de competencia de ESPN (ej. "arg.1") — para el filtro por competencia seguida. */
   competitionId?: string;
+  /** Por qué aparece en el feed: siguiendo a uno de los equipos, o siguiendo la competencia
+   *  entera — para mostrar primero los partidos de "tus equipos" y después los de las
+   *  competencias seguidas, como pidió el usuario. */
+  matchedBy?: "team" | "competition";
 }
 
 
