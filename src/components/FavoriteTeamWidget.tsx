@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Activity, RefreshCw, Calendar, Radio, MapPin, Trophy, Shield } from "lucide-react";
 import { TEAMS, Team } from "../data/teams";
-import { getLeagueCodesForTeam, getStadiumForTeam } from "../lib/matchScheduler";
+import { getStadiumForTeam, fetchTeamScheduleAllCompetitions } from "../lib/matchScheduler";
 import { FOOTBALL_TEAM_ESPN_IDS } from "../data/espnTeamIds";
 
 interface FavoriteTeamWidgetProps {
@@ -78,10 +78,7 @@ export const FavoriteTeamWidget: React.FC<FavoriteTeamWidgetProps> = ({
         return;
       }
 
-      const leagueCode = getLeagueCodesForTeam(teamObj)[0] || "arg.1";
-      const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${leagueCode}/teams/${espnId}/schedule`);
-      const data = res.ok ? await res.json().catch(() => null) : null;
-      const events: any[] = data?.events || [];
+      const events = await fetchTeamScheduleAllCompetitions(teamObj, espnId);
 
       const parsedMatches: MatchData[] = events
         .map((ev) => {
