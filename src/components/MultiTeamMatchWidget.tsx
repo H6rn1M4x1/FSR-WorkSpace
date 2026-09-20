@@ -583,13 +583,7 @@ export const MultiTeamMatchWidget: React.FC<MultiTeamMatchWidgetProps> = ({ dark
   const fetchMatchesForWeek = async () => {
     setLoading(true);
     const { monday, sunday } = getWeekRange();
-
-    const fmt = (d: Date) =>
-      `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(
-        d.getUTCDate()
-      ).padStart(2, "0")}`;
-
-    const dateRange = `${fmt(monday)}-${fmt(sunday)}`;
+    const inWeek = (d: Date) => d >= monday && d <= sunday;
 
     const weeklyMatches: MatchWeeklyData[] = [];
     const addedMatchKeys = new Set<string>();
@@ -600,25 +594,108 @@ export const MultiTeamMatchWidget: React.FC<MultiTeamMatchWidgetProps> = ({ dark
       { name: selectedSelection, type: "selection" as const, espnId: TEAM_NAME_TO_ESPN_ID[selectedSelection] }
     ];
 
-    // Collect all unique league codes to fetch
-    const allUniqueCodes = new Set<string>();
-    // Always include top leagues to discover worldwide interesting matches
-    ["eng.1", "esp.1", "ita.1", "ger.1", "fra.1", "arg.1", "uefa.champions", "conmebol.libertadores", "club.friendly"].forEach(code => allUniqueCodes.add(code));
+    // Un solo pedido por equipo al calendario propio de ESPN (.../teams/{id}/schedule) — probado
+    // en vivo que trae TODAS las competencias que jugó/juega ese equipo (liga, copas locales,
+    // continentales, amistosos, etc.), sin importar qué liga se ponga en la URL. El scoreboard
+    // con "dates" como rango que se usaba antes le devuelve 400 a la API de ESPN sin importar la
+    // liga ni el ancho del rango — eso dejaba afuera todo lo que no fuera la jornada actual de la
+    // liga doméstica (Copa Argentina, Libertadores, Sudamericana, amistosos de selección, etc.
+    // directamente no aparecían).
+    const teamSchedules = await Promise.all(
+      trackedTeams.map(async (teamInfo) => {
+        if (!teamInfo.espnId) return { teamInfo, events: [] as any[] };
+        const isClub = teamInfo.type === "club";
+        const leagueCode = getAllLeagueCodesForTeam(teamInfo.name, isClub)[0] || "arg.1";
+        try {
+          const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${leagueCode}/teams/${teamInfo.espnId}/schedule`);
+          if (!res.ok) return { teamInfo, events: [] as any[] };
+          const data = await res.json().catch(() => null);
+          return { teamInfo, events: (data?.events || []) as any[] };
+        } catch (_) {
+          return { teamInfo, events: [] as any[] };
+        }
+      })
+    );
 
-    for (const teamInfo of trackedTeams) {
+    for (const { teamInfo, events } of teamSchedules) {
       const isClub = teamInfo.type === "club";
-      const codes = getAllLeagueCodesForTeam(teamInfo.name, isClub);
-      codes.forEach(code => allUniqueCodes.add(code));
+      let teamLogo = "";
+
+      if (isClub) {
+        const teamObj = TEAMS.find((t) => t.name === teamInfo.name);
+        teamLogo = teamObj?.logo || "";
+      } else {
+        const selectionObj = NATIONAL_SELECTIONS.find((s) => s.name === teamInfo.name);
+        teamLogo = selectionObj?.logo || "";
+      }
+
+      for (const ev of events) {
+        const matchDate = new Date(ev.date);
+        if (!inWeek(matchDate)) continue;
+
+        const comp = ev.competitions?.[0];
+        const competitors = comp?.competitors || [];
+        const homeComp = competitors.find((c: any) => c.homeAway === "home");
+        const awayComp = competitors.find((c: any) => c.homeAway === "away");
+        if (!comp || !homeComp || !awayComp) continue;
+
+        const homeName = homeComp.team?.displayName || "Local";
+        const awayName = awayComp.team?.displayName || "Visitante";
+        const competitionName = ev.league?.name || (isClub ? "Liga Profesional" : "Partido Internacional");
+
+        const matchKey = `${teamInfo.name}-${ev.id || matchDate.getTime()}`;
+        if (addedMatchKeys.has(matchKey)) continue;
+        addedMatchKeys.add(matchKey);
+
+        const state = comp.status?.type?.state;
+        const homeLogo = getBestLogo(homeName, homeComp.team?.logos?.[0]?.href || homeComp.team?.logo, isClub);
+        const awayLogo = getBestLogo(awayName, awayComp.team?.logos?.[0]?.href || awayComp.team?.logo, isClub);
+
+        const formattedWeekdayAndDay = matchDate.toLocaleDateString("es-AR", {
+          weekday: "short",
+          day: "numeric",
+          month: "short",
+        });
+        const formattedTime = matchDate.toLocaleTimeString("es-AR", {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+        const dateStr = `${formattedWeekdayAndDay} • ${formattedTime}`;
+
+        weeklyMatches.push({
+          id: `weekly-${teamInfo.name}-${ev.id || matchDate.getTime()}`,
+          teamKey: teamInfo.name,
+          logo: teamLogo,
+          status: state === "in" ? "live" : state === "post" ? "finished" : "upcoming",
+          statusText: comp.status?.type?.shortDetail || comp.status?.type?.description || "Programado",
+          dateStr,
+          weekdayNum: matchDate.getDay(),
+          dateObj: matchDate,
+          competition: competitionName,
+          venue: comp.venue?.fullName || comp.venue?.displayName || getStadiumForTeam(homeName),
+          homeTeam: {
+            name: homeName,
+            logo: homeLogo || "https://paladarnegro.net/escudoteca/argentina/primeradivision/png/boca.png",
+            score: homeComp.score?.displayValue ?? homeComp.score ?? "",
+          },
+          awayTeam: {
+            name: awayName,
+            logo: awayLogo || "https://paladarnegro.net/escudoteca/argentina/primeradivision/png/river.png",
+            score: awayComp.score?.displayValue ?? awayComp.score ?? "",
+          }
+        });
+      }
     }
 
-    const allCodesArray = Array.from(allUniqueCodes);
+    // Segundo pase ("Destacado"): mismos partidos de ligas top que antes, pero sin el parámetro
+    // "dates" (que 400ea con o sin rango) — sin fecha, ESPN devuelve solo la jornada actual de
+    // cada liga, que se filtra igual a la semana seleccionada.
+    const topLeagueCodes = ["eng.1", "esp.1", "ita.1", "ger.1", "fra.1", "arg.1", "uefa.champions", "conmebol.libertadores", "club.friendly"];
     const scoreboards: { code: string; data: any }[] = [];
-
     try {
-      const apiPromises = allCodesArray.map(async (code) => {
+      const apiPromises = topLeagueCodes.map(async (code) => {
         try {
-          const url = `https://site.api.espn.com/apis/site/v2/sports/soccer/${code}/scoreboard?dates=${dateRange}`;
-          const res = await fetch(url).catch(() => null);
+          const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${code}/scoreboard`).catch(() => null);
           if (res && res.ok) {
             const data = await res.json().catch(() => null);
             if (data) return { code, data };
@@ -639,96 +716,13 @@ export const MultiTeamMatchWidget: React.FC<MultiTeamMatchWidgetProps> = ({ dark
       // Safe fallback
     }
 
-    // Now, scan all tracked teams and extract matches
-    for (const teamInfo of trackedTeams) {
-      const isClub = teamInfo.type === "club";
-      let teamLogo = "";
-
-      if (isClub) {
-        const teamObj = TEAMS.find((t) => t.name === teamInfo.name);
-        teamLogo = teamObj?.logo || "";
-      } else {
-        const selectionObj = NATIONAL_SELECTIONS.find((s) => s.name === teamInfo.name);
-        teamLogo = selectionObj?.logo || "";
-      }
-
-      // Scan all scoreboards for matches of this team
-      for (const { data } of scoreboards) {
-        const events: any[] = data.events || [];
-        const competitionName = data.leagues?.[0]?.name || (isClub ? "Liga Profesional" : "Partido Internacional");
-
-        const teamEvents = events.filter((ev) => {
-          const competitors = ev.competitions?.[0]?.competitors || [];
-          return competitors.some((c: any) => {
-            if (teamInfo.espnId) {
-              return String(c.team?.id) === teamInfo.espnId;
-            }
-            const displayName = c.team?.displayName || "";
-            return matchesTeam(displayName, teamInfo.name, isClub);
-          });
-        });
-
-        for (const ev of teamEvents) {
-          const comp = ev.competitions?.[0];
-          const homeComp = comp?.competitors?.find((c: any) => c.homeAway === "home");
-          const awayComp = comp?.competitors?.find((c: any) => c.homeAway === "away");
-
-          const homeName = homeComp?.team?.displayName || "Local";
-          const awayName = awayComp?.team?.displayName || "Visitante";
-
-          const state = ev.status?.type?.state;
-          const matchDate = new Date(ev.date);
-
-          const matchKey = `${teamInfo.name}-${ev.id || matchDate.getTime()}`;
-          if (addedMatchKeys.has(matchKey)) continue;
-          addedMatchKeys.add(matchKey);
-
-          const homeLogo = getBestLogo(homeName, homeComp?.team?.logo || homeComp?.team?.logos?.[0]?.href, isClub);
-          const awayLogo = getBestLogo(awayName, awayComp?.team?.logo || awayComp?.team?.logos?.[0]?.href, isClub);
-
-          const formattedWeekdayAndDay = matchDate.toLocaleDateString("es-AR", {
-            weekday: "short",
-            day: "numeric",
-            month: "short",
-          });
-          const formattedTime = matchDate.toLocaleTimeString("es-AR", {
-            hour: "2-digit",
-            minute: "2-digit",
-          });
-          const dateStr = `${formattedWeekdayAndDay} • ${formattedTime}`;
-
-          weeklyMatches.push({
-            id: `weekly-${teamInfo.name}-${ev.id || matchDate.getTime()}`,
-            teamKey: teamInfo.name,
-            logo: teamLogo,
-            status: state === "in" ? "live" : state === "post" ? "finished" : "upcoming",
-            statusText: ev.status?.type?.shortDetail || ev.status?.type?.description || "Programado",
-            dateStr,
-            weekdayNum: matchDate.getDay(),
-            dateObj: matchDate,
-            competition: competitionName,
-            venue: comp?.venue?.displayName || getStadiumForTeam(homeName),
-            homeTeam: {
-              name: homeName,
-              logo: homeLogo || "https://paladarnegro.net/escudoteca/argentina/primeradivision/png/boca.png",
-              score: homeComp?.score ?? "",
-            },
-            awayTeam: {
-              name: awayName,
-              logo: awayLogo || "https://paladarnegro.net/escudoteca/argentina/primeradivision/png/river.png",
-              score: awayComp?.score ?? "",
-            }
-          });
-        }
-      }
-    }
-
     // Second pass: scan all fetched scoreboards for highly interesting matches of other top world teams
     for (const { data } of scoreboards) {
       const events: any[] = data.events || [];
       const competitionName = data.leagues?.[0]?.name || "Competencia Internacional";
 
       for (const ev of events) {
+        if (!inWeek(new Date(ev.date))) continue;
         if (isInterestingMatch(ev, competitionName)) {
           const comp = ev.competitions?.[0];
           const homeComp = comp?.competitors?.find((c: any) => c.homeAway === "home");
