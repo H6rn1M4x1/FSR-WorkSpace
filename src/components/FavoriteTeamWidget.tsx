@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Activity, RefreshCw, Calendar, Radio, MapPin, Trophy, Shield } from "lucide-react";
 import { TEAMS, Team } from "../data/teams";
-import { getStadiumForTeam, fetchTeamScheduleAllCompetitions } from "../lib/matchScheduler";
+import { getStadiumForTeam, getLeagueCodesForTeam, fetchTeamScheduleAllCompetitions } from "../lib/matchScheduler";
 import { FOOTBALL_TEAM_ESPN_IDS } from "../data/espnTeamIds";
 
 interface FavoriteTeamWidgetProps {
@@ -123,8 +123,49 @@ export const FavoriteTeamWidget: React.FC<FavoriteTeamWidgetProps> = ({
         })
         .filter((m) => m.rawDate && !isNaN(m.rawDate.getTime()));
 
-      // 1. Live Match
-      const foundLive = parsedMatches.find((m) => m.status === "live") || null;
+      // 1. Live Match: el calendario por equipo puede tardar en sumar un partido que arranca
+      // justo ahora (confirmado en vivo: un San Lorenzo vs Boca en curso todavía no aparecía
+      // ahí) — el scoreboard del día de la liga principal sí refleja el estado "en vivo" al
+      // instante, así que se chequea ahí primero.
+      let foundLive: MatchData | null = null;
+      try {
+        const leagueCode = getLeagueCodesForTeam(teamObj)[0] || "arg.1";
+        const liveRes = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${leagueCode}/scoreboard`);
+        if (liveRes.ok) {
+          const liveData = await liveRes.json().catch(() => null);
+          const liveEvents: any[] = liveData?.events || [];
+          for (const ev of liveEvents) {
+            const comp = ev.competitions?.[0];
+            const competitors = comp?.competitors || [];
+            const involved = competitors.some((c: any) => String(c.team?.id) === espnId);
+            if (!involved || comp?.status?.type?.state !== "in") continue;
+
+            const homeComp = competitors.find((c: any) => c.homeAway === "home");
+            const awayComp = competitors.find((c: any) => c.homeAway === "away");
+            const homeName = homeComp?.team?.displayName || "Local";
+            const awayName = awayComp?.team?.displayName || "Visitante";
+            const homeLogo = getLogoForTeamName(homeName, homeComp?.team?.logos?.[0]?.href || homeComp?.team?.logo);
+            const awayLogo = getLogoForTeamName(awayName, awayComp?.team?.logos?.[0]?.href || awayComp?.team?.logo);
+
+            foundLive = {
+              id: ev.id,
+              status: "live",
+              statusText: comp?.status?.type?.shortDetail || comp?.status?.type?.description || "",
+              clock: comp?.status?.displayClock || `${comp?.status?.clock || 0}'`,
+              dateStr: new Date(ev.date).toLocaleDateString("es-AR", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }),
+              venue: comp?.venue?.fullName || comp?.venue?.displayName || getStadiumForTeam(homeName),
+              competition: liveData?.leagues?.[0]?.name || teamObj?.league || "Competencia",
+              homeTeam: { name: homeName, logo: homeLogo, score: homeComp?.score ?? "0" },
+              awayTeam: { name: awayName, logo: awayLogo, score: awayComp?.score ?? "0" },
+              isFavoriteHome: homeName === selectedTeamName,
+            };
+            break;
+          }
+        }
+      } catch (_) {
+        // El calendario por equipo sigue funcionando como respaldo si esto falla.
+      }
+      if (!foundLive) foundLive = parsedMatches.find((m) => m.status === "live") || null;
 
       // 2. Next Match: closest upcoming
       const foundNext =
