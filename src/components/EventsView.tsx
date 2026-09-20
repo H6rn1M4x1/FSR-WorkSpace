@@ -30,8 +30,9 @@ import {
   getSanJuanEvents,
   fetchEventPreferences,
   saveEventPreferences,
-  fetchFollowedSportEvents,
+  fetchFollowedSportEventsFromCache,
   FOOTBALL_LEAGUES,
+  FOLLOWABLE_COMPETITIONS,
   getFootballClubs,
   F1_TEAMS,
   F1_DRIVERS,
@@ -341,6 +342,15 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
     setDraftPrefs({ ...draftPrefs, followedTeams: { ...draftPrefs.followedTeams, [sportId]: next } });
   };
 
+  // Seguir una competencia entera (todos sus partidos, no solo los de un equipo puntual).
+  const toggleDraftCompetition = (competitionId: string) => {
+    if (!draftPrefs) return;
+    const current = draftPrefs.followedCompetitions || [];
+    const already = current.includes(competitionId);
+    const next = already ? current.filter((c) => c !== competitionId) : [...current, competitionId];
+    setDraftPrefs({ ...draftPrefs, followedCompetitions: next });
+  };
+
   // Single-select follow, one "team" + one "driver" (F1).
   const pickDraftSingle = (sportId: string, kind: "team" | "driver", entry: FollowedTeam) => {
     if (!draftPrefs) return;
@@ -392,24 +402,47 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
   // --- Sport events for followed sports/teams/drivers ---
   const [sportEvents, setSportEvents] = useState<SportEvent[]>([]);
   const [sportEventsLoading, setSportEventsLoading] = useState(false);
-  // "Eventos deportivos" se muestra de a 5, paginado (como un carrusel que avanza solo).
-  const SPORT_EVENTS_PAGE_SIZE = 5;
-  const [sportEventsPage, setSportEventsPage] = useState(1);
-  const sortedSportEvents = useMemo(
-    () => sportEvents.slice().sort((a, b) => a.date.localeCompare(b.date)).slice(0, 30),
+  // Estilo OneFootball: lista agrupada por día (Ayer/Hoy/Mañana/fechas), con scroll interno y
+  // revelado progresivo (no todo de una) en vez del carrusel paginado de antes — pero acotada,
+  // no infinita: como mucho SPORT_EVENTS_MAX partidos en total, revelados de a
+  // SPORT_EVENTS_BATCH con un botón "Ver más".
+  const SPORT_EVENTS_MAX = 60;
+  const SPORT_EVENTS_BATCH = 12;
+  const [sportEventsRevealCount, setSportEventsRevealCount] = useState(SPORT_EVENTS_BATCH);
+  const sportEventsSorted = useMemo(
+    () =>
+      sportEvents
+        .slice()
+        .sort((a, b) => `${a.date}${a.time || ""}`.localeCompare(`${b.date}${b.time || ""}`))
+        .slice(0, SPORT_EVENTS_MAX),
     [sportEvents]
   );
-  const sportEventsTotalPages = Math.max(1, Math.ceil(sortedSportEvents.length / SPORT_EVENTS_PAGE_SIZE));
-  useEffect(() => { setSportEventsPage(1); }, [sortedSportEvents]);
-  // Carrusel automático: cada 6s avanza a la página siguiente, y vuelve a la primera al llegar
-  // al final. Se detiene solo si hay una sola página (nada que rotar).
-  useEffect(() => {
-    if (sportEventsTotalPages <= 1) return;
-    const id = setInterval(() => {
-      setSportEventsPage((p) => (p >= sportEventsTotalPages ? 1 : p + 1));
-    }, 6000);
-    return () => clearInterval(id);
-  }, [sportEventsTotalPages]);
+  useEffect(() => { setSportEventsRevealCount(SPORT_EVENTS_BATCH); }, [sportEventsSorted]);
+  const visibleSportEvents = sportEventsSorted.slice(0, sportEventsRevealCount);
+
+  const sportDayLabel = (dateStr: string): string => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const d = new Date(`${dateStr}T00:00:00`);
+    const diffDays = Math.round((d.getTime() - today.getTime()) / 86400000);
+    if (diffDays === -1) return "Ayer";
+    if (diffDays === 0) return "Hoy";
+    if (diffDays === 1) return "Mañana";
+    return d.toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" });
+  };
+
+  // Como visibleSportEvents ya viene ordenado por fecha, agrupar es simplemente juntar
+  // corridas consecutivas del mismo día — nunca hace falta reordenar.
+  const sportEventGroups = useMemo(() => {
+    const groups: { label: string; events: SportEvent[] }[] = [];
+    for (const ev of visibleSportEvents) {
+      const label = sportDayLabel(ev.date);
+      const last = groups[groups.length - 1];
+      if (last && last.label === label) last.events.push(ev);
+      else groups.push({ label, events: [ev] });
+    }
+    return groups;
+  }, [visibleSportEvents]);
   // Seguir varios equipos dispara varios fetches secuenciales a ESPN (uno por liga por club),
   // así que este efecto puede tardar bastante y solaparse con una corrida más nueva (ej. el
   // usuario agrega/edita equipos de nuevo mientras la anterior todavía está en vuelo). Sin
@@ -420,12 +453,12 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
     if (!prefsLoaded || !prefs) return;
     const myGeneration = ++sportFetchGeneration.current;
 
-    // Se guardan en localStorage por firma de preferencias (deportes/equipos seguidos) + un
-    // TTL — así recargar la página, o volver a esta pestaña, no dispara de nuevo las llamadas
-    // a ESPN/F1/NBA cada vez, solo cuando cambió algo que seguís o pasó bastante tiempo.
-    const signature = JSON.stringify({ sports: prefs.followedSports, teams: prefs.followedTeams });
+    // Se guardan en localStorage por firma de preferencias (deportes/equipos/competencias
+    // seguidas) + un TTL corto — el caché real y compartido ya vive en Firestore (refrescado
+    // cada 15 min por el scheduled function), esto solo evita releerlo en cada render.
+    const signature = JSON.stringify({ sports: prefs.followedSports, teams: prefs.followedTeams, competitions: prefs.followedCompetitions });
     const cacheKey = `sj_sport_events_cache_${userId}`;
-    const SPORT_EVENTS_TTL_MS = 3 * 60 * 60 * 1000; // 3h
+    const SPORT_EVENTS_TTL_MS = 2 * 60 * 1000; // 2min — hay partidos en vivo, no conviene más
     try {
       const cachedRaw = localStorage.getItem(cacheKey);
       if (cachedRaw) {
@@ -440,7 +473,7 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
     }
 
     setSportEventsLoading(true);
-    fetchFollowedSportEvents(prefs)
+    fetchFollowedSportEventsFromCache(prefs)
       .then((events) => {
         // Una corrida más nueva ya arrancó (el usuario cambió equipos de nuevo antes de que
         // esta terminara) — descartar esta respuesta en vez de pisar el resultado más actual.
@@ -464,7 +497,7 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
         if (myGeneration === sportFetchGeneration.current) setSportEventsLoading(false);
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prefsLoaded, prefs?.followedSports.join(","), JSON.stringify(prefs?.followedTeams || {})]);
+  }, [prefsLoaded, prefs?.followedSports.join(","), JSON.stringify(prefs?.followedTeams || {}), (prefs?.followedCompetitions || []).join(",")]);
 
   // --- Calendar: San Juan + followed sport events, merged by ISO date ---
   const eventsByDate = useMemo(() => {
@@ -854,7 +887,26 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
                   )}
 
                   {isOpen && sportId === "futbol" && (
-                    <div className="space-y-2">
+                    <div className="space-y-3">
+                      <div>
+                        <p className="text-[10px] font-bold text-zinc-400 uppercase mb-1.5">
+                          Competencias (todos sus partidos)
+                        </p>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                          {FOLLOWABLE_COMPETITIONS.map((comp) => (
+                            <button
+                              key={comp.id}
+                              type="button"
+                              onClick={() => toggleDraftCompetition(comp.id)}
+                              className={PICK_BTN((draftPrefs.followedCompetitions || []).includes(comp.id))}
+                            >
+                              <Trophy className="w-4 h-4 shrink-0" />
+                              <span className="truncate">{comp.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <p className="text-[10px] font-bold text-zinc-400 uppercase">O elegí un equipo puntual</p>
                       {!footballLeague ? (
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
                           {FOOTBALL_LEAGUES.map((l) => (
@@ -1043,29 +1095,33 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
           </div>
         ) : sportEvents.length === 0 ? (
           <p className="min-h-[292px] flex items-center text-xs text-zinc-500">
-            {prefs?.followedSports.length ? "No hay próximos eventos por ahora." : "Elegí al menos un deporte desde el botón de configuración."}
+            {prefs?.followedSports.length ? "No hay próximos eventos por ahora." : "Elegí al menos un deporte o competencia desde el botón de configuración."}
           </p>
         ) : (
-          <div className="space-y-2">
-            {/* Alto mínimo fijo (una página completa de 5 partidos) para que la tarjeta no se
-                achique en una página con menos partidos — así la paginación de abajo queda
-                siempre pegada al mismo lugar en vez de subir y bajar entre páginas. */}
-            <div className="overflow-hidden min-h-[292px]">
-              <AnimatePresence mode="wait" initial={false}>
-                <motion.div
-                  key={sportEventsPage}
-                  initial={{ opacity: 0, x: 24 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -24 }}
-                  transition={{ duration: 0.35, ease: "easeInOut" }}
-                  className="space-y-1.5"
-                >
-                  {sortedSportEvents
-                    .slice((sportEventsPage - 1) * SPORT_EVENTS_PAGE_SIZE, sportEventsPage * SPORT_EVENTS_PAGE_SIZE)
-                    .map((ev) => {
+          <div className="space-y-3">
+            {/* Estilo OneFootball: agrupado por día, con scroll interno (alto fijo, no crece la
+                tarjeta) y revelado progresivo animado — nunca todo de una, y con un tope total
+                (SPORT_EVENTS_MAX) en vez de una lista infinita. */}
+            <div className="h-[420px] overflow-y-auto pr-1 space-y-4">
+              {sportEventGroups.map((group) => (
+                <div key={group.label}>
+                  <p className="text-[10px] font-extrabold uppercase tracking-widest text-zinc-400 mb-1.5 capitalize sticky top-0 bg-white dark:bg-zinc-900 py-0.5">
+                    {group.label}
+                  </p>
+                  <div className="space-y-1.5">
+                    {group.events.map((ev) => {
                       const scheduled = isSportScheduled(ev);
+                      const isLive = ev.status === "live";
+                      const isFinished = ev.status === "finished";
+                      const hasScore = ev.homeScore !== undefined && ev.awayScore !== undefined;
                       return (
-                        <div key={ev.id} className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800">
+                        <motion.div
+                          key={ev.id}
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.25 }}
+                          className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800"
+                        >
                           <div className="flex items-center -space-x-2 shrink-0">
                             {ev.sportId === "f1" && sportLogos.f1 ? (
                               <img src={sportLogos.f1} alt="" className="w-6 h-6 object-contain brightness-0 dark:invert" />
@@ -1078,7 +1134,22 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
                           </div>
                           <div className="min-w-0 flex-1">
                             <p className="text-xs font-extrabold text-zinc-900 dark:text-zinc-100 truncate">{ev.title}</p>
-                            <p className="text-[10px] text-zinc-500 dark:text-zinc-400">{ev.leagueName} · {ev.date}{ev.time ? ` ${ev.time}` : ""}</p>
+                            <p className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate">{ev.leagueName}</p>
+                          </div>
+                          <div className="shrink-0 text-right">
+                            {isLive ? (
+                              <span className="text-[9px] font-extrabold text-red-500 dark:text-red-400 uppercase tracking-wide flex items-center gap-1 justify-end">
+                                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                                {ev.statusText || "En vivo"}
+                              </span>
+                            ) : isFinished ? (
+                              <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wide">Finalizado</span>
+                            ) : (
+                              <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-bold">{ev.time || ""}</span>
+                            )}
+                            {hasScore ? (
+                              <p className="text-xs font-extrabold text-zinc-900 dark:text-zinc-100">{ev.homeScore} - {ev.awayScore}</p>
+                            ) : null}
                           </div>
                           <button
                             type="button"
@@ -1090,46 +1161,23 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
                           >
                             {scheduled ? <Bell className="w-3.5 h-3.5 fill-current" /> : <BellOff className="w-3.5 h-3.5" />}
                           </button>
-                        </div>
+                        </motion.div>
                       );
                     })}
-                </motion.div>
-              </AnimatePresence>
-            </div>
-
-            {sportEventsTotalPages > 1 && (
-              <div className="flex items-center justify-between gap-2 pt-1">
-                <button
-                  type="button"
-                  title="Página anterior"
-                  onClick={() => setSportEventsPage((p) => (p === 1 ? sportEventsTotalPages : p - 1))}
-                  className="p-1.5 rounded-full bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 cursor-pointer transition-colors"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-                <div className="flex items-center gap-1.5">
-                  {Array.from({ length: sportEventsTotalPages }).map((_, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      title={`Página ${i + 1}`}
-                      onClick={() => setSportEventsPage(i + 1)}
-                      className={`h-1.5 rounded-full transition-all cursor-pointer ${
-                        sportEventsPage === i + 1 ? "w-4 bg-primary" : "w-1.5 bg-zinc-300 dark:bg-zinc-700"
-                      }`}
-                    />
-                  ))}
+                  </div>
                 </div>
+              ))}
+
+              {sportEventsRevealCount < sportEventsSorted.length && (
                 <button
                   type="button"
-                  title="Página siguiente"
-                  onClick={() => setSportEventsPage((p) => (p === sportEventsTotalPages ? 1 : p + 1))}
-                  className="p-1.5 rounded-full bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 cursor-pointer transition-colors"
+                  onClick={() => setSportEventsRevealCount((c) => Math.min(c + SPORT_EVENTS_BATCH, sportEventsSorted.length))}
+                  className="w-full py-2 rounded-xl text-[11px] font-bold text-primary bg-primary/10 hover:bg-primary/20 transition-all cursor-pointer"
                 >
-                  <ChevronRight className="w-4 h-4" />
+                  Ver más
                 </button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         )}
       </div>

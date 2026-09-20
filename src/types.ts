@@ -610,6 +610,9 @@ export interface FollowedTeam {
 export interface EventPreferences {
   followedSports: string[]; // SportCatalogEntry ids
   followedTeams: Record<string, FollowedTeam[]>; // sportId -> teams followed within it
+  /** Competencias enteras seguidas (código ESPN, ej. "arg.1") — muestran todos sus partidos,
+   *  no solo los de un equipo puntual. */
+  followedCompetitions?: string[];
   updatedAt: number;
 }
 
@@ -624,6 +627,14 @@ export interface SportEvent {
   homeTeamBadge?: string;
   awayTeamBadge?: string;
   venue?: string;
+  /** Estado real del partido (cuando se conoce) — para distinguir vivo/jugado/por jugar en el
+   *  feed de "Eventos deportivos" estilo OneFootball. */
+  status?: "live" | "upcoming" | "finished";
+  statusText?: string;
+  homeScore?: string;
+  awayScore?: string;
+  /** Código de competencia de ESPN (ej. "arg.1") — para el filtro por competencia seguida. */
+  competitionId?: string;
 }
 
 
