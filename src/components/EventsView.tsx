@@ -402,13 +402,11 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
   // --- Sport events for followed sports/teams/drivers ---
   const [sportEvents, setSportEvents] = useState<SportEvent[]>([]);
   const [sportEventsLoading, setSportEventsLoading] = useState(false);
-  // Estilo OneFootball: lista agrupada por día (Ayer/Hoy/Mañana/fechas), con scroll interno y
-  // revelado progresivo (no todo de una) en vez del carrusel paginado de antes — pero acotada,
-  // no infinita: como mucho SPORT_EVENTS_MAX partidos en total, revelados de a
-  // SPORT_EVENTS_BATCH con un botón "Ver más".
+  // Estilo OneFootball: arriba, un selector de días (Ayer/Hoy/Mañana/fechas) a modo de filtro;
+  // abajo, los partidos de ese día — primero los de los equipos que seguís, después los de las
+  // competencias seguidas, en secciones separadas. Acotado (no infinita) con scroll interno y
+  // animación de aparición.
   const SPORT_EVENTS_MAX = 60;
-  const SPORT_EVENTS_BATCH = 12;
-  const [sportEventsRevealCount, setSportEventsRevealCount] = useState(SPORT_EVENTS_BATCH);
   const sportEventsSorted = useMemo(
     () =>
       sportEvents
@@ -417,8 +415,6 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
         .slice(0, SPORT_EVENTS_MAX),
     [sportEvents]
   );
-  useEffect(() => { setSportEventsRevealCount(SPORT_EVENTS_BATCH); }, [sportEventsSorted]);
-  const visibleSportEvents = sportEventsSorted.slice(0, sportEventsRevealCount);
 
   const sportDayLabel = (dateStr: string): string => {
     const today = new Date();
@@ -428,21 +424,100 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
     if (diffDays === -1) return "Ayer";
     if (diffDays === 0) return "Hoy";
     if (diffDays === 1) return "Mañana";
-    return d.toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" });
+    return d.toLocaleDateString("es-AR", { weekday: "short", day: "numeric", month: "short" });
   };
 
-  // Como visibleSportEvents ya viene ordenado por fecha, agrupar es simplemente juntar
-  // corridas consecutivas del mismo día — nunca hace falta reordenar.
-  const sportEventGroups = useMemo(() => {
-    const groups: { label: string; events: SportEvent[] }[] = [];
-    for (const ev of visibleSportEvents) {
-      const label = sportDayLabel(ev.date);
-      const last = groups[groups.length - 1];
-      if (last && last.label === label) last.events.push(ev);
-      else groups.push({ label, events: [ev] });
+  // Días disponibles, en orden — de acá salen las pestañas del filtro.
+  const sportEventDays = useMemo(() => {
+    const days: string[] = [];
+    for (const ev of sportEventsSorted) {
+      if (days[days.length - 1] !== ev.date) days.push(ev.date);
     }
-    return groups;
-  }, [visibleSportEvents]);
+    return days;
+  }, [sportEventsSorted]);
+
+  const todayIso = useMemo(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }, []);
+
+  const [selectedSportDay, setSelectedSportDay] = useState<string | null>(null);
+  useEffect(() => {
+    if (selectedSportDay && sportEventDays.includes(selectedSportDay)) return;
+    // Por defecto: hoy si tiene partidos, si no el primer día disponible (suele ser "ayer").
+    setSelectedSportDay(sportEventDays.includes(todayIso) ? todayIso : sportEventDays[0] || null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sportEventDays, todayIso]);
+
+  const selectedSportDayEvents = useMemo(
+    () => sportEventsSorted.filter((ev) => ev.date === selectedSportDay),
+    [sportEventsSorted, selectedSportDay]
+  );
+  // Los partidos de un equipo seguido van primero; el resto son de competencias seguidas enteras.
+  const selectedSportDayTeamEvents = useMemo(
+    () => selectedSportDayEvents.filter((ev) => ev.matchedBy !== "competition"),
+    [selectedSportDayEvents]
+  );
+  const selectedSportDayCompetitionEvents = useMemo(
+    () => selectedSportDayEvents.filter((ev) => ev.matchedBy === "competition"),
+    [selectedSportDayEvents]
+  );
+
+  const renderSportEventRow = (ev: SportEvent) => {
+    const scheduled = isSportScheduled(ev);
+    const isLive = ev.status === "live";
+    const isFinished = ev.status === "finished";
+    const hasScore = ev.homeScore !== undefined && ev.awayScore !== undefined;
+    return (
+      <motion.div
+        key={ev.id}
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.25 }}
+        className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800"
+      >
+        <div className="flex items-center -space-x-2 shrink-0">
+          {ev.sportId === "f1" && sportLogos.f1 ? (
+            <img src={sportLogos.f1} alt="" className="w-6 h-6 object-contain brightness-0 dark:invert" />
+          ) : (
+            <>
+              {ev.homeTeamBadge && <img src={ev.homeTeamBadge} alt="" className="w-6 h-6 rounded-full bg-white object-contain border border-white" />}
+              {ev.awayTeamBadge && <img src={ev.awayTeamBadge} alt="" className="w-6 h-6 rounded-full bg-white object-contain border border-white" />}
+            </>
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-extrabold text-zinc-900 dark:text-zinc-100 truncate">{ev.title}</p>
+          <p className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate">{ev.leagueName}</p>
+        </div>
+        <div className="shrink-0 text-right">
+          {isLive ? (
+            <span className="text-[9px] font-extrabold text-red-500 dark:text-red-400 uppercase tracking-wide flex items-center gap-1 justify-end">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+              {ev.statusText || "En vivo"}
+            </span>
+          ) : isFinished ? (
+            <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wide">Finalizado</span>
+          ) : (
+            <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-bold">{ev.time || ""}</span>
+          )}
+          {hasScore ? (
+            <p className="text-xs font-extrabold text-zinc-900 dark:text-zinc-100">{ev.homeScore} - {ev.awayScore}</p>
+          ) : null}
+        </div>
+        <button
+          type="button"
+          title={scheduled ? "Quitar de mis turnos" : "Agendar en mis turnos (Ocio)"}
+          onClick={() => toggleSportSchedule(ev)}
+          className={`p-1.5 rounded-full shrink-0 transition-all cursor-pointer ${
+            scheduled ? "bg-primary text-white" : "bg-white dark:bg-zinc-950 text-zinc-400 dark:text-zinc-500 hover:text-primary border border-slate-200 dark:border-zinc-800"
+          }`}
+        >
+          {scheduled ? <Bell className="w-3.5 h-3.5 fill-current" /> : <BellOff className="w-3.5 h-3.5" />}
+        </button>
+      </motion.div>
+    );
+  };
   // Seguir varios equipos dispara varios fetches secuenciales a ESPN (uno por liga por club),
   // así que este efecto puede tardar bastante y solaparse con una corrida más nueva (ej. el
   // usuario agrega/edita equipos de nuevo mientras la anterior todavía está en vuelo). Sin
@@ -1099,83 +1174,51 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
           </p>
         ) : (
           <div className="space-y-3">
-            {/* Estilo OneFootball: agrupado por día, con scroll interno (alto fijo, no crece la
-                tarjeta) y revelado progresivo animado — nunca todo de una, y con un tope total
-                (SPORT_EVENTS_MAX) en vez de una lista infinita. */}
-            <div className="h-[420px] overflow-y-auto pr-1 space-y-4">
-              {sportEventGroups.map((group) => (
-                <div key={group.label}>
-                  <p className="text-[10px] font-extrabold uppercase tracking-widest text-zinc-400 mb-1.5 capitalize sticky top-0 bg-white dark:bg-zinc-900 py-0.5">
-                    {group.label}
-                  </p>
-                  <div className="space-y-1.5">
-                    {group.events.map((ev) => {
-                      const scheduled = isSportScheduled(ev);
-                      const isLive = ev.status === "live";
-                      const isFinished = ev.status === "finished";
-                      const hasScore = ev.homeScore !== undefined && ev.awayScore !== undefined;
-                      return (
-                        <motion.div
-                          key={ev.id}
-                          initial={{ opacity: 0, y: 8 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ duration: 0.25 }}
-                          className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800"
-                        >
-                          <div className="flex items-center -space-x-2 shrink-0">
-                            {ev.sportId === "f1" && sportLogos.f1 ? (
-                              <img src={sportLogos.f1} alt="" className="w-6 h-6 object-contain brightness-0 dark:invert" />
-                            ) : (
-                              <>
-                                {ev.homeTeamBadge && <img src={ev.homeTeamBadge} alt="" className="w-6 h-6 rounded-full bg-white object-contain border border-white" />}
-                                {ev.awayTeamBadge && <img src={ev.awayTeamBadge} alt="" className="w-6 h-6 rounded-full bg-white object-contain border border-white" />}
-                              </>
-                            )}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-extrabold text-zinc-900 dark:text-zinc-100 truncate">{ev.title}</p>
-                            <p className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate">{ev.leagueName}</p>
-                          </div>
-                          <div className="shrink-0 text-right">
-                            {isLive ? (
-                              <span className="text-[9px] font-extrabold text-red-500 dark:text-red-400 uppercase tracking-wide flex items-center gap-1 justify-end">
-                                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                                {ev.statusText || "En vivo"}
-                              </span>
-                            ) : isFinished ? (
-                              <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wide">Finalizado</span>
-                            ) : (
-                              <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-bold">{ev.time || ""}</span>
-                            )}
-                            {hasScore ? (
-                              <p className="text-xs font-extrabold text-zinc-900 dark:text-zinc-100">{ev.homeScore} - {ev.awayScore}</p>
-                            ) : null}
-                          </div>
-                          <button
-                            type="button"
-                            title={scheduled ? "Quitar de mis turnos" : "Agendar en mis turnos (Ocio)"}
-                            onClick={() => toggleSportSchedule(ev)}
-                            className={`p-1.5 rounded-full shrink-0 transition-all cursor-pointer ${
-                              scheduled ? "bg-primary text-white" : "bg-white dark:bg-zinc-950 text-zinc-400 dark:text-zinc-500 hover:text-primary border border-slate-200 dark:border-zinc-800"
-                            }`}
-                          >
-                            {scheduled ? <Bell className="w-3.5 h-3.5 fill-current" /> : <BellOff className="w-3.5 h-3.5" />}
-                          </button>
-                        </motion.div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-
-              {sportEventsRevealCount < sportEventsSorted.length && (
+            {/* Estilo OneFootball: pestañas de día (Ayer/Hoy/Mañana/fechas) como filtro arriba,
+                en vez de headers pegados dentro de la lista — como mucho SPORT_EVENTS_MAX
+                partidos en total (acá adentro nunca es infinita). */}
+            <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
+              {sportEventDays.map((day) => (
                 <button
+                  key={day}
                   type="button"
-                  onClick={() => setSportEventsRevealCount((c) => Math.min(c + SPORT_EVENTS_BATCH, sportEventsSorted.length))}
-                  className="w-full py-2 rounded-xl text-[11px] font-bold text-primary bg-primary/10 hover:bg-primary/20 transition-all cursor-pointer"
+                  onClick={() => setSelectedSportDay(day)}
+                  className={`shrink-0 px-3 py-1.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide capitalize transition-all cursor-pointer ${
+                    day === selectedSportDay
+                      ? "bg-primary text-white"
+                      : "bg-slate-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+                  }`}
                 >
-                  Ver más
+                  {sportDayLabel(day)}
                 </button>
+              ))}
+            </div>
+
+            {/* Dentro del día elegido: primero los partidos de tus equipos, después los de las
+                competencias que seguís enteras, en secciones separadas. Contenedor con scroll
+                interno (alto fijo, no crece la tarjeta) y animación de aparición por fila. */}
+            <div className="h-[380px] overflow-y-auto pr-1 space-y-4">
+              {selectedSportDayEvents.length === 0 ? (
+                <p className="text-xs text-zinc-500 py-4 text-center">No hay partidos ese día.</p>
+              ) : (
+                <>
+                  {selectedSportDayTeamEvents.length > 0 && (
+                    <div>
+                      <p className="text-[10px] font-extrabold uppercase tracking-widest text-zinc-400 mb-1.5 sticky top-0 bg-white dark:bg-zinc-900 py-0.5">
+                        Tus equipos
+                      </p>
+                      <div className="space-y-1.5">{selectedSportDayTeamEvents.map(renderSportEventRow)}</div>
+                    </div>
+                  )}
+                  {selectedSportDayCompetitionEvents.length > 0 && (
+                    <div>
+                      <p className="text-[10px] font-extrabold uppercase tracking-widest text-zinc-400 mb-1.5 sticky top-0 bg-white dark:bg-zinc-900 py-0.5">
+                        Competencias que seguís
+                      </p>
+                      <div className="space-y-1.5">{selectedSportDayCompetitionEvents.map(renderSportEventRow)}</div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>

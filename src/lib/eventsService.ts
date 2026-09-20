@@ -384,7 +384,7 @@ async function getCachedSportEvents(): Promise<CachedSportEvent[]> {
   return data.items || [];
 }
 
-function cachedEventToSportEvent(ev: CachedSportEvent): SportEvent {
+function cachedEventToSportEvent(ev: CachedSportEvent, matchedBy: "team" | "competition"): SportEvent {
   return {
     id: ev.id,
     sportId: ev.sportId,
@@ -400,6 +400,7 @@ function cachedEventToSportEvent(ev: CachedSportEvent): SportEvent {
     homeScore: ev.homeScore,
     awayScore: ev.awayScore,
     competitionId: ev.competitionId,
+    matchedBy,
   };
 }
 
@@ -436,10 +437,13 @@ export async function fetchFollowedSportEventsFromCache(prefs: EventPreferences 
         const byTeam = (ev.homeTeamId && followedIds.has(ev.homeTeamId)) || (ev.awayTeamId && followedIds.has(ev.awayTeamId));
         if (!byCompetition && !byTeam) continue;
 
-        results.push(cachedEventToSportEvent(ev));
+        // Un partido de un equipo seguido cuenta como "tus equipos" aunque también pertenezca
+        // a una competencia seguida — el usuario quiere ver primero los de sus equipos.
+        results.push(cachedEventToSportEvent(ev, byTeam ? "team" : "competition"));
       }
     } else {
-      // Caché todavía vacío — respaldo con el fetch directo por equipo de siempre.
+      // Caché todavía vacío — respaldo con el fetch directo por equipo de siempre. Este camino
+      // no sabe seguir competencias enteras, así que todo lo que trae es "de tus equipos".
       if (prefs.followedSports.includes("futbol")) {
         const teams = prefs.followedTeams["futbol"] || [];
         const clubResults = await Promise.allSettled(
@@ -448,11 +452,14 @@ export async function fetchFollowedSportEventsFromCache(prefs: EventPreferences 
             return team ? fetchFootballFixturesForTeam(team) : Promise.resolve([]);
           })
         );
-        clubResults.forEach((r) => { if (r.status === "fulfilled") results.push(...r.value); });
+        clubResults.forEach((r) => {
+          if (r.status === "fulfilled") results.push(...r.value.map((ev) => ({ ...ev, matchedBy: "team" as const })));
+        });
       }
       if (prefs.followedSports.includes("nba")) {
         try {
-          results.push(...(await fetchNbaFollowedEvents(prefs.followedTeams["nba"] || [])));
+          const nbaEvents = await fetchNbaFollowedEvents(prefs.followedTeams["nba"] || []);
+          results.push(...nbaEvents.map((ev) => ({ ...ev, matchedBy: "team" as const })));
         } catch (err) {
           console.warn("[eventsService] Error fetching NBA events:", err);
         }
@@ -462,7 +469,8 @@ export async function fetchFollowedSportEventsFromCache(prefs: EventPreferences 
 
   if (prefs.followedSports.includes("f1")) {
     try {
-      results.push(...(await fetchF1Races()));
+      const f1Events = await fetchF1Races();
+      results.push(...f1Events.map((ev) => ({ ...ev, matchedBy: "team" as const })));
     } catch (err) {
       console.warn("[eventsService] Error fetching F1 races:", err);
     }
