@@ -1,58 +1,7 @@
 import { TurnoCompromiso } from "../types";
 import { TEAMS, Team } from "../data/teams";
 import { saveCategoryToFirestore, getEffectiveUserId } from "./firestoreSyncService";
-
-const LEAGUE_CODES: Record<string, string> = {
-  "Liga Profesional": "arg.1",
-  "Premier League": "eng.1",
-  LaLiga: "esp.1",
-  "Serie A": "ita.1",
-  Bundesliga: "ger.1",
-  "Ligue 1": "fra.1",
-};
-
-const FALLBACK_RIVALS: Record<string, { rival: string; rivalLogo: string; venue: string }> = {
-  "Boca Juniors": {
-    rival: "River Plate",
-    rivalLogo: "https://paladarnegro.net/escudoteca/argentina/primeradivision/png/river.png",
-    venue: "La Bombonera",
-  },
-  "River Plate": {
-    rival: "Boca Juniors",
-    rivalLogo: "https://paladarnegro.net/escudoteca/argentina/primeradivision/png/boca.png",
-    venue: "Más Monumental",
-  },
-  "Racing Club": {
-    rival: "Independiente",
-    rivalLogo: "https://paladarnegro.net/escudoteca/argentina/primeradivision/png/independiente.png",
-    venue: "El Cilindro de Avellaneda",
-  },
-  "Independiente": {
-    rival: "Racing Club",
-    rivalLogo: "https://paladarnegro.net/escudoteca/argentina/primeradivision/png/racing.png",
-    venue: "Estadio Libertadores de América",
-  },
-  "San Lorenzo": {
-    rival: "Huracán",
-    rivalLogo: "https://paladarnegro.net/escudoteca/argentina/primeradivision/png/huracan.png",
-    venue: "Estadio Pedro Bidegain",
-  },
-  "Real Madrid": {
-    rival: "FC Barcelona",
-    rivalLogo: "https://assets.footylogos.com/logos/fc-barcelona/fc-barcelona-logo-footylogos.svg",
-    venue: "Santiago Bernabéu",
-  },
-  "FC Barcelona": {
-    rival: "Real Madrid",
-    rivalLogo: "https://assets.footylogos.com/logos/real-madrid/real-madrid-logo-footylogos.svg",
-    venue: "Spotify Camp Nou",
-  },
-  Arsenal: {
-    rival: "Chelsea",
-    rivalLogo: "https://assets.footylogos.com/logos/chelsea/chelsea-logo-footylogos.svg",
-    venue: "Emirates Stadium",
-  },
-};
+import { FOOTBALL_TEAM_ESPN_IDS } from "../data/espnTeamIds";
 
 export const TEAM_STADIUMS: Record<string, string> = {
   // Argentina
@@ -245,219 +194,59 @@ export function getLeagueCodesForTeam(team: Team | undefined): string[] {
   return codes;
 }
 
-// Fetch or generate month's matches for a team
+// Fetch this month's real matches for a team from ESPN's per-team schedule endpoint.
 export async function generateMonthlyMatchesForTeam(
   favoriteTeamName: string,
   targetDate: Date = new Date()
 ): Promise<TurnoCompromiso[]> {
   const teamObj: Team | undefined = TEAMS.find((t) => t.name === favoriteTeamName);
-  const teamLogo = teamObj?.logo || getLogoForTeam(favoriteTeamName);
   const leagueName = teamObj?.league || "Liga Profesional";
 
   const year = targetDate.getFullYear();
   const month = targetDate.getMonth(); // 0-indexed
+  const monthStart = new Date(year, month, 1);
+  const monthEnd = new Date(year, month + 1, 0, 23, 59, 59, 999);
 
-  // Format YYYY-MM-DD
-  const firstDayStr = `${year}-${String(month + 1).padStart(2, "0")}-01`;
-  const lastDayObj = new Date(year, month + 1, 0);
-  const lastDayStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(lastDayObj.getDate()).padStart(2, "0")}`;
+  const matchItems: TurnoCompromiso[] = [];
 
-  const cleanQuery = favoriteTeamName
-    .toLowerCase()
-    .replace(/fc|club|de|cd|real|atletico|deportivo/g, "")
-    .trim();
+  // Antes, si la API no devolvía al menos 3 partidos para el mes (algo que pasaba siempre,
+  // porque el scoreboard con "dates" como rango le da 400 a la API de ESPN sin importar la
+  // liga), el código directamente INVENTABA 4 partidos contra un rival de relleno en fechas
+  // generadas al azar y los guardaba como turnos reales — así aparecía, por ejemplo, "Boca vs
+  // River" en una fecha que no tenía nada que ver con el fixture real. Se saca esa invención
+  // por completo: si no hay partidos reales este mes, la lista vuelve vacía.
+  const espnId = FOOTBALL_TEAM_ESPN_IDS[favoriteTeamName];
+  if (!espnId) return matchItems;
 
-  let matchItems: TurnoCompromiso[] = [];
-
-  // Try API first
+  const leagueCode = getLeagueCodesForTeam(teamObj)[0] || "arg.1";
   try {
-    const fmt = (d: Date) =>
-      `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(
-        d.getUTCDate()
-      ).padStart(2, "0")}`;
+    const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${leagueCode}/teams/${espnId}/schedule`);
+    if (!res.ok) return matchItems;
+    const data = await res.json();
+    const events: any[] = data.events || [];
 
-    const dateRange = `${fmt(new Date(year, month, 1))}-${fmt(lastDayObj)}`;
-    const leagueCodes = getLeagueCodesForTeam(teamObj);
+    for (const ev of events) {
+      const eventDate = new Date(ev.date);
+      if (isNaN(eventDate.getTime()) || eventDate < monthStart || eventDate > monthEnd) continue;
 
-    const apiPromises = leagueCodes.map(async (code) => {
-      try {
-        const url = `https://site.api.espn.com/apis/site/v2/sports/soccer/${code}/scoreboard?dates=${dateRange}`;
-        const res = await fetch(url).catch(() => null);
-        if (res && res.ok) {
-          const data = await res.json().catch(() => null);
-          if (data) return { code, data };
-        }
-      } catch (e) {
-        // Silently ignore inactive league codes
-      }
-      return null;
-    });
+      const comp = ev.competitions?.[0];
+      const competitors = comp?.competitors || [];
+      const homeComp = competitors.find((c: any) => c.homeAway === "home");
+      const awayComp = competitors.find((c: any) => c.homeAway === "away");
+      if (!comp || !homeComp || !awayComp) continue;
 
-    const apiResults = await Promise.all(apiPromises);
-    const processedEventIds = new Set<string>();
+      const homeName = homeComp.team?.displayName || favoriteTeamName;
+      const awayName = awayComp.team?.displayName || "Rival";
 
-    for (const resObj of apiResults) {
-      if (!resObj) continue;
-      const { code, data } = resObj;
-      const events: any[] = data.events || [];
+      const homeLogo = getLogoForTeam(homeName, homeComp.team?.logos?.[0]?.href || homeComp.team?.logo);
+      const awayLogo = getLogoForTeam(awayName, awayComp.team?.logos?.[0]?.href || awayComp.team?.logo);
 
-      const teamEvents = events.filter((e) => {
-        const comps = e.competitions?.[0]?.competitors || [];
-        return comps.some((c: any) => {
-          const cn = c.team?.displayName?.toLowerCase() || "";
-          return (
-            cn.includes(cleanQuery) ||
-            cleanQuery.includes(cn) ||
-            c.team?.shortDisplayName?.toLowerCase()?.includes(cleanQuery)
-          );
-        });
-      });
+      const dateStr = `${eventDate.getFullYear()}-${String(eventDate.getMonth() + 1).padStart(2, "0")}-${String(eventDate.getDate()).padStart(2, "0")}`;
+      const timeStr = `${String(eventDate.getHours()).padStart(2, "0")}:${String(eventDate.getMinutes()).padStart(2, "0")}`;
 
-      for (const ev of teamEvents) {
-        if (processedEventIds.has(ev.id)) continue;
-        processedEventIds.add(ev.id);
-
-        const comp = ev.competitions?.[0];
-        if (!comp) continue;
-
-        const homeComp = comp.competitors?.find((c: any) => c.homeAway === "home");
-        const awayComp = comp.competitors?.find((c: any) => c.homeAway === "away");
-
-        const homeName = homeComp?.team?.displayName || favoriteTeamName;
-        const awayName = awayComp?.team?.displayName || "Rival FC";
-
-        const homeLogo = getLogoForTeam(
-          homeName,
-          homeComp?.team?.logo || homeComp?.team?.logos?.[0]?.href
-        );
-        const awayLogo = getLogoForTeam(
-          awayName,
-          awayComp?.team?.logo || awayComp?.team?.logos?.[0]?.href
-        );
-
-        const eventDate = new Date(ev.date);
-        const dateStr = `${eventDate.getFullYear()}-${String(eventDate.getMonth() + 1).padStart(2, "0")}-${String(eventDate.getDate()).padStart(2, "0")}`;
-        const timeStr = `${String(eventDate.getHours()).padStart(2, "0")}:${String(eventDate.getMinutes()).padStart(2, "0")}`;
-
-        // Always resolve stadium based on home team
-        const apiVenue = comp.venue?.displayName;
-        const fallbackStadium = getStadiumForTeam(homeName);
-        const venue = apiVenue && !apiVenue.toLowerCase().includes("default") && apiVenue.length > 3
-          ? apiVenue
-          : fallbackStadium;
-
-        const id = `match-${favoriteTeamName.replace(/\s+/g, "_")}-${ev.id || dateStr}`;
-        const competitionName = data.leagues?.[0]?.name || leagueName;
-
-        let venueLat: number | null = null;
-        let venueLon: number | null = null;
-        try {
-          const geoRes = await fetch(`/.netlify/functions/geocode-place?q=${encodeURIComponent(venue)}`);
-          if (geoRes.ok) {
-            const geoData = await geoRes.json();
-            if (Array.isArray(geoData) && geoData.length > 0) {
-              venueLat = parseFloat(geoData[0].lat);
-              venueLon = parseFloat(geoData[0].lon);
-            }
-          }
-        } catch (_) {
-          // If geocoding fails, the match is still created — just without map coordinates.
-        }
-
-        matchItems.push({
-          id,
-          estatus: ev.status?.type?.state === "post",
-          descripcion: `${homeName} vs ${awayName}`,
-          categoria: "Ocio",
-          fecha: `${dateStr}T${timeStr}`,
-          lugar: venue,
-          lat: venueLat,
-          lon: venueLon,
-          informacionPersonalizada: JSON.stringify({
-            homeTeam: homeName,
-            homeLogo,
-            awayTeam: awayName,
-            awayLogo,
-            competition: competitionName,
-          }),
-        });
-      }
-    }
-  } catch (e) {
-    console.warn("API match fetch skipped, generating monthly league fixtures", e);
-  }
-
-  // Fallback: If API gave fewer than 3 matches for the entire month, generate realistic 4-5 monthly fixtures
-  if (matchItems.length < 3) {
-    const rivalPool: { name: string; logo: string }[] = TEAMS.filter(
-      (t) => t.name !== favoriteTeamName && (t.league === leagueName || leagueName.includes(t.league))
-    ).map((t) => ({ name: t.name, logo: t.logo }));
-
-    if (rivalPool.length < 4) {
-      // Add extra fallback rivals
-      const fallbackRival = FALLBACK_RIVALS[favoriteTeamName] || {
-        rival: "Rival FC",
-        rivalLogo: "https://paladarnegro.net/escudoteca/argentina/primeradivision/png/river.png",
-        venue: "Estadio Principal",
-      };
-      rivalPool.push({ name: fallbackRival.rival, logo: fallbackRival.rivalLogo });
-      rivalPool.push({
-        name: "Racing Club",
-        logo: "https://paladarnegro.net/escudoteca/argentina/primeradivision/png/racing.png",
-      });
-      rivalPool.push({
-        name: "Independiente",
-        logo: "https://paladarnegro.net/escudoteca/argentina/primeradivision/png/independiente.png",
-      });
-      rivalPool.push({
-        name: "San Lorenzo",
-        logo: "https://paladarnegro.net/escudoteca/argentina/primeradivision/png/sanlorenzo.png",
-      });
-    }
-
-    // Generate 4 matches across Sundays/Wednesdays of the month
-    const generatedDates: number[] = [];
-    const daysInMonth = lastDayObj.getDate();
-
-    for (let day = 1; day <= daysInMonth; day++) {
-      const d = new Date(year, month, day);
-      const dayOfWeek = d.getDay(); // 0 is Sunday, 3 is Wednesday
-      if (dayOfWeek === 0 || dayOfWeek === 3) {
-        generatedDates.push(day);
-      }
-    }
-
-    // Pick 4 evenly spaced match dates
-    const selectedDays = generatedDates.filter((_, idx) => idx % 2 === 0).slice(0, 4);
-    if (selectedDays.length < 4) {
-      selectedDays.push(7, 14, 21, 28);
-    }
-
-    const fallbackRivalObj = FALLBACK_RIVALS[favoriteTeamName] || {
-      rival: "Rival FC",
-      rivalLogo: "https://paladarnegro.net/escudoteca/argentina/primeradivision/png/river.png",
-      venue: "Estadio Principal",
-    };
-
-    matchItems = [];
-    for (const dayNum of selectedDays) {
-      const idx = selectedDays.indexOf(dayNum);
-      const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
-      const isHome = idx % 2 === 0;
-
-      const rival = rivalPool[idx % rivalPool.length] || {
-        name: fallbackRivalObj.rival,
-        logo: fallbackRivalObj.rivalLogo,
-      };
-
-      const homeName = isHome ? favoriteTeamName : rival.name;
-      const homeLogo = isHome ? teamLogo : rival.logo;
-      const awayName = isHome ? rival.name : favoriteTeamName;
-      const awayLogo = isHome ? rival.logo : teamLogo;
-
-      // Always put the stadium of the home team as location
-      const venue = getStadiumForTeam(homeName);
-      const timeStr = isHome ? "18:00" : "20:30";
+      const apiVenue = comp.venue?.fullName || comp.venue?.displayName;
+      const venue = apiVenue && apiVenue.length > 3 ? apiVenue : getStadiumForTeam(homeName);
+      const competitionName = ev.league?.name || leagueName;
 
       let venueLat: number | null = null;
       let venueLon: number | null = null;
@@ -475,8 +264,8 @@ export async function generateMonthlyMatchesForTeam(
       }
 
       matchItems.push({
-        id: `match-${favoriteTeamName.replace(/\s+/g, "_")}-${dateStr}`,
-        estatus: false,
+        id: `match-${favoriteTeamName.replace(/\s+/g, "_")}-${ev.id || dateStr}`,
+        estatus: comp.status?.type?.state === "post",
         descripcion: `${homeName} vs ${awayName}`,
         categoria: "Ocio",
         fecha: `${dateStr}T${timeStr}`,
@@ -488,10 +277,12 @@ export async function generateMonthlyMatchesForTeam(
           homeLogo,
           awayTeam: awayName,
           awayLogo,
-          competition: leagueName,
+          competition: competitionName,
         }),
       });
     }
+  } catch (e) {
+    console.warn("[matchScheduler] Error fetching monthly matches from ESPN:", e);
   }
 
   return matchItems;
@@ -507,15 +298,19 @@ export async function syncMonthlyMatches(
   const team = favoriteTeamName || "Boca Juniors";
   const now = new Date();
   const currentMonthKey = `${now.getFullYear()}-${now.getMonth() + 1}_${team}`;
-  const lastSyncKey = `monthly_match_sync_${team}`;
+  // "v2": la versión anterior de este sync a veces inventaba partidos falsos cuando la API
+  // fallaba y los guardaba marcando el mes como ya sincronizado — cambiar de key fuerza una
+  // resincronización real (y el reemplazo completo de abajo) la primera vez que corre este
+  // fix, en vez de confiar en la marca vieja y dejar los datos inventados como están.
+  const lastSyncKey = `monthly_match_sync_v2_${team}`;
 
   const lastSync = localStorage.getItem(lastSyncKey);
 
   // Check if current turnos already have matches for this team & month
   const currentMonthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const existingMonthMatches = currentTurnos.filter(
-    (t) => t.categoria === "Ocio" && t.id.startsWith(`match-${team.replace(/\s+/g, "_")}`) && t.fecha.startsWith(currentMonthPrefix)
-  );
+  const isAutoMatchForThisTeamAndMonth = (t: TurnoCompromiso) =>
+    t.categoria === "Ocio" && t.id.startsWith(`match-${team.replace(/\s+/g, "_")}`) && t.fecha.startsWith(currentMonthPrefix);
+  const existingMonthMatches = currentTurnos.filter(isAutoMatchForThisTeamAndMonth);
 
   if (!forceRefresh && lastSync === currentMonthKey && existingMonthMatches.length >= 3) {
     return { addedCount: 0, matches: existingMonthMatches };
@@ -524,9 +319,11 @@ export async function syncMonthlyMatches(
   // Generate / Fetch matches
   const newMatches = await generateMonthlyMatchesForTeam(team, now);
 
-  const newMatchIds = new Set(newMatches.map((m) => m.id));
+  // Reemplazo completo: se sacan TODOS los partidos auto-agendados anteriores para este
+  // equipo y mes (no solo los que comparten id con la tanda nueva) antes de agregar los
+  // reales — así no quedan mezclados partidos inventados de una corrida vieja con los reales.
   const cleaned = currentTurnos
-    .filter((t) => !newMatchIds.has(t.id))
+    .filter((t) => !isAutoMatchForThisTeamAndMonth(t))
     .map((t) => (t.descripcion.includes("⚽") ? { ...t, descripcion: t.descripcion.replace(/⚽\s*/g, "").trim() } : t));
   const updatedTurnos = [...cleaned, ...newMatches];
 

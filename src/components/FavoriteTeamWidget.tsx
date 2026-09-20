@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Activity, RefreshCw, Calendar, Radio, MapPin, Trophy, Shield } from "lucide-react";
 import { TEAMS, Team } from "../data/teams";
 import { getLeagueCodesForTeam, getStadiumForTeam } from "../lib/matchScheduler";
+import { FOOTBALL_TEAM_ESPN_IDS } from "../data/espnTeamIds";
 
 interface FavoriteTeamWidgetProps {
   favoriteTeamName?: string;
@@ -32,44 +33,6 @@ export interface MatchData {
   rawDate?: Date;
 }
 
-const LEAGUE_CODES: Record<string, string> = {
-  "Liga Profesional": "arg.1",
-  "Premier League": "eng.1",
-  LaLiga: "esp.1",
-  "Serie A": "ita.1",
-  Bundesliga: "ger.1",
-  "Ligue 1": "fra.1",
-};
-
-// Fallbacks per team for rich realistic fixtures if off-season / API unavailable
-const FALLBACK_RIVALS: Record<string, { rival: string; rivalLogo: string; venue: string }> = {
-  "Boca Juniors": {
-    rival: "River Plate",
-    rivalLogo: "https://paladarnegro.net/escudoteca/argentina/primeradivision/png/river.png",
-    venue: "La Bombonera",
-  },
-  "River Plate": {
-    rival: "Boca Juniors",
-    rivalLogo: "https://paladarnegro.net/escudoteca/argentina/primeradivision/png/boca.png",
-    venue: "M\u00e1s Monumental",
-  },
-  "Real Madrid": {
-    rival: "FC Barcelona",
-    rivalLogo: "https://assets.footylogos.com/logos/fc-barcelona/fc-barcelona-logo-footylogos.svg",
-    venue: "Santiago Bernab\u00e9u",
-  },
-  "FC Barcelona": {
-    rival: "Real Madrid",
-    rivalLogo: "https://assets.footylogos.com/logos/real-madrid/real-madrid-logo-footylogos.svg",
-    venue: "Spotify Camp Nou",
-  },
-  Arsenal: {
-    rival: "Chelsea",
-    rivalLogo: "https://assets.footylogos.com/logos/chelsea/chelsea-logo-footylogos.svg",
-    venue: "Emirates Stadium",
-  },
-};
-
 export const FavoriteTeamWidget: React.FC<FavoriteTeamWidgetProps> = ({
   favoriteTeamName = "Boca Juniors",
   darkMode,
@@ -97,268 +60,91 @@ export const FavoriteTeamWidget: React.FC<FavoriteTeamWidgetProps> = ({
     return match?.logo || defaultLogo || "";
   };
 
+  // Calendario propio del equipo (.../teams/{id}/schedule, sin fecha) — mismo endpoint ya
+  // confirmado en vivo para "Eventos deportivos" y el resto de los widgets de partidos. Antes
+  // este widget usaba el scoreboard con "dates" como rango (400 seguro) y, cuando fallaba,
+  // directamente INVENTABA un próximo y un último partido contra un rival de relleno
+  // ("River Plate" fijo para Boca) con fechas armadas — de ahí que apareciera un "Boca vs
+  // River" que no tenía nada que ver con el fixture real. Ahora, si no hay datos reales, el
+  // widget simplemente no muestra nada en esa tarjeta.
   const fetchMatches = async () => {
     setLoading(true);
     try {
-      const leagueName = teamObj?.league || "Liga Profesional";
-      const leagueCodes = getLeagueCodesForTeam(teamObj);
+      const espnId = FOOTBALL_TEAM_ESPN_IDS[selectedTeamName];
+      if (!espnId) {
+        setLiveMatch(null);
+        setNextMatch(null);
+        setLastMatch(null);
+        return;
+      }
 
-      const now = new Date();
-      const past = new Date(now.getTime() - 14 * 24 * 3600 * 1000);
-      const future = new Date(now.getTime() + 14 * 24 * 3600 * 1000);
+      const leagueCode = getLeagueCodesForTeam(teamObj)[0] || "arg.1";
+      const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${leagueCode}/teams/${espnId}/schedule`);
+      const data = res.ok ? await res.json().catch(() => null) : null;
+      const events: any[] = data?.events || [];
 
-      const fmt = (d: Date) =>
-        `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(
-          d.getUTCDate()
-        ).padStart(2, "0")}`;
+      const parsedMatches: MatchData[] = events
+        .map((ev) => {
+          const comp = ev.competitions?.[0];
+          const competitors = comp?.competitors || [];
+          const homeComp = competitors.find((c: any) => c.homeAway === "home");
+          const awayComp = competitors.find((c: any) => c.homeAway === "away");
 
-      const dateRange = `${fmt(past)}-${fmt(future)}`;
+          const homeName = homeComp?.team?.displayName || "Local";
+          const awayName = awayComp?.team?.displayName || "Visitante";
 
-      const fetchPromises = leagueCodes.map(async (code) => {
-        try {
-          const url = `https://site.api.espn.com/apis/site/v2/sports/soccer/${code}/scoreboard?dates=${dateRange}`;
-          const res = await fetch(url).catch(() => null);
-          if (res && res.ok) {
-            const data = await res.json().catch(() => null);
-            if (data) return { code, data };
-          }
-        } catch (e) {
-          // Silently ignore inactive league codes
-        }
-        return null;
-      });
+          const homeLogo = getLogoForTeamName(homeName, homeComp?.team?.logos?.[0]?.href || homeComp?.team?.logo);
+          const awayLogo = getLogoForTeamName(awayName, awayComp?.team?.logos?.[0]?.href || awayComp?.team?.logo);
 
-      const fetchResults = await Promise.all(fetchPromises);
-      const allEvents: { ev: any; competitionName: string }[] = [];
-      const processedEventIds = new Set<string>();
+          const isFavHome = homeName === selectedTeamName;
+          const state = comp?.status?.type?.state; // 'in', 'pre', 'post'
+          const rawDate = new Date(ev.date);
 
-      fetchResults.forEach((resObj) => {
-        if (!resObj) return;
-        const { data } = resObj;
-        const events: any[] = data.events || [];
-        const leagueNameFromAPI = data.leagues?.[0]?.name || teamObj?.league || "Competencia";
-
-        events.forEach((ev) => {
-          if (processedEventIds.has(ev.id)) return;
-          processedEventIds.add(ev.id);
-          allEvents.push({ ev, competitionName: leagueNameFromAPI });
-        });
-      });
-
-      const cleanQuery = selectedTeamName
-        .toLowerCase()
-        .replace(/fc|club|de|cd|real|atletico|deportivo/g, "")
-        .trim();
-
-      const teamEvents = allEvents.filter(({ ev }) => {
-        const comps = ev.competitions?.[0]?.competitors || [];
-        return comps.some((c: any) => {
-          const cn = c.team?.displayName?.toLowerCase() || "";
-          return (
-            cn.includes(cleanQuery) ||
-            cleanQuery.includes(cn) ||
-            c.team?.shortDisplayName?.toLowerCase()?.includes(cleanQuery)
-          );
-        });
-      });
-
-      const parsedMatches: MatchData[] = [];
-
-      teamEvents.forEach(({ ev, competitionName }) => {
-        const comp = ev.competitions?.[0];
-        if (!comp) return;
-
-        const homeComp = comp.competitors?.find((c: any) => c.homeAway === "home");
-        const awayComp = comp.competitors?.find((c: any) => c.homeAway === "away");
-
-        const homeName = homeComp?.team?.displayName || "Local";
-        const awayName = awayComp?.team?.displayName || "Visitante";
-
-        const homeLogo = getLogoForTeamName(
-          homeName,
-          homeComp?.team?.logo || homeComp?.team?.logos?.[0]?.href
-        );
-        const awayLogo = getLogoForTeamName(
-          awayName,
-          awayComp?.team?.logo || awayComp?.team?.logos?.[0]?.href
-        );
-
-        const isFavHome = homeName.toLowerCase().includes(cleanQuery);
-
-        const state = ev.status?.type?.state; // 'in', 'pre', 'post'
-        const matchObj: MatchData = {
-          id: ev.id,
-          status: state === "in" ? "live" : state === "post" ? "finished" : "upcoming",
-          statusText: ev.status?.type?.shortDetail || ev.status?.type?.description || "",
-          clock: ev.status?.displayClock || `${ev.status?.clock || 0}'`,
-          dateStr: new Date(ev.date).toLocaleDateString("es-AR", {
-            weekday: "short",
-            day: "numeric",
-            month: "short",
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-          venue: comp.venue?.displayName || getStadiumForTeam(homeName),
-          competition: competitionName,
-          homeTeam: {
-            name: homeName,
-            logo: homeLogo,
-            score: homeComp?.score ?? "0",
-          },
-          awayTeam: {
-            name: awayName,
-            logo: awayLogo,
-            score: awayComp?.score ?? "0",
-          },
-          isFavoriteHome: isFavHome,
-          rawDate: new Date(ev.date),
-        };
-
-        parsedMatches.push(matchObj);
-      });
+          return {
+            id: ev.id,
+            status: state === "in" ? "live" : state === "post" ? "finished" : "upcoming",
+            statusText: comp?.status?.type?.shortDetail || comp?.status?.type?.description || "",
+            clock: comp?.status?.displayClock || `${comp?.status?.clock || 0}'`,
+            dateStr: rawDate.toLocaleDateString("es-AR", {
+              weekday: "short",
+              day: "numeric",
+              month: "short",
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+            venue: comp?.venue?.fullName || comp?.venue?.displayName || getStadiumForTeam(homeName),
+            competition: ev.league?.name || teamObj?.league || "Competencia",
+            homeTeam: { name: homeName, logo: homeLogo, score: homeComp?.score?.displayValue ?? "0" },
+            awayTeam: { name: awayName, logo: awayLogo, score: awayComp?.score?.displayValue ?? "0" },
+            isFavoriteHome: isFavHome,
+            rawDate,
+          } as MatchData;
+        })
+        .filter((m) => m.rawDate && !isNaN(m.rawDate.getTime()));
 
       // 1. Live Match
-      const liveMatches = parsedMatches.filter(m => m.status === "live");
-      const foundLive = liveMatches.length > 0 ? liveMatches[0] : null;
+      const foundLive = parsedMatches.find((m) => m.status === "live") || null;
 
-      // 2. Next Match: Sort upcoming matches ascending by date (closest first)
-      const upcomingMatches = parsedMatches
-        .filter(m => m.status === "upcoming")
-        .sort((a, b) => (a.rawDate?.getTime() || 0) - (b.rawDate?.getTime() || 0));
-      const foundNext = upcomingMatches.length > 0 ? upcomingMatches[0] : null;
+      // 2. Next Match: closest upcoming
+      const foundNext =
+        parsedMatches
+          .filter((m) => m.status === "upcoming")
+          .sort((a, b) => (a.rawDate?.getTime() || 0) - (b.rawDate?.getTime() || 0))[0] || null;
 
-      // 3. Last Match: Sort finished matches descending by date (most recent first)
-      const finishedMatches = parsedMatches
-        .filter(m => m.status === "finished")
-        .sort((a, b) => (b.rawDate?.getTime() || 0) - (a.rawDate?.getTime() || 0));
-      const foundLast = finishedMatches.length > 0 ? finishedMatches[0] : null;
+      // 3. Last Match: most recent finished
+      const foundLast =
+        parsedMatches
+          .filter((m) => m.status === "finished")
+          .sort((a, b) => (b.rawDate?.getTime() || 0) - (a.rawDate?.getTime() || 0))[0] || null;
 
       setLiveMatch(foundLive);
       setNextMatch(foundNext);
       setLastMatch(foundLast);
-
-      // If no next match found from API (e.g. off-season break), set clean fallback match
-      if (!foundNext) {
-        const rivalInfo = FALLBACK_RIVALS[selectedTeamName] || {
-          rival: "Rival FC",
-          rivalLogo: "https://paladarnegro.net/escudoteca/argentina/primeradivision/png/river.png",
-          venue: "Estadio Principal",
-        };
-
-        const fallbackNextDate = new Date();
-        fallbackNextDate.setDate(fallbackNextDate.getDate() + 3);
-        fallbackNextDate.setHours(18, 0, 0, 0);
-
-        setNextMatch({
-          id: "fb-next",
-          status: "upcoming",
-          statusText: "Programado",
-          dateStr: fallbackNextDate.toLocaleDateString("es-AR", {
-            weekday: "short",
-            day: "numeric",
-            month: "short",
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-          venue: rivalInfo.venue,
-          competition: teamObj?.league || "Liga Oficial",
-          homeTeam: {
-            name: selectedTeamName,
-            logo: teamObj?.logo || "",
-            score: 0,
-          },
-          awayTeam: {
-            name: rivalInfo.rival,
-            logo: rivalInfo.rivalLogo,
-            score: 0,
-          },
-          isFavoriteHome: true,
-        });
-      }
-
-      // If no last match found from API, set clean fallback last match
-      if (!foundLast) {
-        const rivalInfo = FALLBACK_RIVALS[selectedTeamName] || {
-          rival: "Rival FC",
-          rivalLogo: "https://paladarnegro.net/escudoteca/argentina/primeradivision/png/river.png",
-          venue: "Estadio Principal",
-        };
-
-        const fallbackLastDate = new Date();
-        fallbackLastDate.setDate(fallbackLastDate.getDate() - 4);
-
-        setLastMatch({
-          id: "fb-last",
-          status: "finished",
-          statusText: "Finalizado",
-          dateStr: fallbackLastDate.toLocaleDateString("es-AR", {
-            day: "numeric",
-            month: "short",
-          }),
-          venue: rivalInfo.venue,
-          competition: teamObj?.league || "Liga Oficial",
-          homeTeam: {
-            name: selectedTeamName,
-            logo: teamObj?.logo || "",
-            score: 2,
-          },
-          awayTeam: {
-            name: rivalInfo.rival,
-            logo: rivalInfo.rivalLogo,
-            score: 1,
-          },
-          isFavoriteHome: true,
-        });
-      }
     } catch (e) {
-      console.warn("Could not fetch ESPN sports live data, using localized fixture data", e);
-
-      // Robust local fallback when network is offline
-      const rivalInfo = FALLBACK_RIVALS[selectedTeamName] || {
-        rival: "Rival FC",
-        rivalLogo: "https://paladarnegro.net/escudoteca/argentina/primeradivision/png/river.png",
-        venue: "Estadio Principal",
-      };
-
-      setNextMatch({
-        id: "fb-next-err",
-        status: "upcoming",
-        statusText: "Pr\u00f3ximo",
-        dateStr: "Dom, 3 Ago • 18:00 hs",
-        venue: rivalInfo.venue,
-        competition: teamObj?.league || "Liga Oficial",
-        homeTeam: {
-          name: selectedTeamName,
-          logo: teamObj?.logo || "",
-          score: 0,
-        },
-        awayTeam: {
-          name: rivalInfo.rival,
-          logo: rivalInfo.rivalLogo,
-          score: 0,
-        },
-        isFavoriteHome: true,
-      });
-
-      setLastMatch({
-        id: "fb-last-err",
-        status: "finished",
-        statusText: "Finalizado",
-        dateStr: "Hace 4 d\u00edas",
-        venue: rivalInfo.venue,
-        competition: teamObj?.league || "Liga Oficial",
-        homeTeam: {
-          name: selectedTeamName,
-          logo: teamObj?.logo || "",
-          score: 2,
-        },
-        awayTeam: {
-          name: rivalInfo.rival,
-          logo: rivalInfo.rivalLogo,
-          score: 1,
-        },
-        isFavoriteHome: true,
-      });
+      console.warn("[FavoriteTeamWidget] Error fetching matches from ESPN:", e);
+      setLiveMatch(null);
+      setNextMatch(null);
+      setLastMatch(null);
     } finally {
       setLoading(false);
     }
