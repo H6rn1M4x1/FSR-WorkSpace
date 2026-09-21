@@ -1283,8 +1283,10 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
       )}
 
       {/* Qué hacer en San Juan + Partidos de Hoy (fútbol) + NBA — tres tarjetas iguales, cada
-          una su propia tarjeta opaca igual que arriba. */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          una su propia tarjeta opaca igual que arriba. "items-start" evita que CSS grid estire
+          las 3 tarjetas a la altura de la más alta (San Juan, con 6 tarjetas en 3 filas, quedaba
+          más alta que las otras dos, que se estiraban dejando un espacio vacío enorme abajo). */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
       <div className={`${SECTION_CARD(darkMode)} lg:col-span-4`}>
         <div className="flex items-center justify-between flex-wrap gap-2 border-b border-zinc-800/10 dark:border-zinc-800/40 pb-3 mb-4">
           <h3 className="font-extrabold text-sm flex items-center gap-2">
