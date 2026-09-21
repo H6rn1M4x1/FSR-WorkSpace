@@ -508,6 +508,11 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSportDayCompetitionEvents, competitionNameById]);
 
+  // Contenedor con scroll de "Eventos deportivos" — se pasa como "root" del viewport de
+  // framer-motion para que cada fila anime su aparición a medida que se desplaza DENTRO de este
+  // scroll interno (no del scroll de toda la página), como pidió el usuario.
+  const sportEventsScrollRef = useRef<HTMLDivElement>(null);
+
   const renderSportEventRow = (ev: SportEvent) => {
     const scheduled = isSportScheduled(ev);
     const isLive = ev.status === "live";
@@ -516,9 +521,10 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
     return (
       <motion.div
         key={ev.id}
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.25 }}
+        initial={{ opacity: 0, y: 16 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ root: sportEventsScrollRef, once: true, margin: "0px 0px -10% 0px" }}
+        transition={{ duration: 0.35, ease: "easeOut" }}
         className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800"
       >
         <div className="flex items-center -space-x-2 shrink-0">
@@ -1204,7 +1210,14 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
       {/* Deportes */}
       <div className={`${SECTION_CARD(darkMode)} lg:col-span-5`}>
         <div className="flex items-center justify-between gap-2 border-b border-zinc-800/10 dark:border-zinc-800/40 pb-3 mb-4">
-          <p className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-400">Eventos deportivos</p>
+          <div className="flex items-center gap-1.5">
+            {sportLogos.futbol && (
+              <span className="p-1 rounded-full bg-primary/10 shrink-0 flex items-center justify-center">
+                <img src={sportLogos.futbol} alt="" className="w-3.5 h-3.5 object-contain brightness-0 dark:invert" />
+              </span>
+            )}
+            <p className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-400">Partidos de Hoy</p>
+          </div>
           <button
             type="button"
             onClick={openSportsModal}
@@ -1247,7 +1260,7 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
             {/* Dentro del día elegido: primero los partidos de tus equipos, después los de las
                 competencias que seguís enteras, en secciones separadas. Contenedor con scroll
                 interno (alto fijo, no crece la tarjeta) y animación de aparición por fila. */}
-            <div className="h-[380px] overflow-y-auto pr-1 space-y-4">
+            <div ref={sportEventsScrollRef} className="h-[380px] overflow-y-auto pr-1 space-y-4">
               {selectedSportDayEvents.length === 0 ? (
                 <p className="text-xs text-zinc-500 py-4 text-center">No hay partidos ese día.</p>
               ) : (
