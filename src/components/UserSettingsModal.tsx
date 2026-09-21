@@ -1111,7 +1111,7 @@ export function UserSettingsModal({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2 }}
-          className="fixed inset-0 z-[100] flex items-start justify-center p-3 md:p-6 pt-16 md:pt-24 pb-10 bg-black/60 backdrop-blur-md overflow-y-auto"
+          className="fixed inset-0 z-[100] flex items-start justify-center p-3 md:p-6 pt-16 md:pt-24 pb-10 bg-black/60 backdrop-blur-md"
           onClick={onClose}
         >
           <motion.div
