@@ -134,41 +134,47 @@ const handlerFn = async () => {
   const seen = new Set<string>();
 
   try {
-    const footballPromises = FOOTBALL_COMPETITIONS.flatMap((comp) =>
-      days.map(async (day) => {
-        try {
-          const data = await fetchScoreboardForDay("soccer", comp.id, day);
-          const events: any[] = data?.events || [];
-          for (const ev of events) {
-            const mapped = mapEvent(ev, "futbol", comp.id, comp.name);
-            if (mapped && !seen.has(mapped.id)) {
-              seen.add(mapped.id);
-              items.push(mapped);
+    // Un solo Promise.all con las 10 competencias × 9 días + NBA (99 pedidos simultáneos) le
+    // pegaba a ESPN de una sola vez — confirmado en vivo que el caché terminaba con datos solo
+    // de ayer/hoy/mañana (los primeros días en resolver) y nada de los días siguientes, como si
+    // ESPN empezara a rechazar o cortar pedidos bajo esa ráfaga. Se recorre día por día en vez
+    // de todo junto: 11 pedidos en paralelo (10 competencias + NBA) por día, uno detrás del
+    // otro — mismo total de pedidos, pero sin la ráfaga de 99 a la vez.
+    for (const day of days) {
+      const dayPromises = [
+        ...FOOTBALL_COMPETITIONS.map(async (comp) => {
+          try {
+            const data = await fetchScoreboardForDay("soccer", comp.id, day);
+            const events: any[] = data?.events || [];
+            for (const ev of events) {
+              const mapped = mapEvent(ev, "futbol", comp.id, comp.name);
+              if (mapped && !seen.has(mapped.id)) {
+                seen.add(mapped.id);
+                items.push(mapped);
+              }
             }
+          } catch (_) {
+            // una competencia/día que falla no debe tirar abajo el resto del refresh
           }
-        } catch (_) {
-          // una competencia/día que falla no debe tirar abajo el resto del refresh
-        }
-      })
-    );
-
-    const nbaPromises = days.map(async (day) => {
-      try {
-        const data = await fetchScoreboardForDay("basketball", "nba", day);
-        const events: any[] = data?.events || [];
-        for (const ev of events) {
-          const mapped = mapEvent(ev, "nba", "nba", "NBA");
-          if (mapped && !seen.has(mapped.id)) {
-            seen.add(mapped.id);
-            items.push(mapped);
+        }),
+        (async () => {
+          try {
+            const data = await fetchScoreboardForDay("basketball", "nba", day);
+            const events: any[] = data?.events || [];
+            for (const ev of events) {
+              const mapped = mapEvent(ev, "nba", "nba", "NBA");
+              if (mapped && !seen.has(mapped.id)) {
+                seen.add(mapped.id);
+                items.push(mapped);
+              }
+            }
+          } catch (_) {
+            // idem
           }
-        }
-      } catch (_) {
-        // idem
-      }
-    });
-
-    await Promise.all([...footballPromises, ...nbaPromises]);
+        })(),
+      ];
+      await Promise.all(dayPromises);
+    }
 
     console.log(`[refresh-sport-events] cached ${items.length} event(s)`);
     await setDoc(doc(db, "shared_data", "sport_events_cache"), {
