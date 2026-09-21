@@ -4,11 +4,9 @@ import { Trophy, Star, RefreshCw, Flag } from "lucide-react";
 import {
   fetchFootballStandings,
   fetchF1DriverStandings,
-  fetchRecentF1Races,
   fetchNbaStandings,
   FootballLeagueStandings,
   F1DriverStanding,
-  F1RaceResult,
   NbaStandingEntry,
 } from "../lib/standingsService";
 import { fetchWikiThumbnail } from "../lib/eventsService";
@@ -167,7 +165,6 @@ export function FootballStandingsPanel({
  */
 export function F1StandingsPanel({ darkMode, driverName }: { darkMode: boolean; driverName?: string }) {
   const [standings, setStandings] = useState<F1DriverStanding[] | null>(null);
-  const [races, setRaces] = useState<F1RaceResult[]>([]);
   const [circuitImages, setCircuitImages] = useState<Record<string, string | null>>({});
   const [racePage, setRacePage] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -178,30 +175,36 @@ export function F1StandingsPanel({ darkMode, driverName }: { darkMode: boolean; 
       return;
     }
     setLoading(true);
-    Promise.all([fetchF1DriverStandings(), fetchRecentF1Races()]).then(([s, r]) => {
+    fetchF1DriverStandings().then((s) => {
       setStandings(s);
-      setRaces(r);
       setLoading(false);
     });
   }, [driverName]);
 
-  useEffect(() => {
-    races.forEach((r) => {
-      if (!r.circuitName || r.circuitName in circuitImages) return;
-      fetchWikiThumbnail(r.circuitName).then((url) => setCircuitImages((prev) => ({ ...prev, [r.circuitName as string]: url })));
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [races]);
-
-  useEffect(() => {
-    if (races.length <= 1) return;
-    const id = setInterval(() => setRacePage((p) => (p + 1) % races.length), 8000);
-    return () => clearInterval(id);
-  }, [races.length]);
-
   const myStanding = standings?.find((s) => driverName && s.driverName.toLowerCase().includes(driverName.toLowerCase()));
-  const currentRace = races[racePage];
-  const myRaceResult = currentRace?.driverResults.find((r) => driverName && r.driverName.toLowerCase().includes(driverName.toLowerCase()));
+  // Carreras ya corridas de este piloto, más reciente primero (el orden en `races` sigue el
+  // calendario de la temporada, así que alcanza con filtrar por `played` e invertir).
+  const playedRaces = useMemo(() => {
+    const races = myStanding?.races.filter((r) => r.played) || [];
+    return [...races].reverse();
+  }, [myStanding]);
+  const currentRace = playedRaces[racePage % Math.max(playedRaces.length, 1)];
+
+  useEffect(() => {
+    setRacePage(0);
+  }, [myStanding?.driverId]);
+
+  useEffect(() => {
+    if (!currentRace || currentRace.raceName in circuitImages) return;
+    fetchWikiThumbnail(currentRace.raceName).then((url) => setCircuitImages((prev) => ({ ...prev, [currentRace.raceName]: url })));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentRace]);
+
+  useEffect(() => {
+    if (playedRaces.length <= 1) return;
+    const id = setInterval(() => setRacePage((p) => (p + 1) % playedRaces.length), 8000);
+    return () => clearInterval(id);
+  }, [playedRaces.length]);
 
   return (
     <div className={CARD(darkMode)}>
@@ -225,33 +228,27 @@ export function F1StandingsPanel({ darkMode, driverName }: { darkMode: boolean; 
             )}
           </div>
 
-          {/* Mitad de abajo: circuito + resultado, una carrera por vez */}
+          {/* Mitad de abajo: circuito + puntos obtenidos, una carrera por vez */}
           <div className="flex-1 rounded-2xl bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 p-3 overflow-hidden">
             {!currentRace ? (
               <p className="text-xs text-zinc-500 text-center py-6">Sin carreras recientes.</p>
             ) : (
               <AnimatePresence mode="wait">
                 <motion.div
-                  key={currentRace.raceId}
+                  key={currentRace.code}
                   initial={{ opacity: 0, x: 16 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -16 }}
                   transition={{ duration: 0.3 }}
                   className="flex flex-col items-center text-center gap-1.5 h-full justify-center"
                 >
-                  {currentRace.circuitName && circuitImages[currentRace.circuitName] && (
-                    <img src={circuitImages[currentRace.circuitName]!} alt="" className="w-16 h-16 object-contain rounded-xl" />
+                  {circuitImages[currentRace.raceName] && (
+                    <img src={circuitImages[currentRace.raceName]!} alt="" className="w-16 h-16 object-contain rounded-xl" />
                   )}
                   <p className="text-[11px] font-extrabold text-zinc-900 dark:text-zinc-100 truncate max-w-full">{currentRace.raceName}</p>
-                  {currentRace.circuitName && <p className="text-[10px] text-zinc-500 truncate max-w-full">{currentRace.circuitName}</p>}
-                  {myRaceResult ? (
-                    <p className="text-sm font-extrabold text-primary">
-                      P{myRaceResult.position}
-                      {myRaceResult.fastestLap && <span className="text-[9px] ml-1 uppercase">(vuelta rápida)</span>}
-                    </p>
-                  ) : (
-                    <p className="text-[10px] text-zinc-500">Sin resultado para {driverName} en esta carrera.</p>
-                  )}
+                  <p className="text-sm font-extrabold text-primary">
+                    {currentRace.points} {currentRace.points === 1 ? "punto" : "puntos"}
+                  </p>
                 </motion.div>
               </AnimatePresence>
             )}
