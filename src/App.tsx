@@ -2360,6 +2360,7 @@ export default function App() {
                   darkMode={darkMode}
                   turnosCompromisos={turnosCompromisos}
                   setTurnosCompromisos={setTurnosCompromisos}
+                  favoriteTeamName={userProfile?.favoriteTeam}
                 />
               )}
 

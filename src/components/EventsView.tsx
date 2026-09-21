@@ -41,6 +41,9 @@ import {
   NBA_TEAMS,
   fetchWikiThumbnail,
 } from "../lib/eventsService";
+import { TEAMS } from "../data/teams";
+import { FOOTBALL_LEAGUE_ESPN_CODE } from "../lib/standingsService";
+import { FootballStandingsPanel, F1StandingsPanel, NbaStandingsPanel } from "./StandingsPanels";
 import type { EventPreferences, FollowedTeam, SanJuanEvent, SportEvent, TurnoCompromiso } from "../types";
 
 interface EventsViewProps {
@@ -48,6 +51,9 @@ interface EventsViewProps {
   darkMode?: boolean;
   turnosCompromisos: TurnoCompromiso[];
   setTurnosCompromisos: (updater: TurnoCompromiso[] | ((prev: TurnoCompromiso[]) => TurnoCompromiso[])) => void;
+  /** Nombre del equipo favorito (Ajustes de Usuario) — para marcarlo con estrella en la tabla
+   *  de posiciones de fútbol al final de la página. */
+  favoriteTeamName?: string;
 }
 
 /** Id estable para el turno "Ocio" que agenda este evento de San Juan — así togglear la
@@ -461,7 +467,7 @@ function SportDayPanel({
  * follows, and a merged month calendar) lives on ONE unified page — no further sub-tabs —
  * reached as the "Eventos" entry inside Notas' own submenu.
  */
-export function EventsView({ userId, darkMode = false, turnosCompromisos, setTurnosCompromisos }: EventsViewProps) {
+export function EventsView({ userId, darkMode = false, turnosCompromisos, setTurnosCompromisos, favoriteTeamName }: EventsViewProps) {
   const { showToast } = useToast();
 
   // Campanita en cada tarjeta de "Qué hacer en San Juan": agenda/desagenda el evento como
@@ -891,6 +897,30 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
 
   const draftFollowedF1Team = draftPrefs?.followedTeams["f1"]?.find((t) => t.kind === "team");
   const draftFollowedF1Driver = draftPrefs?.followedTeams["f1"]?.find((t) => t.kind === "driver");
+
+  // --- Fila de "Posiciones" al final de la página: ligas de fútbol seguidas, F1 y NBA. ---
+  const followedFootballTeamNames = useMemo(
+    () => new Set((prefs?.followedTeams["futbol"] || []).map((t) => t.name)),
+    [prefs?.followedTeams]
+  );
+  const followedNbaTeamNames = useMemo(
+    () => new Set((prefs?.followedTeams["nba"] || []).map((t) => t.name)),
+    [prefs?.followedTeams]
+  );
+  const followedFootballLeagues = useMemo(() => {
+    const byCode = new Map<string, string>(); // code -> name
+    (prefs?.followedTeams["futbol"] || []).forEach((followed) => {
+      const team = TEAMS.find((t) => t.id === followed.id);
+      const code = team && FOOTBALL_LEAGUE_ESPN_CODE[team.league];
+      if (code) byCode.set(code, team!.league);
+    });
+    (prefs?.followedCompetitions || []).forEach((code) => {
+      const league = FOOTBALL_LEAGUES.find((l) => FOOTBALL_LEAGUE_ESPN_CODE[l.id] === code);
+      if (league) byCode.set(code, league.name);
+    });
+    return Array.from(byCode.entries()).map(([code, name]) => ({ code, name }));
+  }, [prefs?.followedTeams, prefs?.followedCompetitions]);
+  const followedF1DriverName = prefs?.followedTeams["f1"]?.find((t) => t.kind === "driver")?.name;
 
   return (
     <div className="space-y-6 animate-fade-in px-3 sm:px-6 pt-1 sm:pt-1.5 pb-6">
@@ -1447,6 +1477,20 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
         competitionLogos={competitionLogos}
         sportLogos={sportLogos}
       />
+      </div>
+
+      {/* Posiciones: ligas de fútbol seguidas (una por vez) + F1 (posición del piloto + última
+          carrera) + NBA — misma idea de "una tarjeta opaca por sección" que el resto de la
+          página, en su propia fila al final. */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        <FootballStandingsPanel
+          darkMode={darkMode}
+          leagues={followedFootballLeagues}
+          followedTeamNames={followedFootballTeamNames}
+          favoriteTeamName={favoriteTeamName}
+        />
+        <F1StandingsPanel darkMode={darkMode} driverName={followedF1DriverName} />
+        <NbaStandingsPanel darkMode={darkMode} followedTeamNames={followedNbaTeamNames} />
       </div>
     </div>
   );
