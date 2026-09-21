@@ -3,6 +3,7 @@ import { Activity, RefreshCw, Calendar, Radio, MapPin, Trophy, Shield } from "lu
 import { TEAMS, Team } from "../data/teams";
 import { getStadiumForTeam, getLeagueCodesForTeam, fetchTeamScheduleAllCompetitions } from "../lib/matchScheduler";
 import { FOOTBALL_TEAM_ESPN_IDS } from "../data/espnTeamIds";
+import { getTeamCachedEvents } from "../lib/eventsService";
 
 interface FavoriteTeamWidgetProps {
   favoriteTeamName?: string;
@@ -114,7 +115,9 @@ export const FavoriteTeamWidget: React.FC<FavoriteTeamWidgetProps> = ({
               minute: "2-digit",
             }),
             venue: comp?.venue?.fullName || comp?.venue?.displayName || getStadiumForTeam(homeName),
-            competition: ev.league?.name || teamObj?.league || "Competencia",
+            // "ev.league?.name" no se usa acá: confirmado en vivo (ver "Eventos deportivos")
+            // que ESPN devuelve ahí el código crudo de la liga (ej. "arg.copa"), no un nombre.
+            competition: teamObj?.league || "Competencia",
             homeTeam: { name: homeName, logo: homeLogo, score: homeComp?.score?.displayValue ?? "0" },
             awayTeam: { name: awayName, logo: awayLogo, score: awayComp?.score?.displayValue ?? "0" },
             isFavoriteHome: isFavHome,
@@ -122,6 +125,56 @@ export const FavoriteTeamWidget: React.FC<FavoriteTeamWidgetProps> = ({
           } as MatchData;
         })
         .filter((m) => m.rawDate && !isNaN(m.rawDate.getTime()));
+
+      // El calendario por equipo de ESPN (arriba) tiene huecos confirmados en vivo: a veces le
+      // faltan partidos futuros cercanos aunque la competencia sí los tenga (ej. Boca vs Racing
+      // por Copa Argentina no aparecía ahí, pero el próximo partido de la misma copa un mes
+      // después sí). El caché compartido de "Eventos deportivos" cubre ayer + hoy + los próximos
+      // 7 días pidiendo el marcador de cada día puntual — el único patrón de ESPN que
+      // confirmamos que siempre funciona — así que se suma como fuente adicional para no
+      // perderse un partido que el calendario por equipo se salteó.
+      let cachedMatches: MatchData[] = [];
+      try {
+        const cachedEvents = await getTeamCachedEvents(espnId);
+        cachedMatches = cachedEvents.map((ev) => {
+          const rawDate = new Date(`${ev.date}T${ev.time || "00:00"}:00`);
+          return {
+            id: `cache_${ev.id}`,
+            status: ev.status,
+            statusText: ev.statusText,
+            clock: undefined,
+            dateStr: rawDate.toLocaleDateString("es-AR", {
+              weekday: "short",
+              day: "numeric",
+              month: "short",
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+            venue: ev.venue || getStadiumForTeam(ev.homeTeam),
+            competition: ev.competitionName,
+            homeTeam: { name: ev.homeTeam, logo: getLogoForTeamName(ev.homeTeam, ev.homeLogo), score: ev.homeScore ?? "0" },
+            awayTeam: { name: ev.awayTeam, logo: getLogoForTeamName(ev.awayTeam, ev.awayLogo), score: ev.awayScore ?? "0" },
+            isFavoriteHome: ev.homeTeamId === espnId,
+            rawDate,
+          } as MatchData;
+        });
+      } catch (_) {
+        // El calendario por equipo de arriba sigue funcionando como respaldo si esto falla.
+      }
+
+      // Combinados y sin duplicados (mismo partido puede venir de las dos fuentes) — se
+      // identifica por fecha (día) + nombres de ambos equipos, ya que los ids no coinciden
+      // entre el caché y el calendario por equipo.
+      const matchKey = (m: MatchData) =>
+        `${m.rawDate?.toISOString().slice(0, 10)}_${m.homeTeam.name}_${m.awayTeam.name}`;
+      const seenKeys = new Set<string>();
+      const allMatches: MatchData[] = [];
+      for (const m of [...cachedMatches, ...parsedMatches]) {
+        const key = matchKey(m);
+        if (seenKeys.has(key)) continue;
+        seenKeys.add(key);
+        allMatches.push(m);
+      }
 
       // 1. Live Match: el calendario por equipo puede tardar en sumar un partido que arranca
       // justo ahora (confirmado en vivo: un San Lorenzo vs Boca en curso todavía no aparecía
@@ -165,17 +218,17 @@ export const FavoriteTeamWidget: React.FC<FavoriteTeamWidgetProps> = ({
       } catch (_) {
         // El calendario por equipo sigue funcionando como respaldo si esto falla.
       }
-      if (!foundLive) foundLive = parsedMatches.find((m) => m.status === "live") || null;
+      if (!foundLive) foundLive = allMatches.find((m) => m.status === "live") || null;
 
       // 2. Next Match: closest upcoming
       const foundNext =
-        parsedMatches
+        allMatches
           .filter((m) => m.status === "upcoming")
           .sort((a, b) => (a.rawDate?.getTime() || 0) - (b.rawDate?.getTime() || 0))[0] || null;
 
       // 3. Last Match: most recent finished
       const foundLast =
-        parsedMatches
+        allMatches
           .filter((m) => m.status === "finished")
           .sort((a, b) => (b.rawDate?.getTime() || 0) - (a.rawDate?.getTime() || 0))[0] || null;
 
