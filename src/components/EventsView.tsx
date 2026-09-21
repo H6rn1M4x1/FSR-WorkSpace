@@ -406,7 +406,9 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
   // abajo, los partidos de ese día — primero los de los equipos que seguís, después los de las
   // competencias seguidas, en secciones separadas. Acotado (no infinita) con scroll interno y
   // animación de aparición.
-  const SPORT_EVENTS_MAX = 60;
+  // Tope generoso: ahora el filtro cubre 9 días (ayer + hoy + 7 próximos), no solo 3, así que el
+  // total de partidos cacheados es mayor — este cap solo evita una lista realmente infinita.
+  const SPORT_EVENTS_MAX = 300;
   const sportEventsSorted = useMemo(
     () =>
       sportEvents
@@ -427,27 +429,26 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
     return d.toLocaleDateString("es-AR", { weekday: "short", day: "numeric", month: "short" });
   };
 
-  // Días disponibles, en orden — de acá salen las pestañas del filtro.
-  const sportEventDays = useMemo(() => {
-    const days: string[] = [];
-    for (const ev of sportEventsSorted) {
-      if (days[days.length - 1] !== ev.date) days.push(ev.date);
-    }
-    return days;
-  }, [sportEventsSorted]);
-
   const todayIso = useMemo(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   }, []);
 
-  const [selectedSportDay, setSelectedSportDay] = useState<string | null>(null);
-  useEffect(() => {
-    if (selectedSportDay && sportEventDays.includes(selectedSportDay)) return;
-    // Por defecto: hoy si tiene partidos, si no el primer día disponible (suele ser "ayer").
-    setSelectedSportDay(sportEventDays.includes(todayIso) ? todayIso : sportEventDays[0] || null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sportEventDays, todayIso]);
+  // Pestañas fijas: ayer + hoy + los próximos 7 días, relativas a hoy — siempre las mismas,
+  // tengan o no partidos cacheados ese día (antes solo aparecían los días con datos).
+  const SPORT_EVENTS_DAYS_AHEAD = 7;
+  const sportEventDays = useMemo(() => {
+    const base = new Date();
+    base.setHours(0, 0, 0, 0);
+    const days: string[] = [];
+    for (let offset = -1; offset <= SPORT_EVENTS_DAYS_AHEAD; offset++) {
+      const d = new Date(base.getTime() + offset * 86400000);
+      days.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
+    }
+    return days;
+  }, []);
+
+  const [selectedSportDay, setSelectedSportDay] = useState<string>(todayIso);
 
   const selectedSportDayEvents = useMemo(
     () => sportEventsSorted.filter((ev) => ev.date === selectedSportDay),
@@ -462,6 +463,23 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
     () => selectedSportDayEvents.filter((ev) => ev.matchedBy === "competition"),
     [selectedSportDayEvents]
   );
+  // Dentro de "Competencias que seguís", separadas cada una en su propio grupo con los partidos
+  // de esa competencia debajo.
+  const selectedSportDayCompetitionGroups = useMemo(() => {
+    const groups: { key: string; name: string; events: SportEvent[] }[] = [];
+    const indexByKey = new Map<string, number>();
+    for (const ev of selectedSportDayCompetitionEvents) {
+      const key = ev.competitionId || ev.leagueName;
+      let idx = indexByKey.get(key);
+      if (idx === undefined) {
+        idx = groups.length;
+        indexByKey.set(key, idx);
+        groups.push({ key, name: ev.leagueName, events: [] });
+      }
+      groups[idx].events.push(ev);
+    }
+    return groups;
+  }, [selectedSportDayCompetitionEvents]);
 
   const renderSportEventRow = (ev: SportEvent) => {
     const scheduled = isSportScheduled(ev);
@@ -1204,18 +1222,27 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
                 <>
                   {selectedSportDayTeamEvents.length > 0 && (
                     <div>
-                      <p className="text-[10px] font-extrabold uppercase tracking-widest text-zinc-400 mb-1.5 sticky top-0 bg-white dark:bg-zinc-900 py-0.5">
+                      <p className="inline-block text-[10px] font-extrabold uppercase tracking-widest text-zinc-500 dark:text-zinc-300 mb-1.5 px-2 py-1 rounded-md bg-slate-100 dark:bg-zinc-800">
                         Tus equipos
                       </p>
                       <div className="space-y-1.5">{selectedSportDayTeamEvents.map(renderSportEventRow)}</div>
                     </div>
                   )}
-                  {selectedSportDayCompetitionEvents.length > 0 && (
+                  {selectedSportDayCompetitionGroups.length > 0 && (
                     <div>
-                      <p className="text-[10px] font-extrabold uppercase tracking-widest text-zinc-400 mb-1.5 sticky top-0 bg-white dark:bg-zinc-900 py-0.5">
+                      <p className="inline-block text-[10px] font-extrabold uppercase tracking-widest text-zinc-500 dark:text-zinc-300 mb-2 px-2 py-1 rounded-md bg-slate-100 dark:bg-zinc-800">
                         Competencias que seguís
                       </p>
-                      <div className="space-y-1.5">{selectedSportDayCompetitionEvents.map(renderSportEventRow)}</div>
+                      <div className="space-y-3">
+                        {selectedSportDayCompetitionGroups.map((group) => (
+                          <div key={group.key}>
+                            <p className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 mb-1 pl-2 border-l-2 border-primary/40">
+                              {group.name}
+                            </p>
+                            <div className="space-y-1.5">{group.events.map(renderSportEventRow)}</div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </>

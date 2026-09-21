@@ -16,18 +16,20 @@ const firebaseConfig = {
 const FIRESTORE_DATABASE_ID = "ai-studio-fsrworkspace-54088f75-aeab-47ef-aff0-3ed53c6ba118";
 
 // Solo códigos de liga confirmados válidos (ver matchScheduler.ts / footballCompetitions.ts) —
-// "uefa.europa" y "fifa.friendly" dieron 400 confirmado en vivo, así que quedan afuera.
-const FOOTBALL_COMPETITIONS = [
-  "arg.1",
-  "arg.copa",
-  "conmebol.libertadores",
-  "conmebol.sudamericana",
-  "eng.1",
-  "esp.1",
-  "ita.1",
-  "ger.1",
-  "fra.1",
-  "uefa.champions",
+// "uefa.europa" y "fifa.friendly" dieron 400 confirmado en vivo, así que quedan afuera. Nombres
+// en criollo (no el código ESPN) para que "Eventos deportivos" muestre "Premier League" en vez
+// de "eng.1" — deben coincidir con src/data/footballCompetitions.ts.
+const FOOTBALL_COMPETITIONS: { id: string; name: string }[] = [
+  { id: "arg.1", name: "Liga Profesional Argentina" },
+  { id: "arg.copa", name: "Copa Argentina" },
+  { id: "conmebol.libertadores", name: "Copa Libertadores" },
+  { id: "conmebol.sudamericana", name: "Copa Sudamericana" },
+  { id: "eng.1", name: "Premier League" },
+  { id: "esp.1", name: "LaLiga" },
+  { id: "ita.1", name: "Serie A" },
+  { id: "ger.1", name: "Bundesliga" },
+  { id: "fra.1", name: "Ligue 1" },
+  { id: "uefa.champions", name: "UEFA Champions League" },
 ];
 
 interface CachedSportEvent {
@@ -106,32 +108,36 @@ function mapEvent(ev: any, sportId: "futbol" | "nba", competitionId: string, com
 }
 
 /**
- * Refresca un caché compartido (para toda la app, no por usuario) de partidos de ayer/hoy/
- * mañana de las competencias más seguidas + NBA, en `shared_data/sport_events_cache`. Antes
- * "Eventos deportivos" hacía que cada navegador le pegara directo a ESPN por cada equipo
+ * Refresca un caché compartido (para toda la app, no por usuario) de partidos de ayer + hoy +
+ * los próximos 7 días de las competencias más seguidas + NBA, en `shared_data/sport_events_cache`.
+ * Antes "Eventos deportivos" hacía que cada navegador le pegara directo a ESPN por cada equipo
  * seguido — esto lo centraliza en un solo pedido periódico del lado del servidor, que todos
- * los usuarios leen igual que "Qué hacer en San Juan".
+ * los usuarios leen igual que "Qué hacer en San Juan". El filtro de días de la UI necesita datos
+ * de esos 9 días para no mostrar "sin partidos" en pestañas que sí tienen fixtures.
  */
 const handlerFn = async () => {
   const app = getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig);
   const db = getFirestore(app, FIRESTORE_DATABASE_ID);
 
   const today = new Date();
-  const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
-  const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
-  const days = [yesterday, today, tomorrow];
+  today.setHours(0, 0, 0, 0);
+  const DAYS_AHEAD = 7;
+  const days: Date[] = [];
+  for (let offset = -1; offset <= DAYS_AHEAD; offset++) {
+    days.push(new Date(today.getTime() + offset * 24 * 60 * 60 * 1000));
+  }
 
   const items: CachedSportEvent[] = [];
   const seen = new Set<string>();
 
   try {
-    const footballPromises = FOOTBALL_COMPETITIONS.flatMap((code) =>
+    const footballPromises = FOOTBALL_COMPETITIONS.flatMap((comp) =>
       days.map(async (day) => {
         try {
-          const data = await fetchScoreboardForDay("soccer", code, day);
+          const data = await fetchScoreboardForDay("soccer", comp.id, day);
           const events: any[] = data?.events || [];
           for (const ev of events) {
-            const mapped = mapEvent(ev, "futbol", code, code);
+            const mapped = mapEvent(ev, "futbol", comp.id, comp.name);
             if (mapped && !seen.has(mapped.id)) {
               seen.add(mapped.id);
               items.push(mapped);
