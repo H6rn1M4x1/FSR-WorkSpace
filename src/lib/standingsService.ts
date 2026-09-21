@@ -94,80 +94,61 @@ export async function fetchFootballStandings(leagueCode: string, leagueName: str
   return { leagueCode, leagueName, entries };
 }
 
+export interface F1RaceStat {
+  code: string;
+  raceName: string;
+  played: boolean;
+  points: number;
+}
+
 export interface F1DriverStanding {
   driverId: string;
   driverName: string;
   rank: number;
   points: number;
+  races: F1RaceStat[];
 }
 
-/** Campeonato de pilotos de F1. Mismo endpoint "site" que el resto de F1 en esta app. */
+/**
+ * Campeonato de pilotos de F1. Mismo endpoint "site" que el resto de F1 en esta app.
+ *
+ * Confirmado con JSON real de ESPN: el stat de puntos totales se llama "championshipPts" (NO
+ * "points"), y cada entrada de piloto trae además un stat por cada Gran Premio de la temporada
+ * (código de 3 letras, ej. "AUS", "CHN", "JPN"...) con `played: boolean` y `value` = puntos
+ * obtenidos en esa carrera puntual. Se usa esto — no el scoreboard sin fecha, que solo devuelve
+ * la próxima carrera todavía no corrida — como fuente real de "últimas carreras".
+ */
 export async function fetchF1DriverStandings(): Promise<F1DriverStanding[]> {
   const data = await fetchJson("https://site.api.espn.com/apis/v2/sports/racing/f1/standings");
   if (!data) return [];
 
-  const rawEntries: any[] = data?.standings?.[0]?.rankings || data?.children?.[0]?.standings?.entries || data?.standings?.entries || [];
+  const rawEntries: any[] = data?.children?.[0]?.standings?.entries || data?.standings?.entries || [];
   const entries: F1DriverStanding[] = rawEntries
     .map((entry: any, idx: number): F1DriverStanding | null => {
       const athlete = entry.athlete || entry.competitor?.athlete;
       if (!athlete) return null;
-      const stat = (name: string) => entry.stats?.find((s: any) => s.name === name)?.value;
+      const stats: any[] = entry.stats || [];
+      const stat = (name: string) => stats.find((s: any) => s.name === name)?.value;
+      const races: F1RaceStat[] = stats
+        .filter((s: any) => s.name !== "rank" && s.name !== "championshipPts")
+        .map((s: any) => ({
+          code: s.name,
+          raceName: s.displayName || s.shortName || s.name,
+          played: Boolean(s.played),
+          points: Math.round(s.value ?? 0),
+        }));
       return {
         driverId: String(athlete.id ?? idx),
         driverName: athlete.displayName || athlete.fullName || "Piloto",
         rank: Math.round(stat("rank") ?? idx + 1),
-        points: Math.round(stat("points") ?? 0),
+        points: Math.round(stat("championshipPts") ?? 0),
+        races,
       };
     })
     .filter((e): e is F1DriverStanding => e !== null)
     .sort((a, b) => a.rank - b.rank);
 
   return entries;
-}
-
-export interface F1RaceResult {
-  raceId: string;
-  raceName: string;
-  circuitName?: string;
-  date: string;
-  driverResults: { driverName: string; position: number; fastestLap?: boolean }[];
-}
-
-/**
- * Últimas carreras ya corridas (más reciente primero), con el resultado de cada piloto — para
- * mostrar el circuito + la posición del piloto seguido en cada una, pasando de a una.
- */
-export async function fetchRecentF1Races(maxRaces: number = 6): Promise<F1RaceResult[]> {
-  const data = await fetchJson("https://site.api.espn.com/apis/site/v2/sports/racing/f1/scoreboard");
-  if (!data) return [];
-
-  const events: any[] = data.events || [];
-  const races: F1RaceResult[] = [];
-  for (const ev of events) {
-    const state = ev.status?.type?.state || ev.competitions?.[0]?.status?.type?.state;
-    if (state !== "post") continue; // solo carreras ya corridas
-
-    const competitors: any[] = ev.competitions?.[0]?.competitors || [];
-    const driverResults = competitors
-      .map((c: any) => ({
-        driverName: c.athlete?.displayName || c.athlete?.fullName || "Piloto",
-        position: Number(c.order ?? c.rank ?? 0),
-        fastestLap: Boolean(c.records?.some?.((r: any) => r.name === "fastestLap")),
-      }))
-      .filter((r) => r.driverName !== "Piloto")
-      .sort((a, b) => a.position - b.position);
-
-    races.push({
-      raceId: `f1race_${ev.id}`,
-      raceName: ev.name || ev.shortName || "Gran Premio",
-      circuitName: ev.circuit?.fullName || ev.competitions?.[0]?.venue?.fullName,
-      date: ev.date,
-      driverResults,
-    });
-  }
-
-  races.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  return races.slice(0, maxRaces);
 }
 
 export interface NbaStandingEntry {
