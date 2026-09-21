@@ -195,7 +195,12 @@ function SportDayPanel({
     return days;
   }, []);
 
-  const [selectedSportDay, setSelectedSportDay] = useState<string>(todayIso);
+  // Se guarda el ÍNDICE del día elegido (no la fecha en sí) — "Hoy" siempre está en el índice 1
+  // (offset 0 en un arreglo que arranca en -1) de este arreglo fijo, así que avanzar/retroceder
+  // es sumar/restar 1 al índice, sin comparar strings de fecha que podían desincronizarse (el
+  // bug reportado: las flechas desplazaban el contenedor pero nunca cambiaban el día elegido).
+  const [selectedDayIndex, setSelectedDayIndex] = useState(1);
+  const selectedSportDay = sportEventDays[selectedDayIndex] ?? todayIso;
 
   // Flechas para desplazar las pestañas de día, mismo mecanismo que el submenú principal
   // (SubNav.tsx): al clickear, avanza al día anterior/siguiente si hay uno y lo centra en la
@@ -220,15 +225,10 @@ function SportDayPanel({
     container.scrollTo({ left: Math.max(0, Math.min(maxScroll, target)), behavior: "smooth" });
   };
   const scrollDayTabs = (direction: "left" | "right") => {
-    const currentIndex = sportEventDays.indexOf(selectedSportDay);
-    if (direction === "left" && currentIndex > 0) {
-      const prevDay = sportEventDays[currentIndex - 1];
-      setSelectedSportDay(prevDay);
-      scrollDayButtonIntoView(prevDay);
-    } else if (direction === "right" && currentIndex < sportEventDays.length - 1) {
-      const nextDay = sportEventDays[currentIndex + 1];
-      setSelectedSportDay(nextDay);
-      scrollDayButtonIntoView(nextDay);
+    const nextIndex = direction === "left" ? selectedDayIndex - 1 : selectedDayIndex + 1;
+    if (nextIndex >= 0 && nextIndex < sportEventDays.length) {
+      setSelectedDayIndex(nextIndex);
+      scrollDayButtonIntoView(sportEventDays[nextIndex]);
     } else if (dayTabsScrollRef.current) {
       dayTabsScrollRef.current.scrollBy({ left: direction === "left" ? -160 : 160, behavior: "smooth" });
     }
@@ -380,20 +380,20 @@ function SportDayPanel({
               onClick={() => scrollDayTabs("left")}
               title="Desplazar a la izquierda"
               className={`p-1 rounded-full shrink-0 text-zinc-500 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-all cursor-pointer ${
-                sportEventDays.indexOf(selectedSportDay) === 0 ? "opacity-30 pointer-events-none" : ""
+                selectedDayIndex === 0 ? "opacity-30 pointer-events-none" : ""
               }`}
             >
               <ChevronLeft className="w-3.5 h-3.5" />
             </button>
             <div ref={dayTabsScrollRef} className="flex-1 flex gap-1.5 overflow-x-auto pb-1 scroll-smooth scrollbar-none">
-              {sportEventDays.map((day) => (
+              {sportEventDays.map((day, dayIndex) => (
                 <button
                   key={day}
                   type="button"
                   ref={(el) => { dayTabButtonRefs.current[day] = el; }}
-                  onClick={() => setSelectedSportDay(day)}
+                  onClick={() => setSelectedDayIndex(dayIndex)}
                   className={`shrink-0 px-3 py-1.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide capitalize transition-all cursor-pointer ${
-                    day === selectedSportDay
+                    dayIndex === selectedDayIndex
                       ? "bg-primary text-white"
                       : "bg-slate-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
                   }`}
@@ -407,7 +407,7 @@ function SportDayPanel({
               onClick={() => scrollDayTabs("right")}
               title="Desplazar a la derecha"
               className={`p-1 rounded-full shrink-0 text-zinc-500 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-all cursor-pointer ${
-                sportEventDays.indexOf(selectedSportDay) === sportEventDays.length - 1 ? "opacity-30 pointer-events-none" : ""
+                selectedDayIndex === sportEventDays.length - 1 ? "opacity-30 pointer-events-none" : ""
               }`}
             >
               <ChevronRight className="w-3.5 h-3.5" />
