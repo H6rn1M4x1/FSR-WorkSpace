@@ -738,6 +738,19 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Mismo mecanismo para las ligas del picker "O elegí un equipo puntual" del modal de
+  // configuración — FOOTBALL_LEAGUES ya traía un wikiTitle por liga sin usar, pensado para esto.
+  const [footballLeagueLogos, setFootballLeagueLogos] = useState<Record<string, string | null>>({});
+  useEffect(() => {
+    FOOTBALL_LEAGUES.forEach((league) => {
+      if (league.id in footballLeagueLogos) return;
+      fetchWikiThumbnail(league.wikiTitle || league.name).then((url) =>
+        setFootballLeagueLogos((prev) => ({ ...prev, [league.id]: url }))
+      );
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // F1 driver photos: sourced from formula1.com first, Wikipedia as fallback. Team logos are a
   // fixed known-good URL per team (see data/f1.ts) — no fetch/state needed for those.
   const [f1Images, setF1Images] = useState<Record<string, string | null>>({});
@@ -1213,7 +1226,11 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
                               onClick={() => toggleDraftCompetition(comp.id)}
                               className={PICK_BTN((draftPrefs.followedCompetitions || []).includes(comp.id))}
                             >
-                              <Trophy className="w-4 h-4 shrink-0" />
+                              {competitionLogos[comp.id] ? (
+                                <img src={competitionLogos[comp.id]!} alt="" className="w-4 h-4 object-contain shrink-0" />
+                              ) : (
+                                <Trophy className="w-4 h-4 shrink-0" />
+                              )}
                               <span className="truncate">{comp.name}</span>
                             </button>
                           ))}
@@ -1224,7 +1241,11 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
                           {FOOTBALL_LEAGUES.map((l) => (
                             <button key={l.id} type="button" onClick={() => setFootballLeague(l.id)} className={PICK_BTN(false)}>
-                              <Trophy className="w-4 h-4 shrink-0" />
+                              {footballLeagueLogos[l.id] ? (
+                                <img src={footballLeagueLogos[l.id]!} alt="" className="w-4 h-4 object-contain shrink-0" />
+                              ) : (
+                                <Trophy className="w-4 h-4 shrink-0" />
+                              )}
                               <span className="truncate">{l.name}</span>
                             </button>
                           ))}
@@ -1305,9 +1326,11 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
           </p>
         ) : (
           <div className="space-y-2">
-            {/* Mismo alto mínimo que "Eventos deportivos" (misma fila, misma tarjeta) — antes
-                eran 2 filas de 6 tarjetas, mucho más alto que el resto de las secciones. */}
-            <div className="overflow-hidden min-h-[292px]">
+            {/* Alto FIJO (no mínimo) — antes, con "min-h", la tarjeta crecía o se achicaba en
+                cada página según cuánto texto tuviera cada evento, dando un efecto de
+                "salto" molesto al pasar de página. Con altura fija + overflow-hidden queda
+                estable siempre, del mismo alto que "Partidos de Hoy"/"NBA" al lado. */}
+            <div className="overflow-hidden h-[380px]">
               <AnimatePresence mode="wait" initial={false}>
                 <motion.div
                   key={sjPage}
