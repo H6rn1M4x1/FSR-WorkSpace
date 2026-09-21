@@ -5,6 +5,7 @@ import {
   fetchFootballStandings,
   fetchF1DriverStandings,
   fetchNbaStandings,
+  getF1CircuitImage,
   FootballLeagueStandings,
   F1DriverStanding,
   NbaStandingEntry,
@@ -196,6 +197,11 @@ export function F1StandingsPanel({ darkMode, driverName }: { darkMode: boolean; 
 
   useEffect(() => {
     if (!currentRace || currentRace.raceName in circuitImages) return;
+    const fixed = getF1CircuitImage(currentRace.raceName);
+    if (fixed) {
+      setCircuitImages((prev) => ({ ...prev, [currentRace.raceName]: fixed }));
+      return;
+    }
     fetchWikiThumbnail(currentRace.raceName).then((url) => setCircuitImages((prev) => ({ ...prev, [currentRace.raceName]: url })));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentRace]);

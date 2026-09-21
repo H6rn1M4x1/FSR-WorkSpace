@@ -101,6 +101,44 @@ export interface F1RaceStat {
   points: number;
 }
 
+/**
+ * Imágenes de circuitos de F1 provistas por el usuario (sportmonks.com), como fuente fija y
+ * confiable en vez de depender de la búsqueda difusa en Wikipedia. Cada carrera de ESPN llega
+ * con nombre "<sponsor> <lugar> Grand Prix" (ej. "Qatar Airways Australian Grand Prix"), así que
+ * se matchea por el final del nombre ("<lugar> Grand Prix"), nunca por substring suelto — evita
+ * falsos positivos como el sponsor "Qatar Airways" matcheando el Gran Premio de Qatar.
+ */
+const F1_CIRCUIT_IMAGES: { test: RegExp; url: string }[] = [
+  { test: /Australian Grand Prix$/i, url: "https://www.sportmonks.com/wp-content/uploads/2022/07/Albert-Park-Circuit.png" },
+  { test: /Chinese Grand Prix$/i, url: "https://www.sportmonks.com/wp-content/uploads/2024/02/China-GP.png" },
+  { test: /Japanese Grand Prix$/i, url: "https://www.sportmonks.com/wp-content/uploads/2022/07/Suzuka-International-Racing-Course-.png" },
+  { test: /Miami Grand Prix$/i, url: "https://www.sportmonks.com/wp-content/uploads/2022/07/Miami-International-Autodrome.png" },
+  { test: /Canadian Grand Prix$/i, url: "https://www.sportmonks.com/wp-content/uploads/2022/07/Circuit-Gilles-Villeneuve.png" },
+  { test: /Monaco Grand Prix$/i, url: "https://www.sportmonks.com/wp-content/uploads/2022/07/Circuit-de-Monaco-.png" },
+  { test: /(Spanish|Barcelona-Catalunya) Grand Prix$/i, url: "https://www.sportmonks.com/wp-content/uploads/2024/02/Circuit-de-Barcelona.png" },
+  { test: /Austrian Grand Prix$/i, url: "https://www.sportmonks.com/wp-content/uploads/2022/07/Red-Bull-Ring.png" },
+  { test: /British Grand Prix$/i, url: "https://www.sportmonks.com/wp-content/uploads/2022/07/Silverstone-Circuit-.png" },
+  { test: /Belgian Grand Prix$/i, url: "https://www.sportmonks.com/wp-content/uploads/2022/07/Circuit-de-Spa-Francorchamps.png" },
+  { test: /Hungarian Grand Prix$/i, url: "https://www.sportmonks.com/wp-content/uploads/2022/07/Hungaroring.png" },
+  { test: /Dutch Grand Prix$/i, url: "https://www.sportmonks.com/wp-content/uploads/2022/07/Circuit-Zandvoort.png" },
+  { test: /Italian Grand Prix$/i, url: "https://www.sportmonks.com/wp-content/uploads/2022/07/Autodromo-Nazionale-Monza.png" },
+  { test: /Madrid Grand Prix$/i, url: "https://www.sportmonks.com/wp-content/uploads/2026/01/Circuit_de_Madrid.png" },
+  { test: /Azerbaijan Grand Prix$/i, url: "https://www.sportmonks.com/wp-content/uploads/2022/07/Baku-City-Circuit.png" },
+  { test: /Singapore Grand Prix$/i, url: "https://www.sportmonks.com/wp-content/uploads/2024/02/Singapore-GP.png" },
+  { test: /United States Grand Prix$/i, url: "https://www.sportmonks.com/wp-content/uploads/2022/07/Circuit-of-The-Americas.png" },
+  { test: /(Mexico City|Mexican) Grand Prix$/i, url: "https://www.sportmonks.com/wp-content/uploads/2026/01/Autodromo-Hermanos-Rodriguez-2.png" },
+  { test: /(São Paulo|Sao Paulo|Brazilian) Grand Prix$/i, url: "https://www.sportmonks.com/wp-content/uploads/2026/01/Autodromo_Jose_Carlos_Pace.png" },
+  { test: /Las Vegas Grand Prix$/i, url: "https://www.sportmonks.com/wp-content/uploads/2024/02/Las-Vegas-GP.png" },
+  { test: /Qatar Grand Prix$/i, url: "https://www.sportmonks.com/wp-content/uploads/2023/03/GP-Qatar.png" },
+  { test: /Abu Dhabi Grand Prix$/i, url: "https://www.sportmonks.com/wp-content/uploads/2022/07/Yas-Marina-Circuit-.png" },
+];
+
+/** Imagen fija del circuito para una carrera dada, o null si no hay ninguna cargada para ese GP. */
+export function getF1CircuitImage(raceName: string): string | null {
+  const match = F1_CIRCUIT_IMAGES.find((c) => c.test.test(raceName));
+  return match?.url ?? null;
+}
+
 export interface F1DriverStanding {
   driverId: string;
   driverName: string;
