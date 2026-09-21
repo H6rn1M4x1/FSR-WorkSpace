@@ -478,6 +478,17 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
     () => selectedSportDayEvents.filter((ev) => ev.matchedBy === "competition"),
     [selectedSportDayEvents]
   );
+  // Nombre de competencia a mostrar: si el partido trae un competitionId conocido, siempre se
+  // usa el nombre curado de FOLLOWABLE_COMPETITIONS en vez de "leagueName" tal cual venga del
+  // caché — así la UI nunca vuelve a mostrar el código crudo de ESPN (ej. "arg.1"), sea cual sea
+  // el estado del caché compartido en ese momento.
+  const competitionNameById = useMemo(
+    () => new Map(FOLLOWABLE_COMPETITIONS.map((comp) => [comp.id, comp.name])),
+    []
+  );
+  const competitionDisplayName = (ev: SportEvent): string =>
+    (ev.competitionId && competitionNameById.get(ev.competitionId)) || ev.leagueName;
+
   // Dentro de "Competencias que seguís", separadas cada una en su propio grupo con los partidos
   // de esa competencia debajo.
   const selectedSportDayCompetitionGroups = useMemo(() => {
@@ -489,12 +500,13 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
       if (idx === undefined) {
         idx = groups.length;
         indexByKey.set(key, idx);
-        groups.push({ key, name: ev.leagueName, events: [] });
+        groups.push({ key, name: competitionDisplayName(ev), events: [] });
       }
       groups[idx].events.push(ev);
     }
     return groups;
-  }, [selectedSportDayCompetitionEvents]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedSportDayCompetitionEvents, competitionNameById]);
 
   const renderSportEventRow = (ev: SportEvent) => {
     const scheduled = isSportScheduled(ev);
@@ -525,7 +537,7 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
             {ev.competitionId && competitionLogos[ev.competitionId] && (
               <img src={competitionLogos[ev.competitionId]!} alt="" className="w-3 h-3 object-contain shrink-0" />
             )}
-            <span className="truncate">{ev.leagueName}</span>
+            <span className="truncate">{competitionDisplayName(ev)}</span>
           </p>
         </div>
         <div className="shrink-0 text-right">
