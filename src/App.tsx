@@ -357,6 +357,19 @@ export default function App() {
   // defaults before we've had a chance to hear back from Firestore at least once.
   const hasHeardFromFirestoreRef = useRef(false);
 
+  // Confirmado en vivo (35K escrituras a Firestore en una hora, agotando la cuota diaria
+  // gratuita): "id" y "updatedAt" nunca deben entrar en la comparación de eco. El push le
+  // agregaba "id" y saveItemToFirestore le agregaba un "updatedAt: Date.now()" nuevo en cada
+  // guardado — ninguno de los dos vive en el estado local "userProfile", así que el eco que
+  // volvía de Firestore (con esos dos campos de más) nunca coincidía con el JSON que se había
+  // guardado antes de pushear, y cada sync de perfil terminaba reescribiendo una vuelta extra
+  // sobre sí mismo. Se comparan solo los campos reales del perfil, sin "id" ni "updatedAt".
+  const comparableProfileJson = (data: any): string => {
+    if (!data) return "";
+    const { id: _id, updatedAt: _updatedAt, ...rest } = data;
+    return JSON.stringify(rest);
+  };
+
   useEffect(() => {
     if (!user?.email) return; // don't sync under a guessed identity before auth resolves
     const currentUserId = user.email;
@@ -364,7 +377,7 @@ export default function App() {
       hasHeardFromFirestoreRef.current = true;
       const remote = items && items[0];
       if (!remote) return;
-      const remoteJson = JSON.stringify(remote);
+      const remoteJson = comparableProfileJson(remote);
       if (remoteJson === lastSyncedProfileJsonRef.current) return; // echo of our own last push
       lastSyncedProfileJsonRef.current = remoteJson;
       setUserProfile((prev) => ({ ...(prev || {}), ...remote } as UserProfileData));
@@ -388,7 +401,7 @@ export default function App() {
     if (!user?.email) return; // don't push under a guessed identity before auth resolves
     if (!hasHeardFromFirestoreRef.current) return; // wait for the remote profile before pushing anything
     const currentUserId = user.email;
-    const profileJson = JSON.stringify(userProfile);
+    const profileJson = comparableProfileJson(userProfile);
     if (profileJson === lastSyncedProfileJsonRef.current) return; // avoid re-pushing what we just received
     lastSyncedProfileJsonRef.current = profileJson;
     const timeoutId = setTimeout(() => {
