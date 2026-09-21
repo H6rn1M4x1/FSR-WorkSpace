@@ -355,7 +355,7 @@ export { SPORTS_CATALOG, FOLLOWABLE_COMPETITIONS };
 // de ayer/hoy/mañana de las competencias más seguidas + NBA — todos los usuarios leen el mismo
 // documento en vez de que cada navegador le pegue directo a ESPN por cada equipo. ---
 
-interface CachedSportEvent {
+export interface CachedSportEvent {
   id: string;
   sportId: "futbol" | "nba";
   competitionId: string;
@@ -382,6 +382,20 @@ async function getCachedSportEvents(): Promise<CachedSportEvent[]> {
   if (!snap.exists()) return [];
   const data = snap.data() as { items?: CachedSportEvent[]; fetchedAt?: number };
   return data.items || [];
+}
+
+/**
+ * Partidos de un equipo puntual (por id de ESPN) desde el mismo caché compartido de "Eventos
+ * deportivos" — confirmado en vivo que el endpoint `.../teams/{id}/schedule` que usa
+ * FavoriteTeamWidget tiene huecos reales en partidos futuros cercanos (a veces los trae, a
+ * veces no, sin patrón claro por competencia). Este caché en cambio se arma pidiendo el
+ * marcador de cada día puntual (sin rango), el único patrón de ESPN que confirmamos que
+ * siempre funciona, así que es más confiable para encontrar el próximo partido.
+ */
+export async function getTeamCachedEvents(espnTeamId: string): Promise<CachedSportEvent[]> {
+  if (!espnTeamId) return [];
+  const cached = await getCachedSportEvents();
+  return cached.filter((ev) => ev.homeTeamId === espnTeamId || ev.awayTeamId === espnTeamId);
 }
 
 function cachedEventToSportEvent(ev: CachedSportEvent, matchedBy: "team" | "competition"): SportEvent {
