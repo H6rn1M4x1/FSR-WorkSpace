@@ -59,6 +59,7 @@ export function FootballStandingsPanel({
   const [tables, setTables] = useState<Record<string, FootballLeagueStandings | null>>({});
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setPage(0);
@@ -109,44 +110,47 @@ export function FootballStandingsPanel({
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -16 }}
               transition={{ duration: 0.3 }}
+              ref={scrollRef}
               className="h-[350px] overflow-y-auto pr-1"
             >
               {!table ? (
                 <p className="text-xs text-zinc-500 py-4 text-center">No se pudo cargar la tabla de {current.name}.</p>
               ) : (
-                <table className="w-full text-[11px]">
-                  <thead>
-                    <tr className="text-zinc-400 uppercase text-[9px]">
-                      <th className="text-left font-bold pb-1">#</th>
-                      <th className="text-left font-bold pb-1">Equipo</th>
-                      <th className="text-center font-bold pb-1">PJ</th>
-                      <th className="text-center font-bold pb-1">Pts</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                <div className="text-[11px]">
+                  <div className="grid grid-cols-[20px_1fr_32px_36px] gap-2 px-2 text-zinc-400 uppercase text-[9px] font-bold pb-1">
+                    <span>#</span>
+                    <span>Equipo</span>
+                    <span className="text-center">PJ</span>
+                    <span className="text-center">Pts</span>
+                  </div>
+                  <div className="space-y-0.5">
                     {table.entries.map((e) => {
                       const isFollowed = followedTeamNames.has(e.teamName);
                       const isFavorite = favoriteTeamName === e.teamName;
                       return (
-                        <tr
+                        <motion.div
                           key={e.teamId}
-                          className={`border-t border-slate-100 dark:border-zinc-800/60 ${
+                          initial={{ opacity: 0, y: 10 }}
+                          whileInView={{ opacity: 1, y: 0 }}
+                          viewport={{ root: scrollRef, once: true, margin: "0px 0px -10% 0px" }}
+                          transition={{ duration: 0.3, ease: "easeOut" }}
+                          className={`grid grid-cols-[20px_1fr_32px_36px] items-center gap-2 px-2 py-1.5 rounded-xl transition-colors hover:bg-primary/10 ${
                             isFollowed ? "bg-primary/10 text-primary font-extrabold" : "text-zinc-700 dark:text-zinc-300"
                           }`}
                         >
-                          <td className="py-1.5">{e.rank}</td>
-                          <td className="py-1.5 flex items-center gap-1.5 truncate max-w-[140px]">
+                          <span>{e.rank}</span>
+                          <span className="flex items-center gap-1.5 truncate min-w-0">
                             {isFavorite && <Star className="w-3 h-3 text-primary fill-primary shrink-0" />}
                             {e.teamLogo && <img src={e.teamLogo} alt="" className="w-4 h-4 object-contain shrink-0" />}
                             <span className="truncate">{e.teamName}</span>
-                          </td>
-                          <td className="py-1.5 text-center">{e.played}</td>
-                          <td className="py-1.5 text-center font-extrabold">{e.points}</td>
-                        </tr>
+                          </span>
+                          <span className="text-center">{e.played}</span>
+                          <span className="text-center font-extrabold">{e.points}</span>
+                        </motion.div>
                       );
                     })}
-                  </tbody>
-                </table>
+                  </div>
+                </div>
               )}
             </motion.div>
           </AnimatePresence>
@@ -268,6 +272,7 @@ export function NbaStandingsPanel({
 }) {
   const [entries, setEntries] = useState<NbaStandingEntry[] | null>(null);
   const [loading, setLoading] = useState(true);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -285,38 +290,38 @@ export function NbaStandingsPanel({
       ) : !entries || entries.length === 0 ? (
         <EmptyState message="No se pudo cargar la tabla de posiciones de la NBA." />
       ) : (
-        <div className="h-[350px] overflow-y-auto pr-1">
-          <table className="w-full text-[11px]">
-            <thead>
-              <tr className="text-zinc-400 uppercase text-[9px]">
-                <th className="text-left font-bold pb-1">#</th>
-                <th className="text-left font-bold pb-1">Equipo</th>
-                <th className="text-center font-bold pb-1">G-P</th>
-                <th className="text-center font-bold pb-1">Pts</th>
-              </tr>
-            </thead>
-            <tbody>
-              {entries.map((e) => {
-                const isFollowed = followedTeamNames.has(e.teamName);
-                return (
-                  <tr
-                    key={e.teamId}
-                    className={`border-t border-slate-100 dark:border-zinc-800/60 ${
-                      isFollowed ? "bg-primary/10 text-primary font-extrabold" : "text-zinc-700 dark:text-zinc-300"
-                    }`}
-                  >
-                    <td className="py-1.5">{e.rank}</td>
-                    <td className="py-1.5 flex items-center gap-1.5 truncate max-w-[140px]">
-                      {e.teamLogo && <img src={e.teamLogo} alt="" className="w-4 h-4 object-contain shrink-0" />}
-                      <span className="truncate">{e.teamName}</span>
-                    </td>
-                    <td className="py-1.5 text-center">{e.won}-{e.lost}</td>
-                    <td className="py-1.5 text-center font-extrabold">{e.points}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div ref={scrollRef} className="h-[350px] overflow-y-auto pr-1 text-[11px]">
+          <div className="grid grid-cols-[20px_1fr_44px_36px] gap-2 px-2 text-zinc-400 uppercase text-[9px] font-bold pb-1">
+            <span>#</span>
+            <span>Equipo</span>
+            <span className="text-center">G-P</span>
+            <span className="text-center">Pts</span>
+          </div>
+          <div className="space-y-0.5">
+            {entries.map((e) => {
+              const isFollowed = followedTeamNames.has(e.teamName);
+              return (
+                <motion.div
+                  key={e.teamId}
+                  initial={{ opacity: 0, y: 10 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ root: scrollRef, once: true, margin: "0px 0px -10% 0px" }}
+                  transition={{ duration: 0.3, ease: "easeOut" }}
+                  className={`grid grid-cols-[20px_1fr_44px_36px] items-center gap-2 px-2 py-1.5 rounded-xl transition-colors hover:bg-primary/10 ${
+                    isFollowed ? "bg-primary/10 text-primary font-extrabold" : "text-zinc-700 dark:text-zinc-300"
+                  }`}
+                >
+                  <span>{e.rank}</span>
+                  <span className="flex items-center gap-1.5 truncate min-w-0">
+                    {e.teamLogo && <img src={e.teamLogo} alt="" className="w-4 h-4 object-contain shrink-0" />}
+                    <span className="truncate">{e.teamName}</span>
+                  </span>
+                  <span className="text-center">{e.won}-{e.lost}</span>
+                  <span className="text-center font-extrabold">{e.points}</span>
+                </motion.div>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
