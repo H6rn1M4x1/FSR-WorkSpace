@@ -384,6 +384,21 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Escudo de cada competencia (Libertadores, Premier League, etc.), al lado de su nombre en
+  // "Eventos deportivos" — mismo mecanismo que sportLogos de arriba (thumbnail de Wikipedia por
+  // título de artículo), en vez de un link directo a un sitio de logos que no podemos verificar
+  // desde acá que siga funcionando.
+  const [competitionLogos, setCompetitionLogos] = useState<Record<string, string | null>>({});
+  useEffect(() => {
+    FOLLOWABLE_COMPETITIONS.forEach((comp) => {
+      if (comp.id in competitionLogos) return;
+      fetchWikiThumbnail(comp.wikiTitle || comp.name).then((url) =>
+        setCompetitionLogos((prev) => ({ ...prev, [comp.id]: url }))
+      );
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // F1 driver photos: sourced from formula1.com first, Wikipedia as fallback. Team logos are a
   // fixed known-good URL per team (see data/f1.ts) — no fetch/state needed for those.
   const [f1Images, setF1Images] = useState<Record<string, string | null>>({});
@@ -506,7 +521,12 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-xs font-extrabold text-zinc-900 dark:text-zinc-100 truncate">{ev.title}</p>
-          <p className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate">{ev.leagueName}</p>
+          <p className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate flex items-center gap-1">
+            {ev.competitionId && competitionLogos[ev.competitionId] && (
+              <img src={competitionLogos[ev.competitionId]!} alt="" className="w-3 h-3 object-contain shrink-0" />
+            )}
+            <span className="truncate">{ev.leagueName}</span>
+          </p>
         </div>
         <div className="shrink-0 text-right">
           {isLive ? (
@@ -1236,7 +1256,10 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
                       <div className="space-y-3">
                         {selectedSportDayCompetitionGroups.map((group) => (
                           <div key={group.key}>
-                            <p className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 mb-1 pl-2 border-l-2 border-primary/40">
+                            <p className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 mb-1 pl-2 border-l-2 border-primary/40 flex items-center gap-1.5">
+                              {competitionLogos[group.key] && (
+                                <img src={competitionLogos[group.key]!} alt="" className="w-3.5 h-3.5 object-contain shrink-0" />
+                              )}
                               {group.name}
                             </p>
                             <div className="space-y-1.5">{group.events.map(renderSportEventRow)}</div>

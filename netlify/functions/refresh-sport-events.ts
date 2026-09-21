@@ -73,7 +73,7 @@ async function fetchScoreboardForDay(sportPath: string, competitionCode: string,
   return res.json().catch(() => null);
 }
 
-function mapEvent(ev: any, sportId: "futbol" | "nba", competitionId: string, competitionNameFallback: string): CachedSportEvent | null {
+function mapEvent(ev: any, sportId: "futbol" | "nba", competitionId: string, competitionName: string): CachedSportEvent | null {
   const comp = ev.competitions?.[0];
   const competitors = comp?.competitors || [];
   const homeComp = competitors.find((c: any) => c.homeAway === "home");
@@ -90,7 +90,10 @@ function mapEvent(ev: any, sportId: "futbol" | "nba", competitionId: string, com
     id: `${prefix}_${ev.id}`,
     sportId,
     competitionId,
-    competitionName: ev.league?.name || competitionNameFallback,
+    // Antes usaba "ev.league?.name" como nombre — confirmado en vivo que ESPN devuelve ahí el
+    // código crudo de la liga (ej. "eng.1") para fútbol en vez de un nombre de verdad, así que
+    // se usa directamente el nombre curado que ya conocemos (footballCompetitions.ts / "NBA").
+    competitionName,
     date: isoDate(eventDate),
     time: `${String(eventDate.getHours()).padStart(2, "0")}:${String(eventDate.getMinutes()).padStart(2, "0")}`,
     status: state === "in" ? "live" : state === "post" ? "finished" : "upcoming",
