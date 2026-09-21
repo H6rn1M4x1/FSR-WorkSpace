@@ -197,6 +197,43 @@ function SportDayPanel({
 
   const [selectedSportDay, setSelectedSportDay] = useState<string>(todayIso);
 
+  // Flechas para desplazar las pestañas de día, mismo mecanismo que el submenú principal
+  // (SubNav.tsx): al clickear, avanza al día anterior/siguiente si hay uno y lo centra en la
+  // vista; si ya está en la punta, solo desplaza el contenedor.
+  const dayTabsScrollRef = useRef<HTMLDivElement>(null);
+  const dayTabButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const scrollDayButtonIntoView = (day: string) => {
+    const buttonEl = dayTabButtonRefs.current[day];
+    const container = dayTabsScrollRef.current;
+    if (!buttonEl || !container) return;
+    const buttonLeft = buttonEl.offsetLeft;
+    const buttonWidth = buttonEl.offsetWidth;
+    const containerWidth = container.clientWidth;
+    const maxScroll = container.scrollWidth - containerWidth;
+    const currentScroll = container.scrollLeft;
+    let target = currentScroll;
+    if (buttonLeft + buttonWidth + 8 > currentScroll + containerWidth) {
+      target = buttonLeft + buttonWidth - containerWidth + 8;
+    } else if (buttonLeft - 8 < currentScroll) {
+      target = buttonLeft - 8;
+    }
+    container.scrollTo({ left: Math.max(0, Math.min(maxScroll, target)), behavior: "smooth" });
+  };
+  const scrollDayTabs = (direction: "left" | "right") => {
+    const currentIndex = sportEventDays.indexOf(selectedSportDay);
+    if (direction === "left" && currentIndex > 0) {
+      const prevDay = sportEventDays[currentIndex - 1];
+      setSelectedSportDay(prevDay);
+      scrollDayButtonIntoView(prevDay);
+    } else if (direction === "right" && currentIndex < sportEventDays.length - 1) {
+      const nextDay = sportEventDays[currentIndex + 1];
+      setSelectedSportDay(nextDay);
+      scrollDayButtonIntoView(nextDay);
+    } else if (dayTabsScrollRef.current) {
+      dayTabsScrollRef.current.scrollBy({ left: direction === "left" ? -160 : 160, behavior: "smooth" });
+    }
+  };
+
   const selectedSportDayEvents = useMemo(
     () => sportEventsSorted.filter((ev) => ev.date === selectedSportDay),
     [sportEventsSorted, selectedSportDay]
@@ -335,21 +372,46 @@ function SportDayPanel({
         <p className="min-h-[292px] flex items-center text-xs text-zinc-500">{emptyMessage}</p>
       ) : (
         <div className="space-y-3">
-          <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
-            {sportEventDays.map((day) => (
-              <button
-                key={day}
-                type="button"
-                onClick={() => setSelectedSportDay(day)}
-                className={`shrink-0 px-3 py-1.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide capitalize transition-all cursor-pointer ${
-                  day === selectedSportDay
-                    ? "bg-primary text-white"
-                    : "bg-slate-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
-                }`}
-              >
-                {sportDayLabel(day)}
-              </button>
-            ))}
+          {/* Mismo mecanismo de flechas que el submenú principal (SubNav) para desplazar las
+              pestañas de día. */}
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => scrollDayTabs("left")}
+              title="Desplazar a la izquierda"
+              className={`p-1 rounded-full shrink-0 text-zinc-500 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-all cursor-pointer ${
+                sportEventDays.indexOf(selectedSportDay) === 0 ? "opacity-30 pointer-events-none" : ""
+              }`}
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+            </button>
+            <div ref={dayTabsScrollRef} className="flex-1 flex gap-1.5 overflow-x-auto pb-1 scroll-smooth scrollbar-none">
+              {sportEventDays.map((day) => (
+                <button
+                  key={day}
+                  type="button"
+                  ref={(el) => { dayTabButtonRefs.current[day] = el; }}
+                  onClick={() => setSelectedSportDay(day)}
+                  className={`shrink-0 px-3 py-1.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide capitalize transition-all cursor-pointer ${
+                    day === selectedSportDay
+                      ? "bg-primary text-white"
+                      : "bg-slate-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+                  }`}
+                >
+                  {sportDayLabel(day)}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => scrollDayTabs("right")}
+              title="Desplazar a la derecha"
+              className={`p-1 rounded-full shrink-0 text-zinc-500 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-all cursor-pointer ${
+                sportEventDays.indexOf(selectedSportDay) === sportEventDays.length - 1 ? "opacity-30 pointer-events-none" : ""
+              }`}
+            >
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
           </div>
 
           <div ref={sportEventsScrollRef} className="h-[380px] overflow-y-auto pr-1 space-y-4">
@@ -542,10 +604,10 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
   }, []);
 
   // "Qué hacer en San Juan": mismo carrusel paginado (flechas + puntos, avance automático)
-  // que "Eventos deportivos" y "Eventos del Día", de a 3 tarjetas por página (una sola fila)
-  // para que la tarjeta tenga el mismo alto que "Eventos deportivos" en vez de ocupar el doble.
+  // que "Eventos deportivos" y "Eventos del Día" — 6 tarjetas por página, 3 por columna (grilla
+  // de 2 columnas), como pidió el usuario.
   const [sjPage, setSjPage] = useState(1);
-  const SJ_PAGE_SIZE = 3;
+  const SJ_PAGE_SIZE = 6;
   useEffect(() => { setSjPage(1); }, [sjEvents]);
   const sjTotalPages = Math.max(1, Math.ceil(sjEvents.length / SJ_PAGE_SIZE));
   useEffect(() => {
