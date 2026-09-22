@@ -123,28 +123,22 @@ interface StoredEventPreferences {
 }
 
 /**
- * Unión de lo que TODOS los usuarios siguen de verdad, leída una vez por refresh vía
- * `collectionGroup` (barre `users/*\/event_preferences/*` de una — reglas de Firestore de este
- * proyecto son abiertas, así que no hace falta nada especial para leer entre usuarios). Antes el
- * caché siempre pedía las 10 competencias curadas de FOOTBALL_COMPETITIONS le interese o no a
- * alguien — ahora arma dinámicamente qué competencias hace falta pedir a partir de:
+ * Unión de las competencias que TODOS los usuarios siguen de verdad, leída una vez por refresh
+ * vía `collectionGroup` (barre `users/*\/event_preferences/*` de una — reglas de Firestore de
+ * este proyecto son abiertas, así que no hace falta nada especial para leer entre usuarios):
  * (a) competencias enteras seguidas explícitamente (`followedCompetitions`, ya son códigos ESPN),
- * (b) la liga de cada equipo de fútbol seguido puntualmente (vía FOOTBALL_LEAGUE_ESPN_CODE).
- * Así el caché sigue funcionando "como filtro" para cada usuario (cada uno se queda con lo suyo
- * al leerlo, ver `fetchFollowedSportEventsFromCache`), pero ESPN solo recibe pedidos de lo que
- * al menos una persona sigue, no un catálogo fijo completo.
+ * (b) la liga de cada equipo de fútbol seguido puntualmente (vía FOOTBALL_LEAGUE_ESPN_CODE). Se
+ * usa solo para SUMAR por fuera del catálogo curado (ver más abajo) — nunca para restarle nada,
+ * así nunca se pierde cobertura que antes funcionaba por un fallo al leer o mapear preferencias.
+ * Si algo falla (ej. la lectura de Firestore), se degrada a un set vacío sin cortar el refresh.
  */
-async function computeFollowedCompetitionCodes(db: ReturnType<typeof getFirestore>): Promise<{ codes: Set<string>; anyNba: boolean; hasAnyPrefs: boolean }> {
+async function computeFollowedCompetitionCodes(db: ReturnType<typeof getFirestore>): Promise<Set<string>> {
   const codes = new Set<string>();
-  let anyNba = false;
-  let hasAnyPrefs = false;
   try {
     const snap = await getDocs(collectionGroup(db, "event_preferences"));
     snap.forEach((docSnap) => {
-      hasAnyPrefs = true;
       const data = docSnap.data() as StoredEventPreferences;
       (data.followedCompetitions || []).forEach((code) => codes.add(code));
-      if ((data.followedSports || []).includes("nba") || (data.followedTeams?.nba || []).length > 0) anyNba = true;
       (data.followedTeams?.futbol || []).forEach((followed) => {
         const team = TEAMS.find((t) => t.id === followed.id);
         const code = team && FOOTBALL_LEAGUE_ESPN_CODE[team.league];
@@ -154,17 +148,17 @@ async function computeFollowedCompetitionCodes(db: ReturnType<typeof getFirestor
   } catch (error) {
     console.error("[refresh-sport-events] Error leyendo preferencias de usuarios:", error);
   }
-  return { codes, anyNba, hasAnyPrefs };
+  return codes;
 }
 
 /**
  * Refresca un caché compartido (para toda la app, no por usuario) de partidos de ayer + hoy +
- * los próximos 7 días de las competencias que al menos un usuario sigue + NBA (si alguien la
- * sigue), en `shared_data/sport_events_cache`. Antes "Eventos deportivos" hacía que cada
- * navegador le pegara directo a ESPN por cada equipo seguido — esto lo centraliza en un solo
- * pedido periódico del lado del servidor, que todos los usuarios leen igual que "Qué hacer en
- * San Juan", y cada usuario lo filtra por sus propias preferencias al leerlo. El filtro de días
- * de la UI necesita datos de esos 9 días para no mostrar "sin partidos" en pestañas que sí
+ * los próximos 7 días del catálogo curado de competencias + NBA + lo que los usuarios sigan por
+ * fuera de ese catálogo, en `shared_data/sport_events_cache`. Antes "Eventos deportivos" hacía
+ * que cada navegador le pegara directo a ESPN por cada equipo seguido — esto lo centraliza en un
+ * solo pedido periódico del lado del servidor, que todos los usuarios leen igual que "Qué hacer
+ * en San Juan", y cada usuario lo filtra por sus propias preferencias al leerlo. El filtro de
+ * días de la UI necesita datos de esos 9 días para no mostrar "sin partidos" en pestañas que sí
  * tienen fixtures.
  */
 const handlerFn = async () => {
@@ -183,14 +177,16 @@ const handlerFn = async () => {
   const seen = new Set<string>();
 
   try {
-    const { codes: followedCodes, anyNba, hasAnyPrefs } = await computeFollowedCompetitionCodes(db);
-    // Arranque en frío (todavía no hay ninguna preferencia guardada) — cae al catálogo curado
-    // completo para que la app no arranque con el caché vacío antes de que alguien configure algo.
-    const competitionsToFetch = hasAnyPrefs ? FOOTBALL_COMPETITIONS.filter((c) => followedCodes.has(c.id)) : FOOTBALL_COMPETITIONS;
-    const fetchNba = hasAnyPrefs ? anyNba : true;
-    console.log(
-      `[refresh-sport-events] siguiendo ${competitionsToFetch.length} competencia(s) de fútbol${fetchNba ? " + NBA" : ""} (hasAnyPrefs=${hasAnyPrefs})`
-    );
+    const followedCodes = await computeFollowedCompetitionCodes(db);
+    // El catálogo curado (FOOTBALL_COMPETITIONS) es siempre el piso mínimo — nunca se saca nada
+    // de acá para no perder cobertura que ya funcionaba. Lo dinámico (preferencias reales de
+    // usuarios) solo puede SUMAR competencias por fuera de ese catálogo si en el futuro se
+    // agregan más ligas seguibles; hoy en día followedCodes ya es subconjunto del catálogo, así
+    // que esto es efectivamente un no-op salvo que se amplíe FOLLOWABLE_COMPETITIONS. NBA
+    // siempre se pide, como siempre — es una sola competencia, no vale la pena condicionarla.
+    const extraCodes = Array.from(followedCodes).filter((code) => !FOOTBALL_COMPETITIONS.some((c) => c.id === code));
+    const competitionsToFetch = [...FOOTBALL_COMPETITIONS, ...extraCodes.map((id) => ({ id, name: id }))];
+    console.log(`[refresh-sport-events] pidiendo ${competitionsToFetch.length} competencia(s) de fútbol + NBA`);
 
     // Un solo Promise.all con todas las competencias × 9 días + NBA a la vez le pegaba a ESPN de
     // una sola ráfaga — confirmado en vivo que el caché terminaba con datos solo de ayer/hoy/
@@ -214,25 +210,21 @@ const handlerFn = async () => {
             // una competencia/día que falla no debe tirar abajo el resto del refresh
           }
         }),
-        ...(fetchNba
-          ? [
-              (async () => {
-                try {
-                  const data = await fetchScoreboardForDay("basketball", "nba", day);
-                  const events: any[] = data?.events || [];
-                  for (const ev of events) {
-                    const mapped = mapEvent(ev, "nba", "nba", "NBA");
-                    if (mapped && !seen.has(mapped.id)) {
-                      seen.add(mapped.id);
-                      items.push(mapped);
-                    }
-                  }
-                } catch (_) {
-                  // idem
-                }
-              })(),
-            ]
-          : []),
+        (async () => {
+          try {
+            const data = await fetchScoreboardForDay("basketball", "nba", day);
+            const events: any[] = data?.events || [];
+            for (const ev of events) {
+              const mapped = mapEvent(ev, "nba", "nba", "NBA");
+              if (mapped && !seen.has(mapped.id)) {
+                seen.add(mapped.id);
+                items.push(mapped);
+              }
+            }
+          } catch (_) {
+            // idem
+          }
+        })(),
       ];
       await Promise.all(dayPromises);
     }

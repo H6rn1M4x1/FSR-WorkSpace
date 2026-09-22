@@ -14,7 +14,7 @@ import {
   F1NextRace,
   NbaStandingEntry,
 } from "../lib/standingsService";
-import { fetchWikiThumbnail } from "../lib/eventsService";
+import { fetchWikiThumbnail, fetchF1DriverPhoto } from "../lib/eventsService";
 
 const CARD = (darkMode: boolean) =>
   `p-6 rounded-3xl border flex flex-col shadow-xs lg:col-span-4 ${
@@ -163,20 +163,78 @@ export function FootballStandingsPanel({
   );
 }
 
+/** Una tarjeta del slider de pilotos/escuderías — misma pinta para ambas, pasando de a una. */
+function F1SliderCard({
+  label,
+  imageUrl,
+  name,
+  rank,
+  points,
+  isFollowed,
+  pageKey,
+  total,
+  page,
+}: {
+  label: string;
+  imageUrl?: string | null;
+  name: string;
+  rank: number;
+  points: number;
+  isFollowed: boolean;
+  pageKey: string;
+  total: number;
+  page: number;
+}) {
+  return (
+    <div className="flex flex-col min-w-0 min-h-0">
+      <p className="text-[9px] font-bold uppercase text-zinc-400 mb-1 px-1">{label}</p>
+      <div className="flex-1 min-h-0 rounded-xl bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 overflow-hidden flex flex-col">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={pageKey}
+            initial={{ opacity: 0, x: 16 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -16 }}
+            transition={{ duration: 0.3 }}
+            className="flex-1 min-h-0 flex flex-col items-center justify-center text-center gap-1 p-2"
+          >
+            {isFollowed && <Star className="w-3 h-3 text-primary fill-primary" />}
+            {imageUrl && <img src={imageUrl} alt="" className="w-10 h-10 object-contain rounded-full" />}
+            <p className={`text-[11px] font-extrabold truncate max-w-full ${isFollowed ? "text-primary" : "text-zinc-900 dark:text-zinc-100"}`}>
+              {name}
+            </p>
+            <p className="text-[10px] text-zinc-500 dark:text-zinc-400 font-bold">
+              #{rank} · {points} pts
+            </p>
+          </motion.div>
+        </AnimatePresence>
+        {total > 1 && (
+          <div className="flex items-center justify-center gap-1 pb-2 flex-wrap px-2">
+            {Array.from({ length: total }).map((_, i) => (
+              <span key={i} className={`h-1.5 rounded-full transition-all ${i === page ? "w-4 bg-primary" : "w-1.5 bg-zinc-300 dark:bg-zinc-700"}`} />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /**
- * 3/4 del espacio: campeonato de pilotos (lista completa con scroll) al lado del de
- * constructores (una escudería por vez, avanzando sola, como el resto de los carruseles de esta
- * fila). 1/4 restante: cuándo es la próxima carrera. Resalta con acento el piloto/escudería que
- * seguís, mismo criterio que las tablas de fútbol/NBA.
+ * De arriba abajo: 3/4 del espacio con dos tablas en slider lado a lado (pilotos y
+ * constructores, cada una pasando de a un piloto/escudería), 1/4 restante con la próxima
+ * carrera. Resalta con acento + estrella el piloto/escudería que seguís, mismo criterio que las
+ * tablas de fútbol/NBA.
  */
 export function F1StandingsPanel({ darkMode, driverName, teamName }: { darkMode: boolean; driverName?: string; teamName?: string }) {
   const [drivers, setDrivers] = useState<F1DriverStanding[] | null>(null);
   const [constructors, setConstructors] = useState<F1ConstructorStanding[] | null>(null);
   const [nextRace, setNextRace] = useState<F1NextRace | null>(null);
   const [nextRaceImage, setNextRaceImage] = useState<string | null>(null);
+  const [driverPhotos, setDriverPhotos] = useState<Record<string, string | null>>({});
+  const [driverPage, setDriverPage] = useState(0);
   const [constructorPage, setConstructorPage] = useState(0);
   const [loading, setLoading] = useState(true);
-  const driverScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -199,12 +257,27 @@ export function F1StandingsPanel({ darkMode, driverName, teamName }: { darkMode:
   }, [nextRace]);
 
   useEffect(() => {
+    if (!drivers || drivers.length <= 1) return;
+    const id = setInterval(() => setDriverPage((p) => (p + 1) % drivers.length), 5000);
+    return () => clearInterval(id);
+  }, [drivers]);
+
+  useEffect(() => {
     if (!constructors || constructors.length <= 1) return;
     const id = setInterval(() => setConstructorPage((p) => (p + 1) % constructors.length), 6000);
     return () => clearInterval(id);
   }, [constructors]);
 
+  const currentDriver = drivers?.[driverPage % Math.max(drivers.length, 1)];
   const currentConstructor = constructors?.[constructorPage % Math.max(constructors.length, 1)];
+
+  useEffect(() => {
+    if (!currentDriver || currentDriver.driverName in driverPhotos) return;
+    fetchF1DriverPhoto(currentDriver.driverName).then((url) => setDriverPhotos((prev) => ({ ...prev, [currentDriver.driverName]: url })));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentDriver]);
+
+  const isFollowedDriver = (name: string) => Boolean(driverName) && name.toLowerCase().includes(driverName!.toLowerCase());
   const isFollowedConstructor = (name: string) => Boolean(teamName) && name.toLowerCase().includes(teamName!.toLowerCase());
   const nextRaceDate = nextRace ? new Date(nextRace.date) : null;
 
@@ -215,86 +288,53 @@ export function F1StandingsPanel({ darkMode, driverName, teamName }: { darkMode:
         <LoadingState />
       ) : (
         <div className="flex flex-col gap-3">
-          {/* 3/4: pilotos (lista) + constructores (slider) */}
-          <div className="grid grid-cols-2 gap-3 h-[300px]">
-            <div className="flex flex-col min-w-0">
-              <p className="text-[9px] font-bold uppercase text-zinc-400 mb-1 px-1">Pilotos</p>
-              <div ref={driverScrollRef} className="flex-1 overflow-y-auto pr-1 text-[10px] space-y-0.5">
-                {!drivers?.length ? (
-                  <p className="text-xs text-zinc-500 text-center py-6">No disponible.</p>
-                ) : (
-                  drivers.map((d) => {
-                    const isFollowed = Boolean(driverName) && d.driverName.toLowerCase().includes(driverName!.toLowerCase());
-                    return (
-                      <motion.div
-                        key={d.driverId}
-                        initial={{ opacity: 0, y: 8 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ root: driverScrollRef, once: true, margin: "0px 0px -10% 0px" }}
-                        transition={{ duration: 0.25, ease: "easeOut" }}
-                        className={`flex items-center gap-1.5 px-1.5 py-1 rounded-lg transition-colors hover:bg-primary/10 ${
-                          isFollowed ? "bg-primary/10 text-primary font-extrabold" : "text-zinc-700 dark:text-zinc-300"
-                        }`}
-                      >
-                        {isFollowed && <Star className="w-2.5 h-2.5 text-primary fill-primary shrink-0" />}
-                        <span className="w-4 shrink-0">{d.rank}</span>
-                        <span className="truncate flex-1">{d.driverName}</span>
-                        <span className="font-extrabold shrink-0">{d.points}</span>
-                      </motion.div>
-                    );
-                  })
-                )}
+          {/* 3/4: pilotos y constructores, cada uno en su propio slider */}
+          <div className="grid grid-cols-2 gap-3 h-[260px]">
+            {!drivers?.length ? (
+              <div className="flex flex-col min-h-0">
+                <p className="text-[9px] font-bold uppercase text-zinc-400 mb-1 px-1">Pilotos</p>
+                <p className="text-xs text-zinc-500 text-center py-6 m-auto">No disponible.</p>
               </div>
-            </div>
+            ) : (
+              currentDriver && (
+                <F1SliderCard
+                  label="Pilotos"
+                  imageUrl={driverPhotos[currentDriver.driverName]}
+                  name={currentDriver.driverName}
+                  rank={currentDriver.rank}
+                  points={currentDriver.points}
+                  isFollowed={isFollowedDriver(currentDriver.driverName)}
+                  pageKey={currentDriver.driverId}
+                  total={drivers.length}
+                  page={driverPage}
+                />
+              )
+            )}
 
-            <div className="flex flex-col min-w-0">
-              <p className="text-[9px] font-bold uppercase text-zinc-400 mb-1 px-1">Escuderías</p>
-              <div className="flex-1 rounded-xl bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 overflow-hidden flex flex-col">
-                {!currentConstructor ? (
-                  <p className="text-xs text-zinc-500 text-center py-6 m-auto">No disponible.</p>
-                ) : (
-                  <>
-                    <AnimatePresence mode="wait">
-                      <motion.div
-                        key={currentConstructor.teamId}
-                        initial={{ opacity: 0, x: 16 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: -16 }}
-                        transition={{ duration: 0.3 }}
-                        className="flex-1 flex flex-col items-center justify-center text-center gap-1 p-2"
-                      >
-                        {isFollowedConstructor(currentConstructor.teamName) && <Star className="w-3 h-3 text-primary fill-primary" />}
-                        {currentConstructor.teamLogo && (
-                          <img src={currentConstructor.teamLogo} alt="" className="w-8 h-8 object-contain" />
-                        )}
-                        <p
-                          className={`text-[11px] font-extrabold truncate max-w-full ${
-                            isFollowedConstructor(currentConstructor.teamName) ? "text-primary" : "text-zinc-900 dark:text-zinc-100"
-                          }`}
-                        >
-                          {currentConstructor.teamName}
-                        </p>
-                        <p className="text-[10px] text-zinc-500 dark:text-zinc-400 font-bold">
-                          #{currentConstructor.rank} · {currentConstructor.points} pts
-                        </p>
-                      </motion.div>
-                    </AnimatePresence>
-                    <div className="flex items-center justify-center gap-1 pb-2">
-                      {constructors!.map((c, i) => (
-                        <span
-                          key={c.teamId}
-                          className={`h-1.5 rounded-full transition-all ${i === constructorPage ? "w-4 bg-primary" : "w-1.5 bg-zinc-300 dark:bg-zinc-700"}`}
-                        />
-                      ))}
-                    </div>
-                  </>
-                )}
+            {!constructors?.length ? (
+              <div className="flex flex-col min-h-0">
+                <p className="text-[9px] font-bold uppercase text-zinc-400 mb-1 px-1">Escuderías</p>
+                <p className="text-xs text-zinc-500 text-center py-6 m-auto">No disponible.</p>
               </div>
-            </div>
+            ) : (
+              currentConstructor && (
+                <F1SliderCard
+                  label="Escuderías"
+                  imageUrl={currentConstructor.teamLogo}
+                  name={currentConstructor.teamName}
+                  rank={currentConstructor.rank}
+                  points={currentConstructor.points}
+                  isFollowed={isFollowedConstructor(currentConstructor.teamName)}
+                  pageKey={currentConstructor.teamId}
+                  total={constructors.length}
+                  page={constructorPage}
+                />
+              )
+            )}
           </div>
 
           {/* 1/4: próxima carrera */}
-          <div className="rounded-xl bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 p-2.5 flex items-center gap-3">
+          <div className="shrink-0 rounded-xl bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 p-2.5 flex items-center gap-3">
             {nextRaceImage && <img src={nextRaceImage} alt="" className="w-10 h-10 object-contain rounded-lg shrink-0" />}
             <div className="min-w-0 flex-1">
               <p className="text-[9px] font-bold uppercase text-zinc-400 tracking-wide">Próxima carrera</p>
