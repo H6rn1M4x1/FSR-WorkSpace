@@ -225,13 +225,11 @@ function SportDayPanel({
     const buttonWidth = buttonEl.offsetWidth;
     const containerWidth = container.clientWidth;
     const maxScroll = container.scrollWidth - containerWidth;
-    const currentScroll = container.scrollLeft;
-    let target = currentScroll;
-    if (buttonLeft + buttonWidth + 8 > currentScroll + containerWidth) {
-      target = buttonLeft + buttonWidth - containerWidth + 8;
-    } else if (buttonLeft - 8 < currentScroll) {
-      target = buttonLeft - 8;
-    }
+    // Centrado, no solo "apenas visible" en el borde — con el margen mínimo anterior, el botón
+    // elegido podía terminar pegado al borde (o directamente afuera si el cálculo se quedaba
+    // corto), que es justo el bug reportado: se ve que la fila se desplaza pero el día elegido
+    // no queda ni marcado a la vista ni centrado.
+    const target = buttonLeft - containerWidth / 2 + buttonWidth / 2;
     container.scrollTo({ left: Math.max(0, Math.min(maxScroll, target)), behavior: "smooth" });
   };
   const scrollDayTabs = (direction: "left" | "right") => {
