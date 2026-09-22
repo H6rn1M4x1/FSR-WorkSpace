@@ -2361,6 +2361,7 @@ export default function App() {
                   turnosCompromisos={turnosCompromisos}
                   setTurnosCompromisos={setTurnosCompromisos}
                   favoriteTeamName={userProfile?.favoriteTeam}
+                  userCountry={userProfile?.country}
                 />
               )}
 

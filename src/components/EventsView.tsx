@@ -40,6 +40,7 @@ import {
   fetchF1DriverPhoto,
   NBA_TEAMS,
   fetchWikiThumbnail,
+  fetchNationalTeamEspnId,
 } from "../lib/eventsService";
 import { TEAMS } from "../data/teams";
 import { FOOTBALL_LEAGUE_ESPN_CODE } from "../lib/standingsService";
@@ -54,6 +55,9 @@ interface EventsViewProps {
   /** Nombre del equipo favorito (Ajustes de Usuario) — para marcarlo con estrella en la tabla
    *  de posiciones de fútbol al final de la página. */
   favoriteTeamName?: string;
+  /** País del usuario (Ajustes de Usuario) — para seguir su selección nacional de fútbol
+   *  automáticamente, sin que la tenga que elegir a mano (ver fetchNationalTeamEspnId). */
+  userCountry?: string;
 }
 
 /** Id estable para el turno "Ocio" que agenda este evento de San Juan — así togglear la
@@ -467,7 +471,7 @@ function SportDayPanel({
  * follows, and a merged month calendar) lives on ONE unified page — no further sub-tabs —
  * reached as the "Eventos" entry inside Notas' own submenu.
  */
-export function EventsView({ userId, darkMode = false, turnosCompromisos, setTurnosCompromisos, favoriteTeamName }: EventsViewProps) {
+export function EventsView({ userId, darkMode = false, turnosCompromisos, setTurnosCompromisos, favoriteTeamName, userCountry }: EventsViewProps) {
   const { showToast } = useToast();
 
   // Campanita en cada tarjeta de "Qué hacer en San Juan": agenda/desagenda el evento como
@@ -772,6 +776,19 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
   // Fútbol: leagues first, drill into one league's clubs.
   const [footballLeague, setFootballLeague] = useState<string | null>(null);
 
+  // Selección nacional del usuario, resuelta en vivo contra el catálogo de equipos del Mundial
+  // de ESPN a partir de su país en Configuración — se sigue sola, sin picker manual.
+  const [nationalTeamId, setNationalTeamId] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetchNationalTeamEspnId(userCountry).then((id) => {
+      if (!cancelled) setNationalTeamId(id);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [userCountry]);
+
   // --- Sport events for followed sports/teams/drivers ---
   const [sportEvents, setSportEvents] = useState<SportEvent[]>([]);
   const [sportEventsLoading, setSportEventsLoading] = useState(false);
@@ -788,7 +805,7 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
     // Se guardan en localStorage por firma de preferencias (deportes/equipos/competencias
     // seguidas) + un TTL corto — el caché real y compartido ya vive en Firestore (refrescado
     // cada 15 min por el scheduled function), esto solo evita releerlo en cada render.
-    const signature = JSON.stringify({ sports: prefs.followedSports, teams: prefs.followedTeams, competitions: prefs.followedCompetitions });
+    const signature = JSON.stringify({ sports: prefs.followedSports, teams: prefs.followedTeams, competitions: prefs.followedCompetitions, nationalTeamId });
     const cacheKey = `sj_sport_events_cache_${userId}`;
     const SPORT_EVENTS_TTL_MS = 2 * 60 * 1000; // 2min — hay partidos en vivo, no conviene más
     try {
@@ -805,7 +822,7 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
     }
 
     setSportEventsLoading(true);
-    fetchFollowedSportEventsFromCache(prefs)
+    fetchFollowedSportEventsFromCache(prefs, nationalTeamId)
       .then((events) => {
         // Una corrida más nueva ya arrancó (el usuario cambió equipos de nuevo antes de que
         // esta terminara) — descartar esta respuesta en vez de pisar el resultado más actual.
@@ -829,7 +846,7 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
         if (myGeneration === sportFetchGeneration.current) setSportEventsLoading(false);
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prefsLoaded, prefs?.followedSports.join(","), JSON.stringify(prefs?.followedTeams || {}), (prefs?.followedCompetitions || []).join(",")]);
+  }, [prefsLoaded, prefs?.followedSports.join(","), JSON.stringify(prefs?.followedTeams || {}), (prefs?.followedCompetitions || []).join(","), nationalTeamId]);
 
   // --- Calendar: San Juan + followed sport events, merged by ISO date ---
   const eventsByDate = useMemo(() => {
@@ -1245,6 +1262,14 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
 
                   {isOpen && sportId === "futbol" && (
                     <div className="space-y-3">
+                      {userCountry && (
+                        <p className="text-[10px] text-zinc-500 bg-primary/10 text-primary rounded-lg px-2 py-1.5 flex items-center gap-1.5">
+                          <Trophy className="w-3 h-3 shrink-0" />
+                          {nationalTeamId
+                            ? `Tu selección (${userCountry}) se sigue automáticamente, según tu país en Configuración.`
+                            : `Buscando la selección de ${userCountry}...`}
+                        </p>
+                      )}
                       <div>
                         <p className="text-[10px] font-bold text-zinc-400 uppercase mb-1.5">
                           Competencias (todos sus partidos)
