@@ -13,6 +13,8 @@
  * código está mal.
  */
 
+import { F1_TEAMS, F1_TEAM_LOGOS } from "../data/f1";
+
 export interface StandingsEntry {
   teamId: string;
   teamName: string;
@@ -187,6 +189,72 @@ export async function fetchF1DriverStandings(): Promise<F1DriverStanding[]> {
     .sort((a, b) => a.rank - b.rank);
 
   return entries;
+}
+
+export interface F1ConstructorStanding {
+  teamId: string;
+  teamName: string;
+  teamLogo?: string;
+  rank: number;
+  points: number;
+}
+
+/**
+ * Campeonato de constructores de F1. Mismo endpoint de standings que el de pilotos, pero en el
+ * segundo grupo de `children` (el primero es "Driver Standings"). Mismo nombre de stat de
+ * puntos, "championshipPts", confirmado para pilotos y reusado acá porque ESPN usa el mismo
+ * esquema de stats para ambos grupos de standings.
+ */
+export async function fetchF1ConstructorStandings(): Promise<F1ConstructorStanding[]> {
+  const data = await fetchJson("https://site.api.espn.com/apis/v2/sports/racing/f1/standings");
+  if (!data) return [];
+
+  const group = (data?.children || []).find((c: any) => /constructor|manufacturer|team/i.test(c?.name || "")) || data?.children?.[1];
+  const rawEntries: any[] = group?.standings?.entries || [];
+
+  const entries: F1ConstructorStanding[] = rawEntries
+    .map((entry: any, idx: number): F1ConstructorStanding | null => {
+      const team = entry.team || entry.manufacturer;
+      const teamName: string = team?.displayName || team?.name || entry.athlete?.displayName;
+      if (!teamName) return null;
+      const stats: any[] = entry.stats || [];
+      const stat = (name: string) => stats.find((s: any) => s.name === name)?.value;
+      const knownTeam = F1_TEAMS.find((t) => teamName.toLowerCase().includes(t.name.toLowerCase()) || t.name.toLowerCase().includes(teamName.toLowerCase()));
+      return {
+        teamId: String(team?.id ?? knownTeam?.id ?? idx),
+        teamName,
+        teamLogo: team?.logos?.[0]?.href || (knownTeam ? F1_TEAM_LOGOS[knownTeam.id] : undefined),
+        rank: Math.round(stat("rank") ?? idx + 1),
+        points: Math.round(stat("championshipPts") ?? 0),
+      };
+    })
+    .filter((e): e is F1ConstructorStanding => e !== null)
+    .sort((a, b) => a.rank - b.rank);
+
+  return entries;
+}
+
+export interface F1NextRace {
+  raceName: string;
+  circuitName?: string;
+  date: string;
+}
+
+/**
+ * Próxima carrera de F1 todavía no corrida. Confirmado con JSON real: el endpoint de scoreboard
+ * sin fecha siempre devuelve un único evento, el próximo fin de semana de carrera — exactamente
+ * lo que se necesita acá (a diferencia de "últimas carreras", donde este mismo endpoint no
+ * sirve, ver `fetchF1DriverStandings`).
+ */
+export async function fetchF1NextRace(): Promise<F1NextRace | null> {
+  const data = await fetchJson("https://site.api.espn.com/apis/site/v2/sports/racing/f1/scoreboard");
+  const ev = data?.events?.[0];
+  if (!ev) return null;
+  return {
+    raceName: ev.name || ev.shortName || "Gran Premio",
+    circuitName: ev.circuit?.fullName || ev.competitions?.[0]?.venue?.fullName,
+    date: ev.date,
+  };
 }
 
 export interface NbaStandingEntry {

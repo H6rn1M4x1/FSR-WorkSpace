@@ -1,6 +1,8 @@
 import { schedule } from "@netlify/functions";
 import { initializeApp, getApps } from "firebase/app";
-import { getFirestore, doc, setDoc } from "firebase/firestore";
+import { getFirestore, doc, setDoc, collectionGroup, getDocs } from "firebase/firestore";
+import { TEAMS } from "../../src/data/teams";
+import { FOOTBALL_LEAGUE_ESPN_CODE } from "../../src/lib/standingsService";
 
 // Same Firebase project/config as the rest of the serverless functions (see
 // refresh-san-juan-events.ts) — kept in sync manually since there's no shared env var for it
@@ -15,10 +17,14 @@ const firebaseConfig = {
 };
 const FIRESTORE_DATABASE_ID = "ai-studio-fsrworkspace-54088f75-aeab-47ef-aff0-3ed53c6ba118";
 
-// Solo códigos de liga confirmados válidos (ver matchScheduler.ts / footballCompetitions.ts) —
-// "uefa.europa" y "fifa.friendly" dieron 400 confirmado en vivo, así que quedan afuera. Nombres
-// en criollo (no el código ESPN) para que "Eventos deportivos" muestre "Premier League" en vez
-// de "eng.1" — deben coincidir con src/data/footballCompetitions.ts.
+// Catálogo completo de competencias con código ESPN confirmado válido (ver matchScheduler.ts /
+// footballCompetitions.ts) — "uefa.europa" y "fifa.friendly" dieron 400 confirmado en vivo, así
+// que quedan afuera. Ya NO se fetchea entero siempre: por defecto solo se piden las competencias
+// que al menos un usuario sigue de verdad (ver `computeFollowedCompetitionCodes` más abajo) —
+// este catálogo queda como lookup de nombres + fallback para el arranque en frío (antes de que
+// exista ninguna preferencia guardada). Nombres en criollo (no el código ESPN) para que "Partidos
+// de Hoy" muestre "Premier League" en vez de "eng.1" — deben coincidir con
+// src/data/footballCompetitions.ts.
 const FOOTBALL_COMPETITIONS: { id: string; name: string }[] = [
   { id: "arg.1", name: "Liga Profesional Argentina" },
   { id: "arg.copa", name: "Copa Argentina" },
@@ -110,13 +116,56 @@ function mapEvent(ev: any, sportId: "futbol" | "nba", competitionId: string, com
   };
 }
 
+interface StoredEventPreferences {
+  followedSports?: string[];
+  followedTeams?: Record<string, { id: string; name: string }[]>;
+  followedCompetitions?: string[];
+}
+
+/**
+ * Unión de lo que TODOS los usuarios siguen de verdad, leída una vez por refresh vía
+ * `collectionGroup` (barre `users/*\/event_preferences/*` de una — reglas de Firestore de este
+ * proyecto son abiertas, así que no hace falta nada especial para leer entre usuarios). Antes el
+ * caché siempre pedía las 10 competencias curadas de FOOTBALL_COMPETITIONS le interese o no a
+ * alguien — ahora arma dinámicamente qué competencias hace falta pedir a partir de:
+ * (a) competencias enteras seguidas explícitamente (`followedCompetitions`, ya son códigos ESPN),
+ * (b) la liga de cada equipo de fútbol seguido puntualmente (vía FOOTBALL_LEAGUE_ESPN_CODE).
+ * Así el caché sigue funcionando "como filtro" para cada usuario (cada uno se queda con lo suyo
+ * al leerlo, ver `fetchFollowedSportEventsFromCache`), pero ESPN solo recibe pedidos de lo que
+ * al menos una persona sigue, no un catálogo fijo completo.
+ */
+async function computeFollowedCompetitionCodes(db: ReturnType<typeof getFirestore>): Promise<{ codes: Set<string>; anyNba: boolean; hasAnyPrefs: boolean }> {
+  const codes = new Set<string>();
+  let anyNba = false;
+  let hasAnyPrefs = false;
+  try {
+    const snap = await getDocs(collectionGroup(db, "event_preferences"));
+    snap.forEach((docSnap) => {
+      hasAnyPrefs = true;
+      const data = docSnap.data() as StoredEventPreferences;
+      (data.followedCompetitions || []).forEach((code) => codes.add(code));
+      if ((data.followedSports || []).includes("nba") || (data.followedTeams?.nba || []).length > 0) anyNba = true;
+      (data.followedTeams?.futbol || []).forEach((followed) => {
+        const team = TEAMS.find((t) => t.id === followed.id);
+        const code = team && FOOTBALL_LEAGUE_ESPN_CODE[team.league];
+        if (code) codes.add(code);
+      });
+    });
+  } catch (error) {
+    console.error("[refresh-sport-events] Error leyendo preferencias de usuarios:", error);
+  }
+  return { codes, anyNba, hasAnyPrefs };
+}
+
 /**
  * Refresca un caché compartido (para toda la app, no por usuario) de partidos de ayer + hoy +
- * los próximos 7 días de las competencias más seguidas + NBA, en `shared_data/sport_events_cache`.
- * Antes "Eventos deportivos" hacía que cada navegador le pegara directo a ESPN por cada equipo
- * seguido — esto lo centraliza en un solo pedido periódico del lado del servidor, que todos
- * los usuarios leen igual que "Qué hacer en San Juan". El filtro de días de la UI necesita datos
- * de esos 9 días para no mostrar "sin partidos" en pestañas que sí tienen fixtures.
+ * los próximos 7 días de las competencias que al menos un usuario sigue + NBA (si alguien la
+ * sigue), en `shared_data/sport_events_cache`. Antes "Eventos deportivos" hacía que cada
+ * navegador le pegara directo a ESPN por cada equipo seguido — esto lo centraliza en un solo
+ * pedido periódico del lado del servidor, que todos los usuarios leen igual que "Qué hacer en
+ * San Juan", y cada usuario lo filtra por sus propias preferencias al leerlo. El filtro de días
+ * de la UI necesita datos de esos 9 días para no mostrar "sin partidos" en pestañas que sí
+ * tienen fixtures.
  */
 const handlerFn = async () => {
   const app = getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig);
@@ -134,15 +183,23 @@ const handlerFn = async () => {
   const seen = new Set<string>();
 
   try {
-    // Un solo Promise.all con las 10 competencias × 9 días + NBA (99 pedidos simultáneos) le
-    // pegaba a ESPN de una sola vez — confirmado en vivo que el caché terminaba con datos solo
-    // de ayer/hoy/mañana (los primeros días en resolver) y nada de los días siguientes, como si
-    // ESPN empezara a rechazar o cortar pedidos bajo esa ráfaga. Se recorre día por día en vez
-    // de todo junto: 11 pedidos en paralelo (10 competencias + NBA) por día, uno detrás del
-    // otro — mismo total de pedidos, pero sin la ráfaga de 99 a la vez.
+    const { codes: followedCodes, anyNba, hasAnyPrefs } = await computeFollowedCompetitionCodes(db);
+    // Arranque en frío (todavía no hay ninguna preferencia guardada) — cae al catálogo curado
+    // completo para que la app no arranque con el caché vacío antes de que alguien configure algo.
+    const competitionsToFetch = hasAnyPrefs ? FOOTBALL_COMPETITIONS.filter((c) => followedCodes.has(c.id)) : FOOTBALL_COMPETITIONS;
+    const fetchNba = hasAnyPrefs ? anyNba : true;
+    console.log(
+      `[refresh-sport-events] siguiendo ${competitionsToFetch.length} competencia(s) de fútbol${fetchNba ? " + NBA" : ""} (hasAnyPrefs=${hasAnyPrefs})`
+    );
+
+    // Un solo Promise.all con todas las competencias × 9 días + NBA a la vez le pegaba a ESPN de
+    // una sola ráfaga — confirmado en vivo que el caché terminaba con datos solo de ayer/hoy/
+    // mañana (los primeros días en resolver) y nada de los días siguientes, como si ESPN
+    // empezara a rechazar o cortar pedidos bajo esa ráfaga. Se recorre día por día en vez de
+    // todo junto: un pedido en paralelo por competencia (+ NBA) por día, uno detrás del otro.
     for (const day of days) {
       const dayPromises = [
-        ...FOOTBALL_COMPETITIONS.map(async (comp) => {
+        ...competitionsToFetch.map(async (comp) => {
           try {
             const data = await fetchScoreboardForDay("soccer", comp.id, day);
             const events: any[] = data?.events || [];
@@ -157,21 +214,25 @@ const handlerFn = async () => {
             // una competencia/día que falla no debe tirar abajo el resto del refresh
           }
         }),
-        (async () => {
-          try {
-            const data = await fetchScoreboardForDay("basketball", "nba", day);
-            const events: any[] = data?.events || [];
-            for (const ev of events) {
-              const mapped = mapEvent(ev, "nba", "nba", "NBA");
-              if (mapped && !seen.has(mapped.id)) {
-                seen.add(mapped.id);
-                items.push(mapped);
-              }
-            }
-          } catch (_) {
-            // idem
-          }
-        })(),
+        ...(fetchNba
+          ? [
+              (async () => {
+                try {
+                  const data = await fetchScoreboardForDay("basketball", "nba", day);
+                  const events: any[] = data?.events || [];
+                  for (const ev of events) {
+                    const mapped = mapEvent(ev, "nba", "nba", "NBA");
+                    if (mapped && !seen.has(mapped.id)) {
+                      seen.add(mapped.id);
+                      items.push(mapped);
+                    }
+                  }
+                } catch (_) {
+                  // idem
+                }
+              })(),
+            ]
+          : []),
       ];
       await Promise.all(dayPromises);
     }

@@ -921,6 +921,7 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
     return Array.from(byCode.entries()).map(([code, name]) => ({ code, name }));
   }, [prefs?.followedTeams, prefs?.followedCompetitions]);
   const followedF1DriverName = prefs?.followedTeams["f1"]?.find((t) => t.kind === "driver")?.name;
+  const followedF1TeamName = prefs?.followedTeams["f1"]?.find((t) => t.kind === "team")?.name;
 
   return (
     <div className="space-y-6 animate-fade-in px-3 sm:px-6 pt-1 sm:pt-1.5 pb-6">
@@ -1489,7 +1490,7 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
           followedTeamNames={followedFootballTeamNames}
           favoriteTeamName={favoriteTeamName}
         />
-        <F1StandingsPanel darkMode={darkMode} driverName={followedF1DriverName} />
+        <F1StandingsPanel darkMode={darkMode} driverName={followedF1DriverName} teamName={followedF1TeamName} />
         <NbaStandingsPanel darkMode={darkMode} followedTeamNames={followedNbaTeamNames} />
       </div>
     </div>
