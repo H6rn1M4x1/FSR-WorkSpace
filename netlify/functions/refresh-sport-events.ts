@@ -1,8 +1,6 @@
 import { schedule } from "@netlify/functions";
 import { initializeApp, getApps } from "firebase/app";
 import { getFirestore, doc, setDoc, collectionGroup, getDocs } from "firebase/firestore";
-import { TEAMS } from "../../src/data/teams";
-import { FOOTBALL_LEAGUE_ESPN_CODE } from "../../src/lib/standingsService";
 
 // Same Firebase project/config as the rest of the serverless functions (see
 // refresh-san-juan-events.ts) — kept in sync manually since there's no shared env var for it
@@ -19,12 +17,11 @@ const FIRESTORE_DATABASE_ID = "ai-studio-fsrworkspace-54088f75-aeab-47ef-aff0-3e
 
 // Catálogo completo de competencias con código ESPN confirmado válido (ver matchScheduler.ts /
 // footballCompetitions.ts) — "uefa.europa" y "fifa.friendly" dieron 400 confirmado en vivo, así
-// que quedan afuera. Ya NO se fetchea entero siempre: por defecto solo se piden las competencias
-// que al menos un usuario sigue de verdad (ver `computeFollowedCompetitionCodes` más abajo) —
-// este catálogo queda como lookup de nombres + fallback para el arranque en frío (antes de que
-// exista ninguna preferencia guardada). Nombres en criollo (no el código ESPN) para que "Partidos
-// de Hoy" muestre "Premier League" en vez de "eng.1" — deben coincidir con
-// src/data/footballCompetitions.ts.
+// que quedan afuera. Este catálogo SIEMPRE se pide entero (piso mínimo garantizado); lo dinámico
+// por preferencias de usuarios (ver `computeFollowedCompetitionCodes` más abajo) solo puede sumar
+// competencias por fuera de acá, nunca sacar nada de esta lista. Nombres en criollo (no el código
+// ESPN) para que "Partidos de Hoy" muestre "Premier League" en vez de "eng.1" — deben coincidir
+// con src/data/footballCompetitions.ts.
 const FOOTBALL_COMPETITIONS: { id: string; name: string }[] = [
   { id: "arg.1", name: "Liga Profesional Argentina" },
   { id: "arg.copa", name: "Copa Argentina" },
@@ -117,20 +114,18 @@ function mapEvent(ev: any, sportId: "futbol" | "nba", competitionId: string, com
 }
 
 interface StoredEventPreferences {
-  followedSports?: string[];
-  followedTeams?: Record<string, { id: string; name: string }[]>;
   followedCompetitions?: string[];
 }
 
 /**
- * Unión de las competencias que TODOS los usuarios siguen de verdad, leída una vez por refresh
- * vía `collectionGroup` (barre `users/*\/event_preferences/*` de una — reglas de Firestore de
- * este proyecto son abiertas, así que no hace falta nada especial para leer entre usuarios):
- * (a) competencias enteras seguidas explícitamente (`followedCompetitions`, ya son códigos ESPN),
- * (b) la liga de cada equipo de fútbol seguido puntualmente (vía FOOTBALL_LEAGUE_ESPN_CODE). Se
- * usa solo para SUMAR por fuera del catálogo curado (ver más abajo) — nunca para restarle nada,
- * así nunca se pierde cobertura que antes funcionaba por un fallo al leer o mapear preferencias.
- * Si algo falla (ej. la lectura de Firestore), se degrada a un set vacío sin cortar el refresh.
+ * Unión de las competencias enteras que los usuarios siguen explícitamente (`followedCompetitions`,
+ * ya son códigos ESPN — ver footballCompetitions.ts), leída una vez por refresh vía
+ * `collectionGroup` (barre `users/*\/event_preferences/*` de una — reglas de Firestore de este
+ * proyecto son abiertas, así que no hace falta nada especial para leer entre usuarios). Se usa
+ * solo para SUMAR por fuera del catálogo curado (ver más abajo) — nunca para restarle nada, así
+ * nunca se pierde cobertura que antes funcionaba. Si algo falla (ej. la lectura de Firestore), se
+ * degrada a un set vacío sin cortar el refresh — el catálogo curado ya cubre todo lo seguible
+ * hoy, así que esto es puramente a futuro (nuevas ligas que se agreguen como seguibles).
  */
 async function computeFollowedCompetitionCodes(db: ReturnType<typeof getFirestore>): Promise<Set<string>> {
   const codes = new Set<string>();
@@ -139,11 +134,6 @@ async function computeFollowedCompetitionCodes(db: ReturnType<typeof getFirestor
     snap.forEach((docSnap) => {
       const data = docSnap.data() as StoredEventPreferences;
       (data.followedCompetitions || []).forEach((code) => codes.add(code));
-      (data.followedTeams?.futbol || []).forEach((followed) => {
-        const team = TEAMS.find((t) => t.id === followed.id);
-        const code = team && FOOTBALL_LEAGUE_ESPN_CODE[team.league];
-        if (code) codes.add(code);
-      });
     });
   } catch (error) {
     console.error("[refresh-sport-events] Error leyendo preferencias de usuarios:", error);
@@ -175,6 +165,8 @@ const handlerFn = async () => {
 
   const items: CachedSportEvent[] = [];
   const seen = new Set<string>();
+  let okRequests = 0;
+  let failedRequests = 0;
 
   try {
     const followedCodes = await computeFollowedCompetitionCodes(db);
@@ -198,6 +190,11 @@ const handlerFn = async () => {
         ...competitionsToFetch.map(async (comp) => {
           try {
             const data = await fetchScoreboardForDay("soccer", comp.id, day);
+            if (data === null) {
+              failedRequests++;
+              return;
+            }
+            okRequests++;
             const events: any[] = data?.events || [];
             for (const ev of events) {
               const mapped = mapEvent(ev, "futbol", comp.id, comp.name);
@@ -208,11 +205,17 @@ const handlerFn = async () => {
             }
           } catch (_) {
             // una competencia/día que falla no debe tirar abajo el resto del refresh
+            failedRequests++;
           }
         }),
         (async () => {
           try {
             const data = await fetchScoreboardForDay("basketball", "nba", day);
+            if (data === null) {
+              failedRequests++;
+              return;
+            }
+            okRequests++;
             const events: any[] = data?.events || [];
             for (const ev of events) {
               const mapped = mapEvent(ev, "nba", "nba", "NBA");
@@ -223,19 +226,34 @@ const handlerFn = async () => {
             }
           } catch (_) {
             // idem
+            failedRequests++;
           }
         })(),
       ];
       await Promise.all(dayPromises);
     }
 
-    console.log(`[refresh-sport-events] cached ${items.length} event(s)`);
+    console.log(
+      `[refresh-sport-events] ${items.length} event(s), ${okRequests} pedido(s) ok, ${failedRequests} pedido(s) fallido(s)`
+    );
+
+    // Si TODOS (o casi todos) los pedidos a ESPN fallaron, "items" va a dar vacío o casi vacío
+    // sin que eso signifique que de verdad no hay partidos — es mucho más probable que ESPN esté
+    // rechazando pedidos en este momento (ya confirmado que pasa bajo ráfagas/temporalmente en
+    // este proyecto). Escribir ese resultado vacío pisaría un caché anterior que sí tenía datos
+    // reales, dejando la app en blanco hasta el próximo refresh exitoso. Si no hubo NINGÚN pedido
+    // exitoso, se deja el caché anterior intacto en vez de escribir vacío encima.
+    if (okRequests === 0 && failedRequests > 0) {
+      console.warn(`[refresh-sport-events] los ${failedRequests} pedidos a ESPN fallaron todos — no se toca el caché anterior`);
+      return { statusCode: 200, body: `skip: ${failedRequests} failed requests, 0 ok` };
+    }
+
     await setDoc(doc(db, "shared_data", "sport_events_cache"), {
       items,
       fetchedAt: Date.now(),
     });
 
-    return { statusCode: 200, body: `OK (${items.length} eventos)` };
+    return { statusCode: 200, body: `OK (${items.length} eventos, ${failedRequests} pedidos fallidos)` };
   } catch (error: any) {
     console.error("Error in refresh-sport-events:", error);
     // Dejar el caché anterior intacto — un refresh fallido nunca debería vaciar uno que
