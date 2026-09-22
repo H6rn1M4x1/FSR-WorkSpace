@@ -373,16 +373,16 @@ function SportDayPanel({
         </button>
       </div>
       {loading ? (
-        <div className="min-h-[292px] flex items-center gap-2 text-xs text-zinc-500">
+        <div className="flex-1 min-h-[292px] flex items-center gap-2 text-xs text-zinc-500">
           <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Cargando calendarios...
         </div>
       ) : events.length === 0 ? (
-        <p className="min-h-[292px] flex items-center text-xs text-zinc-500">{emptyMessage}</p>
+        <p className="flex-1 min-h-[292px] flex items-center text-xs text-zinc-500">{emptyMessage}</p>
       ) : (
-        <div className="space-y-3">
+        <div className="flex-1 min-h-0 flex flex-col gap-3">
           {/* Mismo mecanismo de flechas que el submenú principal (SubNav) para desplazar las
               pestañas de día. */}
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 shrink-0">
             <button
               type="button"
               onClick={() => scrollDayTabs("left")}
@@ -422,7 +422,7 @@ function SportDayPanel({
             </button>
           </div>
 
-          <div ref={sportEventsScrollRef} className="h-[380px] overflow-y-auto pr-1 space-y-4">
+          <div ref={sportEventsScrollRef} className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-4">
             {selectedSportDayEvents.length === 0 ? (
               <p className="text-xs text-zinc-500 py-4 text-center">No hay partidos ese día.</p>
             ) : (
@@ -1358,10 +1358,11 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
       )}
 
       {/* Qué hacer en San Juan + Partidos de Hoy (fútbol) + NBA — tres tarjetas iguales, cada
-          una su propia tarjeta opaca igual que arriba. "items-start" evita que CSS grid estire
-          las 3 tarjetas a la altura de la más alta (San Juan, con 6 tarjetas en 3 filas, quedaba
-          más alta que las otras dos, que se estiraban dejando un espacio vacío enorme abajo). */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          una su propia tarjeta opaca igual que arriba. Sin "items-start": el stretch por defecto
+          de CSS grid iguala las 3 tarjetas a la altura de la más alta (San Juan, la única con
+          alto natural/auto ya que sus 6 tarjetas en 3 filas nunca se recortan) — las otras dos
+          usan flex-1 internamente para ocupar exactamente esa misma altura. */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
       <div className={`${SECTION_CARD(darkMode)} lg:col-span-4`}>
         <div className="flex items-center justify-between flex-wrap gap-2 border-b border-zinc-800/10 dark:border-zinc-800/40 pb-3 mb-4">
           <h3 className="font-extrabold text-sm flex items-center gap-2">
@@ -1380,11 +1381,14 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
           </p>
         ) : (
           <div className="space-y-2">
-            {/* Alto FIJO (no mínimo) — antes, con "min-h", la tarjeta crecía o se achicaba en
-                cada página según cuánto texto tuviera cada evento, dando un efecto de
-                "salto" molesto al pasar de página. Con altura fija + overflow-hidden queda
-                estable siempre, del mismo alto que "Partidos de Hoy"/"NBA" al lado. */}
-            <div className="overflow-hidden h-[380px]">
+            {/* Sin alto fijo — antes "h-[380px] overflow-hidden" recortaba la última fila
+                cuando las 6 tarjetas (3 filas) no entraban en ese alto. Ahora mide lo que su
+                contenido realmente necesita, nunca recorta, y "Partidos de Hoy"/NBA se estiran
+                para igualarlo (CSS grid stretch, ver el comentario en el div de la fila). El
+                slot de imagen h-32 se reserva SIEMPRE, tenga o no imagen el evento, para que la
+                altura de cada tarjeta sea consistente entre páginas (evita el salto al paginar,
+                sin necesitar una altura fija adivinada). */}
+            <div className="overflow-hidden">
               <AnimatePresence mode="wait" initial={false}>
                 <motion.div
                   key={sjPage}
@@ -1408,14 +1412,18 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
                         >
                           {scheduled ? <Bell className="w-3.5 h-3.5 fill-current" /> : <BellOff className="w-3.5 h-3.5" />}
                         </button>
-                        {ev.imageUrl && (
-                          <img
-                            src={ev.imageUrl}
-                            alt={ev.title}
-                            className="w-full h-32 object-cover"
-                            onError={(e) => { e.currentTarget.style.display = "none"; }}
-                          />
-                        )}
+                        <div className="w-full h-32 shrink-0 flex items-center justify-center bg-slate-100 dark:bg-zinc-800">
+                          {ev.imageUrl ? (
+                            <img
+                              src={ev.imageUrl}
+                              alt={ev.title}
+                              className="w-full h-full object-cover"
+                              onError={(e) => { e.currentTarget.style.display = "none"; }}
+                            />
+                          ) : (
+                            <MapPin className="w-6 h-6 text-zinc-400" />
+                          )}
+                        </div>
                         <div className="p-3 space-y-1 flex-1">
                           <p className="font-extrabold text-sm text-zinc-900 dark:text-zinc-100 line-clamp-2 pr-5">{ev.title}</p>
                           {ev.location && <p className="text-[11px] text-zinc-500 dark:text-zinc-400 line-clamp-1">{ev.location}</p>}
