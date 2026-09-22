@@ -16,8 +16,12 @@ import {
 } from "../lib/standingsService";
 import { fetchWikiThumbnail, fetchF1DriverPhoto } from "../lib/eventsService";
 
+// Alto fijo (no min-height) para que las 3 tarjetas de esta fila (fútbol/F1/NBA) siempre midan
+// exactamente lo mismo — F1 tiene contenido extra (la caja de "próxima carrera") que las otras
+// dos no, así que cada tabla interna usa flex-1 para repartirse el espacio que le queda dentro
+// de esta misma altura total, en vez de que cada tarjeta mida distinto según su contenido.
 const CARD = (darkMode: boolean) =>
-  `p-6 rounded-3xl border flex flex-col shadow-xs lg:col-span-4 ${
+  `p-6 rounded-3xl border flex flex-col shadow-xs lg:col-span-4 h-[440px] ${
     darkMode ? "bg-zinc-900 border-zinc-800 text-white shadow-lg" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
   }`;
 
@@ -97,8 +101,8 @@ export function FootballStandingsPanel({
       ) : loading ? (
         <LoadingState />
       ) : (
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
+        <div className="flex-1 min-h-0 flex flex-col gap-2">
+          <div className="flex items-center justify-between shrink-0">
             <p className="text-xs font-extrabold text-zinc-900 dark:text-zinc-100">{current.name}</p>
             <div className="flex items-center gap-1">
               {leagues.map((l, i) => (
@@ -114,7 +118,7 @@ export function FootballStandingsPanel({
               exit={{ opacity: 0, x: -16 }}
               transition={{ duration: 0.3 }}
               ref={scrollRef}
-              className="h-[350px] overflow-y-auto pr-1"
+              className="flex-1 min-h-0 overflow-y-auto pr-1"
             >
               {!table ? (
                 <p className="text-xs text-zinc-500 py-4 text-center">No se pudo cargar la tabla de {current.name}.</p>
@@ -223,10 +227,30 @@ export function F1StandingsPanel({ darkMode, driverName, teamName }: { darkMode:
       {loading ? (
         <LoadingState />
       ) : (
-        <div className="flex flex-col gap-3">
-          {/* 3/4: un slider, pasa entre la tabla de pilotos y la de constructores */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
+        <div className="flex-1 min-h-0 flex flex-col gap-3">
+          {/* Próxima carrera, arriba */}
+          <div className="shrink-0 rounded-xl bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 p-2.5 flex items-center gap-3">
+            {nextRaceImage && <img src={nextRaceImage} alt="" className="w-10 h-10 object-contain rounded-lg shrink-0" />}
+            <div className="min-w-0 flex-1">
+              <p className="text-[9px] font-bold uppercase text-zinc-400 tracking-wide">Próxima carrera</p>
+              {nextRace ? (
+                <>
+                  <p className="text-[11px] font-extrabold text-zinc-900 dark:text-zinc-100 truncate">{nextRace.raceName}</p>
+                  {nextRaceDate && !isNaN(nextRaceDate.getTime()) && (
+                    <p className="text-[10px] text-zinc-500">
+                      {nextRaceDate.toLocaleDateString("es-AR", { weekday: "short", day: "numeric", month: "short" })}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="text-[11px] text-zinc-500">No disponible.</p>
+              )}
+            </div>
+          </div>
+
+          {/* Slider, pasa entre la tabla de pilotos y la de constructores */}
+          <div className="flex-1 min-h-0 flex flex-col gap-2">
+            <div className="flex items-center justify-between shrink-0">
               <p className="text-xs font-extrabold text-zinc-900 dark:text-zinc-100">{page === "drivers" ? "Pilotos" : "Escuderías"}</p>
               <div className="flex items-center gap-1">
                 {(["drivers", "constructors"] as const).map((p) => (
@@ -242,7 +266,7 @@ export function F1StandingsPanel({ darkMode, driverName, teamName }: { darkMode:
                 exit={{ opacity: 0, x: -16 }}
                 transition={{ duration: 0.3 }}
                 ref={scrollRef}
-                className="h-[260px] overflow-y-auto pr-1 text-[11px]"
+                className="flex-1 min-h-0 overflow-y-auto pr-1 text-[11px]"
               >
                 <div className="grid grid-cols-[20px_26px_1fr_36px] gap-2 px-2 text-zinc-400 uppercase text-[9px] font-bold pb-1">
                   <span>#</span>
@@ -317,26 +341,6 @@ export function F1StandingsPanel({ darkMode, driverName, teamName }: { darkMode:
               </motion.div>
             </AnimatePresence>
           </div>
-
-          {/* 1/4: próxima carrera */}
-          <div className="shrink-0 rounded-xl bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 p-2.5 flex items-center gap-3">
-            {nextRaceImage && <img src={nextRaceImage} alt="" className="w-10 h-10 object-contain rounded-lg shrink-0" />}
-            <div className="min-w-0 flex-1">
-              <p className="text-[9px] font-bold uppercase text-zinc-400 tracking-wide">Próxima carrera</p>
-              {nextRace ? (
-                <>
-                  <p className="text-[11px] font-extrabold text-zinc-900 dark:text-zinc-100 truncate">{nextRace.raceName}</p>
-                  {nextRaceDate && !isNaN(nextRaceDate.getTime()) && (
-                    <p className="text-[10px] text-zinc-500">
-                      {nextRaceDate.toLocaleDateString("es-AR", { weekday: "short", day: "numeric", month: "short" })}
-                    </p>
-                  )}
-                </>
-              ) : (
-                <p className="text-[11px] text-zinc-500">No disponible.</p>
-              )}
-            </div>
-          </div>
         </div>
       )}
     </div>
@@ -371,7 +375,7 @@ export function NbaStandingsPanel({
       ) : !entries || entries.length === 0 ? (
         <EmptyState message="No se pudo cargar la tabla de posiciones de la NBA." />
       ) : (
-        <div ref={scrollRef} className="h-[350px] overflow-y-auto pr-1 text-[11px]">
+        <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto pr-1 text-[11px]">
           <div className="grid grid-cols-[20px_1fr_44px_36px] gap-2 px-2 text-zinc-400 uppercase text-[9px] font-bold pb-1">
             <span>#</span>
             <span>Equipo</span>
