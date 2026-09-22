@@ -16,13 +16,14 @@ const firebaseConfig = {
 const FIRESTORE_DATABASE_ID = "ai-studio-fsrworkspace-54088f75-aeab-47ef-aff0-3ed53c6ba118";
 
 // Catálogo completo de competencias con código ESPN confirmado válido (ver matchScheduler.ts /
-// footballCompetitions.ts) — "uefa.europa" y "fifa.friendly" dieron 400 confirmado en vivo, así
-// que quedan afuera. Se pide siempre entero, sin depender de ninguna lectura extra de
-// preferencias de usuarios (se probó esa variante y se sacó — ver historial de este archivo: una
-// consulta de más a Firestore al arrancar cada corrida es un riesgo real de tiempo de ejecución
-// en una función programada, sin aportar nada hoy ya que este catálogo ya cubre todo lo
-// seguible). Nombres en criollo (no el código ESPN) para que "Partidos de Hoy" muestre "Premier
-// League" en vez de "eng.1" — deben coincidir con src/data/footballCompetitions.ts.
+// footballCompetitions.ts) — "uefa.europa", "uefa.euro.qualifiers" y "conmebol.wc.qualifiers"
+// dieron 400 confirmado en vivo, así que quedan afuera. Se pide siempre entero, sin depender de
+// ninguna lectura extra de preferencias de usuarios (se probó esa variante y se sacó — ver
+// historial de este archivo: una consulta de más a Firestore al arrancar cada corrida es un
+// riesgo real de tiempo de ejecución en una función programada, sin aportar nada hoy ya que este
+// catálogo ya cubre todo lo seguible). Nombres en criollo (no el código ESPN) para que "Partidos
+// de Hoy" muestre "Premier League" en vez de "eng.1" — deben coincidir con
+// src/data/footballCompetitions.ts.
 const FOOTBALL_COMPETITIONS: { id: string; name: string }[] = [
   { id: "arg.1", name: "Liga Profesional Argentina" },
   { id: "arg.copa", name: "Copa Argentina" },
@@ -34,6 +35,11 @@ const FOOTBALL_COMPETITIONS: { id: string; name: string }[] = [
   { id: "ger.1", name: "Bundesliga" },
   { id: "fra.1", name: "Ligue 1" },
   { id: "uefa.champions", name: "UEFA Champions League" },
+  { id: "fifa.world", name: "Mundial de la FIFA" },
+  { id: "fifa.cwc", name: "Mundial de Clubes FIFA" },
+  { id: "conmebol.america", name: "Copa América" },
+  { id: "uefa.euro", name: "Eurocopa" },
+  { id: "fifa.friendly", name: "Amistosos Internacionales" },
 ];
 
 interface CachedSportEvent {

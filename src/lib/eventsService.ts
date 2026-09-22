@@ -239,6 +239,52 @@ export async function fetchF1Races(): Promise<SportEvent[]> {
   }
 }
 
+// --- Selección nacional: en vez de un mapeo país→equipo hardcodeado (imposible de mantener a
+// mano para 200+ países), se busca en vivo contra el propio catálogo de equipos de ESPN para el
+// Mundial — confirmado en vivo que "fifa.world" es un código válido — comparando por nombre de
+// país. Cacheado en memoria: la lista completa (~200 selecciones) no cambia durante una sesión.
+
+let nationalTeamsListCache: { id: string; name: string }[] | null = null;
+
+async function fetchNationalTeamsList(): Promise<{ id: string; name: string }[]> {
+  if (nationalTeamsListCache) return nationalTeamsListCache;
+  try {
+    const res = await fetch("https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/teams");
+    if (!res.ok) return [];
+    const data = await res.json();
+    const teams: any[] = data?.sports?.[0]?.leagues?.[0]?.teams || [];
+    nationalTeamsListCache = teams
+      .map((t) => ({ id: String(t.team?.id ?? ""), name: (t.team?.displayName || t.team?.name || "") as string }))
+      .filter((t) => t.id && t.name);
+    return nationalTeamsListCache;
+  } catch (_) {
+    return [];
+  }
+}
+
+const normalizeCountryName = (s: string) =>
+  s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .trim();
+
+/**
+ * Id de ESPN de la selección nacional del país dado (típicamente `userProfile.country`), para
+ * seguirla automáticamente sin que el usuario tenga que elegirla a mano — el pedido explícito de
+ * esta sesión ("tomando directamente ese valor de configuración").
+ */
+export async function fetchNationalTeamEspnId(countryName: string | undefined | null): Promise<string | null> {
+  if (!countryName) return null;
+  const teams = await fetchNationalTeamsList();
+  const target = normalizeCountryName(countryName);
+  const match = teams.find((t) => {
+    const name = normalizeCountryName(t.name);
+    return name === target || name.includes(target) || target.includes(name);
+  });
+  return match?.id ?? null;
+}
+
 // --- NBA: static roster (badges from cdn.nba.com — renders instantly, no network dependency
 // for the picker itself) + fixtures via ESPN, matched by name, regular + preseason. ---
 
@@ -426,13 +472,19 @@ function cachedEventToSportEvent(ev: CachedSportEvent, matchedBy: "team" | "comp
  * todavía no existe (antes de la primera corrida del scheduled function) o está vacío, cae al
  * fetch directo por equipo de siempre — nunca se queda sin datos por esto.
  */
-export async function fetchFollowedSportEventsFromCache(prefs: EventPreferences | null): Promise<SportEvent[]> {
+export async function fetchFollowedSportEventsFromCache(
+  prefs: EventPreferences | null,
+  nationalTeamEspnId?: string | null
+): Promise<SportEvent[]> {
   if (!prefs || prefs.followedSports.length === 0) return [];
 
   const followedCompetitions = new Set(prefs.followedCompetitions || []);
   const followedFootballIds = new Set(
     (prefs.followedTeams["futbol"] || []).map((t) => FOOTBALL_TEAM_ESPN_IDS[t.name]).filter(Boolean)
   );
+  // Selección nacional del usuario, derivada de su país en Configuración — se sigue sola, sin
+  // que haga falta elegirla a mano (ver fetchNationalTeamEspnId).
+  if (nationalTeamEspnId) followedFootballIds.add(nationalTeamEspnId);
   const followedNbaIds = new Set(
     (prefs.followedTeams["nba"] || []).map((t) => NBA_TEAM_ESPN_IDS[t.name]).filter(Boolean)
   );
