@@ -209,8 +209,16 @@ const handlerFn = async () => {
       return { statusCode: 200, body: `skip: ${failedRequests} failed requests, 0 ok` };
     }
 
+    // Confirmado en los logs reales de Netlify: "Unsupported field value: undefined" — Firestore
+    // rechaza el documento entero si CUALQUIER evento tiene un campo opcional en `undefined` (ej.
+    // un partido sin marcador o sin logo todavía, donde homeScore/awayLogo/etc. terminan
+    // `undefined` en vez de directamente ausentes). Esto tira el setDoc completo — no un evento
+    // puntual — dejando el caché sin actualizar hasta que ese partido puntual desaparezca de la
+    // ventana de 9 días. JSON.stringify/parse omite toda clave en `undefined` (anidada incluida),
+    // así que alcanza para sanear antes de escribir.
+    const sanitizedItems = JSON.parse(JSON.stringify(items));
     await setDoc(doc(db, "shared_data", "sport_events_cache"), {
-      items,
+      items: sanitizedItems,
       fetchedAt: Date.now(),
     });
 
