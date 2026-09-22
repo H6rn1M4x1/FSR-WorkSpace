@@ -1,6 +1,6 @@
 import { schedule } from "@netlify/functions";
 import { initializeApp, getApps } from "firebase/app";
-import { getFirestore, doc, setDoc, collectionGroup, getDocs } from "firebase/firestore";
+import { getFirestore, doc, setDoc } from "firebase/firestore";
 
 // Same Firebase project/config as the rest of the serverless functions (see
 // refresh-san-juan-events.ts) — kept in sync manually since there's no shared env var for it
@@ -17,11 +17,12 @@ const FIRESTORE_DATABASE_ID = "ai-studio-fsrworkspace-54088f75-aeab-47ef-aff0-3e
 
 // Catálogo completo de competencias con código ESPN confirmado válido (ver matchScheduler.ts /
 // footballCompetitions.ts) — "uefa.europa" y "fifa.friendly" dieron 400 confirmado en vivo, así
-// que quedan afuera. Este catálogo SIEMPRE se pide entero (piso mínimo garantizado); lo dinámico
-// por preferencias de usuarios (ver `computeFollowedCompetitionCodes` más abajo) solo puede sumar
-// competencias por fuera de acá, nunca sacar nada de esta lista. Nombres en criollo (no el código
-// ESPN) para que "Partidos de Hoy" muestre "Premier League" en vez de "eng.1" — deben coincidir
-// con src/data/footballCompetitions.ts.
+// que quedan afuera. Se pide siempre entero, sin depender de ninguna lectura extra de
+// preferencias de usuarios (se probó esa variante y se sacó — ver historial de este archivo: una
+// consulta de más a Firestore al arrancar cada corrida es un riesgo real de tiempo de ejecución
+// en una función programada, sin aportar nada hoy ya que este catálogo ya cubre todo lo
+// seguible). Nombres en criollo (no el código ESPN) para que "Partidos de Hoy" muestre "Premier
+// League" en vez de "eng.1" — deben coincidir con src/data/footballCompetitions.ts.
 const FOOTBALL_COMPETITIONS: { id: string; name: string }[] = [
   { id: "arg.1", name: "Liga Profesional Argentina" },
   { id: "arg.copa", name: "Copa Argentina" },
@@ -113,43 +114,14 @@ function mapEvent(ev: any, sportId: "futbol" | "nba", competitionId: string, com
   };
 }
 
-interface StoredEventPreferences {
-  followedCompetitions?: string[];
-}
-
-/**
- * Unión de las competencias enteras que los usuarios siguen explícitamente (`followedCompetitions`,
- * ya son códigos ESPN — ver footballCompetitions.ts), leída una vez por refresh vía
- * `collectionGroup` (barre `users/*\/event_preferences/*` de una — reglas de Firestore de este
- * proyecto son abiertas, así que no hace falta nada especial para leer entre usuarios). Se usa
- * solo para SUMAR por fuera del catálogo curado (ver más abajo) — nunca para restarle nada, así
- * nunca se pierde cobertura que antes funcionaba. Si algo falla (ej. la lectura de Firestore), se
- * degrada a un set vacío sin cortar el refresh — el catálogo curado ya cubre todo lo seguible
- * hoy, así que esto es puramente a futuro (nuevas ligas que se agreguen como seguibles).
- */
-async function computeFollowedCompetitionCodes(db: ReturnType<typeof getFirestore>): Promise<Set<string>> {
-  const codes = new Set<string>();
-  try {
-    const snap = await getDocs(collectionGroup(db, "event_preferences"));
-    snap.forEach((docSnap) => {
-      const data = docSnap.data() as StoredEventPreferences;
-      (data.followedCompetitions || []).forEach((code) => codes.add(code));
-    });
-  } catch (error) {
-    console.error("[refresh-sport-events] Error leyendo preferencias de usuarios:", error);
-  }
-  return codes;
-}
-
 /**
  * Refresca un caché compartido (para toda la app, no por usuario) de partidos de ayer + hoy +
- * los próximos 7 días del catálogo curado de competencias + NBA + lo que los usuarios sigan por
- * fuera de ese catálogo, en `shared_data/sport_events_cache`. Antes "Eventos deportivos" hacía
- * que cada navegador le pegara directo a ESPN por cada equipo seguido — esto lo centraliza en un
- * solo pedido periódico del lado del servidor, que todos los usuarios leen igual que "Qué hacer
- * en San Juan", y cada usuario lo filtra por sus propias preferencias al leerlo. El filtro de
- * días de la UI necesita datos de esos 9 días para no mostrar "sin partidos" en pestañas que sí
- * tienen fixtures.
+ * los próximos 7 días del catálogo curado de competencias + NBA, en
+ * `shared_data/sport_events_cache`. Antes "Eventos deportivos" hacía que cada navegador le
+ * pegara directo a ESPN por cada equipo seguido — esto lo centraliza en un solo pedido periódico
+ * del lado del servidor, que todos los usuarios leen igual que "Qué hacer en San Juan", y cada
+ * usuario lo filtra por sus propias preferencias al leerlo. El filtro de días de la UI necesita
+ * datos de esos 9 días para no mostrar "sin partidos" en pestañas que sí tienen fixtures.
  */
 const handlerFn = async () => {
   const app = getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig);
@@ -169,17 +141,6 @@ const handlerFn = async () => {
   let failedRequests = 0;
 
   try {
-    const followedCodes = await computeFollowedCompetitionCodes(db);
-    // El catálogo curado (FOOTBALL_COMPETITIONS) es siempre el piso mínimo — nunca se saca nada
-    // de acá para no perder cobertura que ya funcionaba. Lo dinámico (preferencias reales de
-    // usuarios) solo puede SUMAR competencias por fuera de ese catálogo si en el futuro se
-    // agregan más ligas seguibles; hoy en día followedCodes ya es subconjunto del catálogo, así
-    // que esto es efectivamente un no-op salvo que se amplíe FOLLOWABLE_COMPETITIONS. NBA
-    // siempre se pide, como siempre — es una sola competencia, no vale la pena condicionarla.
-    const extraCodes = Array.from(followedCodes).filter((code) => !FOOTBALL_COMPETITIONS.some((c) => c.id === code));
-    const competitionsToFetch = [...FOOTBALL_COMPETITIONS, ...extraCodes.map((id) => ({ id, name: id }))];
-    console.log(`[refresh-sport-events] pidiendo ${competitionsToFetch.length} competencia(s) de fútbol + NBA`);
-
     // Un solo Promise.all con todas las competencias × 9 días + NBA a la vez le pegaba a ESPN de
     // una sola ráfaga — confirmado en vivo que el caché terminaba con datos solo de ayer/hoy/
     // mañana (los primeros días en resolver) y nada de los días siguientes, como si ESPN
@@ -187,7 +148,7 @@ const handlerFn = async () => {
     // todo junto: un pedido en paralelo por competencia (+ NBA) por día, uno detrás del otro.
     for (const day of days) {
       const dayPromises = [
-        ...competitionsToFetch.map(async (comp) => {
+        ...FOOTBALL_COMPETITIONS.map(async (comp) => {
           try {
             const data = await fetchScoreboardForDay("soccer", comp.id, day);
             if (data === null) {
