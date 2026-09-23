@@ -557,6 +557,9 @@ export default function FinanceView({
   const [cotizacionesSubTab, setCotizacionesSubTab] = useState<
     "acciones" | "cripto"
   >("acciones");
+  const [inversionesActiveTable, setInversionesActiveTable] = useState<
+    "Tradicional" | "Cripto"
+  >("Tradicional");
 
   const [localActiveTab, setLocalActiveTab] = useState<
     | "resumen"
@@ -1479,6 +1482,19 @@ export default function FinanceView({
             onChange: (id) => setCotizacionesSubTab(id as any),
             tabs: [
               { id: "acciones", label: "Acciones y CEDEARs", icon: LineChart },
+              { id: "cripto", label: "Criptomonedas", icon: Bitcoin },
+            ],
+          },
+        ]
+      : activeTab === "inversiones"
+      ? [
+          {
+            indicatorId: "inversiones",
+            activeId: inversionesActiveTable === "Cripto" ? "cripto" : "tradicional",
+            onChange: (id) =>
+              setInversionesActiveTable(id === "cripto" ? "Cripto" : "Tradicional"),
+            tabs: [
+              { id: "tradicional", label: "Acciones y CEDEARs", icon: BarChart3 },
               { id: "cripto", label: "Criptomonedas", icon: Bitcoin },
             ],
           },
@@ -3576,6 +3592,7 @@ export default function FinanceView({
               darkMode={darkMode}
               onExportSheets={onExportSheets}
               userEmail={userEmail}
+              activeTable={inversionesActiveTable}
             />
           ) : activeTab === "cotizaciones" ? (
             <div className="space-y-6">
