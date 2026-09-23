@@ -63,6 +63,9 @@ import {
   Droplets,
   Target,
   Zap,
+  Layers,
+  BookOpen,
+  BarChart2,
 } from "lucide-react";
 import {
   Medication,
@@ -1332,6 +1335,7 @@ export default function HealthView({
 
   const [medsActiveTab, setMedsActiveTab] = useState<"historial" | "stock">("historial");
   const [deporteAlimActiveTab, setDeporteAlimActiveTab] = useState<"rutina" | "alimentacion" | "registro_diario">("rutina");
+  const [gymActiveTab, setGymActiveTab] = useState<"rutinas" | "logger" | "tecnica" | "progreso" | "historial">("rutinas");
 
   const lastSubTabRef = useRef<string | null>(null);
 
@@ -2982,6 +2986,21 @@ export default function HealthView({
               { id: "registro_diario", label: "Historial Diario", icon: TrendingUp },
             ],
           },
+          ...(deporteAlimActiveTab === "rutina"
+            ? [
+                {
+                  indicatorId: "gymRutina",
+                  activeId: gymActiveTab,
+                  onChange: (id: string) => setGymActiveTab(id as any),
+                  tabs: [
+                    { id: "rutinas", label: `Mis Rutinas (${rutinasGimnasio.length})`, icon: Layers },
+                    { id: "historial", label: "Historial de Sesiones", icon: Activity },
+                    { id: "tecnica", label: "Biblioteca de Ejercicios", icon: BookOpen },
+                    { id: "progreso", label: "Progreso y Métricas", icon: BarChart2 },
+                  ],
+                },
+              ]
+            : [])
         ]
       : null
   );
@@ -4964,6 +4983,8 @@ export default function HealthView({
                   darkMode={darkMode}
                   userEmail={userEmail}
                   token={token}
+                  activeTab={gymActiveTab}
+                  onActiveTabChange={setGymActiveTab}
                   rutinasGimnasio={rutinasGimnasio}
                   setRutinasGimnasio={setRutinasGimnasio}
                   registrosEntrenamiento={registrosEntrenamiento}
