@@ -1,5 +1,4 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
-import { useSubPanelRows } from "../lib/navPanelContext";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import { saveItemToFirestore, deleteItemFromFirestore } from "../lib/firestoreSyncService";
 import { generateUniqueId } from "../utils/id";
@@ -49,6 +48,7 @@ interface InversionesTableProps {
   darkMode: boolean;
   onExportSheets?: (title: string, headers: string[], rows: any[][]) => void;
   userEmail?: string;
+  activeTable: "Tradicional" | "Cripto";
 }
 
 interface CustomSelectProps {
@@ -358,6 +358,7 @@ export default function InversionesTable({
   darkMode,
   onExportSheets,
   userEmail,
+  activeTable,
 }: InversionesTableProps) {
   const { showToast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
@@ -365,28 +366,10 @@ export default function InversionesTable({
 
   // Search & Filters State
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeTable, setActiveTable] = useState<"Tradicional" | "Cripto">("Tradicional");
   const [selectedBroker, setSelectedBroker] = useState("TODOS");
   const [selectedOperacion, setSelectedOperacion] = useState("TODAS");
   const [selectedEstado, setSelectedEstado] = useState("TODOS");
   const [selectedResultado, setSelectedResultado] = useState("TODOS");
-
-  // Registra el selector Acciones y CEDEARs / Criptomonedas en el navbar superior, para que
-  // crezca dentro de la misma cápsula en vez de un menú flotante aparte (igual que Cotizaciones).
-  useSubPanelRows([
-    {
-      indicatorId: "finance-inversiones",
-      activeId: activeTable === "Cripto" ? "cripto" : "tradicional",
-      onChange: (id) => {
-        setActiveTable(id === "cripto" ? "Cripto" : "Tradicional");
-        setCurrentPage(1);
-      },
-      tabs: [
-        { id: "tradicional", label: "Acciones y CEDEARs", icon: BarChart3 },
-        { id: "cripto", label: "Criptomonedas", icon: Bitcoin },
-      ],
-    },
-  ]);
 
   // Combine props cotizaciones
   const allCotizaciones = useMemo(() => {
@@ -418,6 +401,11 @@ export default function InversionesTable({
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 15;
+
+  // Reinicia la paginación al cambiar entre Tradicional/Cripto desde el selector del navbar.
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTable]);
 
   // Modal State
   const [showAddModal, setShowAddModal] = useState(false);
