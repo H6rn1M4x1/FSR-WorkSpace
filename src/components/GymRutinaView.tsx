@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import { createPortal } from "react-dom";
 import {
@@ -86,6 +86,8 @@ interface GymRutinaViewProps {
   deportesActividades?: DeporteActividad[];
   onDeleteActividad?: (id: string, skipConfirmation?: boolean) => void;
   onEditActividad?: (act: DeporteActividad) => void;
+  activeTab?: "rutinas" | "logger" | "tecnica" | "progreso" | "historial";
+  onActiveTabChange?: (tab: "rutinas" | "logger" | "tecnica" | "progreso" | "historial") => void;
 }
 
 // Grupos musculares requeridos
@@ -596,7 +598,9 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
   onOpenActividadModal,
   deportesActividades = [],
   onDeleteActividad,
-  onEditActividad
+  onEditActividad,
+  activeTab: propActiveTab,
+  onActiveTabChange
 }) => {
   const userId = getEffectiveUserId(userEmail);
 
@@ -619,8 +623,14 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
     }
   };
 
-  // Sub-secciones de la pestaña Rutina
-  const [activeTab, setActiveTab] = useState<"rutinas" | "logger" | "tecnica" | "progreso" | "historial">("rutinas");
+  // Sub-secciones de la pestaña Rutina — controlado por el padre (fila del navbar) cuando se
+  // pasa `activeTab`/`onActiveTabChange`, con estado local propio como respaldo.
+  const [localActiveTab, setLocalActiveTab] = useState<"rutinas" | "logger" | "tecnica" | "progreso" | "historial">("rutinas");
+  const activeTab = propActiveTab ?? localActiveTab;
+  const setActiveTab = (tab: "rutinas" | "logger" | "tecnica" | "progreso" | "historial") => {
+    setLocalActiveTab(tab);
+    onActiveTabChange?.(tab);
+  };
   const [selectedFilterDate, setSelectedFilterDate] = useState<Date | null>(() => new Date());
 
   // Filtro de Grupo Muscular activo
@@ -1155,32 +1165,6 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
 
   // Estado para la búsqueda de ejercicios en el gráfico
   const [exerciseDropdownSearch, setExerciseDropdownSearch] = useState("");
-
-  
-  // Ref y funciones para desplazamiento de las pestañas superiores de navegación
-  const tabsScrollRef = useRef<HTMLDivElement>(null);
-  const scrollTabsLeft = () => {
-    const tabs = ["rutinas","historial","tecnica","progreso"];
-    const currentIndex = tabs.indexOf(activeTab);
-    if (currentIndex > 0) {
-      setActiveTab(tabs[currentIndex - 1] as any);
-      if (tabsScrollRef.current) {
-        const buttons = tabsScrollRef.current.querySelectorAll('button');
-        if (buttons[currentIndex - 1]) buttons[currentIndex - 1].scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-      }
-    }
-  };
-  const scrollTabsRight = () => {
-    const tabs = ["rutinas","historial","tecnica","progreso"];
-    const currentIndex = tabs.indexOf(activeTab);
-    if (currentIndex < tabs.length - 1) {
-      setActiveTab(tabs[currentIndex + 1] as any);
-      if (tabsScrollRef.current) {
-        const buttons = tabsScrollRef.current.querySelectorAll('button');
-        if (buttons[currentIndex + 1]) buttons[currentIndex + 1].scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-      }
-    }
-  };
 
   // Usar las rutinas registradas en el estado directamente
   const listRutinas = useMemo(() => {
@@ -1930,111 +1914,8 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
 
   return (
     <>
-      {/* 1. SECCIÓN SUPERIOR: NAVEGACIÓN PRINCIPAL DE PESTAÑAS (TARJETA INDEPENDIENTE CON FLECHAS EN MÓVIL) */}
-      <div className="flex items-center justify-center gap-2 mb-4 mt-2 w-full max-w-full px-2 mx-auto">
-        <button
-          onClick={scrollTabsLeft}
-          className={`pointer-events-auto p-1.5 rounded-full bg-white/90 dark:bg-zinc-900/95 border border-zinc-200/60 dark:border-zinc-800 text-zinc-600 dark:text-zinc-300 shadow-md hover:text-primary dark:hover:text-white transition-all cursor-pointer flex md:hidden items-center justify-center shrink-0 w-8 h-8 ${["rutinas", "historial", "tecnica", "progreso"].indexOf(activeTab) === 0 ? "opacity-30 pointer-events-none" : ""}`}
-          aria-label="Desplazar izquierda"
-        >
-          <ChevronLeft className="w-4 h-4 shrink-0" />
-        </button>
-
-        <div className="relative min-w-0 max-w-full">
-          <div
-            ref={tabsScrollRef}
-            className="flex items-center justify-start md:justify-center gap-1.5 p-1.5 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md rounded-full border border-slate-200 dark:border-zinc-800 shadow-md w-full max-w-full md:max-w-max overflow-x-auto scroll-smooth scrollbar-none whitespace-nowrap"
-            style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-          >
-            <button
-              onClick={(e) => { setActiveTab("rutinas"); e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' }); }}
-              className={`relative md:!flex-1 shrink-0 py-2.5 px-3.5 sm:px-4 text-xs sm:text-sm transition-colors rounded-full flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer z-10 whitespace-nowrap ${
-                activeTab === "rutinas"
-                  ? "text-white dark:text-zinc-950 font-bold"
-                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-800/50 font-medium"
-              }`}
-            >
-              <Layers className="w-4 h-4 shrink-0" />
-              <span className="font-bold whitespace-nowrap">Mis Rutinas ({listRutinas.length})</span>
-              {activeTab === "rutinas" && (
-                <motion.div
-                  layoutId="activeGymRutinaTabIndicator"
-                  className="absolute inset-0 rounded-full bg-primary shadow-sm shadow-primary/20 -z-10"
-                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                />
-              )}
-            </button>
-   
-            <button
-              onClick={(e) => { setActiveTab("historial"); e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' }); }}
-              className={`relative md:!flex-1 shrink-0 py-2.5 px-3.5 sm:px-4 text-xs sm:text-sm transition-colors rounded-full flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer z-10 whitespace-nowrap ${
-                activeTab === "historial"
-                  ? "text-white dark:text-zinc-950 font-bold"
-                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-800/50 font-medium"
-              }`}
-            >
-              <Activity className="w-4 h-4 shrink-0" />
-              <span className="font-bold whitespace-nowrap">Historial de Sesiones</span>
-              {activeTab === "historial" && (
-                <motion.div
-                  layoutId="activeGymRutinaTabIndicator"
-                  className="absolute inset-0 rounded-full bg-primary shadow-sm shadow-primary/20 -z-10"
-                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                />
-              )}
-            </button>
-   
-            <button
-              onClick={(e) => { setActiveTab("tecnica"); e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' }); }}
-              className={`relative md:!flex-1 shrink-0 py-2.5 px-3.5 sm:px-4 text-xs sm:text-sm transition-colors rounded-full flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer z-10 whitespace-nowrap ${
-                activeTab === "tecnica"
-                  ? "text-white dark:text-zinc-950 font-bold"
-                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-800/50 font-medium"
-              }`}
-            >
-              <BookOpen className="w-4 h-4 shrink-0" />
-              <span className="font-bold whitespace-nowrap">Biblioteca de Ejercicios</span>
-              {activeTab === "tecnica" && (
-                <motion.div
-                  layoutId="activeGymRutinaTabIndicator"
-                  className="absolute inset-0 rounded-full bg-primary shadow-sm shadow-primary/20 -z-10"
-                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                />
-              )}
-            </button>
-   
-            <button
-              onClick={(e) => { setActiveTab("progreso"); e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' }); }}
-              className={`relative md:!flex-1 shrink-0 py-2.5 px-3.5 sm:px-4 text-xs sm:text-sm transition-colors rounded-full flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer z-10 whitespace-nowrap ${
-                activeTab === "progreso"
-                  ? "text-white dark:text-zinc-950 font-bold"
-                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-800/50 font-medium"
-              }`}
-            >
-              <BarChart2 className="w-4 h-4 shrink-0" />
-              <span className="font-bold whitespace-nowrap">Progreso y Métricas</span>
-              {activeTab === "progreso" && (
-                <motion.div
-                  layoutId="activeGymRutinaTabIndicator"
-                  className="absolute inset-0 rounded-full bg-primary shadow-sm shadow-primary/20 -z-10"
-                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                />
-              )}
-            </button>
-          </div>
-        </div>
-
-        <button
-          onClick={scrollTabsRight}
-          className={`pointer-events-auto p-1.5 rounded-full bg-white/90 dark:bg-zinc-900/95 border border-zinc-200/60 dark:border-zinc-800 text-zinc-600 dark:text-zinc-300 shadow-md hover:text-primary dark:hover:text-white transition-all cursor-pointer flex md:hidden items-center justify-center shrink-0 w-8 h-8 ${["rutinas", "historial", "tecnica", "progreso"].indexOf(activeTab) === 3 ? "opacity-30 pointer-events-none" : ""}`}
-          aria-label="Desplazar derecha"
-        >
-          <ChevronRight className="w-4 h-4 shrink-0" />
-        </button>
-      </div>
-
-      {/* ESPACIADO ENTRE LAS DOS PARTES */}
-      <div className="h-2" />
+      {/* Selector Mis Rutinas / Historial de Sesiones / Biblioteca de Ejercicios / Progreso y
+          Métricas — ahora integrado en el navbar (useSubPanelRows en HealthView) */}
 
       {/* 2. CONTENEDOR PRINCIPAL DEL CUERPO (TARJETA INDEPENDIENTE) */}
       <div

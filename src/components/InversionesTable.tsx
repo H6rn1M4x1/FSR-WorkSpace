@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
+import { useSubPanelRows } from "../lib/navPanelContext";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import { saveItemToFirestore, deleteItemFromFirestore } from "../lib/firestoreSyncService";
 import { generateUniqueId } from "../utils/id";
@@ -370,47 +371,23 @@ export default function InversionesTable({
   const [selectedEstado, setSelectedEstado] = useState("TODOS");
   const [selectedResultado, setSelectedResultado] = useState("TODOS");
 
-  // Scroll references and helpers for tab selection
-  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  // Registra el selector Acciones y CEDEARs / Criptomonedas en el navbar superior, para que
+  // crezca dentro de la misma cápsula en vez de un menú flotante aparte (igual que Cotizaciones).
+  useSubPanelRows([
+    {
+      indicatorId: "finance-inversiones",
+      activeId: activeTable === "Cripto" ? "cripto" : "tradicional",
+      onChange: (id) => {
+        setActiveTable(id === "cripto" ? "Cripto" : "Tradicional");
+        setCurrentPage(1);
+      },
+      tabs: [
+        { id: "tradicional", label: "Acciones y CEDEARs", icon: BarChart3 },
+        { id: "cripto", label: "Criptomonedas", icon: Bitcoin },
+      ],
+    },
+  ]);
 
-  const scrollTabsLeft = () => {
-    const tabs = ["Tradicional","Cripto"];
-    const currentIndex = tabs.indexOf(activeTable);
-    if (currentIndex > 0) {
-      setActiveTable(tabs[currentIndex - 1] as any);
-      if (scrollContainerRef.current) {
-        const buttons = scrollContainerRef.current.querySelectorAll('button');
-        if (buttons[currentIndex - 1]) buttons[currentIndex - 1].scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-      }
-    }
-  };
-
-  const scrollTabsRight = () => {
-    const tabs = ["Tradicional","Cripto"];
-    const currentIndex = tabs.indexOf(activeTable);
-    if (currentIndex < tabs.length - 1) {
-      setActiveTable(tabs[currentIndex + 1] as any);
-      if (scrollContainerRef.current) {
-        const buttons = scrollContainerRef.current.querySelectorAll('button');
-        if (buttons[currentIndex + 1]) buttons[currentIndex + 1].scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-      }
-    }
-  };
-
-  useEffect(() => {
-    if (scrollContainerRef.current) {
-      const tabs = ["Tradicional", "Cripto"];
-      const currentIndex = tabs.indexOf(activeTable);
-      const buttons = scrollContainerRef.current.querySelectorAll('button');
-      if (buttons[currentIndex]) {
-        buttons[currentIndex].scrollIntoView({
-          behavior: 'smooth',
-          inline: 'center',
-          block: 'nearest',
-        });
-      }
-    }
-  }, [activeTable]);
   // Combine props cotizaciones
   const allCotizaciones = useMemo(() => {
     return cotizaciones || [];
@@ -1244,58 +1221,7 @@ export default function InversionesTable({
 
   return (
     <div className="space-y-6">
-      {/* Sliding toggle button for switching between Tradicional and Cripto */}
-      <div className="flex items-center justify-center mb-8 w-full max-w-sm sm:max-w-md mx-auto">
-        <div className="w-full">
-          <div
-            ref={scrollContainerRef}
-            className="flex items-center justify-center gap-1.5 p-1.5 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md border border-slate-200 dark:border-zinc-800 rounded-full w-full shadow-md whitespace-nowrap"
-          >
-            <button
-              onClick={() => {
-                setActiveTable("Tradicional");
-                setCurrentPage(1);
-              }}
-              className={`relative flex-1 py-2.5 px-3 sm:px-4 text-xs sm:text-sm transition-colors rounded-full flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer z-10 whitespace-nowrap ${
-                activeTable === "Tradicional"
-                  ? "text-white font-black"
-                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-800/50 font-medium"
-              }`}
-            >
-              <BarChart3 className="w-4 h-4 flex-shrink-0" />
-              <span className="whitespace-nowrap font-bold">Acciones y CEDEARs</span>
-              {activeTable === "Tradicional" && (
-                <motion.div
-                  layoutId="activeInversionesTabIndicator"
-                  className="absolute inset-0 rounded-full bg-primary shadow-md shadow-primary/25 -z-10"
-                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                />
-              )}
-            </button>
-            <button
-              onClick={() => {
-                setActiveTable("Cripto");
-                setCurrentPage(1);
-              }}
-              className={`relative flex-1 py-2.5 px-3 sm:px-4 text-xs sm:text-sm transition-colors rounded-full flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer z-10 whitespace-nowrap ${
-                activeTable === "Cripto"
-                  ? "text-white font-black"
-                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-800/50 font-medium"
-              }`}
-            >
-              <Bitcoin className="w-4 h-4 flex-shrink-0" />
-              <span className="whitespace-nowrap font-bold">Criptomonedas</span>
-              {activeTable === "Cripto" && (
-                <motion.div
-                  layoutId="activeInversionesTabIndicator"
-                  className="absolute inset-0 rounded-full bg-primary shadow-md shadow-primary/25 -z-10"
-                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                />
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
+      {/* Selector Acciones y CEDEARs / Criptomonedas — ahora integrado en el navbar (useSubPanelRows arriba) */}
 
       {/* Unified Main Card Container matching GastosVariosTable */}
       <div
