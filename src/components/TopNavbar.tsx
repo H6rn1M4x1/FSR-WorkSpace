@@ -210,6 +210,164 @@ interface TopNavbarProps {
   subPanelRows?: NavPanelRow[] | null;
 }
 
+// Fila de sub-pestañas anidadas (ej. Doctores/Presión Arterial/Estudios/Medicamentos) dibujada
+// dentro de la misma cápsula del navbar. En mobile, si las pestañas no entran en una línea,
+// se desplaza horizontalmente con flechas — igual que el primer nivel de sub-pestañas — en vez
+// de pasar a una segunda línea.
+function SubPanelRow({ row, rowIndex, darkMode }: { row: NavPanelRow; rowIndex: number; darkMode: boolean }) {
+  const [showLeftArrow, setShowLeftArrow] = useState(false);
+  const [showRightArrow, setShowRightArrow] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const buttonRefs = useRef<{ [key: string]: HTMLButtonElement | null }>({});
+
+  const scrollToButton = (buttonEl: HTMLElement | null) => {
+    if (!buttonEl || !scrollRef.current) return;
+    const container = scrollRef.current;
+    const buttonLeft = buttonEl.offsetLeft;
+    const buttonWidth = buttonEl.offsetWidth;
+    const containerWidth = container.clientWidth;
+    const maxScroll = container.scrollWidth - containerWidth;
+    const currentScroll = container.scrollLeft;
+    const paddingRight = 8;
+    const paddingLeft = 8;
+
+    let targetScrollLeft = currentScroll;
+    if (buttonLeft + buttonWidth + paddingRight > currentScroll + containerWidth) {
+      targetScrollLeft = buttonLeft + buttonWidth - containerWidth + paddingRight;
+    } else if (buttonLeft - paddingLeft < currentScroll) {
+      targetScrollLeft = buttonLeft - paddingLeft;
+    }
+    container.scrollTo({ left: Math.max(0, Math.min(maxScroll, targetScrollLeft)), behavior: "smooth" });
+  };
+
+  const updateScrollButtons = () => {
+    if (scrollRef.current) {
+      const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
+      setShowLeftArrow(scrollLeft > 2);
+      setShowRightArrow(scrollLeft + clientWidth < scrollWidth - 4);
+    } else {
+      setShowLeftArrow(false);
+      setShowRightArrow(false);
+    }
+  };
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      scrollToButton(buttonRefs.current[row.activeId]);
+      updateScrollButtons();
+    }, 50);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [row.activeId]);
+
+  useEffect(() => {
+    const timeoutId = setTimeout(updateScrollButtons, 150);
+    window.addEventListener("resize", updateScrollButtons);
+    return () => {
+      clearTimeout(timeoutId);
+      window.removeEventListener("resize", updateScrollButtons);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [row.tabs.length]);
+
+  const handleArrow = (direction: "left" | "right") => {
+    const currentIndex = row.tabs.findIndex((t) => t.id === row.activeId);
+    if (direction === "left" && currentIndex > 0) {
+      const prevTab = row.tabs[currentIndex - 1];
+      row.onChange(prevTab.id);
+      scrollToButton(buttonRefs.current[prevTab.id]);
+    } else if (direction === "right" && currentIndex < row.tabs.length - 1) {
+      const nextTab = row.tabs[currentIndex + 1];
+      row.onChange(nextTab.id);
+      scrollToButton(buttonRefs.current[nextTab.id]);
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, height: 0, marginTop: 0 }}
+      animate={{ opacity: 1, height: "auto", marginTop: 8 }}
+      exit={{ opacity: 0, height: 0, marginTop: 0 }}
+      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+      className="w-full overflow-hidden relative flex items-center gap-1.5 pt-2.5 border-t border-zinc-200/50 dark:border-white/10"
+    >
+      {showLeftArrow && (
+        <button
+          onClick={() => handleArrow("left")}
+          className="p-1.5 rounded-full bg-white/90 dark:bg-zinc-900/95 border border-zinc-200/60 dark:border-white/10 text-zinc-600 dark:text-zinc-300 hover:text-primary dark:hover:text-white transition-all cursor-pointer flex items-center justify-center shrink-0 z-20"
+          title="Desplazar a la izquierda"
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+      )}
+
+      <div
+        ref={scrollRef}
+        onScroll={updateScrollButtons}
+        className="flex-1 flex items-center justify-start gap-1 overflow-x-auto scroll-smooth scrollbar-none relative px-1 py-0.5"
+        style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+      >
+        <div className="flex items-center gap-1.5 min-w-full sm:min-w-0 pr-6 sm:pr-2">
+          {row.tabs.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = row.activeId === tab.id;
+            return (
+              <button
+                key={tab.id}
+                ref={(el) => {
+                  buttonRefs.current[tab.id] = el;
+                }}
+                onClick={() => {
+                  row.onChange(tab.id);
+                  scrollToButton(buttonRefs.current[tab.id]);
+                }}
+                className={`relative flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors duration-300 cursor-pointer whitespace-nowrap z-10 shrink-0 ${
+                  isActive
+                    ? `text-white dark:text-zinc-950 font-bold ${!darkMode ? "active-nav-pill-light" : ""}`
+                    : darkMode
+                    ? "text-zinc-300 hover:text-white hover:bg-white/5"
+                    : "text-black hover:text-black hover:bg-zinc-100/60"
+                }`}
+              >
+                {isActive && (
+                  <motion.div
+                    layoutId={`activeSubPanelPill-${rowIndex}`}
+                    className="absolute inset-0 rounded-full bg-primary -z-10"
+                    transition={{ type: "spring", stiffness: 220, damping: 26 }}
+                  />
+                )}
+                {Icon && (
+                  <Icon
+                    className={`w-3.5 h-3.5 ${
+                      isActive
+                        ? `text-white dark:text-zinc-950 stroke-[2.2] ${!darkMode ? "active-nav-pill-light" : ""}`
+                        : darkMode
+                        ? "text-zinc-400 stroke-[1.8]"
+                        : "text-black stroke-[1.8]"
+                    }`}
+                  />
+                )}
+                <span className={isActive && !darkMode ? "active-nav-pill-light" : ""}>{tab.label}</span>
+              </button>
+            );
+          })}
+          <div className="shrink-0 w-2.5 h-2 pointer-events-none" aria-hidden="true" />
+        </div>
+      </div>
+
+      {showRightArrow && (
+        <button
+          onClick={() => handleArrow("right")}
+          className="p-1.5 rounded-full bg-white/90 dark:bg-zinc-900/95 border border-zinc-200/60 dark:border-white/10 text-zinc-600 dark:text-zinc-300 hover:text-primary dark:hover:text-white transition-all cursor-pointer flex items-center justify-center shrink-0 z-20"
+          title="Desplazar a la derecha"
+        >
+          <ChevronRight className="w-4 h-4" />
+        </button>
+      )}
+    </motion.div>
+  );
+}
+
 export default function TopNavbar({
   currentTab,
   setCurrentTab,
@@ -679,54 +837,7 @@ export default function TopNavbar({
             del menú, en vez de cada vista armando su propio menú flotante aparte. */}
         <AnimatePresence mode="popLayout">
           {subPanelRows && subPanelRows.length > 0 && subPanelRows.map((row, rowIndex) => (
-            <motion.div
-              key={row.indicatorId}
-              initial={{ opacity: 0, height: 0, marginTop: 0 }}
-              animate={{ opacity: 1, height: "auto", marginTop: 8 }}
-              exit={{ opacity: 0, height: 0, marginTop: 0 }}
-              transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-              className="w-full overflow-hidden relative flex items-center gap-1.5 pt-2.5 border-t border-zinc-200/50 dark:border-white/10"
-            >
-              <div className="flex-1 flex flex-wrap items-center justify-start gap-1.5 px-1 py-0.5">
-                {row.tabs.map((tab) => {
-                  const Icon = tab.icon;
-                  const isActive = row.activeId === tab.id;
-                  return (
-                    <button
-                      key={tab.id}
-                      onClick={() => row.onChange(tab.id)}
-                      className={`relative flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors duration-300 cursor-pointer whitespace-nowrap z-10 shrink-0 ${
-                        isActive
-                          ? `text-white dark:text-zinc-950 font-bold ${!darkMode ? "active-nav-pill-light" : ""}`
-                          : darkMode
-                          ? "text-zinc-300 hover:text-white hover:bg-white/5"
-                          : "text-black hover:text-black hover:bg-zinc-100/60"
-                      }`}
-                    >
-                      {isActive && (
-                        <motion.div
-                          layoutId={`activeSubPanelPill-${rowIndex}`}
-                          className="absolute inset-0 rounded-full bg-primary -z-10"
-                          transition={{ type: "spring", stiffness: 220, damping: 26 }}
-                        />
-                      )}
-                      {Icon && (
-                        <Icon
-                          className={`w-3.5 h-3.5 ${
-                            isActive
-                              ? `text-white dark:text-zinc-950 stroke-[2.2] ${!darkMode ? "active-nav-pill-light" : ""}`
-                              : darkMode
-                              ? "text-zinc-400 stroke-[1.8]"
-                              : "text-black stroke-[1.8]"
-                          }`}
-                        />
-                      )}
-                      <span className={isActive && !darkMode ? "active-nav-pill-light" : ""}>{tab.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </motion.div>
+            <SubPanelRow key={row.indicatorId} row={row} rowIndex={rowIndex} darkMode={darkMode} />
           ))}
         </AnimatePresence>
 
