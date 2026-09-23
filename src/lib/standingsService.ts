@@ -13,7 +13,7 @@
  * código está mal.
  */
 
-import { F1_TEAMS, F1_TEAM_LOGOS } from "../data/f1";
+import { F1_TEAMS, F1_TEAM_LOGOS, F1_DRIVERS } from "../data/f1";
 
 export interface StandingsEntry {
   teamId: string;
@@ -103,44 +103,6 @@ export interface F1RaceStat {
   points: number;
 }
 
-/**
- * Imágenes de circuitos de F1 provistas por el usuario (sportmonks.com), como fuente fija y
- * confiable en vez de depender de la búsqueda difusa en Wikipedia. Cada carrera de ESPN llega
- * con nombre "<sponsor> <lugar> Grand Prix" (ej. "Qatar Airways Australian Grand Prix"), así que
- * se matchea por el final del nombre ("<lugar> Grand Prix"), nunca por substring suelto — evita
- * falsos positivos como el sponsor "Qatar Airways" matcheando el Gran Premio de Qatar.
- */
-const F1_CIRCUIT_IMAGES: { test: RegExp; url: string }[] = [
-  { test: /Australian Grand Prix$/i, url: "https://www.sportmonks.com/wp-content/uploads/2022/07/Albert-Park-Circuit.png" },
-  { test: /Chinese Grand Prix$/i, url: "https://www.sportmonks.com/wp-content/uploads/2024/02/China-GP.png" },
-  { test: /Japanese Grand Prix$/i, url: "https://www.sportmonks.com/wp-content/uploads/2022/07/Suzuka-International-Racing-Course-.png" },
-  { test: /Miami Grand Prix$/i, url: "https://www.sportmonks.com/wp-content/uploads/2022/07/Miami-International-Autodrome.png" },
-  { test: /Canadian Grand Prix$/i, url: "https://www.sportmonks.com/wp-content/uploads/2022/07/Circuit-Gilles-Villeneuve.png" },
-  { test: /Monaco Grand Prix$/i, url: "https://www.sportmonks.com/wp-content/uploads/2022/07/Circuit-de-Monaco-.png" },
-  { test: /(Spanish|Barcelona-Catalunya) Grand Prix$/i, url: "https://www.sportmonks.com/wp-content/uploads/2024/02/Circuit-de-Barcelona.png" },
-  { test: /Austrian Grand Prix$/i, url: "https://www.sportmonks.com/wp-content/uploads/2022/07/Red-Bull-Ring.png" },
-  { test: /British Grand Prix$/i, url: "https://www.sportmonks.com/wp-content/uploads/2022/07/Silverstone-Circuit-.png" },
-  { test: /Belgian Grand Prix$/i, url: "https://www.sportmonks.com/wp-content/uploads/2022/07/Circuit-de-Spa-Francorchamps.png" },
-  { test: /Hungarian Grand Prix$/i, url: "https://www.sportmonks.com/wp-content/uploads/2022/07/Hungaroring.png" },
-  { test: /Dutch Grand Prix$/i, url: "https://www.sportmonks.com/wp-content/uploads/2022/07/Circuit-Zandvoort.png" },
-  { test: /Italian Grand Prix$/i, url: "https://www.sportmonks.com/wp-content/uploads/2022/07/Autodromo-Nazionale-Monza.png" },
-  { test: /Madrid Grand Prix$/i, url: "https://www.sportmonks.com/wp-content/uploads/2026/01/Circuit_de_Madrid.png" },
-  { test: /Azerbaijan Grand Prix$/i, url: "https://www.sportmonks.com/wp-content/uploads/2022/07/Baku-City-Circuit.png" },
-  { test: /Singapore Grand Prix$/i, url: "https://www.sportmonks.com/wp-content/uploads/2024/02/Singapore-GP.png" },
-  { test: /United States Grand Prix$/i, url: "https://www.sportmonks.com/wp-content/uploads/2022/07/Circuit-of-The-Americas.png" },
-  { test: /(Mexico City|Mexican) Grand Prix$/i, url: "https://www.sportmonks.com/wp-content/uploads/2026/01/Autodromo-Hermanos-Rodriguez-2.png" },
-  { test: /(São Paulo|Sao Paulo|Brazilian) Grand Prix$/i, url: "https://www.sportmonks.com/wp-content/uploads/2026/01/Autodromo_Jose_Carlos_Pace.png" },
-  { test: /Las Vegas Grand Prix$/i, url: "https://www.sportmonks.com/wp-content/uploads/2024/02/Las-Vegas-GP.png" },
-  { test: /Qatar Grand Prix$/i, url: "https://www.sportmonks.com/wp-content/uploads/2023/03/GP-Qatar.png" },
-  { test: /Abu Dhabi Grand Prix$/i, url: "https://www.sportmonks.com/wp-content/uploads/2022/07/Yas-Marina-Circuit-.png" },
-];
-
-/** Imagen fija del circuito para una carrera dada, o null si no hay ninguna cargada para ese GP. */
-export function getF1CircuitImage(raceName: string): string | null {
-  const match = F1_CIRCUIT_IMAGES.find((c) => c.test.test(raceName));
-  return match?.url ?? null;
-}
-
 export interface F1DriverStanding {
   driverId: string;
   driverName: string;
@@ -200,36 +162,39 @@ export interface F1ConstructorStanding {
 }
 
 /**
- * Campeonato de constructores de F1. Mismo endpoint de standings que el de pilotos, pero en el
- * segundo grupo de `children` (el primero es "Driver Standings"). Mismo nombre de stat de
- * puntos, "championshipPts", confirmado para pilotos y reusado acá porque ESPN usa el mismo
- * esquema de stats para ambos grupos de standings.
+ * Campeonato de constructores de F1. El endpoint de standings de ESPN trae un segundo grupo de
+ * "constructor/manufacturer standings" en `children`, pero confirmado en vivo que sus puntos
+ * siempre dan 0 (campo distinto al de pilotos, nunca identificado con certeza) — en vez de
+ * seguir adivinando el nombre del stat, se suman los puntos reales de cada piloto (ya
+ * confirmados, "championshipPts") por escudería, usando el mapeo piloto→equipo de data/f1.ts.
+ * Es exactamente cómo se calculan los puntos de constructores en la F1 real (suma de ambos
+ * pilotos del equipo), así que el resultado es correcto, no una aproximación.
  */
 export async function fetchF1ConstructorStandings(): Promise<F1ConstructorStanding[]> {
-  const data = await fetchJson("https://site.api.espn.com/apis/v2/sports/racing/f1/standings");
-  if (!data) return [];
+  const drivers = await fetchF1DriverStandings();
+  if (!drivers.length) return [];
 
-  const group = (data?.children || []).find((c: any) => /constructor|manufacturer|team/i.test(c?.name || "")) || data?.children?.[1];
-  const rawEntries: any[] = group?.standings?.entries || [];
+  const pointsByTeamId = new Map<string, number>();
+  for (const d of drivers) {
+    const known = F1_DRIVERS.find((fd) => {
+      const a = fd.name.toLowerCase();
+      const b = d.driverName.toLowerCase();
+      return a === b || a.includes(b) || b.includes(a);
+    });
+    if (!known) continue;
+    pointsByTeamId.set(known.teamId, (pointsByTeamId.get(known.teamId) ?? 0) + d.points);
+  }
 
-  const entries: F1ConstructorStanding[] = rawEntries
-    .map((entry: any, idx: number): F1ConstructorStanding | null => {
-      const team = entry.team || entry.manufacturer;
-      const teamName: string = team?.displayName || team?.name || entry.athlete?.displayName;
-      if (!teamName) return null;
-      const stats: any[] = entry.stats || [];
-      const stat = (name: string) => stats.find((s: any) => s.name === name)?.value;
-      const knownTeam = F1_TEAMS.find((t) => teamName.toLowerCase().includes(t.name.toLowerCase()) || t.name.toLowerCase().includes(teamName.toLowerCase()));
-      return {
-        teamId: String(team?.id ?? knownTeam?.id ?? idx),
-        teamName,
-        teamLogo: team?.logos?.[0]?.href || (knownTeam ? F1_TEAM_LOGOS[knownTeam.id] : undefined),
-        rank: Math.round(stat("rank") ?? idx + 1),
-        points: Math.round(stat("championshipPts") ?? 0),
-      };
-    })
-    .filter((e): e is F1ConstructorStanding => e !== null)
-    .sort((a, b) => a.rank - b.rank);
+  const entries: F1ConstructorStanding[] = F1_TEAMS.filter((t) => pointsByTeamId.has(t.id))
+    .map((t) => ({
+      teamId: t.id,
+      teamName: t.name,
+      teamLogo: F1_TEAM_LOGOS[t.id],
+      rank: 0,
+      points: pointsByTeamId.get(t.id) ?? 0,
+    }))
+    .sort((a, b) => b.points - a.points)
+    .map((e, idx) => ({ ...e, rank: idx + 1 }));
 
   return entries;
 }

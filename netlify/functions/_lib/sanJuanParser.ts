@@ -63,7 +63,12 @@ function toEventItem(href: string, title: string, rawDate?: string | null, image
     id: `sj_${hash}`,
     title: title.trim(),
     rawDate: rawDate || null,
-    imageUrl: absolutizeUrl(imageUrl),
+    // Las URLs extraídas de HTML crudo (o de un <script> con el JSON mal escapado) pueden traer
+    // "&amp;" en vez de "&" — confirmado en vivo leyendo el caché de Firestore: las URLs del
+    // optimizador de imágenes de Next.js (".../_next/image?url=...&amp;w=256&amp;q=75") quedaban
+    // con el "&amp;" literal, así que el navegador mandaba "amp;w"/"amp;q" como nombres de
+    // parámetro en vez de "w"/"q" — el optimizador los rechaza sin "w", y la imagen nunca carga.
+    imageUrl: absolutizeUrl(imageUrl ? decodeEntities(imageUrl) : imageUrl),
     sourceUrl: absolutizeUrl(href),
   };
 }
