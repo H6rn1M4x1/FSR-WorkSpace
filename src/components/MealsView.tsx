@@ -1,4 +1,5 @@
 import { SubNav } from "./SubNav";
+import { useSubPanelRows } from "../lib/navPanelContext";
 import { SharedBadge, makeSharedOutHelpers } from "./SharedBadge";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import { generateUniqueId } from "../utils/id";
@@ -442,30 +443,6 @@ export default function MealsView({
   const [creacionComidasActiveTab, setCreacionComidasActiveTab] = useState<
     "mercaderia" | "alimentos" | "platos"
   >("mercaderia");
-
-  const creacionComidasScrollRef = React.useRef<HTMLDivElement>(null);
-  const scrollCreacionComidasTabsLeft = () => {
-    const tabs = ["mercaderia","alimentos","platos"];
-    const currentIndex = tabs.indexOf(creacionComidasActiveTab);
-    if (currentIndex > 0) {
-      setCreacionComidasActiveTab(tabs[currentIndex - 1] as any);
-      if (creacionComidasScrollRef.current) {
-        const buttons = creacionComidasScrollRef.current.querySelectorAll('button');
-        if (buttons[currentIndex - 1]) buttons[currentIndex - 1].scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-      }
-    }
-  };
-  const scrollCreacionComidasTabsRight = () => {
-    const tabs = ["mercaderia","alimentos","platos"];
-    const currentIndex = tabs.indexOf(creacionComidasActiveTab);
-    if (currentIndex < tabs.length - 1) {
-      setCreacionComidasActiveTab(tabs[currentIndex + 1] as any);
-      if (creacionComidasScrollRef.current) {
-        const buttons = creacionComidasScrollRef.current.querySelectorAll('button');
-        if (buttons[currentIndex + 1]) buttons[currentIndex + 1].scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-      }
-    }
-  };
 
   const userId = (userEmail || "hernanmaximiliano10@gmail.com").toLowerCase().trim();
   const [isSaving, setIsSaving] = useState(false);
@@ -2246,6 +2223,25 @@ export default function MealsView({
   // Get distinct categories for filter
   const categoriesList = ["Todas", ...CATEGORIAS];
 
+  // Registra las sub-pestañas de Creación de Comidas en el navbar superior, para que crezcan
+  // dentro de la misma cápsula en vez de un menú flotante aparte.
+  useSubPanelRows(
+    activeSubTab === "creacion_comidas"
+      ? [
+          {
+            indicatorId: "creacionComidas",
+            activeId: creacionComidasActiveTab,
+            onChange: (id) => setCreacionComidasActiveTab(id as any),
+            tabs: [
+              { id: "mercaderia", label: "Mercadería", icon: Database },
+              { id: "alimentos", label: "Alimentos", icon: ClipboardList },
+              { id: "platos", label: "Platos", icon: ChefHat },
+            ],
+          },
+        ]
+      : null
+  );
+
   return (
     <div className="space-y-6 animate-fade-in px-3 sm:px-6 pt-1 sm:pt-1.5 pb-6">
       {partnerInfo.isLinked && (
@@ -2831,92 +2827,7 @@ export default function MealsView({
       {/* RENDER CREACION COMIDAS TAB */}
       {activeSubTab === "creacion_comidas" && (
         <div className="space-y-6">
-          {/* Selector de Pestañas style matching Inversiones */}
-          <div className="flex items-center justify-center gap-2 mb-8 w-full max-w-md mx-auto">
-            <button
-              type="button"
-              onClick={scrollCreacionComidasTabsLeft}
-              className={`pointer-events-auto p-1 rounded-full bg-white/90 dark:bg-black/95 border border-zinc-200/60 dark:border-white/10 text-zinc-600 dark:text-zinc-300 shadow-md hover:text-primary dark:hover:text-white transition-all cursor-pointer flex md:hidden items-center justify-center flex-shrink-0 w-8 h-8 ${["mercaderia","alimentos","platos"].indexOf(creacionComidasActiveTab) === 0 ? "opacity-30 pointer-events-none" : ""}`}
-              aria-label="Desplazar izquierda"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-
-            <div className="relative flex-grow min-w-0">
-              <div
-                ref={creacionComidasScrollRef}
-                className="flex items-center justify-start md:justify-center gap-1.5 p-1 sm:p-1.5 bg-white/80 dark:bg-black/80 backdrop-blur-md rounded-full border border-slate-200 dark:border-zinc-800 shadow-md w-full overflow-x-auto scroll-smooth scrollbar-none whitespace-nowrap"
-                style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-              >
-                <button
-                  type="button"
-                  onClick={(e) => { setCreacionComidasActiveTab("mercaderia"); e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' }); }}
-                  className={`relative md:!flex-1 shrink-0 py-2 px-3.5 sm:px-4 text-xs md:text-sm transition-colors rounded-full flex items-center justify-center gap-1.5 cursor-pointer z-10 whitespace-nowrap ${
-                    creacionComidasActiveTab === "mercaderia"
-                      ? "text-white font-black"
-                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-800/50 font-medium"
-                  }`}
-                >
-                  <Database className="w-3.5 h-3.5 flex-shrink-0" />
-                  <span className="whitespace-nowrap">Mercadería</span>
-                  {creacionComidasActiveTab === "mercaderia" && (
-                    <motion.div
-                      layoutId="activeCreacionComidasTabIndicator"
-                      className="absolute inset-0 rounded-full bg-primary shadow-md shadow-primary/25 -z-10"
-                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                    />
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => { setCreacionComidasActiveTab("alimentos"); e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' }); }}
-                  className={`relative md:!flex-1 shrink-0 py-2 px-3.5 sm:px-4 text-xs md:text-sm transition-colors rounded-full flex items-center justify-center gap-1.5 cursor-pointer z-10 whitespace-nowrap ${
-                    creacionComidasActiveTab === "alimentos"
-                      ? "text-white font-black"
-                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-800/50 font-medium"
-                  }`}
-                >
-                  <ClipboardList className="w-3.5 h-3.5 flex-shrink-0" />
-                  <span className="whitespace-nowrap">Alimentos</span>
-                  {creacionComidasActiveTab === "alimentos" && (
-                    <motion.div
-                      layoutId="activeCreacionComidasTabIndicator"
-                      className="absolute inset-0 rounded-full bg-primary shadow-md shadow-primary/25 -z-10"
-                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                    />
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => { setCreacionComidasActiveTab("platos"); e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' }); }}
-                  className={`relative md:!flex-1 shrink-0 py-2 px-3.5 sm:px-4 text-xs md:text-sm transition-colors rounded-full flex items-center justify-center gap-1.5 cursor-pointer z-10 whitespace-nowrap ${
-                    creacionComidasActiveTab === "platos"
-                      ? "text-white font-black"
-                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-800/50 font-medium"
-                  }`}
-                >
-                  <ChefHat className="w-3.5 h-3.5 flex-shrink-0" />
-                  <span className="whitespace-nowrap">Platos</span>
-                  {creacionComidasActiveTab === "platos" && (
-                    <motion.div
-                      layoutId="activeCreacionComidasTabIndicator"
-                      className="absolute inset-0 rounded-full bg-primary shadow-md shadow-primary/25 -z-10"
-                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                    />
-                  )}
-                </button>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={scrollCreacionComidasTabsRight}
-              className={`pointer-events-auto p-1 rounded-full bg-white/90 dark:bg-black/95 border border-zinc-200/60 dark:border-white/10 text-zinc-600 dark:text-zinc-300 shadow-md hover:text-primary dark:hover:text-white transition-all cursor-pointer flex md:hidden items-center justify-center flex-shrink-0 w-8 h-8 ${["mercaderia","alimentos","platos"].indexOf(creacionComidasActiveTab) === 2 ? "opacity-30 pointer-events-none" : ""}`}
-              aria-label="Desplazar derecha"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
+          {/* Selector de Pestañas — ahora integrado en el navbar (useSubPanelRows arriba) */}
 
           <AnimatePresence mode="wait">
             {creacionComidasActiveTab === "mercaderia" && (

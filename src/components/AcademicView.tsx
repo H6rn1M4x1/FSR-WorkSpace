@@ -1,4 +1,5 @@
 import { SubNav } from "./SubNav";
+import { useSubPanelRows } from "../lib/navPanelContext";
 import { SharedBadge, makeSharedOutHelpers } from "./SharedBadge";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import { generateUniqueId } from "../utils/id";
@@ -860,55 +861,6 @@ export default function AcademicView({
   const [planEstudioSubTab, setPlanEstudioSubTab] = useState<"plan_estudio" | "historia_academica">("plan_estudio");
   const [horarioSubTab, setHorarioSubTab] = useState<"horario" | "examenes">("horario");
 
-  const planEstudioScrollRef = React.useRef<HTMLDivElement>(null);
-  const horarioScrollRef = React.useRef<HTMLDivElement>(null);
-
-  const scrollPlanEstudioTabsLeft = () => {
-    const tabs = ["plan_estudio","historia_academica"];
-    const currentIndex = tabs.indexOf(planEstudioSubTab);
-    if (currentIndex > 0) {
-      setPlanEstudioSubTab(tabs[currentIndex - 1] as any);
-      if (planEstudioScrollRef.current) {
-        const buttons = planEstudioScrollRef.current.querySelectorAll('button');
-        if (buttons[currentIndex - 1]) buttons[currentIndex - 1].scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-      }
-    }
-  };
-  const scrollPlanEstudioTabsRight = () => {
-    const tabs = ["plan_estudio","historia_academica"];
-    const currentIndex = tabs.indexOf(planEstudioSubTab);
-    if (currentIndex < tabs.length - 1) {
-      setPlanEstudioSubTab(tabs[currentIndex + 1] as any);
-      if (planEstudioScrollRef.current) {
-        const buttons = planEstudioScrollRef.current.querySelectorAll('button');
-        if (buttons[currentIndex + 1]) buttons[currentIndex + 1].scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-      }
-    }
-  };
-
-  const scrollHorarioTabsLeft = () => {
-    const tabs = ["horario","examenes"];
-    const currentIndex = tabs.indexOf(horarioSubTab);
-    if (currentIndex > 0) {
-      setHorarioSubTab(tabs[currentIndex - 1] as any);
-      if (horarioScrollRef.current) {
-        const buttons = horarioScrollRef.current.querySelectorAll('button');
-        if (buttons[currentIndex - 1]) buttons[currentIndex - 1].scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-      }
-    }
-  };
-  const scrollHorarioTabsRight = () => {
-    const tabs = ["horario","examenes"];
-    const currentIndex = tabs.indexOf(horarioSubTab);
-    if (currentIndex < tabs.length - 1) {
-      setHorarioSubTab(tabs[currentIndex + 1] as any);
-      if (horarioScrollRef.current) {
-        const buttons = horarioScrollRef.current.querySelectorAll('button');
-        if (buttons[currentIndex + 1]) buttons[currentIndex + 1].scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-      }
-    }
-  };
-
   // Normalized active parent tab: mapping "plan_estudio" to "informacion_materias" and "examenes" to "horario"
   let normalizedParentTab = activeSubTab;
   if (activeSubTab === "plan_estudio") {
@@ -1756,6 +1708,36 @@ export default function AcademicView({
     );
   };
 
+  // Registra las sub-pestañas de Plan de Estudio / Calendario Académico en el navbar superior,
+  // para que crezcan dentro de la misma cápsula en vez de un menú flotante aparte.
+  useSubPanelRows(
+    normalizedParentTab === "informacion_materias"
+      ? [
+          {
+            indicatorId: "planEstudio",
+            activeId: planEstudioSubTab,
+            onChange: (id) => setPlanEstudioSubTab(id as any),
+            tabs: [
+              { id: "plan_estudio", label: "Plan de Estudio", icon: GraduationCap },
+              { id: "historia_academica", label: "Historia Académica", icon: BookOpen },
+            ],
+          },
+        ]
+      : normalizedParentTab === "horario"
+      ? [
+          {
+            indicatorId: "horario",
+            activeId: horarioSubTab,
+            onChange: (id) => setHorarioSubTab(id as any),
+            tabs: [
+              { id: "horario", label: "Horario", icon: Calendar },
+              { id: "examenes", label: "Exámenes y Trabajos", icon: BookOpen },
+            ],
+          },
+        ]
+      : null
+  );
+
   return (
     <div className="space-y-6 animate-fade-in px-3 sm:px-6 pt-1 sm:pt-1.5 pb-6">
       {/* Submenu Tabs Selector with Navigation Arrows */}
@@ -1794,102 +1776,6 @@ export default function AcademicView({
           transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
           className="space-y-6"
         >
-          {normalizedParentTab === "informacion_materias" && (
-            <div className="flex items-center justify-center mb-8 w-full max-w-sm sm:max-w-md mx-auto">
-              <div className="w-full">
-                <div
-                  ref={planEstudioScrollRef}
-                  className="flex items-center justify-center gap-1.5 p-1.5 bg-white/80 dark:bg-black/80 backdrop-blur-md border border-slate-200 dark:border-zinc-800 rounded-full w-full shadow-md whitespace-nowrap"
-                >
-                  <button
-                    onClick={() => setPlanEstudioSubTab("plan_estudio")}
-                    className={`relative flex-1 py-2.5 px-3 sm:px-4 text-xs sm:text-sm transition-colors rounded-full flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer z-10 whitespace-nowrap ${
-                      planEstudioSubTab === "plan_estudio"
-                        ? "text-white font-black"
-                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-800/50 font-medium"
-                    }`}
-                  >
-                    <GraduationCap className="w-4 h-4 flex-shrink-0" />
-                    <span className="whitespace-nowrap font-bold">Plan de Estudio</span>
-                    {planEstudioSubTab === "plan_estudio" && (
-                      <motion.div
-                        layoutId="activePlanEstudioTabIndicator"
-                        className="absolute inset-0 rounded-full bg-primary shadow-md shadow-primary/25 -z-10"
-                        transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                      />
-                    )}
-                  </button>
-                  <button
-                    onClick={() => setPlanEstudioSubTab("historia_academica")}
-                    className={`relative flex-1 py-2.5 px-3 sm:px-4 text-xs sm:text-sm transition-colors rounded-full flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer z-10 whitespace-nowrap ${
-                      planEstudioSubTab === "historia_academica"
-                        ? "text-white font-black"
-                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-800/50 font-medium"
-                    }`}
-                  >
-                    <BookOpen className="w-4 h-4 flex-shrink-0" />
-                    <span className="whitespace-nowrap font-bold">Historia Académica</span>
-                    {planEstudioSubTab === "historia_academica" && (
-                      <motion.div
-                        layoutId="activePlanEstudioTabIndicator"
-                        className="absolute inset-0 rounded-full bg-primary shadow-md shadow-primary/25 -z-10"
-                        transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                      />
-                    )}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {normalizedParentTab === "horario" && (
-            <div className="flex items-center justify-center mb-8 w-full max-w-sm sm:max-w-md mx-auto">
-              <div className="w-full">
-                <div
-                  ref={horarioScrollRef}
-                  className="flex items-center justify-center gap-1.5 p-1.5 bg-white/80 dark:bg-black/80 backdrop-blur-md border border-slate-200 dark:border-zinc-800 rounded-full w-full shadow-md whitespace-nowrap"
-                >
-                  <button
-                    onClick={() => setHorarioSubTab("horario")}
-                    className={`relative flex-1 py-2.5 px-3 sm:px-4 text-xs sm:text-sm transition-colors rounded-full flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer z-10 whitespace-nowrap ${
-                      horarioSubTab === "horario"
-                        ? "text-white font-black"
-                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-800/50 font-medium"
-                    }`}
-                  >
-                    <Calendar className="w-4 h-4 flex-shrink-0" />
-                    <span className="whitespace-nowrap font-bold">Horario</span>
-                    {horarioSubTab === "horario" && (
-                      <motion.div
-                        layoutId="activeHorarioTabIndicator"
-                        className="absolute inset-0 rounded-full bg-primary shadow-md shadow-primary/25 -z-10"
-                        transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                      />
-                    )}
-                  </button>
-                  <button
-                    onClick={() => setHorarioSubTab("examenes")}
-                    className={`relative flex-1 py-2.5 px-3 sm:px-4 text-xs sm:text-sm transition-colors rounded-full flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer z-10 whitespace-nowrap ${
-                      horarioSubTab === "examenes"
-                        ? "text-white font-black"
-                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-800/50 font-medium"
-                    }`}
-                  >
-                    <BookOpen className="w-4 h-4 flex-shrink-0" />
-                    <span className="whitespace-nowrap font-bold">Exámenes y Trabajos</span>
-                    {horarioSubTab === "examenes" && (
-                      <motion.div
-                        layoutId="activeHorarioTabIndicator"
-                        className="absolute inset-0 rounded-full bg-primary shadow-md shadow-primary/25 -z-10"
-                        transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                      />
-                    )}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
           {activeSubTab === "resumen" && (() => {
             const selectedEvents = getAcademicEventsForDate(resumenSelectedDateStr);
             type UnifiedAcademicAgendaItem = {

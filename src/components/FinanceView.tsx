@@ -1,4 +1,5 @@
 import { SubNav } from "./SubNav";
+import { useSubPanelRows } from "../lib/navPanelContext";
 import { SharedBadge, makeSharedOutHelpers } from "./SharedBadge";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import { generateUniqueId } from "../utils/id";
@@ -550,114 +551,12 @@ export default function FinanceView({
     setLocalCotizaciones(action);
   };
 
-  // Tabs and scrolling helpers for unified subtabs
-  const cotizacionesScrollRef = React.useRef<HTMLDivElement>(null);
-  const pagosScrollRef = React.useRef<HTMLDivElement>(null);
-
-  const scrollCotizacionesTabsLeft = () => {
-    const tabs = ["acciones", "cripto"];
-    const currentIndex = tabs.indexOf(cotizacionesSubTab);
-    if (currentIndex > 0) {
-      setCotizacionesSubTab(tabs[currentIndex - 1] as any);
-      if (cotizacionesScrollRef.current) {
-        const buttons =
-          cotizacionesScrollRef.current.querySelectorAll("button");
-        if (buttons[currentIndex - 1])
-          buttons[currentIndex - 1].scrollIntoView({
-            behavior: "smooth",
-            inline: "center",
-            block: "nearest",
-          });
-      }
-    }
-  };
-  const scrollCotizacionesTabsRight = () => {
-    const tabs = ["acciones", "cripto"];
-    const currentIndex = tabs.indexOf(cotizacionesSubTab);
-    if (currentIndex < tabs.length - 1) {
-      setCotizacionesSubTab(tabs[currentIndex + 1] as any);
-      if (cotizacionesScrollRef.current) {
-        const buttons =
-          cotizacionesScrollRef.current.querySelectorAll("button");
-        if (buttons[currentIndex + 1])
-          buttons[currentIndex + 1].scrollIntoView({
-            behavior: "smooth",
-            inline: "center",
-            block: "nearest",
-          });
-      }
-    }
-  };
-
-  const scrollPagosTabsLeft = () => {
-    const tabs = ["todos_pagos", "gastos_varios"];
-    const currentIndex = tabs.indexOf(pagosSubTab);
-    if (currentIndex > 0) {
-      setPagosSubTab(tabs[currentIndex - 1] as any);
-      if (pagosScrollRef.current) {
-        const buttons = pagosScrollRef.current.querySelectorAll("button");
-        if (buttons[currentIndex - 1])
-          buttons[currentIndex - 1].scrollIntoView({
-            behavior: "smooth",
-            inline: "center",
-            block: "nearest",
-          });
-      }
-    }
-  };
-  const scrollPagosTabsRight = () => {
-    const tabs = ["todos_pagos", "gastos_varios"];
-    const currentIndex = tabs.indexOf(pagosSubTab);
-    if (currentIndex < tabs.length - 1) {
-      setPagosSubTab(tabs[currentIndex + 1] as any);
-      if (pagosScrollRef.current) {
-        const buttons = pagosScrollRef.current.querySelectorAll("button");
-        if (buttons[currentIndex + 1])
-          buttons[currentIndex + 1].scrollIntoView({
-            behavior: "smooth",
-            inline: "center",
-            block: "nearest",
-          });
-      }
-    }
-  };
-
   const [pagosSubTab, setPagosSubTab] = useState<
     "todos_pagos" | "gastos_varios"
   >("todos_pagos");
   const [cotizacionesSubTab, setCotizacionesSubTab] = useState<
     "acciones" | "cripto"
   >("acciones");
-
-  React.useEffect(() => {
-    if (cotizacionesScrollRef.current) {
-      const tabs = ["acciones", "cripto"];
-      const currentIndex = tabs.indexOf(cotizacionesSubTab);
-      const buttons = cotizacionesScrollRef.current.querySelectorAll("button");
-      if (buttons[currentIndex]) {
-        buttons[currentIndex].scrollIntoView({
-          behavior: "smooth",
-          inline: "center",
-          block: "nearest",
-        });
-      }
-    }
-  }, [cotizacionesSubTab]);
-
-  React.useEffect(() => {
-    if (pagosScrollRef.current) {
-      const tabs = ["todos_pagos", "gastos_varios"];
-      const currentIndex = tabs.indexOf(pagosSubTab);
-      const buttons = pagosScrollRef.current.querySelectorAll("button");
-      if (buttons[currentIndex]) {
-        buttons[currentIndex].scrollIntoView({
-          behavior: "smooth",
-          inline: "center",
-          block: "nearest",
-        });
-      }
-    }
-  }, [pagosSubTab]);
 
   const [localActiveTab, setLocalActiveTab] = useState<
     | "resumen"
@@ -1556,6 +1455,36 @@ export default function FinanceView({
       bestOpenCripto,
     };
   }, [effectiveInversiones, cotizacionesCripto]);
+
+  // Registra las sub-pestañas de Pagos Mensuales / Cotizaciones en el navbar superior, para que
+  // crezcan dentro de la misma cápsula en vez de un menú flotante aparte.
+  useSubPanelRows(
+    activeTab === "pagos_mensuales"
+      ? [
+          {
+            indicatorId: "pagos",
+            activeId: pagosSubTab,
+            onChange: (id) => setPagosSubTab(id as any),
+            tabs: [
+              { id: "todos_pagos", label: "Gastos Mensuales", icon: Wallet },
+              { id: "gastos_varios", label: "Gastos Varios", icon: CreditCard },
+            ],
+          },
+        ]
+      : activeTab === "cotizaciones"
+      ? [
+          {
+            indicatorId: "cotizaciones",
+            activeId: cotizacionesSubTab,
+            onChange: (id) => setCotizacionesSubTab(id as any),
+            tabs: [
+              { id: "acciones", label: "Acciones y CEDEARs", icon: LineChart },
+              { id: "cripto", label: "Criptomonedas", icon: Bitcoin },
+            ],
+          },
+        ]
+      : null
+  );
 
   return (
     <div className="space-y-6 animate-fade-in px-3 sm:px-6 pt-1 sm:pt-1.5 pb-6">
@@ -3599,64 +3528,7 @@ export default function FinanceView({
             </div>
           ) : activeTab === "pagos_mensuales" ? (
             <div className="space-y-6">
-              {/* Selector de Pestañas de Pagos Mensuales */}
-              <div className="flex items-center justify-center mb-8 w-full max-w-sm sm:max-w-md mx-auto">
-                <div className="w-full">
-                  <div
-                    ref={pagosScrollRef}
-                    className="flex items-center justify-center gap-1.5 p-1.5 bg-white dark:bg-black border border-slate-200 dark:border-zinc-800 rounded-full w-full shadow-md whitespace-nowrap"
-                  >
-                    <button
-                      onClick={() => setPagosSubTab("todos_pagos")}
-                      className={`relative flex-1 py-2.5 px-3 sm:px-4 text-xs sm:text-sm transition-colors rounded-full flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer z-10 whitespace-nowrap ${
-                        pagosSubTab === "todos_pagos"
-                          ? "text-white font-black"
-                          : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-800/50 font-medium"
-                      }`}
-                    >
-                      <Wallet className="w-4 h-4 flex-shrink-0" />
-                      <span className="whitespace-nowrap font-bold">
-                        Gastos Mensuales
-                      </span>
-                      {pagosSubTab === "todos_pagos" && (
-                        <motion.div
-                          layoutId="activePagosTabIndicator"
-                          className="absolute inset-0 rounded-full bg-primary shadow-md shadow-primary/25 -z-10"
-                          transition={{
-                            type: "spring",
-                            stiffness: 380,
-                            damping: 30,
-                          }}
-                        />
-                      )}
-                    </button>
-                    <button
-                      onClick={() => setPagosSubTab("gastos_varios")}
-                      className={`relative flex-1 py-2.5 px-3 sm:px-4 text-xs sm:text-sm transition-colors rounded-full flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer z-10 whitespace-nowrap ${
-                        pagosSubTab === "gastos_varios"
-                          ? "text-white font-black"
-                          : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-800/50 font-medium"
-                      }`}
-                    >
-                      <CreditCard className="w-4 h-4 flex-shrink-0" />
-                      <span className="whitespace-nowrap font-bold">
-                        Gastos Varios
-                      </span>
-                      {pagosSubTab === "gastos_varios" && (
-                        <motion.div
-                          layoutId="activePagosTabIndicator"
-                          className="absolute inset-0 rounded-full bg-primary shadow-md shadow-primary/25 -z-10"
-                          transition={{
-                            type: "spring",
-                            stiffness: 380,
-                            damping: 30,
-                          }}
-                        />
-                      )}
-                    </button>
-                  </div>
-                </div>
-              </div>
+              {/* Selector de Pestañas — ahora integrado en el navbar (useSubPanelRows arriba) */}
 
               <AnimatePresence mode="wait">
                 {pagosSubTab === "todos_pagos" ? (
@@ -3707,64 +3579,7 @@ export default function FinanceView({
             />
           ) : activeTab === "cotizaciones" ? (
             <div className="space-y-6">
-              {/* Selector de Pestañas de Cotizaciones */}
-              <div className="flex items-center justify-center mb-8 w-full max-w-sm sm:max-w-md mx-auto">
-                <div className="w-full">
-                  <div
-                    ref={cotizacionesScrollRef}
-                    className="flex items-center justify-center gap-1.5 p-1.5 bg-white dark:bg-black border border-slate-200 dark:border-zinc-800 rounded-full w-full shadow-md whitespace-nowrap"
-                  >
-                    <button
-                      onClick={() => setCotizacionesSubTab("acciones")}
-                      className={`relative flex-1 py-2.5 px-3 sm:px-4 text-xs sm:text-sm transition-colors rounded-full flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer z-10 whitespace-nowrap ${
-                        cotizacionesSubTab === "acciones"
-                          ? "text-white font-black"
-                          : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-800/50 font-medium"
-                      }`}
-                    >
-                      <LineChart className="w-4 h-4 flex-shrink-0" />
-                      <span className="whitespace-nowrap font-bold">
-                        Acciones y CEDEARs
-                      </span>
-                      {cotizacionesSubTab === "acciones" && (
-                        <motion.div
-                          layoutId="activeCotizacionesTabIndicator"
-                          className="absolute inset-0 rounded-full bg-primary shadow-md shadow-primary/25 -z-10"
-                          transition={{
-                            type: "spring",
-                            stiffness: 380,
-                            damping: 30,
-                          }}
-                        />
-                      )}
-                    </button>
-                    <button
-                      onClick={() => setCotizacionesSubTab("cripto")}
-                      className={`relative flex-1 py-2.5 px-3 sm:px-4 text-xs sm:text-sm transition-colors rounded-full flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer z-10 whitespace-nowrap ${
-                        cotizacionesSubTab === "cripto"
-                          ? "text-white font-black"
-                          : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-800/50 font-medium"
-                      }`}
-                    >
-                      <Bitcoin className="w-4 h-4 flex-shrink-0" />
-                      <span className="whitespace-nowrap font-bold">
-                        Criptomonedas
-                      </span>
-                      {cotizacionesSubTab === "cripto" && (
-                        <motion.div
-                          layoutId="activeCotizacionesTabIndicator"
-                          className="absolute inset-0 rounded-full bg-primary shadow-md shadow-primary/25 -z-10"
-                          transition={{
-                            type: "spring",
-                            stiffness: 380,
-                            damping: 30,
-                          }}
-                        />
-                      )}
-                    </button>
-                  </div>
-                </div>
-              </div>
+              {/* Selector de Pestañas — ahora integrado en el navbar (useSubPanelRows arriba) */}
 
               <AnimatePresence mode="wait">
                 {cotizacionesSubTab === "acciones" ? (

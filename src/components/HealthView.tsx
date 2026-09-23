@@ -1,4 +1,5 @@
 import { SubNav } from "./SubNav";
+import { useSubPanelRows } from "../lib/navPanelContext";
 import { SharedBadge, makeSharedOutHelpers } from "./SharedBadge";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import { UserProfileData } from "./UserSettingsModal";
@@ -639,60 +640,7 @@ export default function HealthView({
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Scroll references and helpers for tab selection (Medicamentos)
-  const medsScrollRef = useRef<HTMLDivElement | null>(null);
-
-  const scrollMedsTabsLeft = () => {
-    const tabs = ["historial","stock"];
-    const currentIndex = tabs.indexOf(medsActiveTab);
-    if (currentIndex > 0) {
-      setMedsActiveTab(tabs[currentIndex - 1] as any);
-      if (medsScrollRef.current) {
-        const buttons = medsScrollRef.current.querySelectorAll('button');
-        if (buttons[currentIndex - 1]) buttons[currentIndex - 1].scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-      }
-    }
-  };
-
-  const scrollMedsTabsRight = () => {
-    const tabs = ["historial","stock"];
-    const currentIndex = tabs.indexOf(medsActiveTab);
-    if (currentIndex < tabs.length - 1) {
-      setMedsActiveTab(tabs[currentIndex + 1] as any);
-      if (medsScrollRef.current) {
-        const buttons = medsScrollRef.current.querySelectorAll('button');
-        if (buttons[currentIndex + 1]) buttons[currentIndex + 1].scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-      }
-    }
-  };
-
-  // Scroll references and helpers for tab selection (Control Clinico)
-  const clinicoScrollRef = useRef<HTMLDivElement | null>(null);
-
-  const scrollClinicoTabsLeft = () => {
-    const tabs = ["doctores","presion","estudios","medicamentos"];
-    const currentIndex = tabs.indexOf(clinicoActiveTab);
-    if (currentIndex > 0) {
-      setClinicoActiveTab(tabs[currentIndex - 1] as any);
-      if (clinicoScrollRef.current) {
-        const buttons = clinicoScrollRef.current.querySelectorAll('button');
-        if (buttons[currentIndex - 1]) buttons[currentIndex - 1].scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-      }
-    }
-  };
-
-  const scrollClinicoTabsRight = () => {
-    const tabs = ["doctores","presion","estudios","medicamentos"];
-    const currentIndex = tabs.indexOf(clinicoActiveTab);
-    if (currentIndex < tabs.length - 1) {
-      setClinicoActiveTab(tabs[currentIndex + 1] as any);
-      if (clinicoScrollRef.current) {
-        const buttons = clinicoScrollRef.current.querySelectorAll('button');
-        if (buttons[currentIndex + 1]) buttons[currentIndex + 1].scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-      }
-    }
-  };
-  const userId = (userEmail || auth.currentUser?.email || auth.currentUser?.uid || "hernanmaximiliano10@gmail.com").toLowerCase().trim();
+  const userId =(userEmail || auth.currentUser?.email || auth.currentUser?.uid || "hernanmaximiliano10@gmail.com").toLowerCase().trim();
 
   // --- ESTADOS Y HELPERS PARA CALENDARIO MÉDICO Y MEDICAMENTOS ---
   const [medicalCalendarDate, setMedicalCalendarDate] = useState<Date>(new Date());
@@ -1384,32 +1332,6 @@ export default function HealthView({
 
   const [medsActiveTab, setMedsActiveTab] = useState<"historial" | "stock">("historial");
   const [deporteAlimActiveTab, setDeporteAlimActiveTab] = useState<"rutina" | "alimentacion" | "registro_diario">("rutina");
-
-  const deporteAlimScrollRef = useRef<HTMLDivElement | null>(null);
-
-  const scrollDeporteAlimTabsLeft = () => {
-    const tabs = ["rutina","alimentacion","registro_diario"];
-    const currentIndex = tabs.indexOf(deporteAlimActiveTab);
-    if (currentIndex > 0) {
-      setDeporteAlimActiveTab(tabs[currentIndex - 1] as any);
-      if (deporteAlimScrollRef.current) {
-        const buttons = deporteAlimScrollRef.current.querySelectorAll('button');
-        if (buttons[currentIndex - 1]) buttons[currentIndex - 1].scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-      }
-    }
-  };
-
-  const scrollDeporteAlimTabsRight = () => {
-    const tabs = ["rutina","alimentacion","registro_diario"];
-    const currentIndex = tabs.indexOf(deporteAlimActiveTab);
-    if (currentIndex < tabs.length - 1) {
-      setDeporteAlimActiveTab(tabs[currentIndex + 1] as any);
-      if (deporteAlimScrollRef.current) {
-        const buttons = deporteAlimScrollRef.current.querySelectorAll('button');
-        if (buttons[currentIndex + 1]) buttons[currentIndex + 1].scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-      }
-    }
-  };
 
   const lastSubTabRef = useRef<string | null>(null);
 
@@ -3016,6 +2938,53 @@ export default function HealthView({
       bpFilterPatient === "Todos" || patientName === bpFilterPatient;
     return matchesSearch && matchesPatient;
   });
+
+  // Registra las sub-pestañas de Control Clínico (y, si corresponde, las de Medicamentos), o las
+  // de Deporte y Alimentación, en el navbar superior, para que crezcan dentro de la misma cápsula
+  // en vez de un menú flotante aparte.
+  useSubPanelRows(
+    activeSubTab === "control_clinico"
+      ? [
+          {
+            indicatorId: "clinico",
+            activeId: clinicoActiveTab,
+            onChange: (id) => setClinicoActiveTab(id as any),
+            tabs: [
+              { id: "doctores", label: "Doctores", icon: Stethoscope },
+              { id: "presion", label: "Presión Arterial", icon: Heart },
+              { id: "estudios", label: "Estudios e Informes", icon: FileText },
+              { id: "medicamentos", label: "Medicamentos", icon: Pill },
+            ],
+          },
+          ...(clinicoActiveTab === "medicamentos"
+            ? [
+                {
+                  indicatorId: "meds",
+                  activeId: medsActiveTab,
+                  onChange: (id: string) => setMedsActiveTab(id as any),
+                  tabs: [
+                    { id: "historial", label: "Historial de Consumo", icon: Pill },
+                    { id: "stock", label: "Stock y Disponibilidad", icon: Clock },
+                  ],
+                },
+              ]
+            : [])
+        ]
+      : activeSubTab === "deporte_alimentacion"
+      ? [
+          {
+            indicatorId: "deporteAlim",
+            activeId: deporteAlimActiveTab,
+            onChange: (id) => setDeporteAlimActiveTab(id as any),
+            tabs: [
+              { id: "rutina", label: "Rutina", icon: Dumbbell },
+              { id: "alimentacion", label: "Alimentación", icon: Utensils },
+              { id: "registro_diario", label: "Historial Diario", icon: TrendingUp },
+            ],
+          },
+        ]
+      : null
+  );
 
   return (
     <div className="space-y-6 animate-fade-in px-3 sm:px-6 pt-1 sm:pt-1.5 pb-6 font-sans">
@@ -4980,90 +4949,7 @@ export default function HealthView({
 
       {activeSubTab === "deporte_alimentacion" && (
         <div className="space-y-6">
-          {/* Selector de Pestañas style matching Inversiones */}
-          {/* Selector de Pestañas internas (Deportes, Rutina, Alimentación) */}
-          <div className="flex items-center justify-center gap-2 mb-8 w-full max-w-full px-2 mx-auto">
-            <button
-              onClick={scrollDeporteAlimTabsLeft}
-              className={`pointer-events-auto p-1.5 rounded-full bg-white/90 dark:bg-black/95 border border-zinc-200/60 dark:border-zinc-800 text-zinc-600 dark:text-zinc-300 shadow-md hover:text-primary dark:hover:text-white transition-all cursor-pointer flex sm:hidden items-center justify-center shrink-0 w-8 h-8 ${["rutina","alimentacion","registro_diario"].indexOf(deporteAlimActiveTab) === 0 ? "opacity-30 pointer-events-none" : ""}`}
-              aria-label="Desplazar izquierda"
-            >
-              <ChevronLeft className="w-4 h-4 shrink-0" />
-            </button>
-
-            <div className="relative min-w-0 max-w-full">
-              <div
-                ref={deporteAlimScrollRef}
-                className="flex items-center justify-start sm:justify-center gap-1.5 p-1.5 bg-white/80 dark:bg-black/80 backdrop-blur-md rounded-full border border-slate-200 dark:border-zinc-800 shadow-md w-full max-w-full overflow-x-auto scroll-smooth scrollbar-none whitespace-nowrap"
-                style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-              >
-                <button
-                  onClick={(e) => { setDeporteAlimActiveTab("rutina"); e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' }); }}
-                  className={`relative md:!flex-1 shrink-0 py-2.5 px-3.5 sm:px-4 text-xs sm:text-sm transition-colors rounded-full flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer z-10 whitespace-nowrap ${
-                    deporteAlimActiveTab === "rutina"
-                      ? "text-white font-black"
-                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-800/50 font-medium"
-                  }`}
-                >
-                  <Dumbbell className="w-4 h-4 flex-shrink-0" />
-                  <span className="whitespace-nowrap shrink-0 font-bold">Rutina</span>
-                  {deporteAlimActiveTab === "rutina" && (
-                    <motion.div
-                      layoutId="activeDeporteAlimTabIndicator"
-                      className="absolute inset-0 rounded-full bg-primary shadow-md shadow-primary/25 -z-10"
-                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                    />
-                  )}
-                </button>
-
-                <button
-                  onClick={(e) => { setDeporteAlimActiveTab("alimentacion"); e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' }); }}
-                  className={`relative md:!flex-1 shrink-0 py-2.5 px-3.5 sm:px-4 text-xs sm:text-sm transition-colors rounded-full flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer z-10 whitespace-nowrap ${
-                    deporteAlimActiveTab === "alimentacion"
-                      ? "text-white font-black"
-                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-800/50 font-medium"
-                  }`}
-                >
-                  <Utensils className="w-4 h-4 flex-shrink-0" />
-                  <span className="whitespace-nowrap shrink-0 font-bold">Alimentación</span>
-                  {deporteAlimActiveTab === "alimentacion" && (
-                    <motion.div
-                      layoutId="activeDeporteAlimTabIndicator"
-                      className="absolute inset-0 rounded-full bg-primary shadow-md shadow-primary/25 -z-10"
-                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                    />
-                  )}
-                </button>
-
-                <button
-                  onClick={(e) => { setDeporteAlimActiveTab("registro_diario"); e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' }); }}
-                  className={`relative md:!flex-1 shrink-0 py-2.5 px-3.5 sm:px-4 text-xs sm:text-sm transition-colors rounded-full flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer z-10 whitespace-nowrap ${
-                    deporteAlimActiveTab === "registro_diario"
-                      ? "text-white font-black"
-                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-800/50 font-medium"
-                  }`}
-                >
-                  <TrendingUp className="w-4 h-4 flex-shrink-0" />
-                  <span className="whitespace-nowrap shrink-0 font-bold">Historial Diario</span>
-                  {deporteAlimActiveTab === "registro_diario" && (
-                    <motion.div
-                      layoutId="activeDeporteAlimTabIndicator"
-                      className="absolute inset-0 rounded-full bg-primary shadow-md shadow-primary/25 -z-10"
-                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                    />
-                  )}
-                </button>
-              </div>
-            </div>
-
-            <button
-              onClick={scrollDeporteAlimTabsRight}
-              className={`pointer-events-auto p-1.5 rounded-full bg-white/90 dark:bg-black/95 border border-zinc-200/60 dark:border-zinc-800 text-zinc-600 dark:text-zinc-300 shadow-md hover:text-primary dark:hover:text-white transition-all cursor-pointer flex sm:hidden items-center justify-center shrink-0 w-8 h-8 ${["rutina","alimentacion","registro_diario"].indexOf(deporteAlimActiveTab) === 2 ? "opacity-30 pointer-events-none" : ""}`}
-              aria-label="Desplazar derecha"
-            >
-              <ChevronRight className="w-4 h-4 shrink-0" />
-            </button>
-          </div>
+          {/* Selector de Pestañas — ahora integrado en el navbar (useSubPanelRows arriba) */}
 
           <AnimatePresence mode="wait">
             {deporteAlimActiveTab === "rutina" && (
@@ -5648,108 +5534,7 @@ export default function HealthView({
             </div>
           )}
 
-          {/* Selector de Pestañas Control Clínico */}
-          <div className="flex items-center justify-center gap-2 mb-8 w-full max-w-full px-2 mx-auto">
-            <button
-              onClick={scrollClinicoTabsLeft}
-              className={`pointer-events-auto p-1.5 rounded-full bg-white/90 dark:bg-black/95 border border-zinc-200/60 dark:border-zinc-800 text-zinc-600 dark:text-zinc-300 shadow-md hover:text-primary dark:hover:text-white transition-all cursor-pointer flex sm:hidden items-center justify-center shrink-0 w-8 h-8 ${["doctores","presion","estudios","medicamentos"].indexOf(clinicoActiveTab) === 0 ? "opacity-30 pointer-events-none" : ""}`}
-              aria-label="Desplazar izquierda"
-            >
-              <ChevronLeft className="w-4 h-4 shrink-0" />
-            </button>
-
-            <div className="relative min-w-0 max-w-full">
-              <div
-                ref={clinicoScrollRef}
-                className="flex items-center justify-start sm:justify-center gap-1.5 p-1.5 bg-white/80 dark:bg-black/80 backdrop-blur-md rounded-full border border-slate-200 dark:border-zinc-800 shadow-md w-full max-w-full overflow-x-auto scroll-smooth scrollbar-none whitespace-nowrap"
-                style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-              >
-                <button
-                  onClick={(e) => { setClinicoActiveTab("doctores"); e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' }); }}
-                  className={`relative md:!flex-1 shrink-0 py-2.5 px-3.5 sm:px-4 text-xs sm:text-sm transition-colors rounded-full flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer z-10 whitespace-nowrap ${
-                    clinicoActiveTab === "doctores"
-                      ? "text-white font-black"
-                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-800/50 font-medium"
-                  }`}
-                >
-                  <Stethoscope className="w-4 h-4 flex-shrink-0" />
-                  <span className="whitespace-nowrap font-bold">Doctores</span>
-                  {clinicoActiveTab === "doctores" && (
-                    <motion.div
-                      layoutId="activeClinicoTabIndicator"
-                      className="absolute inset-0 rounded-full bg-primary shadow-md shadow-primary/25 -z-10"
-                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                    />
-                  )}
-                </button>
-
-                <button
-                  onClick={(e) => { setClinicoActiveTab("presion"); e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' }); }}
-                  className={`relative md:!flex-1 shrink-0 py-2.5 px-3.5 sm:px-4 text-xs sm:text-sm transition-colors rounded-full flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer z-10 whitespace-nowrap ${
-                    clinicoActiveTab === "presion"
-                      ? "text-white font-black"
-                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-800/50 font-medium"
-                  }`}
-                >
-                  <Heart className="w-4 h-4 flex-shrink-0" />
-                  <span className="whitespace-nowrap font-bold">Presión Arterial</span>
-                  {clinicoActiveTab === "presion" && (
-                    <motion.div
-                      layoutId="activeClinicoTabIndicator"
-                      className="absolute inset-0 rounded-full bg-primary shadow-md shadow-primary/25 -z-10"
-                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                    />
-                  )}
-                </button>
-
-                <button
-                  onClick={(e) => { setClinicoActiveTab("estudios"); e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' }); }}
-                  className={`relative md:!flex-1 shrink-0 py-2.5 px-3.5 sm:px-4 text-xs sm:text-sm transition-colors rounded-full flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer z-10 whitespace-nowrap ${
-                    clinicoActiveTab === "estudios"
-                      ? "text-white font-black"
-                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-800/50 font-medium"
-                  }`}
-                >
-                  <FileText className="w-4 h-4 flex-shrink-0" />
-                  <span className="whitespace-nowrap font-bold">Estudios e Informes</span>
-                  {clinicoActiveTab === "estudios" && (
-                    <motion.div
-                      layoutId="activeClinicoTabIndicator"
-                      className="absolute inset-0 rounded-full bg-primary shadow-md shadow-primary/25 -z-10"
-                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                    />
-                  )}
-                </button>
-
-                <button
-                  onClick={(e) => { setClinicoActiveTab("medicamentos"); e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' }); }}
-                  className={`relative md:!flex-1 shrink-0 py-2.5 px-3.5 sm:px-4 text-xs sm:text-sm transition-colors rounded-full flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer z-10 whitespace-nowrap ${
-                    clinicoActiveTab === "medicamentos"
-                      ? "text-white font-black"
-                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-800/50 font-medium"
-                  }`}
-                >
-                  <Pill className="w-4 h-4 flex-shrink-0" />
-                  <span className="whitespace-nowrap font-bold">Medicamentos</span>
-                  {clinicoActiveTab === "medicamentos" && (
-                    <motion.div
-                      layoutId="activeClinicoTabIndicator"
-                      className="absolute inset-0 rounded-full bg-primary shadow-md shadow-primary/25 -z-10"
-                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                    />
-                  )}
-                </button>
-              </div>
-            </div>
-
-            <button
-              onClick={scrollClinicoTabsRight}
-              className={`pointer-events-auto p-1.5 rounded-full bg-white/90 dark:bg-black/95 border border-zinc-200/60 dark:border-zinc-800 text-zinc-600 dark:text-zinc-300 shadow-md hover:text-primary dark:hover:text-white transition-all cursor-pointer flex sm:hidden items-center justify-center shrink-0 w-8 h-8 ${["doctores","presion","estudios","medicamentos"].indexOf(clinicoActiveTab) === 3 ? "opacity-30 pointer-events-none" : ""}`}
-              aria-label="Desplazar derecha"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
+          {/* Selector de Pestañas Control Clínico — ahora integrado en el navbar (useSubPanelRows arriba) */}
 
           <AnimatePresence mode="wait">
             <motion.div
@@ -5932,70 +5717,7 @@ export default function HealthView({
 
               {clinicoActiveTab === "medicamentos" && (
                 <div className="space-y-6">
-                  {/* Selector de Pestañas Medicamentos */}
-                  <div className="flex items-center justify-center gap-2 mb-8 w-full max-w-full px-2 mx-auto">
-                    <button
-                      onClick={scrollMedsTabsLeft}
-                      className={`pointer-events-auto p-1.5 rounded-full bg-white/90 dark:bg-black/95 border border-zinc-200/60 dark:border-zinc-800 text-zinc-600 dark:text-zinc-300 shadow-md hover:text-primary dark:hover:text-white transition-all cursor-pointer flex sm:hidden items-center justify-center shrink-0 w-8 h-8 ${["historial","stock"].indexOf(medsActiveTab) === 0 ? "opacity-30 pointer-events-none" : ""}`}
-                      aria-label="Desplazar izquierda"
-                    >
-                      <ChevronLeft className="w-4 h-4 shrink-0" />
-                    </button>
-
-                    <div className="relative min-w-0 max-w-full">
-                      <div
-                        ref={medsScrollRef}
-                        className="flex items-center justify-start sm:justify-center gap-1.5 p-1.5 bg-white/80 dark:bg-black/80 backdrop-blur-md rounded-full border border-slate-200 dark:border-zinc-800 shadow-md w-full max-w-full overflow-x-auto scroll-smooth scrollbar-none whitespace-nowrap"
-                        style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-                      >
-                        <button
-                          onClick={(e) => { setMedsActiveTab("historial"); e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' }); }}
-                          className={`relative md:!flex-1 shrink-0 py-2.5 px-3.5 sm:px-4 text-xs sm:text-sm transition-colors rounded-full flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer z-10 whitespace-nowrap ${
-                            medsActiveTab === "historial"
-                              ? "text-white font-black"
-                              : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-800/50 font-medium"
-                          }`}
-                        >
-                          <Pill className="w-4 h-4 flex-shrink-0" />
-                          <span className="whitespace-nowrap shrink-0 font-bold">Historial de Consumo</span>
-                          {medsActiveTab === "historial" && (
-                            <motion.div
-                              layoutId="activeMedsTabIndicator"
-                              className="absolute inset-0 rounded-full bg-primary shadow-md shadow-primary/25 -z-10"
-                              transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                            />
-                          )}
-                        </button>
-
-                        <button
-                          onClick={(e) => { setMedsActiveTab("stock"); e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' }); }}
-                          className={`relative md:!flex-1 shrink-0 py-2.5 px-3.5 sm:px-4 text-xs sm:text-sm transition-colors rounded-full flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer z-10 whitespace-nowrap ${
-                            medsActiveTab === "stock"
-                              ? "text-white font-black"
-                              : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-800/50 font-medium"
-                          }`}
-                        >
-                          <Clock className="w-4 h-4 flex-shrink-0" />
-                          <span className="whitespace-nowrap shrink-0 font-bold">Stock y Disponibilidad</span>
-                          {medsActiveTab === "stock" && (
-                            <motion.div
-                              layoutId="activeMedsTabIndicator"
-                              className="absolute inset-0 rounded-full bg-primary shadow-md shadow-primary/25 -z-10"
-                              transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                            />
-                          )}
-                        </button>
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={scrollMedsTabsRight}
-                      className={`pointer-events-auto p-1.5 rounded-full bg-white/90 dark:bg-black/95 border border-zinc-200/60 dark:border-zinc-800 text-zinc-600 dark:text-zinc-300 shadow-md hover:text-primary dark:hover:text-white transition-all cursor-pointer flex sm:hidden items-center justify-center shrink-0 w-8 h-8 ${["historial","stock"].indexOf(medsActiveTab) === 1 ? "opacity-30 pointer-events-none" : ""}`}
-                      aria-label="Desplazar derecha"
-                    >
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
-                  </div>
+                  {/* Selector de Pestañas Medicamentos — ahora integrado en el navbar (useSubPanelRows arriba) */}
 
                   {/* Secondary container (card) */}
                   <div
