@@ -449,6 +449,7 @@ export default function TopNavbar({
   }, [showNotifications]);
 
   const currentSubMenu = isSettingsOpen || mobileMenuOpen ? [] : (SUBMENUS_BY_TAB[currentTab] || []);
+  const effectiveSubPanelRows = isSettingsOpen || mobileMenuOpen ? null : subPanelRows;
 
   const [showLeftArrow, setShowLeftArrow] = useState(false);
   const [showRightArrow, setShowRightArrow] = useState(false);
@@ -836,7 +837,7 @@ export default function TopNavbar({
             Salud → Control Clínico) — dibujadas DENTRO de esta misma cápsula, como continuación
             del menú, en vez de cada vista armando su propio menú flotante aparte. */}
         <AnimatePresence mode="popLayout">
-          {subPanelRows && subPanelRows.length > 0 && subPanelRows.map((row, rowIndex) => (
+          {effectiveSubPanelRows && effectiveSubPanelRows.length > 0 && effectiveSubPanelRows.map((row, rowIndex) => (
             <SubPanelRow key={row.indicatorId} row={row} rowIndex={rowIndex} darkMode={darkMode} />
           ))}
         </AnimatePresence>
