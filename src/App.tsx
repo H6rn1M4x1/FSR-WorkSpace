@@ -16,6 +16,7 @@ import { Eye, EyeOff, Settings, Folder, RefreshCw } from "lucide-react";
 import LoginScreen from "./components/LoginScreen";
 import Logo from "./components/Logo";
 import TopNavbar, { SUBMENUS_BY_TAB } from "./components/TopNavbar";
+import { NavPanelContext, type NavPanelRow } from "./lib/navPanelContext";
 import HomeView from "./components/HomeView";
 const AcademicView = lazy(() => import("./components/AcademicView"));
 const MealsView = lazy(() => import("./components/MealsView"));
@@ -116,6 +117,7 @@ export default function App() {
   // Layout State & Aesthetic Preferences (LocalStorage EXCLUSIVE per device)
   const [currentTab, setCurrentTab] = useState("home");
   const [activeSubTab, setActiveSubTab] = useState("");
+  const [subPanelRows, setSubPanelRows] = useState<NavPanelRow[] | null>(null);
   const [darkMode, setDarkMode] = useState<boolean>(() => AestheticStorageService.getDarkMode());
   const [backgroundStyle, setBackgroundStyle] = useState<"dither" | "pixelblast" | "plasma">(() => AestheticStorageService.getBackgroundStyle());
   const [themeColor, setThemeColor] = useState(() => AestheticStorageService.getThemeColor());
@@ -2071,12 +2073,14 @@ export default function App() {
       </div>
 
       {/* Top Floating Glass Navigation Header - Hidden during 2FA authentication */}
+      <NavPanelContext.Provider value={setSubPanelRows}>
       {!is2FARequired && (
         <TopNavbar
           currentTab={currentTab}
           setCurrentTab={handleTabChange}
           activeSubTab={activeSubTab}
           onSubTabChange={setActiveSubTab}
+          subPanelRows={subPanelRows}
           darkMode={darkMode}
           setDarkMode={setDarkMode}
           user={userProfile ? { displayName: userProfile.displayName, email: (user?.email || auth.currentUser?.email || userProfile.email), photoURL: userProfile.photoURL } : user}
@@ -2435,6 +2439,7 @@ export default function App() {
           darkMode={darkMode}
         />
       </div>
+      </NavPanelContext.Provider>
     </div>
   );
 }

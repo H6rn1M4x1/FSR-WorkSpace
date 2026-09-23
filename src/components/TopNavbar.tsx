@@ -2,6 +2,7 @@ import { createPortal } from "react-dom";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import type { NavPanelRow } from "../lib/navPanelContext";
 import {
   Home,
   Calendar,
@@ -206,6 +207,7 @@ interface TopNavbarProps {
   medicamentosDetallados?: MedicamentoDetallado[];
   doctors?: DoctorCard[];
   medicalRecords?: MedicalRecord[];
+  subPanelRows?: NavPanelRow[] | null;
 }
 
 export default function TopNavbar({
@@ -213,6 +215,7 @@ export default function TopNavbar({
   setCurrentTab,
   activeSubTab,
   onSubTabChange,
+  subPanelRows,
   darkMode,
   setDarkMode,
   user,
@@ -669,6 +672,62 @@ export default function TopNavbar({
               )}
             </motion.div>
           )}
+        </AnimatePresence>
+
+        {/* Filas anidadas registradas por la vista actual (ej. Doctores/Presión Arterial/... en
+            Salud → Control Clínico) — dibujadas DENTRO de esta misma cápsula, como continuación
+            del menú, en vez de cada vista armando su propio menú flotante aparte. */}
+        <AnimatePresence mode="popLayout">
+          {subPanelRows && subPanelRows.length > 0 && subPanelRows.map((row, rowIndex) => (
+            <motion.div
+              key={row.indicatorId}
+              initial={{ opacity: 0, height: 0, marginTop: 0 }}
+              animate={{ opacity: 1, height: "auto", marginTop: 8 }}
+              exit={{ opacity: 0, height: 0, marginTop: 0 }}
+              transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+              className="w-full overflow-hidden relative flex items-center gap-1.5 pt-2.5 border-t border-zinc-200/50 dark:border-white/10"
+            >
+              <div className="flex-1 flex flex-wrap items-center justify-start gap-1.5 px-1 py-0.5">
+                {row.tabs.map((tab) => {
+                  const Icon = tab.icon;
+                  const isActive = row.activeId === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => row.onChange(tab.id)}
+                      className={`relative flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors duration-300 cursor-pointer whitespace-nowrap z-10 shrink-0 ${
+                        isActive
+                          ? `text-white dark:text-zinc-950 font-bold ${!darkMode ? "active-nav-pill-light" : ""}`
+                          : darkMode
+                          ? "text-zinc-300 hover:text-white hover:bg-white/5"
+                          : "text-black hover:text-black hover:bg-zinc-100/60"
+                      }`}
+                    >
+                      {isActive && (
+                        <motion.div
+                          layoutId={`activeSubPanelPill-${rowIndex}`}
+                          className="absolute inset-0 rounded-full bg-primary -z-10"
+                          transition={{ type: "spring", stiffness: 220, damping: 26 }}
+                        />
+                      )}
+                      {Icon && (
+                        <Icon
+                          className={`w-3.5 h-3.5 ${
+                            isActive
+                              ? `text-white dark:text-zinc-950 stroke-[2.2] ${!darkMode ? "active-nav-pill-light" : ""}`
+                              : darkMode
+                              ? "text-zinc-400 stroke-[1.8]"
+                              : "text-black stroke-[1.8]"
+                          }`}
+                        />
+                      )}
+                      <span className={isActive && !darkMode ? "active-nav-pill-light" : ""}>{tab.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </motion.div>
+          ))}
         </AnimatePresence>
 
         {/* Mobile Menu Backdrop Overlay & Floating Pop-up Card (Portal) */}
