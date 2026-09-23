@@ -9,7 +9,7 @@ import { createPortal } from "react-dom";
 import { TEAMS } from "../data/teams";
 import { FavoriteTeamWidget } from "./FavoriteTeamWidget";
 import { WeatherWidget } from "./WeatherWidget";
-import { MultiTeamMatchWidget } from "./MultiTeamMatchWidget";
+import { QuickNotesMiniWidget } from "./QuickNotesMiniWidget";
 import { PillFilterBar } from "./PillFilterBar";
 import { getMatchTeamLogos, syncMonthlyMatches } from "../lib/matchScheduler";
 import { motion, AnimatePresence } from "motion/react";
@@ -120,6 +120,8 @@ interface HomeViewProps {
   setTasks?: React.Dispatch<React.SetStateAction<AcademicTask[]>>;
   subjects?: AcademicSubject[];
   materiasInfo?: MateriaInfo[];
+  /** Navega a la pestaña de Notas Rápidas — usado por el "Ver todas" de la miniatura en Inicio. */
+  onOpenNotes?: () => void;
 }
 
 export default function HomeView({
@@ -151,7 +153,9 @@ export default function HomeView({
   setTasks,
   subjects = [],
   materiasInfo = [],
+  onOpenNotes,
 }: HomeViewProps) {
+  const homeUserId = user?.email || userProfile?.email || "hernanmaximiliano10@gmail.com";
   const { showToast } = useToast();
 
   // Helpers for the "shared" badge on my OWN items (i.e. things I shared out to others).
@@ -3458,9 +3462,9 @@ export default function HomeView({
         </div>
       </div>
 
-      {/* Multi-Team Tracking Weekly Widget */}
+      {/* Miniatura de Notas Rápidas */}
       <div className="w-full relative z-30">
-        <MultiTeamMatchWidget darkMode={darkMode} />
+        <QuickNotesMiniWidget userId={homeUserId} darkMode={darkMode} onOpenAll={onOpenNotes} />
       </div>
 
       {/* DETAILED MODAL POPUP (Mini Menu Desplegado) */}

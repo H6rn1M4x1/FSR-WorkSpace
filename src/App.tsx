@@ -2211,6 +2211,10 @@ export default function App() {
                   setTasks={setTasks}
                   subjects={subjects}
                   materiasInfo={materiasInfo}
+                  onOpenNotes={() => {
+                    handleTabChange("notes");
+                    setActiveSubTab("quick");
+                  }}
                 />
               )}
 

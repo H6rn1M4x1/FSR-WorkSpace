@@ -7,14 +7,13 @@ import {
   fetchF1ConstructorStandings,
   fetchF1NextRace,
   fetchNbaStandings,
-  getF1CircuitImage,
   FootballLeagueStandings,
   F1DriverStanding,
   F1ConstructorStanding,
   F1NextRace,
   NbaStandingEntry,
 } from "../lib/standingsService";
-import { fetchWikiThumbnail, fetchF1DriverPhoto } from "../lib/eventsService";
+import { fetchF1DriverPhoto } from "../lib/eventsService";
 
 // Alto fijo (no min-height) para que las 3 tarjetas de esta fila (fútbol/F1/NBA) siempre midan
 // exactamente lo mismo — F1 tiene contenido extra (la caja de "próxima carrera") que las otras
@@ -177,7 +176,6 @@ export function F1StandingsPanel({ darkMode, driverName, teamName }: { darkMode:
   const [drivers, setDrivers] = useState<F1DriverStanding[] | null>(null);
   const [constructors, setConstructors] = useState<F1ConstructorStanding[] | null>(null);
   const [nextRace, setNextRace] = useState<F1NextRace | null>(null);
-  const [nextRaceImage, setNextRaceImage] = useState<string | null>(null);
   const [driverPhotos, setDriverPhotos] = useState<Record<string, string | null>>({});
   const [page, setPage] = useState<"drivers" | "constructors">("drivers");
   const [loading, setLoading] = useState(true);
@@ -192,16 +190,6 @@ export function F1StandingsPanel({ darkMode, driverName, teamName }: { darkMode:
       setLoading(false);
     });
   }, []);
-
-  useEffect(() => {
-    if (!nextRace) return;
-    const fixed = getF1CircuitImage(nextRace.raceName);
-    if (fixed) {
-      setNextRaceImage(fixed);
-      return;
-    }
-    fetchWikiThumbnail(nextRace.circuitName || nextRace.raceName).then(setNextRaceImage);
-  }, [nextRace]);
 
   useEffect(() => {
     if (!drivers?.length) return;
@@ -230,7 +218,6 @@ export function F1StandingsPanel({ darkMode, driverName, teamName }: { darkMode:
         <div className="flex-1 min-h-0 flex flex-col gap-3">
           {/* Próxima carrera, arriba */}
           <div className="shrink-0 rounded-xl bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 p-2.5 flex items-center gap-3">
-            {nextRaceImage && <img src={nextRaceImage} alt="" className="w-10 h-10 object-contain rounded-lg shrink-0" />}
             <div className="min-w-0 flex-1">
               <p className="text-[9px] font-bold uppercase text-zinc-400 tracking-wide">Próxima carrera</p>
               {nextRace ? (
