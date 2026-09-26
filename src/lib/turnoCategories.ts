@@ -107,6 +107,13 @@ export function normalizeCategoriaText(s: string): string {
     .trim();
 }
 
+// Orden manual de categorías (menor `order` primero). Se usa tanto en el administrador de
+// categorías como en el selector del formulario, para que ambos muestren siempre el mismo
+// orden que el usuario definió arrastrando.
+export function sortTurnoCategorias(list: TurnoCategoriaDef[]): TurnoCategoriaDef[] {
+  return [...list].sort((a, b) => (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER));
+}
+
 // Semilla con las 6 categorías que ya existían hardcodeadas antes de este selector, con el
 // mismo ícono que ya se les mostraba (vía la heurística de getTurnoCategoryIcon en
 // AppointmentsView.tsx) para que la migración sea 100% visualmente idéntica. El `id` de cada

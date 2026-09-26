@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence, Reorder, useDragControls } from "motion/react";
-import { X, Plus, Pencil, Star, Check, ChevronLeft, GripVertical } from "lucide-react";
+import { X, Plus, Pencil, Star, Check, ChevronLeft, GripVertical, Trash2 } from "lucide-react";
 import { TurnoCategoriaDef } from "../types";
 import { generateUniqueId } from "../utils/id";
-import { TURNO_CATEGORY_ICON_CHOICES, getTurnoCategoryIconComponent } from "../lib/turnoCategories";
+import { TURNO_CATEGORY_ICON_CHOICES, getTurnoCategoryIconComponent, sortTurnoCategorias } from "../lib/turnoCategories";
+import { ConfirmationModal } from "./ConfirmationModal";
 
 interface TurnoCategoryManagerModalProps {
   isOpen: boolean;
@@ -13,23 +14,25 @@ interface TurnoCategoryManagerModalProps {
   onSaveCategoria: (categoria: TurnoCategoriaDef) => void;
   onSetDefault: (id: string) => void;
   onReorder: (categorias: TurnoCategoriaDef[]) => void;
+  onDelete: (id: string) => void;
   onClose: () => void;
 }
-
-const sortByOrder = (list: TurnoCategoriaDef[]) =>
-  [...list].sort((a, b) => (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER));
 
 // Fila arrastrable de una categoría — el drag se dispara solo desde el ícono de agarre (no
 // desde toda la fila) para no interferir con los clicks en la estrella/lápiz.
 function CategoryRow({
   cat,
+  canDelete,
   onSetDefault,
   onEdit,
+  onDelete,
   onDragEnd,
 }: {
   cat: TurnoCategoriaDef;
+  canDelete: boolean;
   onSetDefault: (id: string) => void;
   onEdit: (cat: TurnoCategoriaDef) => void;
+  onDelete: (cat: TurnoCategoriaDef) => void;
   onDragEnd: () => void;
 }) {
   const dragControls = useDragControls();
@@ -45,12 +48,13 @@ function CategoryRow({
       initial={{ opacity: 0, height: 0, y: -12 }}
       animate={{ opacity: 1, height: "auto", y: 0 }}
       transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-      className="flex items-center gap-2 p-2.5 rounded-2xl bg-slate-50 dark:bg-zinc-900/60 border border-slate-100 dark:border-zinc-800/50"
+      className="flex items-center gap-2 p-2.5 rounded-2xl bg-slate-50 dark:bg-zinc-900/60 border border-slate-100 dark:border-zinc-800/50 select-none"
     >
       <div
         onPointerDown={(e) => dragControls.start(e)}
         title="Arrastrar para reordenar"
-        className="shrink-0 p-1 -ml-1 text-slate-300 dark:text-zinc-600 hover:text-slate-500 dark:hover:text-zinc-400 cursor-grab active:cursor-grabbing touch-none"
+        style={{ WebkitTouchCallout: "none" }}
+        className="shrink-0 p-1.5 -ml-1.5 text-slate-300 dark:text-zinc-600 hover:text-slate-500 dark:hover:text-zinc-400 cursor-grab active:cursor-grabbing touch-none select-none"
       >
         <GripVertical className="w-4 h-4" />
       </div>
@@ -78,6 +82,16 @@ function CategoryRow({
       >
         <Pencil className="w-3.5 h-3.5" />
       </button>
+      {canDelete && (
+        <button
+          type="button"
+          onClick={() => onDelete(cat)}
+          title="Eliminar categoría"
+          className="p-1.5 rounded-full text-slate-400 dark:text-zinc-500 hover:text-red-500 hover:bg-red-500/10 transition-all cursor-pointer"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      )}
     </Reorder.Item>
   );
 }
@@ -93,18 +107,20 @@ export const TurnoCategoryManagerModal: React.FC<TurnoCategoryManagerModalProps>
   onSaveCategoria,
   onSetDefault,
   onReorder,
+  onDelete,
   onClose,
 }) => {
   const [editing, setEditing] = useState<TurnoCategoriaDef | null>(null);
   const [formLabel, setFormLabel] = useState("");
   const [formIcon, setFormIcon] = useState("Tag");
   const [showIconPicker, setShowIconPicker] = useState(false);
+  const [confirmDeleteCat, setConfirmDeleteCat] = useState<TurnoCategoriaDef | null>(null);
   // Copia local reordenable, sincronizada con `categorias` (nueva/editada categoría, o cambios
   // que lleguen de otro dispositivo) salvo mientras el usuario está arrastrando.
-  const [orderedCategorias, setOrderedCategorias] = useState<TurnoCategoriaDef[]>(() => sortByOrder(categorias));
+  const [orderedCategorias, setOrderedCategorias] = useState<TurnoCategoriaDef[]>(() => sortTurnoCategorias(categorias));
 
   useEffect(() => {
-    setOrderedCategorias(sortByOrder(categorias));
+    setOrderedCategorias(sortTurnoCategorias(categorias));
   }, [categorias]);
 
   const handleDragEnd = () => {
@@ -149,7 +165,9 @@ export const TurnoCategoryManagerModal: React.FC<TurnoCategoryManagerModalProps>
 
   if (typeof document === "undefined") return null;
 
-  return createPortal(
+  return (
+    <>
+      {createPortal(
     <AnimatePresence mode="wait">
       {isOpen && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
@@ -208,8 +226,10 @@ export const TurnoCategoryManagerModal: React.FC<TurnoCategoryManagerModalProps>
                       <CategoryRow
                         key={cat.id}
                         cat={cat}
+                        canDelete={orderedCategorias.length > 1}
                         onSetDefault={onSetDefault}
                         onEdit={startEdit}
+                        onDelete={setConfirmDeleteCat}
                         onDragEnd={handleDragEnd}
                       />
                     ))}
@@ -321,7 +341,25 @@ export const TurnoCategoryManagerModal: React.FC<TurnoCategoryManagerModalProps>
         </div>
       )}
     </AnimatePresence>,
-    document.body
+        document.body
+      )}
+
+      <ConfirmationModal
+        isOpen={!!confirmDeleteCat}
+        darkMode={darkMode}
+        title="Eliminar Categoría"
+        message={
+          confirmDeleteCat
+            ? `¿Eliminar la categoría "${confirmDeleteCat.label}"? Los turnos ya guardados con esta categoría no se modifican.`
+            : ""
+        }
+        confirmText="Eliminar"
+        onConfirm={() => {
+          if (confirmDeleteCat) onDelete(confirmDeleteCat.id);
+        }}
+        onClose={() => setConfirmDeleteCat(null)}
+      />
+    </>
   );
 };
 

@@ -161,7 +161,8 @@ function AddressRow({
           }}
           onClick={(e) => e.stopPropagation()}
           title="Arrastrar para reordenar"
-          className="shrink-0 p-1 -ml-1 mt-0.5 text-slate-300 dark:text-zinc-600 hover:text-slate-500 dark:hover:text-zinc-400 cursor-grab active:cursor-grabbing touch-none"
+          style={{ WebkitTouchCallout: "none" }}
+          className="shrink-0 p-1.5 -ml-1.5 mt-0.5 text-slate-300 dark:text-zinc-600 hover:text-slate-500 dark:hover:text-zinc-400 cursor-grab active:cursor-grabbing touch-none select-none"
         >
           <GripVertical className="w-4 h-4" />
         </div>
@@ -244,7 +245,7 @@ function AddressRow({
         initial={{ opacity: 0, height: 0, y: -12 }}
         animate={{ opacity: 1, height: "auto", y: 0 }}
         transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-        className={rowClassName}
+        className={`${rowClassName} select-none`}
       >
         {content}
       </Reorder.Item>
