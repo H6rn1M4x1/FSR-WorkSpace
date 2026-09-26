@@ -84,6 +84,29 @@ export function getTurnoCategoryIconComponent(iconName: string | undefined | nul
   return (iconName && ICON_BY_NAME[iconName]) || Tag;
 }
 
+// Devuelve la etiqueta legible de una categoría a partir del valor guardado en
+// TurnoCompromiso.categoria (que es el `id` de la definición, no necesariamente texto legible
+// — p.ej. las categorías creadas con el administrador de categorías). Si no hay ninguna
+// definición que matchee (dato legacy/huérfano), muestra el valor guardado tal cual en vez de
+// romper el render.
+export function getTurnoCategoryLabel(
+  categoria: string | undefined | null,
+  categorias: TurnoCategoriaDef[]
+): string {
+  const found = categorias.find((c) => c.id === categoria);
+  return found ? found.label : String(categoria || "");
+}
+
+// Normaliza sacando acentos y pasando a minúsculas, para comparar nombres de categoría sin
+// importar mayúsculas/acentos (p.ej. "Medicación" / "Medicacion" / "medicamentos").
+export function normalizeCategoriaText(s: string): string {
+  return String(s || "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
 // Semilla con las 6 categorías que ya existían hardcodeadas antes de este selector, con el
 // mismo ícono que ya se les mostraba (vía la heurística de getTurnoCategoryIcon en
 // AppointmentsView.tsx) para que la migración sea 100% visualmente idéntica. El `id` de cada

@@ -8,7 +8,7 @@ import { GeminiService } from "../lib/gemini";
 import { AudioTranscriptionPlayer } from "./AudioTranscriptionPlayer";
 import { FilePreviewModal } from "./FilePreviewModal";
 import { getMatchTeamLogos } from "../lib/matchScheduler";
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import L from "leaflet";
 import { collection, query, getDocs } from "firebase/firestore";
 import { subscribeToCategory, deleteItemFromFirestore, saveItemToFirestore, sanitizeForFirestore, getEffectiveUserId } from "../lib/firestoreSyncService";
@@ -78,7 +78,12 @@ import { SmartDateTimePicker } from "./SmartDateTimePicker";
 import { RichTextEditor } from "./RichTextEditor";
 import { TurnoCategoryManagerModal } from "./TurnoCategoryManagerModal";
 import { TurnoMedicamentosAPedir } from "./TurnoMedicamentosAPedir";
-import { DEFAULT_TURNO_CATEGORIAS, getTurnoCategoryIconComponent } from "../lib/turnoCategories";
+import {
+  DEFAULT_TURNO_CATEGORIAS,
+  getTurnoCategoryIconComponent,
+  getTurnoCategoryLabel,
+  normalizeCategoriaText,
+} from "../lib/turnoCategories";
 
 const FALLBACK_PLACES = [
   {
@@ -228,10 +233,12 @@ const MapComponent = ({
   turnosCompromisos,
   locationCoords,
   darkMode,
+  getCategoryLabel,
 }: {
   turnosCompromisos: TurnoCompromiso[];
   locationCoords: { [lugar: string]: { lat: number; lon: number } };
   darkMode: boolean;
+  getCategoryLabel: (categoria: string) => string;
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
@@ -416,7 +423,7 @@ const MapComponent = ({
                  <div class="p-2.5 rounded-xl ${itemBgColor} border ${itemBorderColor} hover:border-primary/30 transition-colors">
                     <div class="flex items-center justify-between mb-1.5 gap-2">
                       <span class="text-[9px] font-bold uppercase tracking-wider text-primary ${tagBgColor} px-1.5 py-0.5 rounded-md truncate">
-                         ${tc.categoria}
+                         ${getCategoryLabel(tc.categoria)}
                       </span>
                       <span class="flex items-center gap-1 text-[10px] ${itemIconColor} font-medium shrink-0">
                          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>
@@ -545,7 +552,7 @@ const MapComponent = ({
     } catch (err) {
       console.warn("Error updating markers on map:", err);
     }
-  }, [turnosCompromisos, locationCoords, darkMode]);
+  }, [turnosCompromisos, locationCoords, darkMode, getCategoryLabel]);
 
   return (
     <div className="relative w-full h-[380px] min-h-[380px] rounded-3xl overflow-hidden border border-slate-200/80 dark:border-zinc-800 shadow-md">
@@ -976,13 +983,26 @@ export default function AppointmentsView({
   const effectiveCategorias = turnoCategorias.length > 0 ? turnoCategorias : DEFAULT_TURNO_CATEGORIAS;
   const defaultCategoriaId =
     effectiveCategorias.find((c) => c.isDefault)?.id || effectiveCategorias[0]?.id || "Compromisos";
-  const isTurnoCategoria = (cat: string) => String(cat || "").trim().toLowerCase().startsWith("turno");
+  const isTurnoCategoria = (cat: string) => normalizeCategoriaText(cat).startsWith("turno");
+  const isMedicacionCategoria = (cat: string) => {
+    const n = normalizeCategoriaText(cat);
+    return n.startsWith("medicacion") || n.startsWith("medicamento");
+  };
+  // Categorías que habilitan el checklist de medicamentos a pedir: "Turno*" y cualquier
+  // variante de "Medicación" (Medicacion/Medicamento/Medicaciones/Medicamentos).
+  const showsMedicamentosAPedir = (cat: string) => isTurnoCategoria(cat) || isMedicacionCategoria(cat);
   // Ícono elegido manualmente para la categoría si existe una definición; si no (dato legacy
   // o corrupto que no matchea ninguna categoría guardada), cae a la heurística de siempre.
   const getCategoryIcon = (categoria: string) => {
     const found = effectiveCategorias.find((c) => c.id === categoria);
     return found ? getTurnoCategoryIconComponent(found.icon) : getTurnoCategoryIcon(categoria);
   };
+  // Etiqueta legible de una categoría (nunca el `id` crudo) — memoizada porque se le pasa a
+  // MapComponent como dependencia de su efecto de dibujado de marcadores.
+  const getCategoryLabel = useCallback(
+    (categoria: string) => getTurnoCategoryLabel(categoria, effectiveCategorias),
+    [effectiveCategorias]
+  );
   const [showCategoryManager, setShowCategoryManager] = useState(false);
 
   // Inicialización de muestra únicamente una sola vez para usuarios que todavía no tienen
@@ -1005,11 +1025,13 @@ export default function AppointmentsView({
 
   const handleSaveCategoria = (cat: TurnoCategoriaDef) => {
     if (!setTurnoCategorias) return;
+    const isNew = !effectiveCategorias.some((c) => c.id === cat.id);
     saveItemToFirestore(activeUserId, "turno_categorias", cat).catch(() => {});
     setTurnoCategorias((prev) => {
       const exists = prev.some((c) => c.id === cat.id);
       return exists ? prev.map((c) => (c.id === cat.id ? cat : c)) : [...prev, cat];
     });
+    showToast(isNew ? "Categoría creada correctamente" : "Categoría actualizada correctamente", "success");
   };
 
   const handleSetDefaultCategoria = (id: string) => {
@@ -1856,7 +1878,7 @@ export default function AppointmentsView({
         informacionPersonalizada: String(tcInformacionPersonalizada || ""),
         archivosNecesarios: Array.isArray(tcArchivosNecesarios) ? tcArchivosNecesarios : [],
         transcripcionAutomatica: String(tcTranscripcionAutomatica || ""),
-        medicamentosAPedir: isTurnoCategoria(tcCategoria) && Array.isArray(tcMedicamentosAPedir) ? tcMedicamentosAPedir : [],
+        medicamentosAPedir: showsMedicamentosAPedir(tcCategoria) && Array.isArray(tcMedicamentosAPedir) ? tcMedicamentosAPedir : [],
       };
 
       const payload = sanitizeForFirestore(rawPayload);
@@ -2659,7 +2681,7 @@ export default function AppointmentsView({
                                       return (
                                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-primary/10 text-primary">
                                           <CatIcon className="w-3 h-3 shrink-0" />
-                                          <span>{tc.categoria}</span>
+                                          <span>{getCategoryLabel(tc.categoria)}</span>
                                         </span>
                                       );
                                     })()}
@@ -2895,7 +2917,7 @@ export default function AppointmentsView({
                                           Categoría y Estatus
                                         </span>
                                         <span className="font-semibold text-zinc-800 dark:text-zinc-200">
-                                          {tc.categoria} • {estado}
+                                          {getCategoryLabel(tc.categoria)} • {estado}
                                         </span>
                                       </div>
                                       )}
@@ -3023,6 +3045,7 @@ export default function AppointmentsView({
               turnosCompromisos={(turnosCompromisos || []).filter((tc) => !String(tc?.id || "").startsWith("match-"))}
               locationCoords={locationCoords}
               darkMode={darkMode}
+              getCategoryLabel={getCategoryLabel}
             />
           </div>
         </div>
@@ -3807,6 +3830,8 @@ export default function AppointmentsView({
                             setTcDoctor("");
                             setTcPedido(undefined);
                             setTcEstudio(undefined);
+                          }
+                          if (!showsMedicamentosAPedir(val)) {
                             setTcMedicamentosAPedir([]);
                           }
                         }}
@@ -4103,8 +4128,10 @@ export default function AppointmentsView({
                     </div>
                   )}
 
-                  {/* Medicamentos a pedirle al doctor, ordenados por menor stock disponible */}
-                  {isTurnoCategoria(tcCategoria) && (
+                  {/* Medicamentos a pedirle al doctor, ordenados por menor stock disponible.
+                      Visible para categorías "Turno*" y para cualquier variante de "Medicación"
+                      (Medicacion/Medicamento/Medicaciones/Medicamentos). */}
+                  {showsMedicamentosAPedir(tcCategoria) && (
                     <TurnoMedicamentosAPedir
                       darkMode={darkMode}
                       medicamentosDetallados={medicamentosDetallados}
