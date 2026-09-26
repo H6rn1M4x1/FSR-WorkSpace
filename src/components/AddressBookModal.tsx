@@ -548,7 +548,10 @@ export const AddressBookModal: React.FC<AddressBookModalProps> = ({
         </div>
 
         {/* Body Content */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        {/* layoutScroll: Reorder.Group necesita que el contenedor que hace scroll lo declare,
+            o el arrastre pierde precisión al medir posiciones cuando la lista scrollea — se
+            nota sobre todo en arrastres largos (mover un ítem más de 1-2 posiciones). */}
+        <motion.div layoutScroll className="flex-1 overflow-y-auto p-4 space-y-3">
           {/* Add / Edit Form */}
           {showAddForm && (
             <form
@@ -719,7 +722,7 @@ export const AddressBookModal: React.FC<AddressBookModalProps> = ({
               </Reorder.Group>
             </>
           )}
-        </div>
+        </motion.div>
 
         {/* Footer */}
         <div className="px-6 py-3 bg-slate-100 dark:bg-zinc-950/80 border-t border-slate-200 dark:border-zinc-800 text-[11px] text-slate-500 dark:text-zinc-400 flex items-center justify-between font-medium">
