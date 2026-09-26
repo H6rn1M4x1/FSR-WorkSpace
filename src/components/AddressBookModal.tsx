@@ -5,7 +5,7 @@ import { auth } from "../lib/supabase";
 import { saveItemToFirestore, deleteItemFromFirestore, subscribeToCategory, refetchCategory } from "../lib/firestoreSyncService";
 import { useToast } from "../context/ToastContext";
 import { createPortal } from "react-dom";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence, Reorder, useDragControls } from "motion/react";
 import { ConfirmationModal } from "./ConfirmationModal";
 import {
   BookMarked,
@@ -22,7 +22,8 @@ import {
   BookmarkPlus,
   Lightbulb,
   FileText,
-  Loader2
+  Loader2,
+  GripVertical
 } from "lucide-react";
 
 export interface AddressEntry {
@@ -33,7 +34,13 @@ export interface AddressEntry {
   lon?: number;
   notes?: string;
   isFavorite?: boolean;
+  // Posición manual en la lista (menor = primero). Sin definir para entradas que nunca se
+  // reordenaron — en ese caso se ordenan al final, en el orden en que llegaron.
+  order?: number;
 }
+
+const sortAddressesByOrder = (list: AddressEntry[]) =>
+  [...list].sort((a, b) => (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER));
 
 export const DEFAULT_ADDRESSES: AddressEntry[] = [
   {
@@ -119,6 +126,136 @@ export function saveAddressBook(entries: AddressEntry[]) {
   } catch (e) {
     console.warn("Error saving address book:", e);
   }
+}
+
+// Fila de una dirección guardada. Cuando `draggable` es true se renderiza como Reorder.Item,
+// con el drag disparado solo desde el ícono de agarre (no desde toda la fila, que ya
+// selecciona la dirección al hacer click) para no interferir con esa acción ni con los botones
+// de favorito/editar/eliminar.
+function AddressRow({
+  entry,
+  draggable,
+  onSelect,
+  onToggleFavorite,
+  onEdit,
+  onDelete,
+  onDragEnd,
+}: {
+  entry: AddressEntry;
+  draggable: boolean;
+  onSelect: () => void;
+  onToggleFavorite: (e: React.MouseEvent) => void;
+  onEdit: (e: React.MouseEvent) => void;
+  onDelete: (e: React.MouseEvent) => void;
+  onDragEnd: () => void;
+}) {
+  const dragControls = useDragControls();
+
+  const content = (
+    <>
+      {draggable && (
+        <div
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            dragControls.start(e);
+          }}
+          onClick={(e) => e.stopPropagation()}
+          title="Arrastrar para reordenar"
+          className="shrink-0 p-1 -ml-1 mt-0.5 text-slate-300 dark:text-zinc-600 hover:text-slate-500 dark:hover:text-zinc-400 cursor-grab active:cursor-grabbing touch-none"
+        >
+          <GripVertical className="w-4 h-4" />
+        </div>
+      )}
+      <div className="flex items-start gap-2.5 min-w-0 flex-1">
+        <div className="p-2 rounded-xl bg-primary/10 text-primary shrink-0 mt-0.5 border border-primary/20">
+          <MapPin className="w-4 h-4 text-primary stroke-[1.75]" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-black dark:text-white text-xs truncate address-title">
+              {entry.name}
+            </span>
+            {entry.isFavorite && (
+              <Star className="w-3 h-3 text-amber-500 fill-amber-500 shrink-0" />
+            )}
+          </div>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <MapPin className="w-3.5 h-3.5 text-primary shrink-0 stroke-[1.75]" />
+            <p className="text-[11px] text-black dark:text-zinc-400 font-normal truncate address-text">
+              {entry.address}
+            </p>
+          </div>
+          {entry.notes && (
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <Lightbulb className="w-3.5 h-3.5 text-primary shrink-0 stroke-[1.75]" />
+              <p className="text-[10px] text-primary font-medium italic truncate address-notes">
+                {entry.notes}
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-1 shrink-0">
+        <button
+          type="button"
+          onClick={onToggleFavorite}
+          className="p-1.5 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-slate-200 dark:hover:bg-zinc-800 transition-colors"
+          title="Favorito"
+        >
+          <Star
+            className={`w-3.5 h-3.5 ${
+              entry.isFavorite ? "text-amber-500 fill-amber-500" : ""
+            }`}
+          />
+        </button>
+        <button
+          type="button"
+          onClick={onEdit}
+          className="p-1.5 rounded-lg text-slate-400 hover:text-primary hover:bg-slate-200 dark:hover:bg-zinc-800 transition-colors"
+          title="Editar"
+        >
+          <Edit2 className="w-3.5 h-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={onDelete}
+          className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-slate-200 dark:hover:bg-zinc-800 transition-colors"
+          title="Eliminar"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </>
+  );
+
+  const rowClassName =
+    "p-3 bg-slate-50 dark:bg-zinc-950/50 hover:border-primary! dark:hover:border-primary! hover:ring-1 hover:ring-primary/40 border border-slate-200 dark:border-zinc-800/80 rounded-2xl transition-all duration-200 cursor-pointer flex items-start justify-between gap-3 group address-book-item";
+
+  if (draggable) {
+    return (
+      <Reorder.Item
+        as="div"
+        value={entry}
+        dragListener={false}
+        dragControls={dragControls}
+        onDragEnd={onDragEnd}
+        onClick={onSelect}
+        initial={{ opacity: 0, height: 0, y: -12 }}
+        animate={{ opacity: 1, height: "auto", y: 0 }}
+        transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+        className={rowClassName}
+      >
+        {content}
+      </Reorder.Item>
+    );
+  }
+
+  return (
+    <div onClick={onSelect} className={rowClassName}>
+      {content}
+    </div>
+  );
 }
 
 interface AddressBookModalProps {
@@ -302,6 +439,21 @@ export const AddressBookModal: React.FC<AddressBookModalProps> = ({
       (e.notes && e.notes.toLowerCase().includes(q))
     );
   });
+
+  // Solo se puede reordenar con la lista completa (sin filtro de búsqueda) para no mezclar
+  // posiciones de un subconjunto con las del resto.
+  const sortedEntries = sortAddressesByOrder(entries);
+
+  const handleDragEndAddress = () => {
+    const reIndexed = sortAddressesByOrder(entries).map((e, i) => ({ ...e, order: i }));
+    setEntries(reIndexed);
+    saveAddressBook(reIndexed);
+    const activeUserId = (auth.currentUser?.email || auth.currentUser?.uid || "hernanmaximiliano10@gmail.com").toLowerCase().trim();
+    reIndexed.forEach((e) => {
+      saveItemToFirestore(activeUserId, "address_book", e).catch(() => {});
+    });
+    showToast("Orden de direcciones guardado", "success");
+  };
 
   return createPortal(
     <AnimatePresence>
@@ -513,78 +665,53 @@ export const AddressBookModal: React.FC<AddressBookModalProps> = ({
             <div className="text-center py-8 text-slate-400 dark:text-zinc-500 text-xs">
               No se encontraron direcciones guardadas.
             </div>
-          ) : (
+          ) : searchQuery.trim() ? (
             filteredEntries.map((entry) => (
-              <div
+              <AddressRow
                 key={entry.id}
-                onClick={() => {
+                entry={entry}
+                draggable={false}
+                onSelect={() => {
                   onSelectAddress(entry);
                   onClose();
                 }}
-                className="p-3 bg-slate-50 dark:bg-zinc-950/50 hover:border-primary! dark:hover:border-primary! hover:ring-1 hover:ring-primary/40 border border-slate-200 dark:border-zinc-800/80 rounded-2xl transition-all duration-200 cursor-pointer flex items-start justify-between gap-3 group address-book-item"
-              >
-                <div className="flex items-start gap-2.5 min-w-0 flex-1">
-                  <div className="p-2 rounded-xl bg-primary/10 text-primary shrink-0 mt-0.5 border border-primary/20">
-                    <MapPin className="w-4 h-4 text-primary stroke-[1.75]" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-black dark:text-white text-xs truncate address-title">
-                        {entry.name}
-                      </span>
-                      {entry.isFavorite && (
-                        <Star className="w-3 h-3 text-amber-500 fill-amber-500 shrink-0" />
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      <MapPin className="w-3.5 h-3.5 text-primary shrink-0 stroke-[1.75]" />
-                      <p className="text-[11px] text-black dark:text-zinc-400 font-normal truncate address-text">
-                        {entry.address}
-                      </p>
-                    </div>
-                    {entry.notes && (
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <Lightbulb className="w-3.5 h-3.5 text-primary shrink-0 stroke-[1.75]" />
-                        <p className="text-[10px] text-primary font-medium italic truncate address-notes">
-                          {entry.notes}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    type="button"
-                    onClick={(e) => handleToggleFavorite(entry.id, e)}
-                    className="p-1.5 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-slate-200 dark:hover:bg-zinc-800 transition-colors"
-                    title="Favorito"
-                  >
-                    <Star
-                      className={`w-3.5 h-3.5 ${
-                        entry.isFavorite ? "text-amber-500 fill-amber-500" : ""
-                      }`}
-                    />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => handleStartEdit(entry, e)}
-                    className="p-1.5 rounded-lg text-slate-400 hover:text-primary hover:bg-slate-200 dark:hover:bg-zinc-800 transition-colors"
-                    title="Editar"
-                  >
-                    <Edit2 className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => handleDelete(entry.id, e)}
-                    className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-slate-200 dark:hover:bg-zinc-800 transition-colors"
-                    title="Eliminar"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
+                onToggleFavorite={(e) => handleToggleFavorite(entry.id, e)}
+                onEdit={(e) => handleStartEdit(entry, e)}
+                onDelete={(e) => handleDelete(entry.id, e)}
+                onDragEnd={() => {}}
+              />
             ))
+          ) : (
+            <>
+              {sortedEntries.length > 1 && (
+                <p className="text-[10px] text-slate-400 dark:text-zinc-500 font-medium px-0.5 -mt-1 mb-1">
+                  Arrastrá desde <GripVertical className="w-3 h-3 inline -mt-0.5" /> para cambiar el orden.
+                </p>
+              )}
+              <Reorder.Group
+                as="div"
+                axis="y"
+                values={sortedEntries}
+                onReorder={setEntries}
+                className="space-y-3"
+              >
+                {sortedEntries.map((entry) => (
+                  <AddressRow
+                    key={entry.id}
+                    entry={entry}
+                    draggable
+                    onSelect={() => {
+                      onSelectAddress(entry);
+                      onClose();
+                    }}
+                    onToggleFavorite={(e) => handleToggleFavorite(entry.id, e)}
+                    onEdit={(e) => handleStartEdit(entry, e)}
+                    onDelete={(e) => handleDelete(entry.id, e)}
+                    onDragEnd={handleDragEndAddress}
+                  />
+                ))}
+              </Reorder.Group>
+            </>
           )}
         </div>
 
