@@ -139,6 +139,7 @@ function AddressRow({
   canMoveDown,
   onMoveUp,
   onMoveDown,
+  highlighted,
   onSelect,
   onToggleFavorite,
   onEdit,
@@ -150,6 +151,7 @@ function AddressRow({
   canMoveDown: boolean;
   onMoveUp: () => void;
   onMoveDown: () => void;
+  highlighted: boolean;
   onSelect: () => void;
   onToggleFavorite: (e: React.MouseEvent) => void;
   onEdit: (e: React.MouseEvent) => void;
@@ -157,12 +159,20 @@ function AddressRow({
 }) {
   return (
     <motion.div
-      layout
+      layout="position"
       initial={{ opacity: 0, height: 0, y: -12 }}
       animate={{ opacity: 1, height: "auto", y: 0 }}
-      transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+      transition={{
+        duration: 0.25,
+        ease: [0.16, 1, 0.3, 1],
+        layout: { type: "spring", stiffness: 500, damping: 40, mass: 0.9 },
+      }}
       onClick={onSelect}
-      className="p-3 bg-slate-50 dark:bg-zinc-950/50 hover:border-primary! dark:hover:border-primary! hover:ring-1 hover:ring-primary/40 border border-slate-200 dark:border-zinc-800/80 rounded-2xl transition-all duration-200 cursor-pointer flex items-start justify-between gap-3 group address-book-item"
+      className={`p-3 bg-slate-50 dark:bg-zinc-950/50 hover:border-primary! dark:hover:border-primary! hover:ring-1 hover:ring-primary/40 border rounded-2xl transition-all duration-300 cursor-pointer flex items-start justify-between gap-3 group address-book-item ${
+        highlighted
+          ? "border-primary! ring-2 ring-primary/50 bg-primary/5 dark:bg-primary/10"
+          : "border-slate-200 dark:border-zinc-800/80"
+      }`}
     >
       {showReorder && (
         <div className="shrink-0 flex flex-col gap-0.5 -ml-1 mt-0.5">
@@ -280,6 +290,8 @@ export const AddressBookModal: React.FC<AddressBookModalProps> = ({
   // Copia local ordenada, sincronizada con `entries` (nueva dirección, o cambios que lleguen
   // de otro dispositivo) y reindexada al mover una posición con las flechas subir/bajar.
   const [orderedEntries, setOrderedEntries] = useState<AddressEntry[]>([]);
+  // Resalta brevemente la fila recién movida para que el cambio de posición se note.
+  const [justMovedId, setJustMovedId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -462,6 +474,11 @@ export const AddressBookModal: React.FC<AddressBookModalProps> = ({
       saveItemToFirestore(activeUserId, "address_book", e).catch(() => {});
     });
     showToast("Orden de direcciones guardado", "success");
+
+    setJustMovedId(id);
+    window.setTimeout(() => {
+      setJustMovedId((current) => (current === id ? null : current));
+    }, 500);
   };
 
   return createPortal(
@@ -687,6 +704,7 @@ export const AddressBookModal: React.FC<AddressBookModalProps> = ({
                 canMoveDown={false}
                 onMoveUp={() => {}}
                 onMoveDown={() => {}}
+                highlighted={false}
                 onSelect={() => {
                   onSelectAddress(entry);
                   onClose();
@@ -713,6 +731,7 @@ export const AddressBookModal: React.FC<AddressBookModalProps> = ({
                     canMoveDown={idx < orderedEntries.length - 1}
                     onMoveUp={() => handleMoveAddress(entry.id, "up")}
                     onMoveDown={() => handleMoveAddress(entry.id, "down")}
+                    highlighted={entry.id === justMovedId}
                     onSelect={() => {
                       onSelectAddress(entry);
                       onClose();

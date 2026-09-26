@@ -27,6 +27,7 @@ function CategoryRow({
   canMoveDown,
   onMoveUp,
   onMoveDown,
+  highlighted,
   onSetDefault,
   onEdit,
   onDelete,
@@ -37,6 +38,7 @@ function CategoryRow({
   canMoveDown: boolean;
   onMoveUp: () => void;
   onMoveDown: () => void;
+  highlighted: boolean;
   onSetDefault: (id: string) => void;
   onEdit: (cat: TurnoCategoriaDef) => void;
   onDelete: (cat: TurnoCategoriaDef) => void;
@@ -45,11 +47,19 @@ function CategoryRow({
 
   return (
     <motion.div
-      layout
+      layout="position"
       initial={{ opacity: 0, height: 0, y: -12 }}
       animate={{ opacity: 1, height: "auto", y: 0 }}
-      transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-      className="flex items-center gap-2 p-2.5 rounded-2xl bg-slate-50 dark:bg-zinc-900/60 border border-slate-100 dark:border-zinc-800/50"
+      transition={{
+        duration: 0.25,
+        ease: [0.16, 1, 0.3, 1],
+        layout: { type: "spring", stiffness: 500, damping: 40, mass: 0.9 },
+      }}
+      className={`flex items-center gap-2 p-2.5 rounded-2xl bg-slate-50 dark:bg-zinc-900/60 border transition-colors duration-300 ${
+        highlighted
+          ? "border-primary ring-2 ring-primary/50 bg-primary/5 dark:bg-primary/10"
+          : "border-slate-100 dark:border-zinc-800/50"
+      }`}
     >
       <div className="shrink-0 flex flex-col gap-0.5">
         <button
@@ -131,6 +141,8 @@ export const TurnoCategoryManagerModal: React.FC<TurnoCategoryManagerModalProps>
   // Copia local ordenada, sincronizada con `categorias` (nueva/editada categoría, o cambios
   // que lleguen de otro dispositivo) y reindexada al mover una posición con las flechas.
   const [orderedCategorias, setOrderedCategorias] = useState<TurnoCategoriaDef[]>(() => sortTurnoCategorias(categorias));
+  // Resalta brevemente la categoría recién movida para que el cambio de posición se note.
+  const [justMovedId, setJustMovedId] = useState<string | null>(null);
 
   useEffect(() => {
     setOrderedCategorias(sortTurnoCategorias(categorias));
@@ -147,6 +159,11 @@ export const TurnoCategoryManagerModal: React.FC<TurnoCategoryManagerModalProps>
 
     setOrderedCategorias(reIndexed);
     onReorder(reIndexed);
+
+    setJustMovedId(id);
+    window.setTimeout(() => {
+      setJustMovedId((current) => (current === id ? null : current));
+    }, 500);
   };
 
   const startEdit = (cat: TurnoCategoriaDef) => {
@@ -248,6 +265,7 @@ export const TurnoCategoryManagerModal: React.FC<TurnoCategoryManagerModalProps>
                         canMoveDown={idx < orderedCategorias.length - 1}
                         onMoveUp={() => handleMoveCategoria(cat.id, "up")}
                         onMoveDown={() => handleMoveCategoria(cat.id, "down")}
+                        highlighted={cat.id === justMovedId}
                         onSetDefault={onSetDefault}
                         onEdit={startEdit}
                         onDelete={setConfirmDeleteCat}

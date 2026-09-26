@@ -45,13 +45,23 @@ import {
   Maximize2,
   Minimize2,
   Minus,
+  History,
+  SquarePen,
 } from "lucide-react";
 import {
   googleSignIn,
   getAccessToken,
   logout as firebaseLogout,
   initAuth,
+  auth,
 } from "../lib/supabase";
+import { generateUniqueId } from "../utils/id";
+import {
+  saveItemToFirestore,
+  deleteItemFromFirestore,
+  subscribeToCategory,
+  refetchCategory,
+} from "../lib/firestoreSyncService";
 
 interface GoogleDriveFile {
   id: string;
@@ -61,6 +71,22 @@ interface GoogleDriveFile {
   webViewLink?: string;
   size?: string;
   modifiedTime?: string;
+}
+
+interface GeminiChatMessage {
+  sender: "user" | "bot";
+  text: string;
+  timestamp: string;
+  fileName?: string;
+}
+
+// Una sesión de estudio guardada con el Profesor Gemini (historial por usuario en Firestore).
+interface GeminiChatSession {
+  id: string;
+  title: string;
+  messages: GeminiChatMessage[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface Breadcrumb {
@@ -280,20 +306,33 @@ export default function DriveFolderVisualizer({
   const [isChatSending, setIsChatSending] = useState(false);
   const [selectedFileContent, setSelectedFileContent] = useState("");
   const [isReadingFileContent, setIsReadingFileContent] = useState(false);
-  const [chatMessages, setChatMessages] = useState<
-    Array<{
-      sender: "user" | "bot";
-      text: string;
-      timestamp: Date;
-      fileName?: string;
-    }>
-  >([
-    {
-      sender: "bot",
-      text: "¡Hola! Soy tu **Profesor de Facultad** impulsado por Google Gemini. 🎓✨ Estudiemos juntos.\n\nCuando selecciones o edites un apunte o documento aquí en la sección de Facultad, podré **leerlo automáticamente** para responder tus preguntas, explicar fórmulas complejas, resumir conceptos difíciles o crear cuestionarios de práctica para tus exámenes.\n\n¿En qué materia o tema te gustaría trabajar hoy?",
-      timestamp: new Date(),
-    },
+
+  const GEMINI_GREETING_TEXT =
+    "¡Hola! Soy tu **Profesor de Facultad** impulsado por Google Gemini. 🎓✨ Estudiemos juntos.\n\nCuando selecciones o edites un apunte o documento aquí en la sección de Facultad, podré **leerlo automáticamente** para responder tus preguntas, explicar fórmulas complejas, resumir conceptos difíciles o crear cuestionarios de práctica para tus exámenes.\n\n¿En qué materia o tema te gustaría trabajar hoy?";
+
+  const createGreetingMessage = (): GeminiChatMessage => ({
+    sender: "bot",
+    text: GEMINI_GREETING_TEXT,
+    timestamp: new Date().toISOString(),
+  });
+
+  const [chatMessages, setChatMessages] = useState<GeminiChatMessage[]>([
+    createGreetingMessage(),
   ]);
+
+  // Historial de conversaciones con el Profesor Gemini, por usuario (Firestore).
+  const [chatSessions, setChatSessions] = useState<GeminiChatSession[]>([]);
+  const [showChatHistory, setShowChatHistory] = useState(false);
+  const currentSessionIdRef = useRef<string | null>(null);
+  const currentSessionCreatedAtRef = useRef<string>(new Date().toISOString());
+  // Evita re-guardar la sesión inmediatamente después de cargarla o de empezar una nueva
+  // (ya está guardada tal cual, o todavía no tiene mensajes propios que guardar).
+  const skipNextPersistRef = useRef(false);
+
+  const getActiveUserId = () =>
+    (auth.currentUser?.email || auth.currentUser?.uid || "hernanmaximiliano10@gmail.com")
+      .toLowerCase()
+      .trim();
 
   // Ref for auto-scrolling chat history
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -329,6 +368,82 @@ export default function DriveFolderVisualizer({
 
     return () => unsubscribe();
   }, []);
+
+  // Historial de conversaciones con el Profesor Gemini: se sincroniza por usuario contra
+  // Firestore (misma categoría en todos los dispositivos), independiente del login de Google
+  // Drive de arriba (que solo autoriza la lectura/edición de archivos).
+  useEffect(() => {
+    const activeUserId = getActiveUserId();
+    const unsub = subscribeToCategory(
+      activeUserId,
+      "gemini_chat_sessions",
+      (items: GeminiChatSession[]) => {
+        setChatSessions(
+          [...items].sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""))
+        );
+      }
+    );
+    refetchCategory(activeUserId, "gemini_chat_sessions", true).catch(() => {});
+    return () => {
+      try {
+        unsub();
+      } catch (_) {}
+    };
+  }, [user]);
+
+  // Auto-guarda la sesión de chat actual cada vez que hay un mensaje nuevo (a partir del
+  // primer intercambio real; el saludo inicial solo no cuenta como sesión para no llenar el
+  // historial de conversaciones vacías).
+  useEffect(() => {
+    if (skipNextPersistRef.current) {
+      skipNextPersistRef.current = false;
+      return;
+    }
+    if (chatMessages.length <= 1) return;
+
+    if (!currentSessionIdRef.current) {
+      currentSessionIdRef.current = generateUniqueId("gemini_chat");
+      currentSessionCreatedAtRef.current = new Date().toISOString();
+    }
+
+    const firstUserMessage = chatMessages.find((m) => m.sender === "user");
+    const title = firstUserMessage
+      ? firstUserMessage.text.slice(0, 60)
+      : "Nueva conversación";
+
+    saveItemToFirestore(getActiveUserId(), "gemini_chat_sessions", {
+      id: currentSessionIdRef.current,
+      title,
+      messages: chatMessages,
+      createdAt: currentSessionCreatedAtRef.current,
+      updatedAt: new Date().toISOString(),
+    }).catch(() => {});
+  }, [chatMessages]);
+
+  const handleNewChatSession = () => {
+    currentSessionIdRef.current = null;
+    skipNextPersistRef.current = true;
+    setChatMessages([createGreetingMessage()]);
+    setShowChatHistory(false);
+  };
+
+  const handleLoadChatSession = (session: GeminiChatSession) => {
+    currentSessionIdRef.current = session.id;
+    currentSessionCreatedAtRef.current = session.createdAt;
+    skipNextPersistRef.current = true;
+    setChatMessages(session.messages.length > 0 ? session.messages : [createGreetingMessage()]);
+    setShowChatHistory(false);
+  };
+
+  const handleDeleteChatSession = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    deleteItemFromFirestore(getActiveUserId(), "gemini_chat_sessions", id).catch(() => {});
+    if (currentSessionIdRef.current === id) {
+      currentSessionIdRef.current = null;
+      skipNextPersistRef.current = true;
+      setChatMessages([createGreetingMessage()]);
+    }
+  };
 
   // When token is available, search or initialize the "1 - Facultad" folder
   useEffect(() => {
@@ -453,7 +568,7 @@ export default function DriveFolderVisualizer({
     const newUserMessage = {
       sender: "user" as const,
       text: textToSend,
-      timestamp: new Date(),
+      timestamp: new Date().toISOString(),
       fileName:
         activeDocNames.length > 0
           ? activeDocNames.slice(0, 3).join(", ") +
@@ -526,7 +641,14 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
       });
 
       if (!response.ok) {
-        throw new Error("Error al comunicarse con el Profesor Gemini.");
+        let errMsg = "Error al comunicarse con el Profesor Gemini.";
+        try {
+          const errData = await response.json();
+          if (errData?.error) errMsg = errData.error;
+        } catch (_) {
+          // Response wasn't JSON (e.g. an HTML error page) — keep the generic message.
+        }
+        throw new Error(errMsg);
       }
 
       const data = await response.json();
@@ -536,7 +658,7 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
           {
             sender: "bot",
             text: data.text,
-            timestamp: new Date(),
+            timestamp: new Date().toISOString(),
           },
         ]);
       } else {
@@ -549,7 +671,7 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
         {
           sender: "bot",
           text: `❌ **Error del Profesor:** Lo siento, no pude procesar tu consulta en este momento. Inténtalo de nuevo. (${err.message || "Error desconocido"})`,
-          timestamp: new Date(),
+          timestamp: new Date().toISOString(),
         },
       ]);
     } finally {
@@ -3610,7 +3732,11 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
             }`}
           >
             {/* Header */}
-            <div className="bg-gradient-to-r from-blue-600/10 via-indigo-600/10 to-violet-600/10 border-b border-zinc-200/60 dark:border-zinc-800/60 p-4.5 flex items-center justify-between">
+            <div
+              className={`border-b border-zinc-200/60 dark:border-zinc-800/60 p-4.5 flex items-center justify-between ${
+                darkMode ? "bg-black" : "bg-white"
+              }`}
+            >
               <div className="flex items-center gap-2.5">
                 <div className="p-1.5 bg-primary/10 rounded-xl">
                   <GraduationCap className="w-5 h-5 text-primary" />
@@ -3624,14 +3750,92 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
                   </span>
                 </div>
               </div>
-              <button
-                onClick={() => setIsChatOpen(false)}
-                className="p-1.5 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-all cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setShowChatHistory((v) => !v)}
+                  title="Historial de conversaciones"
+                  className={`p-1.5 rounded-full transition-all cursor-pointer ${
+                    showChatHistory
+                      ? "bg-primary/10 text-primary"
+                      : "hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+                  }`}
+                >
+                  <History className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={handleNewChatSession}
+                  title="Nueva conversación"
+                  className="p-1.5 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-all cursor-pointer"
+                >
+                  <SquarePen className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setIsChatOpen(false)}
+                  className="p-1.5 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-all cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
+            {showChatHistory ? (
+              <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                <button
+                  type="button"
+                  onClick={handleNewChatSession}
+                  className={`w-full flex items-center justify-center gap-2 p-2.5 rounded-2xl border border-dashed text-xs font-bold transition-all cursor-pointer ${
+                    darkMode
+                      ? "border-zinc-700 text-zinc-400 hover:text-primary hover:border-primary/50"
+                      : "border-zinc-300 text-zinc-500 hover:text-primary hover:border-primary/50"
+                  }`}
+                >
+                  <SquarePen className="w-3.5 h-3.5" />
+                  <span>Nueva conversación</span>
+                </button>
+
+                {chatSessions.length === 0 ? (
+                  <div className="text-center py-8 text-[11px] text-zinc-400 dark:text-zinc-500 italic">
+                    Todavía no tenés sesiones de estudio guardadas.
+                  </div>
+                ) : (
+                  chatSessions.map((session) => (
+                    <div
+                      key={session.id}
+                      onClick={() => handleLoadChatSession(session)}
+                      className={`p-3 rounded-2xl border flex items-start justify-between gap-2 transition-all cursor-pointer group ${
+                        darkMode
+                          ? "border-zinc-800 hover:border-primary/40 bg-zinc-900/40"
+                          : "border-zinc-200 hover:border-primary/40 bg-zinc-50"
+                      }`}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-bold truncate">
+                          {session.title || "Nueva conversación"}
+                        </p>
+                        <p className="text-[10px] text-zinc-400 dark:text-zinc-500 font-medium mt-0.5">
+                          {session.messages.length} mensajes ·{" "}
+                          {new Date(session.updatedAt).toLocaleDateString("es-AR", {
+                            day: "2-digit",
+                            month: "short",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => handleDeleteChatSession(session.id, e)}
+                        className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 hover:bg-red-500/10 transition-all cursor-pointer shrink-0 opacity-0 group-hover:opacity-100"
+                        title="Eliminar sesión"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            ) : (
+              <>
             {/* Reading Status Banner */}
             <div
               className={`px-4 py-2 text-[10px] border-b flex flex-col gap-1.5 font-medium ${
@@ -3850,6 +4054,8 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
                 <Send className="w-3.5 h-3.5" />
               </button>
             </form>
+              </>
+            )}
           </div>
         )}
 
