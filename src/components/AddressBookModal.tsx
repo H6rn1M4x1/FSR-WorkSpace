@@ -280,6 +280,10 @@ export const AddressBookModal: React.FC<AddressBookModalProps> = ({
   useLockBodyScroll(isOpen);
   const { showToast } = useToast();
   const [entries, setEntries] = useState<AddressEntry[]>([]);
+  // Copia local reordenable para el drag-to-reorder — Reorder.Group necesita que el mismo
+  // estado que recibe como `values` sea el que su `onReorder` actualiza directamente (no un
+  // array derivado recalculado en cada render), o el gesto de arrastre no llega a confirmarse.
+  const [orderedEntries, setOrderedEntries] = useState<AddressEntry[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -334,6 +338,10 @@ export const AddressBookModal: React.FC<AddressBookModalProps> = ({
       } catch (_) {}
     };
   }, [isOpen]);
+
+  useEffect(() => {
+    setOrderedEntries(sortAddressesByOrder(entries));
+  }, [entries]);
 
   if (!isOpen) return null;
 
@@ -441,12 +449,9 @@ export const AddressBookModal: React.FC<AddressBookModalProps> = ({
     );
   });
 
-  // Solo se puede reordenar con la lista completa (sin filtro de búsqueda) para no mezclar
-  // posiciones de un subconjunto con las del resto.
-  const sortedEntries = sortAddressesByOrder(entries);
-
   const handleDragEndAddress = () => {
-    const reIndexed = sortAddressesByOrder(entries).map((e, i) => ({ ...e, order: i }));
+    const reIndexed = orderedEntries.map((e, i) => ({ ...e, order: i }));
+    setOrderedEntries(reIndexed);
     setEntries(reIndexed);
     saveAddressBook(reIndexed);
     const activeUserId = (auth.currentUser?.email || auth.currentUser?.uid || "hernanmaximiliano10@gmail.com").toLowerCase().trim();
@@ -684,7 +689,7 @@ export const AddressBookModal: React.FC<AddressBookModalProps> = ({
             ))
           ) : (
             <>
-              {sortedEntries.length > 1 && (
+              {orderedEntries.length > 1 && (
                 <p className="text-[10px] text-slate-400 dark:text-zinc-500 font-medium px-0.5 -mt-1 mb-1">
                   Arrastrá desde <GripVertical className="w-3 h-3 inline -mt-0.5" /> para cambiar el orden.
                 </p>
@@ -692,11 +697,11 @@ export const AddressBookModal: React.FC<AddressBookModalProps> = ({
               <Reorder.Group
                 as="div"
                 axis="y"
-                values={sortedEntries}
-                onReorder={setEntries}
+                values={orderedEntries}
+                onReorder={setOrderedEntries}
                 className="space-y-3"
               >
-                {sortedEntries.map((entry) => (
+                {orderedEntries.map((entry) => (
                   <AddressRow
                     key={entry.id}
                     entry={entry}
