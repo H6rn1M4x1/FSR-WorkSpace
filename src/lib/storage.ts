@@ -23,6 +23,7 @@ import {
   PlatoItem,
   OrganizacionSemanalItem,
   TurnoCompromiso,
+  TurnoCategoriaDef,
   MedicamentoDetallado,
   DisponibilidadMedicamento,
   MedicalRecord,
@@ -337,6 +338,9 @@ export class StorageService {
 
   static getTurnosCompromisos() { return getStoredData("turnos_compromisos", []); }
   static setTurnosCompromisos(data: TurnoCompromiso[]) { setStoredData("turnos_compromisos", data); }
+
+  static getTurnoCategorias() { return getStoredData("turno_categorias", []); }
+  static setTurnoCategorias(data: TurnoCategoriaDef[]) { setStoredData("turno_categorias", data); }
 
   static getDisponibilidadMedicamentos() { return getStoredData("disponibilidad_medicamentos", []); }
   static setDisponibilidadMedicamentos(data: DisponibilidadMedicamento[]) { setStoredData("disponibilidad_medicamentos", data); }

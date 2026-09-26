@@ -323,7 +323,11 @@ export interface TurnoCompromiso {
   id: string;
   estatus: boolean;
   descripcion: string;
-  categoria: "Compromisos" | "Turno - Hernan" | "Turno - Modesto" | "Tramites" | "Medicacion" | "Ocio";
+  // Antes era una unión fija de 6 valores; se amplía a string para permitir categorías
+  // personalizadas (ver TurnoCategoriaDef) sin romper los registros ya guardados con los
+  // valores originales ("Compromisos", "Turno - Hernan", "Turno - Modesto", "Tramites",
+  // "Medicacion", "Ocio"), que siguen siendo strings válidos.
+  categoria: string;
   fecha: string;
   lugar: string;
   estudioInformeDoc?: string;
@@ -335,6 +339,19 @@ export interface TurnoCompromiso {
   informacionPersonalizada?: string;
   archivosNecesarios?: {name: string, url: string}[];
   transcripcionAutomatica?: string;
+  // IDs de MedicamentoDetallado a pedir/renovar en este turno (categorías "Turno*").
+  medicamentosAPedir?: string[];
+}
+
+// Definición editable de una categoría de Turno/Compromiso: icono (nombre de lucide-react)
+// y si es la categoría por defecto al abrir el formulario. `id` es el valor guardado en
+// TurnoCompromiso.categoria, así que nunca debe cambiar una vez creado (renombrar solo
+// actualiza `label`, no reasigna `id`, para no desincronizar registros ya guardados).
+export interface TurnoCategoriaDef {
+  id: string;
+  label: string;
+  icon: string;
+  isDefault?: boolean;
 }
 
 export interface MedicamentoDetallado {

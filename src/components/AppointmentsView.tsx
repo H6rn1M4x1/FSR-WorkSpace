@@ -67,12 +67,18 @@ import {
   Appointment,
   RoutineLog,
   TurnoCompromiso,
+  TurnoCategoriaDef,
   DoctorCard,
   MedicalRecord,
+  MedicamentoDetallado,
+  DisponibilidadMedicamento,
 } from "../types";
 import { WorkspaceService } from "../lib/workspace";
 import { SmartDateTimePicker } from "./SmartDateTimePicker";
 import { RichTextEditor } from "./RichTextEditor";
+import { TurnoCategoryManagerModal } from "./TurnoCategoryManagerModal";
+import { TurnoMedicamentosAPedir } from "./TurnoMedicamentosAPedir";
+import { DEFAULT_TURNO_CATEGORIAS, getTurnoCategoryIconComponent } from "../lib/turnoCategories";
 
 const FALLBACK_PLACES = [
   {
@@ -562,6 +568,10 @@ interface AppointmentsViewProps {
   setRoutines: React.Dispatch<React.SetStateAction<RoutineLog[]>>;
   turnosCompromisos: TurnoCompromiso[];
   setTurnosCompromisos: React.Dispatch<React.SetStateAction<TurnoCompromiso[]>>;
+  turnoCategorias?: TurnoCategoriaDef[];
+  setTurnoCategorias?: React.Dispatch<React.SetStateAction<TurnoCategoriaDef[]>>;
+  medicamentosDetallados?: MedicamentoDetallado[];
+  disponibilidadMedicamentos?: DisponibilidadMedicamento[];
   token?: string | null;
   doctors: DoctorCard[];
   medicalRecords?: MedicalRecord[];
@@ -943,6 +953,10 @@ export default function AppointmentsView({
   setRoutines,
   turnosCompromisos,
   setTurnosCompromisos,
+  turnoCategorias = [],
+  setTurnoCategorias,
+  medicamentosDetallados = [],
+  disponibilidadMedicamentos = [],
   token,
   doctors,
   medicalRecords = [],
@@ -956,6 +970,56 @@ export default function AppointmentsView({
   const [modalError, setModalError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const activeUserId = (userEmail || auth.currentUser?.email || auth.currentUser?.uid || "hernanmaximiliano10@gmail.com").toLowerCase().trim();
+
+  // Categorías de Turno/Compromiso: mientras la suscripción de Firestore todavía no entregó
+  // nada (o para usuarios nuevos), se usan las 6 categorías que ya existían hardcodeadas.
+  const effectiveCategorias = turnoCategorias.length > 0 ? turnoCategorias : DEFAULT_TURNO_CATEGORIAS;
+  const defaultCategoriaId =
+    effectiveCategorias.find((c) => c.isDefault)?.id || effectiveCategorias[0]?.id || "Compromisos";
+  const isTurnoCategoria = (cat: string) => String(cat || "").trim().toLowerCase().startsWith("turno");
+  // Ícono elegido manualmente para la categoría si existe una definición; si no (dato legacy
+  // o corrupto que no matchea ninguna categoría guardada), cae a la heurística de siempre.
+  const getCategoryIcon = (categoria: string) => {
+    const found = effectiveCategorias.find((c) => c.id === categoria);
+    return found ? getTurnoCategoryIconComponent(found.icon) : getTurnoCategoryIcon(categoria);
+  };
+  const [showCategoryManager, setShowCategoryManager] = useState(false);
+
+  // Inicialización de muestra únicamente una sola vez para usuarios que todavía no tienen
+  // categorías propias guardadas (usuarios existentes, antes de este selector de categorías).
+  useEffect(() => {
+    if (typeof window !== "undefined" && activeUserId) {
+      const initialized = localStorage.getItem(`turno_categorias_init_${activeUserId}`);
+      if (!initialized) {
+        localStorage.setItem(`turno_categorias_init_${activeUserId}`, "true");
+        if ((!turnoCategorias || turnoCategorias.length === 0) && setTurnoCategorias) {
+          DEFAULT_TURNO_CATEGORIAS.forEach((cat) => {
+            saveItemToFirestore(activeUserId, "turno_categorias", cat).catch(() => {});
+          });
+          setTurnoCategorias(DEFAULT_TURNO_CATEGORIAS);
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeUserId]);
+
+  const handleSaveCategoria = (cat: TurnoCategoriaDef) => {
+    if (!setTurnoCategorias) return;
+    saveItemToFirestore(activeUserId, "turno_categorias", cat).catch(() => {});
+    setTurnoCategorias((prev) => {
+      const exists = prev.some((c) => c.id === cat.id);
+      return exists ? prev.map((c) => (c.id === cat.id ? cat : c)) : [...prev, cat];
+    });
+  };
+
+  const handleSetDefaultCategoria = (id: string) => {
+    if (!setTurnoCategorias) return;
+    const updated = effectiveCategorias.map((c) => ({ ...c, isDefault: c.id === id }));
+    updated.forEach((c) => {
+      saveItemToFirestore(activeUserId, "turno_categorias", c).catch(() => {});
+    });
+    setTurnoCategorias(updated);
+  };
 
   // One-time static getDocs fetch for Turnos, Compromisos, Appointments, and Routines (runs ONCE on mount)
   useEffect(() => {
@@ -1058,7 +1122,8 @@ export default function AppointmentsView({
     )
   );
   const [tcCategoria, setTcCategoria] =
-    useState<TurnoCompromiso["categoria"]>("Compromisos");
+    useState<TurnoCompromiso["categoria"]>(defaultCategoriaId);
+  const [tcMedicamentosAPedir, setTcMedicamentosAPedir] = useState<string[]>([]);
   const [tcFecha, setTcFecha] = useState(
     () => new Date().toISOString().split("T")[0],
   );
@@ -1590,7 +1655,7 @@ export default function AppointmentsView({
     setSearchingPlaces(false);
     setEditingTurnoComp(null);
     setTcDescripcion("");
-    setTcCategoria("Compromisos");
+    setTcCategoria(defaultCategoriaId);
     setTcLugar("");
     setLugarQuery("");
     setTcInformacionPersonalizada("");
@@ -1600,6 +1665,7 @@ export default function AppointmentsView({
     setTcEstudio(undefined);
     setTcMedicalRecordId(undefined);
     setTcPedido(undefined);
+    setTcMedicamentosAPedir([]);
     setTcLat(undefined);
     setTcLon(undefined);
     if (selectedCalendarDate) {
@@ -1643,6 +1709,7 @@ export default function AppointmentsView({
         undefined,
     );
     setTcPedido(tc.pedidoDocumento);
+    setTcMedicamentosAPedir(tc.medicamentosAPedir || []);
 
     const hasValidCoords =
       Boolean(cleanLugar) &&
@@ -1667,7 +1734,7 @@ export default function AppointmentsView({
     setShowAddTurnoComp(false);
     setEditingTurnoComp(null);
     setTcDescripcion("");
-    setTcCategoria("Compromisos");
+    setTcCategoria(defaultCategoriaId);
     setTcFecha(new Date().toISOString().split("T")[0]);
     setTcLugar("");
     setLugarQuery("");
@@ -1678,6 +1745,7 @@ export default function AppointmentsView({
     setTcEstudio(undefined);
     setTcMedicalRecordId(undefined);
     setTcPedido(undefined);
+    setTcMedicamentosAPedir([]);
     setTcLat(undefined);
     setTcLon(undefined);
   };
@@ -1776,7 +1844,7 @@ export default function AppointmentsView({
         googleCalendarEventId: editingTurnoComp ? (editingTurnoComp as any).googleCalendarEventId : undefined,
         whatsappReminderSent: false,
         descripcion: String(tcDescripcion || "").trim(),
-        categoria: String(tcCategoria || "Compromisos"),
+        categoria: String(tcCategoria || defaultCategoriaId),
         fecha: String(tcFecha || ""),
         lugar: placeToGeocode,
         doctor: String(tcDoctor || "").trim(),
@@ -1788,6 +1856,7 @@ export default function AppointmentsView({
         informacionPersonalizada: String(tcInformacionPersonalizada || ""),
         archivosNecesarios: Array.isArray(tcArchivosNecesarios) ? tcArchivosNecesarios : [],
         transcripcionAutomatica: String(tcTranscripcionAutomatica || ""),
+        medicamentosAPedir: isTurnoCategoria(tcCategoria) && Array.isArray(tcMedicamentosAPedir) ? tcMedicamentosAPedir : [],
       };
 
       const payload = sanitizeForFirestore(rawPayload);
@@ -2169,14 +2238,7 @@ export default function AppointmentsView({
     })),
   ].filter((v, i, self) => self.findIndex((t) => t.value === v.value) === i); // Deduplicate
 
-  const categoryOptions = [
-    { value: "Compromisos", label: "Compromisos" },
-    { value: "Turno - Hernan", label: "Turno - Hernan" },
-    { value: "Turno - Modesto", label: "Turno - Modesto" },
-    { value: "Tramites", label: "Trámites" },
-    { value: "Medicacion", label: "Medicación" },
-    { value: "Ocio", label: "Ocio" },
-  ];
+  const categoryOptions = effectiveCategorias.map((c) => ({ value: c.id, label: c.label }));
 
   // Deduplicated and sorted Turnos & Compromisos
   const uniqueTurnosCompromisos = useMemo(() => {
@@ -2583,7 +2645,7 @@ export default function AppointmentsView({
                               {/* Left Category Icon */}
                               <div className="p-2 bg-primary/10 text-primary rounded-xl shrink-0 mt-0.5">
                                 {(() => {
-                                  const CatIcon = getTurnoCategoryIcon(tc.categoria);
+                                  const CatIcon = getCategoryIcon(tc.categoria);
                                   return <CatIcon className="w-4 h-4" />;
                                 })()}
                               </div>
@@ -2593,7 +2655,7 @@ export default function AppointmentsView({
                                 <div className="flex items-center justify-between gap-2">
                                   <div className="flex flex-wrap gap-1.5 items-center">
                                     {(() => {
-                                      const CatIcon = getTurnoCategoryIcon(tc.categoria);
+                                      const CatIcon = getCategoryIcon(tc.categoria);
                                       return (
                                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-primary/10 text-primary">
                                           <CatIcon className="w-3 h-3 shrink-0" />
@@ -2640,7 +2702,7 @@ export default function AppointmentsView({
 
                                 {/* Description & Checkbox */}
                                 {(() => {
-                                  const CatIcon = getTurnoCategoryIcon(tc.categoria);
+                                  const CatIcon = getCategoryIcon(tc.categoria);
                                   const matchLogos = getMatchTeamLogos(tc);
                                   if (matchLogos && (matchLogos.homeLogo || matchLogos.awayLogo)) {
                                     return (
@@ -3724,20 +3786,28 @@ export default function AppointmentsView({
                   {/* Categoría & Fecha */}
                   <div className="grid grid-cols-2 gap-3 w-full">
                     <div className="w-full min-w-0">
-                      <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
-                        Categoría
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest">
+                          Categoría
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setShowCategoryManager(true)}
+                          title="Administrar categorías"
+                          className="p-0.5 text-slate-400 dark:text-zinc-500 hover:text-primary transition-colors cursor-pointer"
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </button>
+                      </div>
                       <CustomSelect
                         value={tcCategoria}
                         onChange={(val) => {
                           setTcCategoria(val as any);
-                          if (
-                            val !== "Turno - Modesto" &&
-                            val !== "Turno - Hernan"
-                          ) {
+                          if (!isTurnoCategoria(val)) {
                             setTcDoctor("");
                             setTcPedido(undefined);
                             setTcEstudio(undefined);
+                            setTcMedicamentosAPedir([]);
                           }
                         }}
                         options={categoryOptions}
@@ -4007,9 +4077,8 @@ export default function AppointmentsView({
                   )}
 
 
-                  {/* Doctor (Only visible for Turno - Modesto or Turno - Hernan) */}
-                  {(tcCategoria === "Turno - Modesto" ||
-                    tcCategoria === "Turno - Hernan") && (
+                  {/* Doctor (Only visible for "Turno*" categories) */}
+                  {isTurnoCategoria(tcCategoria) && (
                     <div>
                       <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
                         Médico / Doctor (Habilita cargas de archivo)
@@ -4034,9 +4103,23 @@ export default function AppointmentsView({
                     </div>
                   )}
 
+                  {/* Medicamentos a pedirle al doctor, ordenados por menor stock disponible */}
+                  {isTurnoCategoria(tcCategoria) && (
+                    <TurnoMedicamentosAPedir
+                      darkMode={darkMode}
+                      medicamentosDetallados={medicamentosDetallados}
+                      disponibilidadMedicamentos={disponibilidadMedicamentos}
+                      selectedIds={tcMedicamentosAPedir}
+                      onToggle={(id) =>
+                        setTcMedicamentosAPedir((prev) =>
+                          prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+                        )
+                      }
+                    />
+                  )}
+
                   {/* File Uploads - Only visible if Doctor is selected */}
-                  {(tcCategoria === "Turno - Modesto" ||
-                    tcCategoria === "Turno - Hernan") &&
+                  {isTurnoCategoria(tcCategoria) &&
                     tcDoctor && (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-zinc-800/40 rounded-2xl">
                         {/* Pedido / Doc. */}
@@ -4187,6 +4270,15 @@ export default function AppointmentsView({
       </AnimatePresence>,
       document.body,
     )}
+
+      <TurnoCategoryManagerModal
+        isOpen={showCategoryManager}
+        darkMode={darkMode}
+        categorias={effectiveCategorias}
+        onSaveCategoria={handleSaveCategoria}
+        onSetDefault={handleSetDefaultCategoria}
+        onClose={() => setShowCategoryManager(false)}
+      />
 
       {/* DETAILED MODAL POPUP (Mini Menu Desplegado) */}
       {activeDetailItem &&
