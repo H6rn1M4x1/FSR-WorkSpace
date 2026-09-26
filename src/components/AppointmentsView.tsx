@@ -83,6 +83,7 @@ import {
   getTurnoCategoryIconComponent,
   getTurnoCategoryLabel,
   normalizeCategoriaText,
+  sortTurnoCategorias,
 } from "../lib/turnoCategories";
 
 const FALLBACK_PLACES = [
@@ -980,7 +981,7 @@ export default function AppointmentsView({
 
   // Categorías de Turno/Compromiso: mientras la suscripción de Firestore todavía no entregó
   // nada (o para usuarios nuevos), se usan las 6 categorías que ya existían hardcodeadas.
-  const effectiveCategorias = turnoCategorias.length > 0 ? turnoCategorias : DEFAULT_TURNO_CATEGORIAS;
+  const effectiveCategorias = sortTurnoCategorias(turnoCategorias.length > 0 ? turnoCategorias : DEFAULT_TURNO_CATEGORIAS);
   const defaultCategoriaId =
     effectiveCategorias.find((c) => c.isDefault)?.id || effectiveCategorias[0]?.id || "Compromisos";
   const isTurnoCategoria = (cat: string) => normalizeCategoriaText(cat).startsWith("turno");
@@ -1050,6 +1051,22 @@ export default function AppointmentsView({
       saveItemToFirestore(activeUserId, "turno_categorias", c).catch(() => {});
     });
     showToast("Orden de categorías guardado", "success");
+  };
+
+  const handleDeleteCategoria = (id: string) => {
+    if (!setTurnoCategorias) return;
+    const deleted = effectiveCategorias.find((c) => c.id === id);
+    let remaining = effectiveCategorias.filter((c) => c.id !== id);
+    if (deleted?.isDefault && remaining.length > 0 && !remaining.some((c) => c.isDefault)) {
+      remaining = remaining.map((c, i) => (i === 0 ? { ...c, isDefault: true } : c));
+      saveItemToFirestore(activeUserId, "turno_categorias", remaining[0]).catch(() => {});
+    }
+    deleteItemFromFirestore(activeUserId, "turno_categorias", id).catch(() => {});
+    setTurnoCategorias(remaining);
+    if (tcCategoria === id) {
+      setTcCategoria(remaining.find((c) => c.isDefault)?.id || remaining[0]?.id || "Compromisos");
+    }
+    showToast("Categoría eliminada", "success");
   };
 
   // One-time static getDocs fetch for Turnos, Compromisos, Appointments, and Routines (runs ONCE on mount)
@@ -4315,6 +4332,7 @@ export default function AppointmentsView({
         onSaveCategoria={handleSaveCategoria}
         onSetDefault={handleSetDefaultCategoria}
         onReorder={handleReorderCategorias}
+        onDelete={handleDeleteCategoria}
         onClose={() => setShowCategoryManager(false)}
       />
 
