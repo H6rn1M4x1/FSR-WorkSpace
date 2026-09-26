@@ -201,7 +201,7 @@ export const TurnoCategoryManagerModal: React.FC<TurnoCategoryManagerModalProps>
                           transition={{ duration: 0.2 }}
                           className="overflow-hidden"
                         >
-                          <div className="mt-2 grid grid-cols-6 gap-2 p-2.5 rounded-xl bg-slate-50 dark:bg-black/30 border border-slate-100 dark:border-zinc-800/50">
+                          <div className="mt-2 grid grid-cols-8 gap-1.5 p-2.5 rounded-xl bg-slate-50 dark:bg-black/30 border border-slate-100 dark:border-zinc-800/50">
                             {TURNO_CATEGORY_ICON_CHOICES.map(({ name, icon: Icon }) => {
                               const selected = formIcon === name;
                               return (
@@ -213,15 +213,15 @@ export const TurnoCategoryManagerModal: React.FC<TurnoCategoryManagerModalProps>
                                     setShowIconPicker(false);
                                   }}
                                   title={name}
-                                  className={`relative aspect-square rounded-xl flex items-center justify-center transition-all cursor-pointer ${
+                                  className={`relative aspect-square rounded-lg flex items-center justify-center transition-all cursor-pointer ${
                                     selected
                                       ? "bg-primary text-white dark:text-zinc-950 shadow-md"
                                       : "bg-white dark:bg-zinc-900 text-primary border border-primary/20 hover:bg-primary/10"
                                   }`}
                                 >
-                                  <Icon className="w-4.5 h-4.5" />
+                                  <Icon className="w-3.5 h-3.5" />
                                   {selected && (
-                                    <Check className="w-3 h-3 absolute -top-1 -right-1 bg-primary text-white dark:text-zinc-950 rounded-full p-0.5" />
+                                    <Check className="w-2.5 h-2.5 absolute -top-1 -right-1 bg-primary text-white dark:text-zinc-950 rounded-full p-0.5" />
                                   )}
                                 </button>
                               );

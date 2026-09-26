@@ -65,6 +65,7 @@ import {
 import {
   Appointment,
   TurnoCompromiso,
+  TurnoCategoriaDef,
   Invoice,
   DetailedPayment,
   OrganizacionSemanalItem,
@@ -83,6 +84,7 @@ import { StorageService } from "../lib/storage";
 import { createShare, updateShare, deleteShare } from "../lib/sharing";
 import AnimatedList from "./AnimatedList";
 import { getTurnoCategoryIcon } from "./AppointmentsView";
+import { DEFAULT_TURNO_CATEGORIAS, getTurnoCategoryLabel, getTurnoCategoryIconComponent } from "../lib/turnoCategories";
 
 interface HomeViewProps {
   darkMode: boolean;
@@ -100,6 +102,7 @@ interface HomeViewProps {
   // Turnos
   appointments: Appointment[];
   turnosCompromisos: TurnoCompromiso[];
+  turnoCategorias?: TurnoCategoriaDef[];
   setAppointments: React.Dispatch<React.SetStateAction<Appointment[]>>;
   setTurnosCompromisos: React.Dispatch<React.SetStateAction<TurnoCompromiso[]>>;
   // Comidas
@@ -138,6 +141,7 @@ export default function HomeView({
   setDetailedPayments,
   appointments,
   turnosCompromisos,
+  turnoCategorias = [],
   setAppointments,
   setTurnosCompromisos,
   organizacionSemanal,
@@ -157,6 +161,15 @@ export default function HomeView({
 }: HomeViewProps) {
   const homeUserId = user?.email || userProfile?.email || "hernanmaximiliano10@gmail.com";
   const { showToast } = useToast();
+
+  // Etiqueta legible de una categoría de Turno/Compromiso (nunca el `id` crudo, que para
+  // categorías creadas con el administrador de categorías no es texto legible).
+  const effectiveTurnoCategorias = turnoCategorias.length > 0 ? turnoCategorias : DEFAULT_TURNO_CATEGORIAS;
+  const getCategoryLabel = (categoria: string) => getTurnoCategoryLabel(categoria, effectiveTurnoCategorias);
+  const getCategoryIcon = (categoria: string) => {
+    const found = effectiveTurnoCategorias.find((c) => c.id === categoria);
+    return found ? getTurnoCategoryIconComponent(found.icon) : getTurnoCategoryIcon(categoria);
+  };
 
   // Helpers for the "shared" badge on my OWN items (i.e. things I shared out to others).
   const isItemSharedOut = (category: string, itemId: string): boolean =>
@@ -2214,7 +2227,7 @@ export default function HomeView({
                     if (item.itemType === "turno") {
                       const tc = item.data;
                       const matchLogos = getMatchTeamLogos(tc);
-                      const CatIcon = getTurnoCategoryIcon(tc.categoria);
+                      const CatIcon = getCategoryIcon(tc.categoria);
                       return (
                         <div
                           key={`tc-${tc.id}-${itemIdx}`}
@@ -2241,7 +2254,7 @@ export default function HomeView({
                               <div className="flex items-center gap-2">
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-primary/10 text-primary">
                                   <CatIcon className="w-3 h-3 shrink-0" />
-                                  <span>{tc.categoria}</span>
+                                  <span>{getCategoryLabel(tc.categoria)}</span>
                                 </span>
                                 {tc.estatus && (
                                   <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-primary/10 text-primary">
@@ -2397,7 +2410,7 @@ export default function HomeView({
                                         Categoría y Estatus
                                       </span>
                                       <span className="font-semibold text-zinc-800 dark:text-zinc-200">
-                                        {tc.categoria} • {(() => {
+                                        {getCategoryLabel(tc.categoria)} • {(() => {
                                           if (tc.estatus) return "Realizado";
                                           const todayStr = getLocalDateString();
                                           const datePortion = tc.fecha ? tc.fecha.substring(0, 10) : "";
@@ -3681,7 +3694,7 @@ export default function HomeView({
                   <div className="flex items-center justify-between pr-10">
                     <div className="flex items-center gap-2 px-3 py-1.5 bg-primary/10 text-primary rounded-xl text-xs font-bold w-fit">
                       <Calendar className="w-4 h-4" />
-                      <span>{activeDetailItem.data.categoria}</span>
+                      <span>{getCategoryLabel(activeDetailItem.data.categoria)}</span>
                     </div>
                     <div
                       className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold uppercase tracking-wide ${

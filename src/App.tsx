@@ -17,6 +17,7 @@ import LoginScreen from "./components/LoginScreen";
 import Logo from "./components/Logo";
 import TopNavbar, { SUBMENUS_BY_TAB } from "./components/TopNavbar";
 import { NavPanelContext, type NavPanelRow } from "./lib/navPanelContext";
+import { DEFAULT_TURNO_CATEGORIAS, getTurnoCategoryLabel } from "./lib/turnoCategories";
 import HomeView from "./components/HomeView";
 const AcademicView = lazy(() => import("./components/AcademicView"));
 const MealsView = lazy(() => import("./components/MealsView"));
@@ -1751,7 +1752,7 @@ export default function App() {
       newNotifs.push({
         id: `notif-turno-${t.id}`,
         title: t.descripcion,
-        body: `Categoría: ${t.categoria}${t.lugar ? ` - Lugar: ${t.lugar}` : ""}`,
+        body: `Categoría: ${getTurnoCategoryLabel(t.categoria, turnoCategorias.length > 0 ? turnoCategorias : DEFAULT_TURNO_CATEGORIAS)}${t.lugar ? ` - Lugar: ${t.lugar}` : ""}`,
         timestamp: new Date().toISOString(),
         read: false,
         type: "turno",
@@ -2214,6 +2215,7 @@ export default function App() {
                   appointments={appointmentsWithShared}
                   setAppointments={setAppointments}
                   turnosCompromisos={turnosCompromisosWithShared}
+                  turnoCategorias={turnoCategorias}
                   setTurnosCompromisos={setTurnosCompromisos}
                   organizacionSemanal={organizacionSemanalWithShared}
                   setOrganizacionSemanal={setOrganizacionSemanal}
