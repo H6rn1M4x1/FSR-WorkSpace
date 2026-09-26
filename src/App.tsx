@@ -65,6 +65,7 @@ import {
   PlatoItem,
   OrganizacionSemanalItem,
   TurnoCompromiso,
+  TurnoCategoriaDef,
   MedicamentoDetallado,
   DisponibilidadMedicamento,
   DeporteActividad,
@@ -326,6 +327,7 @@ export default function App() {
   const [platos, setPlatos] = useState<PlatoItem[]>([]);
   const [organizacionSemanal, setOrganizacionSemanal] = useState<OrganizacionSemanalItem[]>([]);
   const [turnosCompromisos, setTurnosCompromisos] = useState<TurnoCompromiso[]>([]);
+  const [turnoCategorias, setTurnoCategorias] = useState<TurnoCategoriaDef[]>([]);
   const [medicamentosDetallados, setMedicamentosDetallados] = useState<MedicamentoDetallado[]>([]);
   const [disponibilidadMedicamentos, setDisponibilidadMedicamentos] = useState<DisponibilidadMedicamento[]>([]);
   const [deportesActividades, setDeportesActividades] = useState<DeporteActividad[]>([]);
@@ -712,6 +714,7 @@ export default function App() {
       { key: "platos", targetUserId: effectiveComidasUserId, setState: setPlatos },
       { key: "organizacion_semanal", targetUserId: effectiveComidasUserId, setState: setOrganizacionSemanal },
       { key: "turnos_compromisos", targetUserId: currentUserId, setState: setTurnosCompromisos },
+      { key: "turno_categorias", targetUserId: currentUserId, setState: setTurnoCategorias },
       { key: "medicamentos_detallados", targetUserId: effectiveControlClinicoUserId, setState: setMedicamentosDetallados },
       { key: "disponibilidad_medicamentos", targetUserId: effectiveControlClinicoUserId, setState: setDisponibilidadMedicamentos },
       { key: "deportes_actividades", targetUserId: currentUserId, setState: setDeportesActividades },
@@ -790,6 +793,7 @@ export default function App() {
       { key: "platos", targetUserId: effectiveComidasUserId },
       { key: "organizacion_semanal", targetUserId: effectiveComidasUserId },
       { key: "turnos_compromisos", targetUserId: currentUserId },
+      { key: "turno_categorias", targetUserId: currentUserId },
       { key: "medicamentos_detallados", targetUserId: effectiveControlClinicoUserId },
       { key: "disponibilidad_medicamentos", targetUserId: effectiveControlClinicoUserId },
       { key: "deportes_actividades", targetUserId: currentUserId },
@@ -1621,6 +1625,16 @@ export default function App() {
   useEffect(() => {
     if (isInitialLoadDone) {
       if (!isRemoteUpdateRef.current) {
+        StorageService.setTurnoCategorias(turnoCategorias);
+      } else {
+        setStoredDataSilent("turno_categorias", turnoCategorias);
+      }
+    }
+  }, [turnoCategorias, isInitialLoadDone]);
+
+  useEffect(() => {
+    if (isInitialLoadDone) {
+      if (!isRemoteUpdateRef.current) {
         StorageService.setMedicamentosDetallados(medicamentosDetallados);
       } else {
         setStoredDataSilent("medicamentos_detallados", medicamentosDetallados);
@@ -2312,6 +2326,10 @@ export default function App() {
                   setRoutines={setRoutines}
                   turnosCompromisos={turnosCompromisosWithShared}
                   setTurnosCompromisos={setTurnosCompromisos}
+                  turnoCategorias={turnoCategorias}
+                  setTurnoCategorias={setTurnoCategorias}
+                  medicamentosDetallados={medicamentosDetallados}
+                  disponibilidadMedicamentos={disponibilidadMedicamentos}
                   token={token}
                   doctors={doctors}
                   medicalRecords={medicalRecords}
