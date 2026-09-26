@@ -4148,10 +4148,6 @@ export default function AppointmentsView({
                         className="w-full"
                         icon={<Stethoscope className="w-4 h-4 text-primary" />}
                       />
-                      <p className="text-[10px] text-zinc-500 mt-1">
-                        *Nota: Para adjuntar estudios, informes o pedidos, el
-                        compromiso debe tener un Médico asignado.
-                      </p>
                     </div>
                   )}
 

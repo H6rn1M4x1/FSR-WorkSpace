@@ -209,7 +209,9 @@ export const TurnoCategoryManagerModal: React.FC<TurnoCategoryManagerModalProps>
             </div>
 
             {/* Body */}
-            <div className="flex-1 overflow-y-auto p-5 scrollbar-thin scrollbar-thumb-zinc-200 dark:scrollbar-thumb-zinc-800">
+            {/* layoutScroll: si la lista crece y este contenedor scrollea, Reorder.Group
+                necesita que el ancestro con scroll lo declare para medir bien el arrastre. */}
+            <motion.div layoutScroll className="flex-1 overflow-y-auto p-5 scrollbar-thin scrollbar-thumb-zinc-200 dark:scrollbar-thumb-zinc-800">
               {!editing ? (
                 <div className="space-y-2">
                   <p className="text-[10px] text-slate-400 dark:text-zinc-500 font-medium px-0.5 -mt-1 mb-1">
@@ -336,7 +338,7 @@ export const TurnoCategoryManagerModal: React.FC<TurnoCategoryManagerModalProps>
                   </div>
                 </div>
               )}
-            </div>
+            </motion.div>
           </motion.div>
         </div>
       )}
