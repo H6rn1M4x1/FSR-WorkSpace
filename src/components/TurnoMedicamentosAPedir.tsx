@@ -118,7 +118,7 @@ export const TurnoMedicamentosAPedir: React.FC<TurnoMedicamentosAPedirProps> = (
         ref={triggerRef}
         type="button"
         onClick={() => setIsOpen((v) => !v)}
-        className="w-full flex items-center justify-between gap-2 px-3.5 h-[42px] rounded-xl bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-zinc-800 text-xs md:text-sm font-semibold cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20"
+        className="w-full flex items-center justify-between gap-2 px-3.5 h-[42px] rounded-xl bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-zinc-800 text-xs md:text-sm font-semibold cursor-pointer transition-colors hover:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20"
       >
         <span className="flex items-center gap-2 truncate min-w-0">
           <Pill className="w-4 h-4 text-primary shrink-0" />

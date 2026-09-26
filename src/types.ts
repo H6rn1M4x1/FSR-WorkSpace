@@ -352,6 +352,9 @@ export interface TurnoCategoriaDef {
   label: string;
   icon: string;
   isDefault?: boolean;
+  // Posición manual en la lista (menor = primero). Sin definir para categorías que nunca se
+  // reordenaron — en ese caso se ordenan al final, en el orden en que llegaron.
+  order?: number;
 }
 
 export interface MedicamentoDetallado {

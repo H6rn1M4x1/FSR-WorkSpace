@@ -693,8 +693,8 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
         }}
         className={`w-full flex items-center justify-between font-bold transition-all focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
           size === "sm"
-            ? "px-3 h-[34px] rounded-xl bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 text-xs font-semibold focus:border-primary"
-            : "px-3.5 h-[42px] rounded-xl bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-zinc-800 text-black dark:text-white text-xs md:text-sm focus:border-primary"
+            ? "px-3 h-[34px] rounded-xl bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 text-xs font-semibold hover:border-primary/50 focus:border-primary"
+            : "px-3.5 h-[42px] rounded-xl bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-zinc-800 text-black dark:text-white text-xs md:text-sm hover:border-primary/50 focus:border-primary"
         }`}
       >
         <span className="flex items-center gap-2 truncate min-w-0">
@@ -1041,6 +1041,15 @@ export default function AppointmentsView({
       saveItemToFirestore(activeUserId, "turno_categorias", c).catch(() => {});
     });
     setTurnoCategorias(updated);
+  };
+
+  const handleReorderCategorias = (reordered: TurnoCategoriaDef[]) => {
+    if (!setTurnoCategorias) return;
+    setTurnoCategorias(reordered);
+    reordered.forEach((c) => {
+      saveItemToFirestore(activeUserId, "turno_categorias", c).catch(() => {});
+    });
+    showToast("Orden de categorías guardado", "success");
   };
 
   // One-time static getDocs fetch for Turnos, Compromisos, Appointments, and Routines (runs ONCE on mount)
@@ -4120,6 +4129,7 @@ export default function AppointmentsView({
                         options={doctorOptions}
                         placeholder="-- Selecciona Doctor (Opcional) --"
                         className="w-full"
+                        icon={<Stethoscope className="w-4 h-4" />}
                       />
                       <p className="text-[10px] text-zinc-500 mt-1">
                         *Nota: Para adjuntar estudios, informes o pedidos, el
@@ -4304,6 +4314,7 @@ export default function AppointmentsView({
         categorias={effectiveCategorias}
         onSaveCategoria={handleSaveCategoria}
         onSetDefault={handleSetDefaultCategoria}
+        onReorder={handleReorderCategorias}
         onClose={() => setShowCategoryManager(false)}
       />
 
