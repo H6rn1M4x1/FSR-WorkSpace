@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { motion, AnimatePresence, Reorder, useDragControls } from "motion/react";
-import { X, Plus, Pencil, Star, Check, ChevronLeft, GripVertical, Trash2 } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
+import { X, Plus, Pencil, Star, Check, ChevronLeft, ChevronUp, ChevronDown, Trash2 } from "lucide-react";
 import { TurnoCategoriaDef } from "../types";
 import { generateUniqueId } from "../utils/id";
 import { TURNO_CATEGORY_ICON_CHOICES, getTurnoCategoryIconComponent, sortTurnoCategorias } from "../lib/turnoCategories";
@@ -18,45 +18,58 @@ interface TurnoCategoryManagerModalProps {
   onClose: () => void;
 }
 
-// Fila arrastrable de una categoría — el drag se dispara solo desde el ícono de agarre (no
-// desde toda la fila) para no interferir con los clicks en la estrella/lápiz.
+// Fila de una categoría. En vez de arrastrar (que en pantallas táctiles interfería con la
+// selección de texto), el orden se cambia con flechas para subir/bajar de posición.
 function CategoryRow({
   cat,
   canDelete,
+  canMoveUp,
+  canMoveDown,
+  onMoveUp,
+  onMoveDown,
   onSetDefault,
   onEdit,
   onDelete,
-  onDragEnd,
 }: {
   cat: TurnoCategoriaDef;
   canDelete: boolean;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
   onSetDefault: (id: string) => void;
   onEdit: (cat: TurnoCategoriaDef) => void;
   onDelete: (cat: TurnoCategoriaDef) => void;
-  onDragEnd: () => void;
 }) {
-  const dragControls = useDragControls();
   const Icon = getTurnoCategoryIconComponent(cat.icon);
 
   return (
-    <Reorder.Item
-      as="div"
-      value={cat}
-      dragListener={false}
-      dragControls={dragControls}
-      onDragEnd={onDragEnd}
+    <motion.div
+      layout
       initial={{ opacity: 0, height: 0, y: -12 }}
       animate={{ opacity: 1, height: "auto", y: 0 }}
       transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-      className="flex items-center gap-2 p-2.5 rounded-2xl bg-slate-50 dark:bg-zinc-900/60 border border-slate-100 dark:border-zinc-800/50 select-none"
+      className="flex items-center gap-2 p-2.5 rounded-2xl bg-slate-50 dark:bg-zinc-900/60 border border-slate-100 dark:border-zinc-800/50"
     >
-      <div
-        onPointerDown={(e) => dragControls.start(e)}
-        title="Arrastrar para reordenar"
-        style={{ WebkitTouchCallout: "none" }}
-        className="shrink-0 p-1.5 -ml-1.5 text-slate-300 dark:text-zinc-600 hover:text-slate-500 dark:hover:text-zinc-400 cursor-grab active:cursor-grabbing touch-none select-none"
-      >
-        <GripVertical className="w-4 h-4" />
+      <div className="shrink-0 flex flex-col gap-0.5">
+        <button
+          type="button"
+          onClick={onMoveUp}
+          disabled={!canMoveUp}
+          title="Subir"
+          className="p-1 rounded-lg text-slate-300 dark:text-zinc-600 hover:text-primary hover:bg-primary/10 disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
+        >
+          <ChevronUp className="w-3.5 h-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={onMoveDown}
+          disabled={!canMoveDown}
+          title="Bajar"
+          className="p-1 rounded-lg text-slate-300 dark:text-zinc-600 hover:text-primary hover:bg-primary/10 disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
+        >
+          <ChevronDown className="w-3.5 h-3.5" />
+        </button>
       </div>
       <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 border border-primary/20">
         <Icon className="w-4.5 h-4.5" />
@@ -92,7 +105,7 @@ function CategoryRow({
           <Trash2 className="w-3.5 h-3.5" />
         </button>
       )}
-    </Reorder.Item>
+    </motion.div>
   );
 }
 
@@ -115,16 +128,23 @@ export const TurnoCategoryManagerModal: React.FC<TurnoCategoryManagerModalProps>
   const [formIcon, setFormIcon] = useState("Tag");
   const [showIconPicker, setShowIconPicker] = useState(false);
   const [confirmDeleteCat, setConfirmDeleteCat] = useState<TurnoCategoriaDef | null>(null);
-  // Copia local reordenable, sincronizada con `categorias` (nueva/editada categoría, o cambios
-  // que lleguen de otro dispositivo) salvo mientras el usuario está arrastrando.
+  // Copia local ordenada, sincronizada con `categorias` (nueva/editada categoría, o cambios
+  // que lleguen de otro dispositivo) y reindexada al mover una posición con las flechas.
   const [orderedCategorias, setOrderedCategorias] = useState<TurnoCategoriaDef[]>(() => sortTurnoCategorias(categorias));
 
   useEffect(() => {
     setOrderedCategorias(sortTurnoCategorias(categorias));
   }, [categorias]);
 
-  const handleDragEnd = () => {
-    const reIndexed = orderedCategorias.map((c, i) => ({ ...c, order: i }));
+  const handleMoveCategoria = (id: string, direction: "up" | "down") => {
+    const idx = orderedCategorias.findIndex((c) => c.id === id);
+    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (idx === -1 || swapIdx < 0 || swapIdx >= orderedCategorias.length) return;
+
+    const reArranged = [...orderedCategorias];
+    [reArranged[idx], reArranged[swapIdx]] = [reArranged[swapIdx], reArranged[idx]];
+    const reIndexed = reArranged.map((c, i) => ({ ...c, order: i }));
+
     setOrderedCategorias(reIndexed);
     onReorder(reIndexed);
   };
@@ -209,33 +229,31 @@ export const TurnoCategoryManagerModal: React.FC<TurnoCategoryManagerModalProps>
             </div>
 
             {/* Body */}
-            {/* layoutScroll: si la lista crece y este contenedor scrollea, Reorder.Group
-                necesita que el ancestro con scroll lo declare para medir bien el arrastre. */}
+            {/* layoutScroll: las filas usan animación `layout` al cambiar de posición con las
+                flechas — si la lista crece y este contenedor scrollea, necesita declarar
+                layoutScroll para que esa animación mida bien las posiciones. */}
             <motion.div layoutScroll className="flex-1 overflow-y-auto p-5 scrollbar-thin scrollbar-thumb-zinc-200 dark:scrollbar-thumb-zinc-800">
               {!editing ? (
                 <div className="space-y-2">
                   <p className="text-[10px] text-slate-400 dark:text-zinc-500 font-medium px-0.5 -mt-1 mb-1">
-                    Arrastrá desde <GripVertical className="w-3 h-3 inline -mt-0.5" /> para cambiar el orden.
+                    Usá las flechas para cambiar el orden.
                   </p>
-                  <Reorder.Group
-                    as="div"
-                    axis="y"
-                    values={orderedCategorias}
-                    onReorder={setOrderedCategorias}
-                    className="space-y-2"
-                  >
-                    {orderedCategorias.map((cat) => (
+                  <div className="space-y-2">
+                    {orderedCategorias.map((cat, idx) => (
                       <CategoryRow
                         key={cat.id}
                         cat={cat}
                         canDelete={orderedCategorias.length > 1}
+                        canMoveUp={idx > 0}
+                        canMoveDown={idx < orderedCategorias.length - 1}
+                        onMoveUp={() => handleMoveCategoria(cat.id, "up")}
+                        onMoveDown={() => handleMoveCategoria(cat.id, "down")}
                         onSetDefault={onSetDefault}
                         onEdit={startEdit}
                         onDelete={setConfirmDeleteCat}
-                        onDragEnd={handleDragEnd}
                       />
                     ))}
-                  </Reorder.Group>
+                  </div>
 
                   <button
                     type="button"

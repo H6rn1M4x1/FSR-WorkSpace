@@ -5,7 +5,7 @@ import { auth } from "../lib/supabase";
 import { saveItemToFirestore, deleteItemFromFirestore, subscribeToCategory, refetchCategory } from "../lib/firestoreSyncService";
 import { useToast } from "../context/ToastContext";
 import { createPortal } from "react-dom";
-import { motion, AnimatePresence, Reorder, useDragControls } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import { ConfirmationModal } from "./ConfirmationModal";
 import {
   BookMarked,
@@ -23,7 +23,8 @@ import {
   Lightbulb,
   FileText,
   Loader2,
-  GripVertical
+  ChevronUp,
+  ChevronDown
 } from "lucide-react";
 
 export interface AddressEntry {
@@ -128,43 +129,67 @@ export function saveAddressBook(entries: AddressEntry[]) {
   }
 }
 
-// Fila de una dirección guardada. Cuando `draggable` es true se renderiza como Reorder.Item,
-// con el drag disparado solo desde el ícono de agarre (no desde toda la fila, que ya
-// selecciona la dirección al hacer click) para no interferir con esa acción ni con los botones
-// de favorito/editar/eliminar.
+// Fila de una dirección guardada. Cuando `showReorder` es true se muestran flechas para subir
+// o bajar de posición (en vez de arrastrar, que en pantallas táctiles competía con la selección
+// de texto y con el click de la fila).
 function AddressRow({
   entry,
-  draggable,
+  showReorder,
+  canMoveUp,
+  canMoveDown,
+  onMoveUp,
+  onMoveDown,
   onSelect,
   onToggleFavorite,
   onEdit,
   onDelete,
-  onDragEnd,
 }: {
   entry: AddressEntry;
-  draggable: boolean;
+  showReorder: boolean;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
   onSelect: () => void;
   onToggleFavorite: (e: React.MouseEvent) => void;
   onEdit: (e: React.MouseEvent) => void;
   onDelete: (e: React.MouseEvent) => void;
-  onDragEnd: () => void;
 }) {
-  const dragControls = useDragControls();
-
-  const content = (
-    <>
-      {draggable && (
-        <div
-          onPointerDown={(e) => {
-            e.stopPropagation();
-            dragControls.start(e);
-          }}
-          onClick={(e) => e.stopPropagation()}
-          title="Arrastrar para reordenar"
-          style={{ WebkitTouchCallout: "none" }}
-          className="shrink-0 p-1.5 -ml-1.5 mt-0.5 text-slate-300 dark:text-zinc-600 hover:text-slate-500 dark:hover:text-zinc-400 cursor-grab active:cursor-grabbing touch-none select-none"
-        >
-          <GripVertical className="w-4 h-4" />
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, height: 0, y: -12 }}
+      animate={{ opacity: 1, height: "auto", y: 0 }}
+      transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+      onClick={onSelect}
+      className="p-3 bg-slate-50 dark:bg-zinc-950/50 hover:border-primary! dark:hover:border-primary! hover:ring-1 hover:ring-primary/40 border border-slate-200 dark:border-zinc-800/80 rounded-2xl transition-all duration-200 cursor-pointer flex items-start justify-between gap-3 group address-book-item"
+    >
+      {showReorder && (
+        <div className="shrink-0 flex flex-col gap-0.5 -ml-1 mt-0.5">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onMoveUp();
+            }}
+            disabled={!canMoveUp}
+            title="Subir"
+            className="p-1 rounded-lg text-slate-300 dark:text-zinc-600 hover:text-primary hover:bg-primary/10 disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
+          >
+            <ChevronUp className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onMoveDown();
+            }}
+            disabled={!canMoveDown}
+            title="Bajar"
+            className="p-1 rounded-lg text-slate-300 dark:text-zinc-600 hover:text-primary hover:bg-primary/10 disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
+          >
+            <ChevronDown className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
       <div className="flex items-start gap-2.5 min-w-0 flex-1">
@@ -227,35 +252,7 @@ function AddressRow({
           <Trash2 className="w-3.5 h-3.5" />
         </button>
       </div>
-    </>
-  );
-
-  const rowClassName =
-    "p-3 bg-slate-50 dark:bg-zinc-950/50 hover:border-primary! dark:hover:border-primary! hover:ring-1 hover:ring-primary/40 border border-slate-200 dark:border-zinc-800/80 rounded-2xl transition-all duration-200 cursor-pointer flex items-start justify-between gap-3 group address-book-item";
-
-  if (draggable) {
-    return (
-      <Reorder.Item
-        as="div"
-        value={entry}
-        dragListener={false}
-        dragControls={dragControls}
-        onDragEnd={onDragEnd}
-        onClick={onSelect}
-        initial={{ opacity: 0, height: 0, y: -12 }}
-        animate={{ opacity: 1, height: "auto", y: 0 }}
-        transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-        className={`${rowClassName} select-none`}
-      >
-        {content}
-      </Reorder.Item>
-    );
-  }
-
-  return (
-    <div onClick={onSelect} className={rowClassName}>
-      {content}
-    </div>
+    </motion.div>
   );
 }
 
@@ -280,9 +277,8 @@ export const AddressBookModal: React.FC<AddressBookModalProps> = ({
   useLockBodyScroll(isOpen);
   const { showToast } = useToast();
   const [entries, setEntries] = useState<AddressEntry[]>([]);
-  // Copia local reordenable para el drag-to-reorder — Reorder.Group necesita que el mismo
-  // estado que recibe como `values` sea el que su `onReorder` actualiza directamente (no un
-  // array derivado recalculado en cada render), o el gesto de arrastre no llega a confirmarse.
+  // Copia local ordenada, sincronizada con `entries` (nueva dirección, o cambios que lleguen
+  // de otro dispositivo) y reindexada al mover una posición con las flechas subir/bajar.
   const [orderedEntries, setOrderedEntries] = useState<AddressEntry[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
@@ -449,8 +445,15 @@ export const AddressBookModal: React.FC<AddressBookModalProps> = ({
     );
   });
 
-  const handleDragEndAddress = () => {
-    const reIndexed = orderedEntries.map((e, i) => ({ ...e, order: i }));
+  const handleMoveAddress = (id: string, direction: "up" | "down") => {
+    const idx = orderedEntries.findIndex((e) => e.id === id);
+    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (idx === -1 || swapIdx < 0 || swapIdx >= orderedEntries.length) return;
+
+    const reArranged = [...orderedEntries];
+    [reArranged[idx], reArranged[swapIdx]] = [reArranged[swapIdx], reArranged[idx]];
+    const reIndexed = reArranged.map((e, i) => ({ ...e, order: i }));
+
     setOrderedEntries(reIndexed);
     setEntries(reIndexed);
     saveAddressBook(reIndexed);
@@ -548,9 +551,9 @@ export const AddressBookModal: React.FC<AddressBookModalProps> = ({
         </div>
 
         {/* Body Content */}
-        {/* layoutScroll: Reorder.Group necesita que el contenedor que hace scroll lo declare,
-            o el arrastre pierde precisión al medir posiciones cuando la lista scrollea — se
-            nota sobre todo en arrastres largos (mover un ítem más de 1-2 posiciones). */}
+        {/* layoutScroll: las filas usan animación `layout` para acomodarse al cambiar de
+            posición con las flechas — si este contenedor scrollea, necesita declarar
+            layoutScroll para que esa animación mida bien las posiciones. */}
         <motion.div layoutScroll className="flex-1 overflow-y-auto p-4 space-y-3">
           {/* Add / Edit Form */}
           {showAddForm && (
@@ -679,7 +682,11 @@ export const AddressBookModal: React.FC<AddressBookModalProps> = ({
               <AddressRow
                 key={entry.id}
                 entry={entry}
-                draggable={false}
+                showReorder={false}
+                canMoveUp={false}
+                canMoveDown={false}
+                onMoveUp={() => {}}
+                onMoveDown={() => {}}
                 onSelect={() => {
                   onSelectAddress(entry);
                   onClose();
@@ -687,28 +694,25 @@ export const AddressBookModal: React.FC<AddressBookModalProps> = ({
                 onToggleFavorite={(e) => handleToggleFavorite(entry.id, e)}
                 onEdit={(e) => handleStartEdit(entry, e)}
                 onDelete={(e) => handleDelete(entry.id, e)}
-                onDragEnd={() => {}}
               />
             ))
           ) : (
             <>
               {orderedEntries.length > 1 && (
                 <p className="text-[10px] text-slate-400 dark:text-zinc-500 font-medium px-0.5 -mt-1 mb-1">
-                  Arrastrá desde <GripVertical className="w-3 h-3 inline -mt-0.5" /> para cambiar el orden.
+                  Usá las flechas para cambiar el orden.
                 </p>
               )}
-              <Reorder.Group
-                as="div"
-                axis="y"
-                values={orderedEntries}
-                onReorder={setOrderedEntries}
-                className="space-y-3"
-              >
-                {orderedEntries.map((entry) => (
+              <div className="space-y-3">
+                {orderedEntries.map((entry, idx) => (
                   <AddressRow
                     key={entry.id}
                     entry={entry}
-                    draggable
+                    showReorder={orderedEntries.length > 1}
+                    canMoveUp={idx > 0}
+                    canMoveDown={idx < orderedEntries.length - 1}
+                    onMoveUp={() => handleMoveAddress(entry.id, "up")}
+                    onMoveDown={() => handleMoveAddress(entry.id, "down")}
                     onSelect={() => {
                       onSelectAddress(entry);
                       onClose();
@@ -716,10 +720,9 @@ export const AddressBookModal: React.FC<AddressBookModalProps> = ({
                     onToggleFavorite={(e) => handleToggleFavorite(entry.id, e)}
                     onEdit={(e) => handleStartEdit(entry, e)}
                     onDelete={(e) => handleDelete(entry.id, e)}
-                    onDragEnd={handleDragEndAddress}
                   />
                 ))}
-              </Reorder.Group>
+              </div>
             </>
           )}
         </motion.div>
