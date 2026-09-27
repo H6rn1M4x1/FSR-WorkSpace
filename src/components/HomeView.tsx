@@ -3470,7 +3470,14 @@ export default function HomeView({
             favoriteTeamName={userProfile?.favoriteTeam}
             darkMode={darkMode}
             onScheduleMonthlyMatches={handleScheduleMatches}
-            isScheduled={turnosCompromisos.some((t) => t.categoria === "Ocio" && t.id.startsWith("match-"))}
+            isScheduled={(() => {
+              const team = (userProfile?.favoriteTeam || "Boca Juniors").replace(/\s+/g, "_");
+              const now = new Date();
+              const monthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+              return turnosCompromisos.some(
+                (t) => t.categoria === "Ocio" && t.id.startsWith(`match-${team}`) && t.fecha.startsWith(monthPrefix)
+              );
+            })()}
           />
         </div>
       </div>

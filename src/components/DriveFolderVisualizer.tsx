@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useContext, useMemo } from "react";
 import AnimatedFolder from "./AnimatedFolder";
 import { createPortal } from "react-dom";
 import {
@@ -47,6 +47,7 @@ import {
   Minus,
   History,
   SquarePen,
+  Pin,
 } from "lucide-react";
 import {
   googleSignIn,
@@ -84,6 +85,10 @@ interface GeminiChatMessage {
 interface GeminiChatSession {
   id: string;
   title: string;
+  // true una vez que el usuario le puso un nombre manualmente — a partir de ahí el autoguardado
+  // deja de pisarlo con el texto del primer mensaje.
+  customTitle?: boolean;
+  pinned?: boolean;
   messages: GeminiChatMessage[];
   createdAt: string;
   updatedAt: string;
@@ -94,6 +99,176 @@ interface Breadcrumb {
   name: string;
 }
 
+// Inicializa mermaid una sola vez (import dinámico: es una librería pesada, no hace falta en el
+// bundle principal si el usuario nunca pide un diagrama).
+let mermaidReadyPromise: Promise<typeof import("mermaid").default> | null = null;
+const getMermaid = () => {
+  if (!mermaidReadyPromise) {
+    mermaidReadyPromise = import("mermaid").then((mod) => {
+      const mermaid = mod.default;
+      mermaid.initialize({ startOnLoad: false, theme: "dark", securityLevel: "loose" });
+      return mermaid;
+    });
+  }
+  return mermaidReadyPromise;
+};
+
+// Contexto para que los diagramas Mermaid (definidos fuera del componente principal, ya que
+// renderMarkdown también vive a nivel de módulo) puedan guardarse como PDF en la carpeta de
+// Drive actualmente abierta, sin tener que pasar accessToken/folderId a mano por cada línea de
+// renderMarkdown.
+const MermaidDriveContext = React.createContext<{
+  accessToken: string | null;
+  folderId: string | null;
+  onSaved: () => void;
+  onError: (msg: string) => void;
+} | null>(null);
+
+// Convierte el SVG ya renderizado de un diagrama en un PDF de una página (vía canvas → PNG).
+async function svgToPdfBlob(svgString: string): Promise<Blob> {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(svgString, "image/svg+xml");
+  const svgEl = doc.documentElement;
+  const viewBox = svgEl.getAttribute("viewBox");
+  let width = parseFloat(svgEl.getAttribute("width") || "0");
+  let height = parseFloat(svgEl.getAttribute("height") || "0");
+  if ((!width || !height) && viewBox) {
+    const parts = viewBox.split(/\s+/).map(Number);
+    width = width || parts[2] || 800;
+    height = height || parts[3] || 600;
+  }
+  width = width || 800;
+  height = height || 600;
+
+  const scale = 2;
+  const canvas = document.createElement("canvas");
+  canvas.width = width * scale;
+  canvas.height = height * scale;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("No se pudo preparar el lienzo para exportar el diagrama.");
+  ctx.fillStyle = "#09090b";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(svgBlob);
+  try {
+    const img = new Image();
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error("No se pudo procesar el diagrama para exportarlo."));
+      img.src = url;
+    });
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+
+  const pngDataUrl = canvas.toDataURL("image/png");
+  const { jsPDF } = await import("jspdf");
+  const pdf = new jsPDF({
+    orientation: width >= height ? "landscape" : "portrait",
+    unit: "px",
+    format: [canvas.width, canvas.height],
+  });
+  pdf.addImage(pngDataUrl, "PNG", 0, 0, canvas.width, canvas.height);
+  return pdf.output("blob");
+}
+
+async function uploadPdfToDrive(blob: Blob, accessToken: string, folderId: string) {
+  const fileName = `Diagrama - ${new Date().toLocaleDateString("es-AR")} ${new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}.pdf`;
+  const metadata = { name: fileName, parents: [folderId] };
+  const form = new FormData();
+  form.append("metadata", new Blob([JSON.stringify(metadata)], { type: "application/json" }));
+  form.append("file", blob, fileName);
+  const response = await fetch(
+    "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart",
+    { method: "POST", headers: { Authorization: `Bearer ${accessToken}` }, body: form },
+  );
+  if (!response.ok) throw new Error("No se pudo guardar el diagrama en Drive.");
+}
+
+// Dibuja un bloque ```mermaid de la respuesta del profesor como un diagrama visual (esquemas,
+// mapas conceptuales, árboles de temas, etc.), en vez de mostrar el código crudo.
+function MermaidDiagram({ code }: { code: string }) {
+  const [svg, setSvg] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const idRef = useRef(`mermaid-${Math.random().toString(36).slice(2)}`);
+  const driveCtx = useContext(MermaidDriveContext);
+
+  useEffect(() => {
+    let cancelled = false;
+    setSvg(null);
+    setError(null);
+    getMermaid()
+      .then((mermaid) => mermaid.render(idRef.current, code))
+      .then(({ svg: renderedSvg }) => {
+        if (!cancelled) setSvg(renderedSvg);
+      })
+      .catch((e: any) => {
+        if (!cancelled) setError(e?.message || "No se pudo dibujar el diagrama.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [code]);
+
+  if (error) {
+    return (
+      <pre className="bg-zinc-950 text-red-400 p-3 rounded-xl text-[10px] font-mono overflow-x-auto my-2.5 border border-red-900/50 whitespace-pre-wrap">
+        ⚠️ {error}
+      </pre>
+    );
+  }
+
+  if (!svg) {
+    return (
+      <div className="flex items-center gap-2 text-[10px] text-zinc-400 py-3">
+        <Loader2 className="w-3 h-3 animate-spin" />
+        <span>Dibujando diagrama...</span>
+      </div>
+    );
+  }
+
+  const handleSaveToDrive = async () => {
+    if (!svg || !driveCtx?.accessToken || !driveCtx?.folderId || isSaving) return;
+    setIsSaving(true);
+    try {
+      const pdfBlob = await svgToPdfBlob(svg);
+      await uploadPdfToDrive(pdfBlob, driveCtx.accessToken, driveCtx.folderId);
+      driveCtx.onSaved();
+    } catch (e: any) {
+      driveCtx.onError(e?.message || "No se pudo guardar el diagrama en Drive.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="my-2.5">
+      <div
+        className="mermaid-diagram p-3 rounded-xl bg-zinc-950 border border-zinc-800 overflow-x-auto [&_svg]:max-w-none"
+        dangerouslySetInnerHTML={{ __html: svg }}
+      />
+      {driveCtx?.accessToken && driveCtx?.folderId && (
+        <button
+          type="button"
+          onClick={handleSaveToDrive}
+          disabled={isSaving}
+          className="mt-1.5 flex items-center gap-1.5 text-[10px] font-bold text-primary hover:text-primary-hover disabled:opacity-50 transition-colors cursor-pointer"
+        >
+          {isSaving ? (
+            <Loader2 className="w-3 h-3 animate-spin" />
+          ) : (
+            <Download className="w-3 h-3" />
+          )}
+          <span>{isSaving ? "Guardando..." : "Guardar en Drive (PDF)"}</span>
+        </button>
+      )}
+    </div>
+  );
+}
+
 // Lightweight parser for simple Markdown from Gemini responses
 const renderMarkdown = (text: string) => {
   if (!text) return null;
@@ -101,6 +276,7 @@ const renderMarkdown = (text: string) => {
   const lines = text.split("\n");
   let inCodeBlock = false;
   let codeLines: string[] = [];
+  let codeLang = "";
 
   return lines
     .map((line, idx) => {
@@ -109,7 +285,12 @@ const renderMarkdown = (text: string) => {
         if (inCodeBlock) {
           inCodeBlock = false;
           const codeContent = codeLines.join("\n");
+          const lang = codeLang;
           codeLines = [];
+          codeLang = "";
+          if (lang === "mermaid") {
+            return <MermaidDiagram key={idx} code={codeContent} />;
+          }
           return (
             <pre
               key={idx}
@@ -120,6 +301,7 @@ const renderMarkdown = (text: string) => {
           );
         } else {
           inCodeBlock = true;
+          codeLang = line.trim().replace(/^```/, "").trim().toLowerCase();
           return null;
         }
       }
@@ -302,9 +484,18 @@ export default function DriveFolderVisualizer({
 
   // Gemini Professor Chatbot State
   const [isChatOpen, setIsChatOpen] = useState(false);
+  // Modo "expandido": el chat se acopla como panel lateral (1/4 de la pantalla en desktop, para
+  // dejar el resto libre para leer el PDF/apunte abierto al lado).
+  const [isChatExpanded, setIsChatExpanded] = useState(false);
   const [chatInputValue, setChatInputValue] = useState("");
   const [isChatSending, setIsChatSending] = useState(false);
   const [selectedFileContent, setSelectedFileContent] = useState("");
+  // PDF/imagen del archivo abierto, en base64, para que Gemini los lea de forma multimodal
+  // (no solo el texto extraído — también diagramas, tablas o texto dentro de imágenes/escaneos).
+  const [selectedFileInlineData, setSelectedFileInlineData] = useState<{
+    mimeType: string;
+    data: string;
+  } | null>(null);
   const [isReadingFileContent, setIsReadingFileContent] = useState(false);
 
   const GEMINI_GREETING_TEXT =
@@ -379,7 +570,10 @@ export default function DriveFolderVisualizer({
       "gemini_chat_sessions",
       (items: GeminiChatSession[]) => {
         setChatSessions(
-          [...items].sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""))
+          [...items].sort((a, b) => {
+            if (!!b.pinned !== !!a.pinned) return (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0);
+            return (b.updatedAt || "").localeCompare(a.updatedAt || "");
+          })
         );
       }
     );
@@ -390,6 +584,14 @@ export default function DriveFolderVisualizer({
       } catch (_) {}
     };
   }, [user]);
+
+  // Ref con la última lista de sesiones conocida, para leerla desde el efecto de autoguardado
+  // (más abajo) sin tener que agregar chatSessions a sus dependencias — eso lo dispararía de
+  // nuevo cada vez que llega una actualización remota, no solo cuando cambian los mensajes.
+  const chatSessionsRef = useRef<GeminiChatSession[]>([]);
+  useEffect(() => {
+    chatSessionsRef.current = chatSessions;
+  }, [chatSessions]);
 
   // Auto-guarda la sesión de chat actual cada vez que hay un mensaje nuevo (a partir del
   // primer intercambio real; el saludo inicial solo no cuenta como sesión para no llenar el
@@ -406,14 +608,18 @@ export default function DriveFolderVisualizer({
       currentSessionCreatedAtRef.current = new Date().toISOString();
     }
 
-    const firstUserMessage = chatMessages.find((m) => m.sender === "user");
-    const title = firstUserMessage
-      ? firstUserMessage.text.slice(0, 60)
-      : "Nueva conversación";
+    const existing = chatSessionsRef.current.find((s) => s.id === currentSessionIdRef.current);
+    let title = existing?.title;
+    if (!existing?.customTitle) {
+      const firstUserMessage = chatMessages.find((m) => m.sender === "user");
+      title = firstUserMessage ? firstUserMessage.text.slice(0, 60) : "Nueva conversación";
+    }
 
     saveItemToFirestore(getActiveUserId(), "gemini_chat_sessions", {
       id: currentSessionIdRef.current,
       title,
+      customTitle: existing?.customTitle || false,
+      pinned: existing?.pinned || false,
       messages: chatMessages,
       createdAt: currentSessionCreatedAtRef.current,
       updatedAt: new Date().toISOString(),
@@ -444,6 +650,49 @@ export default function DriveFolderVisualizer({
       setChatMessages([createGreetingMessage()]);
     }
   };
+
+  const handleTogglePinChatSession = (session: GeminiChatSession, e: React.MouseEvent) => {
+    e.stopPropagation();
+    saveItemToFirestore(getActiveUserId(), "gemini_chat_sessions", {
+      ...session,
+      pinned: !session.pinned,
+    }).catch(() => {});
+  };
+
+  const [renamingSessionId, setRenamingSessionId] = useState<string | null>(null);
+  const [sessionRenameValue, setSessionRenameValue] = useState("");
+
+  const handleStartRenameChatSession = (session: GeminiChatSession, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setRenamingSessionId(session.id);
+    setSessionRenameValue(session.title || "");
+  };
+
+  const handleConfirmRenameChatSession = (session: GeminiChatSession) => {
+    const trimmed = sessionRenameValue.trim();
+    setRenamingSessionId(null);
+    if (!trimmed || trimmed === session.title) return;
+    saveItemToFirestore(getActiveUserId(), "gemini_chat_sessions", {
+      ...session,
+      title: trimmed,
+      customTitle: true,
+    }).catch(() => {});
+  };
+
+  // Contexto para que los diagramas Mermaid del chat puedan guardarse como PDF en la carpeta de
+  // Drive actualmente abierta (solo disponible cuando hay una carpeta abierta, ver MermaidDiagram).
+  const mermaidDriveContextValue = useMemo(
+    () => ({
+      accessToken,
+      folderId: currentFolderId,
+      onSaved: () => {
+        setSuccessMsg("Diagrama guardado en Drive como PDF.");
+        handleRefresh();
+      },
+      onError: (msg: string) => setErrorMsg(msg),
+    }),
+    [accessToken, currentFolderId],
+  );
 
   // When token is available, search or initialize the "1 - Facultad" folder
   useEffect(() => {
@@ -500,12 +749,41 @@ export default function DriveFolderVisualizer({
     }
   }, [accessToken, selectedFile, viewerMode]);
 
+  // Descarga un archivo de Drive y lo devuelve como base64 puro (sin el prefijo "data:...;base64,"),
+  // para adjuntarlo como inlineData multimodal en el pedido a Gemini.
+  const fetchFileAsBase64 = async (fileId: string): Promise<string> => {
+    const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!response.ok) throw new Error("No se pudo descargar el archivo.");
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const result = reader.result as string;
+        resolve(result.split(",")[1] || "");
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  };
+
+  // Tamaño máximo de archivo que se adjunta directamente (en bytes) al pedirle a Gemini que lo
+  // lea — más grande que esto y el pedido HTTP se vuelve muy pesado (Netlify Functions rechaza
+  // bodies grandes), así que se avisa en vez de intentarlo.
+  const GEMINI_INLINE_FILE_MAX_BYTES = 4 * 1024 * 1024;
+
   // Load content of selected file for Gemini Professor Context
   const loadSelectedFileContent = async (file: GoogleDriveFile) => {
     if (!accessToken) return;
     setIsReadingFileContent(true);
     setSelectedFileContent("");
+    setSelectedFileInlineData(null);
     try {
+      const isVisualFormat =
+        file.mimeType === "application/pdf" || file.mimeType.startsWith("image/");
+
       if (isPlainTextEditableFormat(file.mimeType, file.name)) {
         const url = `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`;
         const response = await fetch(url, {
@@ -523,6 +801,27 @@ export default function DriveFolderVisualizer({
         if (response.ok) {
           const text = await response.text();
           setSelectedFileContent(text);
+        }
+      } else if (isVisualFormat) {
+        // PDFs e imágenes se adjuntan tal cual (no se les extrae texto acá) — Gemini puede leer
+        // directamente el contenido visual, incluyendo imágenes, tablas o texto escaneado.
+        const sizeBytes = file.size ? parseInt(file.size, 10) : 0;
+        if (sizeBytes > 0 && sizeBytes <= GEMINI_INLINE_FILE_MAX_BYTES) {
+          try {
+            const base64 = await fetchFileAsBase64(file.id);
+            setSelectedFileInlineData({ mimeType: file.mimeType, data: base64 });
+            setSelectedFileContent(
+              `[Archivo: ${file.name} — se adjunta el contenido visual completo (imágenes, tablas y texto escaneado incluidos) para que lo leas directamente.]`,
+            );
+          } catch (e) {
+            setSelectedFileContent(
+              `[Archivo: ${file.name} | Tipo de archivo: ${file.mimeType} — no se pudo adjuntar para lectura directa.]`,
+            );
+          }
+        } else {
+          setSelectedFileContent(
+            `[Archivo: ${file.name} | Tipo de archivo: ${file.mimeType} — es demasiado grande (${formatBytes(file.size)}) para adjuntar y leer directamente.]`,
+          );
         }
       } else {
         // Non-text files, just provide basic description to the bot
@@ -543,6 +842,7 @@ export default function DriveFolderVisualizer({
       loadSelectedFileContent(selectedFile);
     } else {
       setSelectedFileContent("");
+      setSelectedFileInlineData(null);
     }
   }, [selectedFile, accessToken]);
 
@@ -631,10 +931,13 @@ export default function DriveFolderVisualizer({
           message: finalMessageText,
           history: formattedHistory,
           model: "gemini-3.5-flash",
+          files: selectedFileInlineData ? [selectedFileInlineData] : [],
           systemInstruction: `Eres "Prof. Gemini", un distinguido y empático profesor universitario y tutor académico personal.
 Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a comprender los conceptos de sus apuntes, guías y materias de la facultad.
 - Explica los temas de forma educativa, constructiva y con ejemplos claros.
 - En el bloque "CONTEXTO DE DOCUMENTOS ABIERTOS EN EL ESCRITORIO" se te provee el texto o estado de todos los documentos y apuntes que el estudiante tiene abiertos en pantalla (tanto la vista principal como las ventanas flotantes). Léelos detenidamente para relacionarlos, comparar conceptos, responder dudas o armar cuestionarios citando/nombrando el archivo correspondiente.
+- Cuando además se te adjunte el archivo (PDF o imagen) directamente, podés VER su contenido visual real — leé también las imágenes, diagramas, tablas o texto escaneado/manuscrito que contenga, no solo el texto plano.
+- Si te piden un esquema, mapa conceptual o diagrama de árbol de un tema, generalo como un bloque de código con \`\`\`mermaid usando la sintaxis de Mermaid (graph TD o mindmap), para que se pueda dibujar visualmente.
 - Adapta tu nivel explicativo al ámbito universitario. Sé paciente, motivador y utiliza un lenguaje amigable en español.
 - Responde con formato Markdown limpio (usa negritas, listas o bloques de código si es necesario para facilitar la lectura del estudiante).`,
         }),
@@ -1897,7 +2200,11 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
   }
 
   return (
-    <div className="space-y-6">
+    <div
+      className={`space-y-6 transition-all duration-300 ${
+        isChatOpen && isChatExpanded ? "sm:pr-[max(25vw,360px)]" : ""
+      }`}
+    >
       {/* Top Banner with Google Account Info & Disconnect option */}
       <div
         className={`p-4 rounded-2xl border flex flex-col sm:flex-row items-center justify-between gap-4 ${
@@ -3721,11 +4028,21 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
         )}
 
       {/* FLOATING ACTION BUTTON (FAB): Gemini Professor Assistant */}
-      <div className="fixed bottom-6 right-6 z-[9999] flex flex-col items-end">
-        {/* Chat Panel Overlay */}
+      <div
+        className={
+          isChatExpanded
+            ? "fixed inset-y-0 right-0 z-[9999] flex flex-col items-end"
+            : "fixed bottom-6 right-6 z-[9999] flex flex-col items-end"
+        }
+      >
+        {/* Chat Panel Overlay (o panel lateral acoplado, en modo expandido) */}
         {isChatOpen && (
           <div
-            className={`w-92 sm:w-96 h-[520px] max-h-[calc(100vh-8rem)] rounded-3xl border shadow-2xl overflow-hidden flex flex-col mb-4 transition-all duration-300 transform scale-100 origin-bottom-right ${
+            className={`border shadow-2xl overflow-hidden flex flex-col transition-all duration-300 transform ${
+              isChatExpanded
+                ? "w-full sm:w-[25vw] sm:min-w-[360px] h-full rounded-none sm:rounded-l-3xl mb-0"
+                : "w-92 sm:w-96 h-[520px] max-h-[calc(100vh-8rem)] rounded-3xl mb-4 scale-100 origin-bottom-right"
+            } ${
               darkMode
                 ? "bg-zinc-950/95 border-zinc-800 text-zinc-100"
                 : "bg-white/95 border-zinc-200 text-zinc-800"
@@ -3770,7 +4087,25 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
                   <SquarePen className="w-4 h-4" />
                 </button>
                 <button
-                  onClick={() => setIsChatOpen(false)}
+                  onClick={() => setIsChatExpanded((v) => !v)}
+                  title={isChatExpanded ? "Volver a ventana flotante" : "Expandir al costado (para leer el PDF al lado)"}
+                  className={`hidden sm:inline-flex p-1.5 rounded-full transition-all cursor-pointer ${
+                    isChatExpanded
+                      ? "bg-primary/10 text-primary"
+                      : "hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+                  }`}
+                >
+                  {isChatExpanded ? (
+                    <Minimize2 className="w-4 h-4" />
+                  ) : (
+                    <Maximize2 className="w-4 h-4" />
+                  )}
+                </button>
+                <button
+                  onClick={() => {
+                    setIsChatOpen(false);
+                    setIsChatExpanded(false);
+                  }}
                   className="p-1.5 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-all cursor-pointer"
                 >
                   <X className="w-4 h-4" />
@@ -3801,17 +4136,42 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
                   chatSessions.map((session) => (
                     <div
                       key={session.id}
-                      onClick={() => handleLoadChatSession(session)}
+                      onClick={() => renamingSessionId !== session.id && handleLoadChatSession(session)}
                       className={`p-3 rounded-2xl border flex items-start justify-between gap-2 transition-all cursor-pointer group ${
-                        darkMode
-                          ? "border-zinc-800 hover:border-primary/40 bg-zinc-900/40"
-                          : "border-zinc-200 hover:border-primary/40 bg-zinc-50"
+                        session.pinned
+                          ? "border-primary/40 bg-primary/5"
+                          : darkMode
+                            ? "border-zinc-800 hover:border-primary/40 bg-zinc-900/40"
+                            : "border-zinc-200 hover:border-primary/40 bg-zinc-50"
                       }`}
                     >
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs font-bold truncate">
-                          {session.title || "Nueva conversación"}
-                        </p>
+                        {renamingSessionId === session.id ? (
+                          <input
+                            type="text"
+                            autoFocus
+                            value={sessionRenameValue}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => setSessionRenameValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleConfirmRenameChatSession(session);
+                              if (e.key === "Escape") setRenamingSessionId(null);
+                            }}
+                            onBlur={() => handleConfirmRenameChatSession(session)}
+                            className={`w-full text-xs font-bold px-1.5 py-0.5 -ml-1.5 rounded-lg outline-none border ${
+                              darkMode
+                                ? "bg-zinc-950 border-primary/50 text-white"
+                                : "bg-white border-primary/50 text-zinc-900"
+                            }`}
+                          />
+                        ) : (
+                          <p className="text-xs font-bold truncate flex items-center gap-1">
+                            {session.pinned && (
+                              <Pin className="w-3 h-3 text-primary shrink-0 fill-current" />
+                            )}
+                            <span className="truncate">{session.title || "Nueva conversación"}</span>
+                          </p>
+                        )}
                         <p className="text-[10px] text-zinc-400 dark:text-zinc-500 font-medium mt-0.5">
                           {session.messages.length} mensajes ·{" "}
                           {new Date(session.updatedAt).toLocaleDateString("es-AR", {
@@ -3822,14 +4182,36 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
                           })}
                         </p>
                       </div>
-                      <button
-                        type="button"
-                        onClick={(e) => handleDeleteChatSession(session.id, e)}
-                        className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 hover:bg-red-500/10 transition-all cursor-pointer shrink-0 opacity-0 group-hover:opacity-100"
-                        title="Eliminar sesión"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          type="button"
+                          onClick={(e) => handleTogglePinChatSession(session, e)}
+                          className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                            session.pinned
+                              ? "text-primary hover:bg-primary/10"
+                              : "text-zinc-400 hover:text-primary hover:bg-primary/10"
+                          }`}
+                          title={session.pinned ? "Desfijar" : "Fijar"}
+                        >
+                          <Pin className={`w-3.5 h-3.5 ${session.pinned ? "fill-current" : ""}`} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => handleStartRenameChatSession(session, e)}
+                          className="p-1.5 rounded-lg text-zinc-400 hover:text-primary hover:bg-primary/10 transition-all cursor-pointer"
+                          title="Renombrar"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeleteChatSession(session.id, e)}
+                          className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 hover:bg-red-500/10 transition-all cursor-pointer"
+                          title="Eliminar sesión"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   ))
                 )}
@@ -3893,10 +4275,11 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
 
             {/* Messages Area */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <MermaidDriveContext.Provider value={mermaidDriveContextValue}>
               {chatMessages.map((msg, i) => (
                 <div
                   key={i}
-                  className={`flex gap-2.5 max-w-[85%] ${msg.sender === "user" ? "ml-auto flex-row-reverse" : "mr-auto"}`}
+                  className={`flex gap-2.5 max-w-[85%] min-w-0 ${msg.sender === "user" ? "ml-auto flex-row-reverse" : "mr-auto"}`}
                 >
                   <div
                     className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 shadow-sm ${
@@ -3913,9 +4296,9 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
                       <Bot className="w-3.5 h-3.5 text-primary" />
                     )}
                   </div>
-                  <div className="flex flex-col gap-1">
+                  <div className="flex flex-col gap-1 min-w-0">
                     <div
-                      className={`p-3 rounded-2xl text-xs leading-relaxed shadow-xs ${
+                      className={`p-3 rounded-2xl text-xs leading-relaxed shadow-xs min-w-0 break-words ${
                         msg.sender === "user"
                           ? "bg-primary text-white dark:text-blue-950 rounded-tr-none"
                           : darkMode
@@ -3924,11 +4307,11 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
                       }`}
                     >
                       {msg.sender === "bot" ? (
-                        <div className="space-y-1.5 whitespace-pre-wrap">
+                        <div className="space-y-1.5 whitespace-pre-wrap break-words">
                           {renderMarkdown(msg.text)}
                         </div>
                       ) : (
-                        <span className="whitespace-pre-wrap font-medium">
+                        <span className="whitespace-pre-wrap break-words font-medium">
                           {msg.text}
                         </span>
                       )}
@@ -3963,6 +4346,7 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
                 </div>
               )}
               <div ref={chatEndRef} />
+            </MermaidDriveContext.Provider>
             </div>
 
             {/* Quick Suggestions Pills (When any file text is available) */}
@@ -4059,28 +4443,31 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
           </div>
         )}
 
-        {/* Floating Button Button */}
-        <button
-          onClick={() => setIsChatOpen(!isChatOpen)}
-          className="w-13 h-13 rounded-full bg-primary hover:bg-primary-hover text-white dark:text-blue-950 shadow-xl shadow-primary/20 dark:shadow-indigo-950/40 flex items-center justify-center border border-white/10 cursor-pointer hover:scale-105 active:scale-95 transition-all duration-300 relative"
-          title="Profesor Gemini - Consultas y Tutorías"
-        >
-          {isChatOpen ? (
-            <X className="w-5 h-5" />
-          ) : (
-            <GraduationCap className="w-5 h-5 animate-pulse" />
-          )}
+        {/* Floating Button Button (oculto en modo expandido: el panel ya está abierto y
+            acoplado, y este botón redondo no tiene un buen lugar dentro de ese layout) */}
+        {!(isChatOpen && isChatExpanded) && (
+          <button
+            onClick={() => setIsChatOpen(!isChatOpen)}
+            className="w-13 h-13 rounded-full bg-primary hover:bg-primary-hover text-white dark:text-blue-950 shadow-xl shadow-primary/20 dark:shadow-indigo-950/40 flex items-center justify-center border border-white/10 cursor-pointer hover:scale-105 active:scale-95 transition-all duration-300 relative"
+            title="Profesor Gemini - Consultas y Tutorías"
+          >
+            {isChatOpen ? (
+              <X className="w-5 h-5" />
+            ) : (
+              <GraduationCap className="w-5 h-5 animate-pulse" />
+            )}
 
-          {/* Active File Read Badge / Indicator */}
-          {selectedFile && !isChatOpen && (
-            <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-4 w-4 bg-primary border-2 border-zinc-900 text-[8px] font-bold text-white dark:text-blue-950 items-center justify-center">
-                ✓
+            {/* Active File Read Badge / Indicator */}
+            {selectedFile && !isChatOpen && (
+              <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-4 w-4 bg-primary border-2 border-zinc-900 text-[8px] font-bold text-white dark:text-blue-950 items-center justify-center">
+                  ✓
+                </span>
               </span>
-            </span>
-          )}
-        </button>
+            )}
+          </button>
+        )}
       </div>
     </div>
   );

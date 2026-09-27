@@ -2,6 +2,7 @@ import { TurnoCompromiso } from "../types";
 import { TEAMS, Team } from "../data/teams";
 import { saveCategoryToFirestore, getEffectiveUserId } from "./firestoreSyncService";
 import { FOOTBALL_TEAM_ESPN_IDS } from "../data/espnTeamIds";
+import { getTeamCachedEvents } from "./eventsService";
 
 export const TEAM_STADIUMS: Record<string, string> = {
   // Argentina
@@ -254,6 +255,25 @@ export async function generateMonthlyMatchesForTeam(
   const espnId = FOOTBALL_TEAM_ESPN_IDS[favoriteTeamName];
   if (!espnId) return matchItems;
 
+  // Id crudo de ESPN (sin el prefijo fb_/nba_ que le agrega el caché compartido) de cada
+  // partido ya agregado — para no duplicar un partido que aparezca en las dos fuentes de abajo.
+  const seenEventIds = new Set<string>();
+
+  const resolveVenueCoords = async (venue: string): Promise<{ lat: number | null; lon: number | null }> => {
+    try {
+      const geoRes = await fetch(`/.netlify/functions/geocode-place?q=${encodeURIComponent(venue)}`);
+      if (geoRes.ok) {
+        const geoData = await geoRes.json();
+        if (Array.isArray(geoData) && geoData.length > 0) {
+          return { lat: parseFloat(geoData[0].lat), lon: parseFloat(geoData[0].lon) };
+        }
+      }
+    } catch (_) {
+      // If geocoding fails, the match is still created — just without map coordinates.
+    }
+    return { lat: null, lon: null };
+  };
+
   try {
     const events = await fetchTeamScheduleAllCompetitions(teamObj, espnId);
 
@@ -280,20 +300,9 @@ export async function generateMonthlyMatchesForTeam(
       const venue = apiVenue && apiVenue.length > 3 ? apiVenue : getStadiumForTeam(homeName);
       const competitionName = ev.league?.name || leagueName;
 
-      let venueLat: number | null = null;
-      let venueLon: number | null = null;
-      try {
-        const geoRes = await fetch(`/.netlify/functions/geocode-place?q=${encodeURIComponent(venue)}`);
-        if (geoRes.ok) {
-          const geoData = await geoRes.json();
-          if (Array.isArray(geoData) && geoData.length > 0) {
-            venueLat = parseFloat(geoData[0].lat);
-            venueLon = parseFloat(geoData[0].lon);
-          }
-        }
-      } catch (_) {
-        // If geocoding fails, the match is still created — just without map coordinates.
-      }
+      const { lat: venueLat, lon: venueLon } = await resolveVenueCoords(venue);
+
+      if (ev.id) seenEventIds.add(String(ev.id));
 
       matchItems.push({
         id: `match-${favoriteTeamName.replace(/\s+/g, "_")}-${ev.id || dateStr}`,
@@ -315,6 +324,48 @@ export async function generateMonthlyMatchesForTeam(
     }
   } catch (e) {
     console.warn("[matchScheduler] Error fetching monthly matches from ESPN:", e);
+  }
+
+  // El endpoint de arriba (.../teams/{id}/schedule) tiene huecos reales confirmados en partidos
+  // próximos cercanos, sobre todo de copas (ver comentario de getTeamCachedEvents en
+  // eventsService.ts) — un partido puede aparecer en el widget "Próximo partido" (que ya usa ese
+  // caché, más confiable) y sin embargo faltar acá, dejando al usuario sin poder "agendarlo"
+  // aunque lo esté viendo en pantalla. Se complementa (nunca reemplaza — el caché solo cubre una
+  // ventana corta de días, no el mes entero) con cualquier partido del caché compartido que caiga
+  // en este mes y no haya salido ya del endpoint de arriba.
+  try {
+    const cachedEvents = await getTeamCachedEvents(espnId);
+    for (const cev of cachedEvents) {
+      const rawId = cev.id.replace(/^(fb_|nba_)/, "");
+      if (seenEventIds.has(rawId)) continue;
+
+      const eventDate = new Date(`${cev.date}T${cev.time || "00:00"}`);
+      if (isNaN(eventDate.getTime()) || eventDate < monthStart || eventDate > monthEnd) continue;
+
+      const venue = cev.venue && cev.venue.length > 3 ? cev.venue : getStadiumForTeam(cev.homeTeam);
+      const { lat: venueLat, lon: venueLon } = await resolveVenueCoords(venue);
+
+      seenEventIds.add(rawId);
+      matchItems.push({
+        id: `match-${favoriteTeamName.replace(/\s+/g, "_")}-${rawId}`,
+        estatus: cev.status === "finished",
+        descripcion: `${cev.homeTeam} vs ${cev.awayTeam}`,
+        categoria: "Ocio",
+        fecha: `${cev.date}T${cev.time || "00:00"}`,
+        lugar: venue,
+        lat: venueLat,
+        lon: venueLon,
+        informacionPersonalizada: JSON.stringify({
+          homeTeam: cev.homeTeam,
+          homeLogo: getLogoForTeam(cev.homeTeam, cev.homeLogo),
+          awayTeam: cev.awayTeam,
+          awayLogo: getLogoForTeam(cev.awayTeam, cev.awayLogo),
+          competition: cev.competitionName || leagueName,
+        }),
+      });
+    }
+  } catch (e) {
+    console.warn("[matchScheduler] Error merging cached sport events into monthly matches:", e);
   }
 
   return matchItems;
