@@ -21,7 +21,7 @@ export const handler: Handler = async (event) => {
 
   try {
     const body = JSON.parse(event.body || "{}");
-    const { message, history, model, systemInstruction, enableSearch, enableMaps, userLocation } = body;
+    const { message, history, model, systemInstruction, enableSearch, enableMaps, userLocation, files } = body;
 
     if (!message || typeof message !== "string") {
       return { statusCode: 400, body: JSON.stringify({ error: "Falta el mensaje." }) };
@@ -61,7 +61,15 @@ export const handler: Handler = async (event) => {
         });
       });
     }
-    formattedContents.push({ role: "user", parts: [{ text: message }] });
+    const userParts: any[] = [{ text: message }];
+    if (Array.isArray(files)) {
+      files.forEach((f: any) => {
+        if (f?.mimeType && f?.data) {
+          userParts.push({ inlineData: { mimeType: f.mimeType, data: f.data } });
+        }
+      });
+    }
+    formattedContents.push({ role: "user", parts: userParts });
 
     let response;
     try {

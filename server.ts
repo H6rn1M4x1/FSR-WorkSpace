@@ -827,7 +827,7 @@ app.get("/api/reverse-geocode", async (req, res) => {
 // 2. Chatbot with grounding, system instructions and models selection
 app.post("/api/gemini/chat", async (req, res) => {
   try {
-    const { message, history, model, systemInstruction, enableSearch, enableMaps, userLocation } = req.body;
+    const { message, history, model, systemInstruction, enableSearch, enableMaps, userLocation, files } = req.body;
     const ai = getGeminiClient();
 
     const selectedModel = model || "gemini-3.5-flash";
@@ -866,9 +866,17 @@ app.post("/api/gemini/chat", async (req, res) => {
       });
     }
 
+    const userParts: any[] = [{ text: message }];
+    if (Array.isArray(files)) {
+      files.forEach((f: any) => {
+        if (f?.mimeType && f?.data) {
+          userParts.push({ inlineData: { mimeType: f.mimeType, data: f.data } });
+        }
+      });
+    }
     formattedContents.push({
       role: "user",
-      parts: [{ text: message }],
+      parts: userParts,
     });
 
     let response;
