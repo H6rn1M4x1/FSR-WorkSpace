@@ -491,14 +491,13 @@ export default function DriveFolderVisualizer({
   // dejar el resto libre para leer el PDF/apunte abierto al lado).
   const [isChatExpanded, setIsChatExpanded] = useState(false);
   // Referencias para que, en modo expandido, el panel del chat mida exactamente la misma altura
-  // que el archivo abierto y quede separado del borde derecho la misma distancia que el
-  // contenido principal tiene del borde izquierdo (mismo "gutter" a los dos lados).
+  // que el archivo abierto, anclado (position: absolute) dentro del contenedor raíz para
+  // scrollear junto con la página en vez de recalcularse por cada evento de scroll.
   const rootRef = useRef<HTMLDivElement>(null);
   const fileViewerRef = useRef<HTMLDivElement>(null);
   const [chatDockLayout, setChatDockLayout] = useState<{
     top: number;
     height: number;
-    rightGutter: number;
   } | null>(null);
   const [chatInputValue, setChatInputValue] = useState("");
   const [isChatSending, setIsChatSending] = useState(false);
@@ -650,13 +649,18 @@ export default function DriveFolderVisualizer({
       messages: chatMessages,
       createdAt: currentSessionCreatedAtRef.current,
       updatedAt: new Date().toISOString(),
-    }).catch(() => {});
+    }).catch((err) => {
+      console.error("[Profesor Gemini] Error al guardar la sesión en el historial:", err);
+      setErrorMsg("No se pudo guardar la conversación en el historial.");
+    });
   }, [chatMessages]);
 
-  // En modo expandido, mide el archivo abierto (si hay uno) y el margen izquierdo del contenido
-  // principal, para que el panel del chat llegue justo hasta esa altura y quede separado del
-  // borde derecho por el mismo gutter que el contenido tiene del izquierdo. Sin archivo abierto,
-  // ocupa la altura completa de la pantalla (no hay con qué alinearlo).
+  // En modo expandido, el panel del chat se posiciona como position:absolute (no fixed) dentro
+  // del contenedor raíz (position:relative) — así queda anclado al flujo normal de la página y
+  // scrollea junto con el resto del contenido de forma nativa, sin recalcular nada por scroll
+  // (esa era la causa de que "se moviera"/tildara al scrollear con el enfoque anterior basado en
+  // position:fixed + un listener de scroll). Se mide el archivo abierto (si hay uno) para que el
+  // panel llegue justo hasta esa altura; sin archivo abierto, ocupa el alto de la pantalla.
   useEffect(() => {
     if (!isChatOpen || !isChatExpanded) {
       setChatDockLayout(null);
@@ -667,12 +671,12 @@ export default function DriveFolderVisualizer({
     const recompute = () => {
       rafId = null;
       const rootRect = rootRef.current?.getBoundingClientRect();
-      const rightGutter = rootRect ? Math.max(rootRect.left, 0) : 0;
+      if (!rootRect) return;
       const fileRect = selectedFile ? fileViewerRef.current?.getBoundingClientRect() : null;
       if (fileRect) {
-        setChatDockLayout({ top: Math.max(fileRect.top, 0), height: fileRect.height, rightGutter });
+        setChatDockLayout({ top: Math.max(fileRect.top - rootRect.top, 0), height: fileRect.height });
       } else {
-        setChatDockLayout({ top: 0, height: window.innerHeight, rightGutter });
+        setChatDockLayout({ top: 0, height: window.innerHeight });
       }
     };
     const scheduleRecompute = () => {
@@ -681,16 +685,13 @@ export default function DriveFolderVisualizer({
 
     recompute();
     window.addEventListener("resize", scheduleRecompute);
-    window.addEventListener("scroll", scheduleRecompute, true);
-    // El contenido (ej. el visor del PDF cargando) puede cambiar de alto sin disparar resize ni
-    // scroll — un chequeo periódico liviano cubre ese caso sin necesitar un ResizeObserver por
-    // archivo.
+    // El contenido (ej. el visor del PDF cargando) puede cambiar de alto sin disparar resize —
+    // un chequeo periódico liviano cubre ese caso sin necesitar un ResizeObserver por archivo.
     const intervalId = window.setInterval(recompute, 500);
 
     return () => {
       if (rafId != null) cancelAnimationFrame(rafId);
       window.removeEventListener("resize", scheduleRecompute);
-      window.removeEventListener("scroll", scheduleRecompute, true);
       window.clearInterval(intervalId);
     };
   }, [isChatOpen, isChatExpanded, selectedFile]);
@@ -1085,36 +1086,55 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
     recognition.continuous = false;
     recognition.interimResults = true;
 
+    // Variable local (no estado de React) para que onend pueda leer el último transcripto sin
+    // depender de un valor de chatInputValue potencialmente desactualizado por el closure.
+    let finalTranscript = "";
+
     recognition.onresult = (event: any) => {
       let transcript = "";
       for (let i = 0; i < event.results.length; i++) {
         transcript += event.results[i][0].transcript;
       }
+      finalTranscript = transcript;
       setChatInputValue(transcript);
     };
     recognition.onerror = () => setIsListening(false);
-    recognition.onend = () => setIsListening(false);
+    recognition.onend = () => {
+      setIsListening(false);
+      // Al terminar de hablar (no al cancelar manualmente sin decir nada), se envía solo.
+      const trimmed = finalTranscript.trim();
+      if (trimmed) {
+        setChatInputValue("");
+        triggerSendWithText(trimmed);
+      }
+    };
 
     speechRecognitionRef.current = recognition;
     setIsListening(true);
     recognition.start();
   };
 
-  // Lee en voz alta una respuesta del profesor (SpeechSynthesis, nativa del navegador). Se corta
-  // cualquier lectura anterior en curso para no superponer voces.
+  // Lee en voz alta una respuesta del profesor (SpeechSynthesis, nativa del navegador).
   const speakText = (text: string) => {
     if (typeof window === "undefined" || !window.speechSynthesis) return;
     try {
-      window.speechSynthesis.cancel();
       const clean = text
         .replace(/```[\s\S]*?```/g, "")
         .replace(/\*\*(.*?)\*\*/g, "$1")
         .replace(/[#>*_`]/g, "")
         .trim();
       if (!clean) return;
-      const utterance = new SpeechSynthesisUtterance(clean);
-      utterance.lang = "es-AR";
-      window.speechSynthesis.speak(utterance);
+      // Cancelar y hablar en el mismo tick hace que algunos navegadores (Chrome incluido)
+      // descarten el utterance nuevo en silencio — solo se cancela si hay algo sonando, y el
+      // speak() real se dispara en el siguiente tick.
+      if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+        window.speechSynthesis.cancel();
+      }
+      setTimeout(() => {
+        const utterance = new SpeechSynthesisUtterance(clean);
+        utterance.lang = "es-AR";
+        window.speechSynthesis.speak(utterance);
+      }, 60);
     } catch (_) {
       // Text-to-speech no disponible en este navegador — se ignora silenciosamente.
     }
@@ -1128,6 +1148,12 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
       } catch (_) {}
       if (!next && typeof window !== "undefined" && window.speechSynthesis) {
         window.speechSynthesis.cancel();
+      } else if (next) {
+        // Hablar acá, disparado directo por el click del usuario, "desbloquea" el motor de voz
+        // en navegadores que solo permiten SpeechSynthesis dentro de un gesto del usuario — sin
+        // esto, la primera lectura de una respuesta (que llega de forma asíncrona, fuera de
+        // cualquier gesto) puede quedar silenciada sin ningún error.
+        speakText("Lectura en voz alta activada.");
       }
       return next;
     });
@@ -2373,7 +2399,7 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
   return (
     <div
       ref={rootRef}
-      className={`space-y-6 transition-all duration-300 ${
+      className={`relative space-y-6 transition-all duration-300 ${
         isChatOpen && isChatExpanded ? "sm:pr-[max(25vw,360px)]" : ""
       }`}
     >
@@ -4201,10 +4227,13 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
         )}
 
       {/* FLOATING ACTION BUTTON (FAB): Gemini Professor Assistant */}
+      {/* En modo expandido es position:absolute (no fixed) dentro del contenedor raíz
+          (position:relative), para que scrollee junto con la página en vez de quedar anclado
+          al viewport — ver el efecto que calcula chatDockLayout más arriba. */}
       <div
         className={
           isChatExpanded
-            ? "fixed z-[9999] flex flex-col items-end"
+            ? "absolute right-0 z-[60] flex flex-col items-end"
             : "fixed bottom-6 right-6 z-[9999] flex flex-col items-end"
         }
         style={
@@ -4212,7 +4241,6 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
             ? {
                 top: chatDockLayout?.top ?? 0,
                 height: chatDockLayout?.height ?? "100vh",
-                right: chatDockLayout?.rightGutter ?? 0,
               }
             : undefined
         }
