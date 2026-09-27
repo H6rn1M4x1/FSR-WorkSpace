@@ -94,6 +94,12 @@ type CategoryCallback = (items: any[]) => void;
 interface SubscriptionGroup {
   callbacks: Set<CategoryCallback>;
   lastData: any[] | null;
+  // Se incrementa en cada escritura optimista (save/delete). refetchCategory lo usa para
+  // descartar una respuesta del servidor que llegó tarde: si alguien escribió algo más nuevo
+  // mientras ese pedido estaba en vuelo, aplicar esa respuesta pisaría el dato recién escrito
+  // con una foto vieja del servidor (confirmado como causa real de "se guardó pero desapareció"
+  // cuando se llama a saveItemToFirestore muy poco después de suscribirse/refetchear).
+  version: number;
 }
 
 const activeSubscriptions: Record<string, SubscriptionGroup> = {};
@@ -230,6 +236,7 @@ export async function refetchCategory(userId: string, category: string, forceSer
   const effectiveUserId = getEffectiveUserId(userId);
   const subKey = `${effectiveUserId}_${category}`;
   const group = activeSubscriptions[subKey];
+  const versionAtStart = group?.version ?? 0;
 
   const colRef = collection(db, "users", effectiveUserId, category);
   try {
@@ -253,18 +260,22 @@ export async function refetchCategory(userId: string, category: string, forceSer
       });
     }
 
-    if (group) {
-      group.lastData = remoteItems;
-      group.callbacks.forEach((cb) => {
+    // Si en el medio se hizo una escritura optimista (save/delete) más nueva que este pedido,
+    // aplicar esta respuesta (memoria Y localStorage) la pisaría con una foto vieja del
+    // servidor — se descarta por completo en vez de aplicarla (el estado optimista ya es más
+    // reciente que lo que este refetch iba a traer).
+    if (!group || group.version === versionAtStart) {
+      if (group) group.lastData = remoteItems;
+      group?.callbacks.forEach((cb) => {
         try {
           cb(remoteItems);
         } catch (e) {
           console.error(`[FirestoreSync] Callback error for category ${category}:`, e);
         }
       });
+      setStoredDataSilent(category, remoteItems);
     }
 
-    setStoredDataSilent(category, remoteItems);
     return remoteItems;
   } catch (error: any) {
     console.warn(`[FirestoreSync] Refetch error for ${category}:`, error?.message || error);
@@ -313,6 +324,7 @@ export async function saveItemToFirestore(
       currentList.push(sanitized);
     }
     group.lastData = currentList;
+    group.version++;
     setStoredDataSilent(category, currentList);
 
     // Trigger local React state callbacks immediately (Instant UI)
@@ -351,6 +363,7 @@ export async function saveItemToFirestore(
     // REVERT OPTIMISTIC UPDATE ON ERROR
     if (group && previousData !== null) {
       group.lastData = previousData;
+      group.version++;
       setStoredDataSilent(category, previousData);
       group.callbacks.forEach((cb) => {
         try { cb(previousData); } catch (_) {}
@@ -399,6 +412,7 @@ export async function deleteItemFromFirestore(
   if (group && group.lastData) {
     const updatedList = group.lastData.filter((i) => String(i.id) !== docId);
     group.lastData = updatedList;
+    group.version++;
     setStoredDataSilent(category, updatedList);
 
     group.callbacks.forEach((cb) => {
@@ -432,6 +446,7 @@ export async function deleteItemFromFirestore(
     // REVERT OPTIMISTIC UPDATE ON ERROR
     if (group && previousData !== null) {
       group.lastData = previousData;
+      group.version++;
       setStoredDataSilent(category, previousData);
       group.callbacks.forEach((cb) => {
         try { cb(previousData); } catch (_) {}
@@ -504,7 +519,8 @@ export function subscribeToCategory(
 
     const group: SubscriptionGroup = {
       callbacks,
-      lastData: null
+      lastData: null,
+      version: 0
     };
 
     activeSubscriptions[subKey] = group;

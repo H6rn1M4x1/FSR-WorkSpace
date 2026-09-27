@@ -48,6 +48,9 @@ import {
   History,
   SquarePen,
   Pin,
+  Mic,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import {
   googleSignIn,
@@ -487,8 +490,30 @@ export default function DriveFolderVisualizer({
   // Modo "expandido": el chat se acopla como panel lateral (1/4 de la pantalla en desktop, para
   // dejar el resto libre para leer el PDF/apunte abierto al lado).
   const [isChatExpanded, setIsChatExpanded] = useState(false);
+  // Referencias para que, en modo expandido, el panel del chat mida exactamente la misma altura
+  // que el archivo abierto y quede separado del borde derecho la misma distancia que el
+  // contenido principal tiene del borde izquierdo (mismo "gutter" a los dos lados).
+  const rootRef = useRef<HTMLDivElement>(null);
+  const fileViewerRef = useRef<HTMLDivElement>(null);
+  const [chatDockLayout, setChatDockLayout] = useState<{
+    top: number;
+    height: number;
+    rightGutter: number;
+  } | null>(null);
   const [chatInputValue, setChatInputValue] = useState("");
   const [isChatSending, setIsChatSending] = useState(false);
+  // Dictado por voz (Web Speech API — nativo del navegador, sin backend) para escribir la
+  // consulta hablando en vez de tipeando.
+  const [isListening, setIsListening] = useState(false);
+  const speechRecognitionRef = useRef<any>(null);
+  // Lectura en voz alta de las respuestas del profesor (opt-in, se recuerda entre sesiones).
+  const [isVoiceReplyEnabled, setIsVoiceReplyEnabled] = useState(() => {
+    try {
+      return localStorage.getItem("gemini_voice_reply_enabled") === "true";
+    } catch (_) {
+      return false;
+    }
+  });
   const [selectedFileContent, setSelectedFileContent] = useState("");
   // PDF/imagen del archivo abierto, en base64, para que Gemini los lea de forma multimodal
   // (no solo el texto extraído — también diagramas, tablas o texto dentro de imágenes/escaneos).
@@ -519,6 +544,8 @@ export default function DriveFolderVisualizer({
   // Evita re-guardar la sesión inmediatamente después de cargarla o de empezar una nueva
   // (ya está guardada tal cual, o todavía no tiene mensajes propios que guardar).
   const skipNextPersistRef = useRef(false);
+  // Mismo criterio que arriba pero para no LEER en voz alta toda una sesión recién cargada.
+  const skipNextSpeechRef = useRef(false);
 
   const getActiveUserId = () =>
     (auth.currentUser?.email || auth.currentUser?.uid || "hernanmaximiliano10@gmail.com")
@@ -626,9 +653,52 @@ export default function DriveFolderVisualizer({
     }).catch(() => {});
   }, [chatMessages]);
 
+  // En modo expandido, mide el archivo abierto (si hay uno) y el margen izquierdo del contenido
+  // principal, para que el panel del chat llegue justo hasta esa altura y quede separado del
+  // borde derecho por el mismo gutter que el contenido tiene del izquierdo. Sin archivo abierto,
+  // ocupa la altura completa de la pantalla (no hay con qué alinearlo).
+  useEffect(() => {
+    if (!isChatOpen || !isChatExpanded) {
+      setChatDockLayout(null);
+      return;
+    }
+
+    let rafId: number | null = null;
+    const recompute = () => {
+      rafId = null;
+      const rootRect = rootRef.current?.getBoundingClientRect();
+      const rightGutter = rootRect ? Math.max(rootRect.left, 0) : 0;
+      const fileRect = selectedFile ? fileViewerRef.current?.getBoundingClientRect() : null;
+      if (fileRect) {
+        setChatDockLayout({ top: Math.max(fileRect.top, 0), height: fileRect.height, rightGutter });
+      } else {
+        setChatDockLayout({ top: 0, height: window.innerHeight, rightGutter });
+      }
+    };
+    const scheduleRecompute = () => {
+      if (rafId == null) rafId = requestAnimationFrame(recompute);
+    };
+
+    recompute();
+    window.addEventListener("resize", scheduleRecompute);
+    window.addEventListener("scroll", scheduleRecompute, true);
+    // El contenido (ej. el visor del PDF cargando) puede cambiar de alto sin disparar resize ni
+    // scroll — un chequeo periódico liviano cubre ese caso sin necesitar un ResizeObserver por
+    // archivo.
+    const intervalId = window.setInterval(recompute, 500);
+
+    return () => {
+      if (rafId != null) cancelAnimationFrame(rafId);
+      window.removeEventListener("resize", scheduleRecompute);
+      window.removeEventListener("scroll", scheduleRecompute, true);
+      window.clearInterval(intervalId);
+    };
+  }, [isChatOpen, isChatExpanded, selectedFile]);
+
   const handleNewChatSession = () => {
     currentSessionIdRef.current = null;
     skipNextPersistRef.current = true;
+    skipNextSpeechRef.current = true;
     setChatMessages([createGreetingMessage()]);
     setShowChatHistory(false);
   };
@@ -637,6 +707,7 @@ export default function DriveFolderVisualizer({
     currentSessionIdRef.current = session.id;
     currentSessionCreatedAtRef.current = session.createdAt;
     skipNextPersistRef.current = true;
+    skipNextSpeechRef.current = true;
     setChatMessages(session.messages.length > 0 ? session.messages : [createGreetingMessage()]);
     setShowChatHistory(false);
   };
@@ -647,6 +718,7 @@ export default function DriveFolderVisualizer({
     if (currentSessionIdRef.current === id) {
       currentSessionIdRef.current = null;
       skipNextPersistRef.current = true;
+      skipNextSpeechRef.current = true;
       setChatMessages([createGreetingMessage()]);
     }
   };
@@ -991,6 +1063,105 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
     setChatInputValue("");
     await triggerSendWithText(userMessageText);
   };
+
+  // Dictado por voz para escribir la consulta hablando (Web Speech API, nativa del navegador —
+  // no requiere backend ni configuración adicional). Solo disponible en navegadores compatibles
+  // (Chrome/Edge; no Firefox ni Safari por ahora).
+  const handleToggleListening = () => {
+    const SpeechRecognitionCtor =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognitionCtor) {
+      setErrorMsg("El dictado por voz no está disponible en este navegador.");
+      return;
+    }
+
+    if (isListening) {
+      speechRecognitionRef.current?.stop();
+      return;
+    }
+
+    const recognition = new SpeechRecognitionCtor();
+    recognition.lang = "es-AR";
+    recognition.continuous = false;
+    recognition.interimResults = true;
+
+    recognition.onresult = (event: any) => {
+      let transcript = "";
+      for (let i = 0; i < event.results.length; i++) {
+        transcript += event.results[i][0].transcript;
+      }
+      setChatInputValue(transcript);
+    };
+    recognition.onerror = () => setIsListening(false);
+    recognition.onend = () => setIsListening(false);
+
+    speechRecognitionRef.current = recognition;
+    setIsListening(true);
+    recognition.start();
+  };
+
+  // Lee en voz alta una respuesta del profesor (SpeechSynthesis, nativa del navegador). Se corta
+  // cualquier lectura anterior en curso para no superponer voces.
+  const speakText = (text: string) => {
+    if (typeof window === "undefined" || !window.speechSynthesis) return;
+    try {
+      window.speechSynthesis.cancel();
+      const clean = text
+        .replace(/```[\s\S]*?```/g, "")
+        .replace(/\*\*(.*?)\*\*/g, "$1")
+        .replace(/[#>*_`]/g, "")
+        .trim();
+      if (!clean) return;
+      const utterance = new SpeechSynthesisUtterance(clean);
+      utterance.lang = "es-AR";
+      window.speechSynthesis.speak(utterance);
+    } catch (_) {
+      // Text-to-speech no disponible en este navegador — se ignora silenciosamente.
+    }
+  };
+
+  const handleToggleVoiceReply = () => {
+    setIsVoiceReplyEnabled((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("gemini_voice_reply_enabled", String(next));
+      } catch (_) {}
+      if (!next && typeof window !== "undefined" && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+      return next;
+    });
+  };
+
+  // Lee en voz alta cada respuesta NUEVA del profesor (no las que ya vienen de cargar una sesión
+  // guardada ni el saludo inicial), solo si el usuario habilitó la lectura en voz alta.
+  const prevChatMessageCountRef = useRef(chatMessages.length);
+  useEffect(() => {
+    if (skipNextSpeechRef.current) {
+      skipNextSpeechRef.current = false;
+      prevChatMessageCountRef.current = chatMessages.length;
+      return;
+    }
+    const grew = chatMessages.length > prevChatMessageCountRef.current;
+    prevChatMessageCountRef.current = chatMessages.length;
+    if (!grew || !isVoiceReplyEnabled) return;
+    const lastMessage = chatMessages[chatMessages.length - 1];
+    if (lastMessage?.sender === "bot") {
+      speakText(lastMessage.text);
+    }
+  }, [chatMessages, isVoiceReplyEnabled]);
+
+  // Corta cualquier lectura en voz alta y el dictado en curso al desmontar el componente.
+  useEffect(() => {
+    return () => {
+      try {
+        speechRecognitionRef.current?.stop();
+      } catch (_) {}
+      try {
+        window.speechSynthesis?.cancel();
+      } catch (_) {}
+    };
+  }, []);
 
   const fetchTextContent = async (fileId: string) => {
     setIsFetchingTextContent(true);
@@ -2201,6 +2372,7 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
 
   return (
     <div
+      ref={rootRef}
       className={`space-y-6 transition-all duration-300 ${
         isChatOpen && isChatExpanded ? "sm:pr-[max(25vw,360px)]" : ""
       }`}
@@ -2820,6 +2992,7 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
       {/* Embedded File Viewer & Editor Panel (Directly inside the page) */}
       {selectedFile && (
         <div
+          ref={fileViewerRef}
           className={`rounded-3xl border overflow-hidden p-6 ${
             darkMode
               ? "bg-zinc-900/30 border-zinc-800/80 text-zinc-100"
@@ -4031,8 +4204,17 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
       <div
         className={
           isChatExpanded
-            ? "fixed inset-y-0 right-0 z-[9999] flex flex-col items-end"
+            ? "fixed z-[9999] flex flex-col items-end"
             : "fixed bottom-6 right-6 z-[9999] flex flex-col items-end"
+        }
+        style={
+          isChatExpanded
+            ? {
+                top: chatDockLayout?.top ?? 0,
+                height: chatDockLayout?.height ?? "100vh",
+                right: chatDockLayout?.rightGutter ?? 0,
+              }
+            : undefined
         }
       >
         {/* Chat Panel Overlay (o panel lateral acoplado, en modo expandido) */}
@@ -4040,7 +4222,7 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
           <div
             className={`border shadow-2xl overflow-hidden flex flex-col transition-all duration-300 transform ${
               isChatExpanded
-                ? "w-full sm:w-[25vw] sm:min-w-[360px] h-full rounded-none sm:rounded-l-3xl mb-0"
+                ? "w-full sm:w-[25vw] sm:min-w-[360px] h-full rounded-3xl mb-0"
                 : "w-92 sm:w-96 h-[520px] max-h-[calc(100vh-8rem)] rounded-3xl mb-4 scale-100 origin-bottom-right"
             } ${
               darkMode
@@ -4085,6 +4267,21 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
                   className="p-1.5 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-all cursor-pointer"
                 >
                   <SquarePen className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={handleToggleVoiceReply}
+                  title={isVoiceReplyEnabled ? "Desactivar lectura en voz alta" : "Leer las respuestas en voz alta"}
+                  className={`p-1.5 rounded-full transition-all cursor-pointer ${
+                    isVoiceReplyEnabled
+                      ? "bg-primary/10 text-primary"
+                      : "hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+                  }`}
+                >
+                  {isVoiceReplyEnabled ? (
+                    <Volume2 className="w-4 h-4" />
+                  ) : (
+                    <VolumeX className="w-4 h-4" />
+                  )}
                 </button>
                 <button
                   onClick={() => setIsChatExpanded((v) => !v)}
@@ -4284,7 +4481,7 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
                   <div
                     className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 shadow-sm ${
                       msg.sender === "user"
-                        ? "bg-primary text-white dark:text-blue-950"
+                        ? "bg-primary text-black dark:text-white"
                         : darkMode
                           ? "bg-zinc-900 text-zinc-300"
                           : "bg-zinc-100 text-zinc-700"
@@ -4300,7 +4497,7 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
                     <div
                       className={`p-3 rounded-2xl text-xs leading-relaxed shadow-xs min-w-0 break-words ${
                         msg.sender === "user"
-                          ? "bg-primary text-white dark:text-blue-950 rounded-tr-none"
+                          ? "bg-primary text-black dark:text-white rounded-tr-none"
                           : darkMode
                             ? "bg-zinc-900/60 border border-zinc-800 text-zinc-200 rounded-tl-none"
                             : "bg-zinc-100/80 text-zinc-800 rounded-tl-none"
@@ -4430,6 +4627,19 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
                     : "bg-zinc-50 border-zinc-200 text-zinc-800"
                 }`}
               />
+              <button
+                type="button"
+                onClick={handleToggleListening}
+                disabled={isChatSending}
+                title={isListening ? "Detener dictado" : "Hablar en vez de escribir"}
+                className={`p-2.5 rounded-full transition-all cursor-pointer shadow-md flex items-center justify-center shrink-0 disabled:opacity-40 ${
+                  isListening
+                    ? "bg-red-500 text-white animate-pulse"
+                    : "bg-primary/10 text-primary hover:bg-primary/20"
+                }`}
+              >
+                <Mic className="w-3.5 h-3.5" />
+              </button>
               <button
                 type="submit"
                 disabled={isChatSending || !chatInputValue.trim()}
