@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import { generateUniqueId } from "../utils/id";
 import { auth } from "../lib/supabase";
@@ -287,9 +287,11 @@ export const AddressBookModal: React.FC<AddressBookModalProps> = ({
   useLockBodyScroll(isOpen);
   const { showToast } = useToast();
   const [entries, setEntries] = useState<AddressEntry[]>([]);
-  // Copia local ordenada, sincronizada con `entries` (nueva dirección, o cambios que lleguen
-  // de otro dispositivo) y reindexada al mover una posición con las flechas subir/bajar.
-  const [orderedEntries, setOrderedEntries] = useState<AddressEntry[]>([]);
+  // Derivado (no un segundo estado) para que reordenar sea un solo cambio de estado — con un
+  // useState+useEffect separado, el re-render extra del efecto llegaba a interrumpir la
+  // animación de framer-motion a mitad de camino y la fila terminaba "saltando" en vez de
+  // deslizarse a la nueva posición.
+  const orderedEntries = useMemo(() => sortAddressesByOrder(entries), [entries]);
   // Resalta brevemente la fila recién movida para que el cambio de posición se note.
   const [justMovedId, setJustMovedId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -346,10 +348,6 @@ export const AddressBookModal: React.FC<AddressBookModalProps> = ({
       } catch (_) {}
     };
   }, [isOpen]);
-
-  useEffect(() => {
-    setOrderedEntries(sortAddressesByOrder(entries));
-  }, [entries]);
 
   if (!isOpen) return null;
 
@@ -466,7 +464,6 @@ export const AddressBookModal: React.FC<AddressBookModalProps> = ({
     [reArranged[idx], reArranged[swapIdx]] = [reArranged[swapIdx], reArranged[idx]];
     const reIndexed = reArranged.map((e, i) => ({ ...e, order: i }));
 
-    setOrderedEntries(reIndexed);
     setEntries(reIndexed);
     saveAddressBook(reIndexed);
     const activeUserId = (auth.currentUser?.email || auth.currentUser?.uid || "hernanmaximiliano10@gmail.com").toLowerCase().trim();
