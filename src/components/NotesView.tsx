@@ -383,8 +383,10 @@ export function NotesView({
       }));
 
     return (
-      <div
+      <motion.div
         key={note.id}
+        layout
+        transition={{ layout: { duration: 0.28, ease: [0.16, 1, 0.3, 1] } }}
         draggable={!isSharedIn}
         onDragStart={() => setDraggingId(note.id)}
         onDragEnd={() => {
@@ -408,7 +410,7 @@ export function NotesView({
         }}
         className={`break-inside-avoid mb-4 min-w-[280px] rounded-2xl border p-3 shadow-sm hover:shadow-md transition-all ${
           palette.card
-        } ${draggingId === note.id ? "opacity-40" : ""} ${
+        } ${draggingId === note.id ? "opacity-90 ring-2 ring-primary shadow-lg" : ""} ${
           dragOverId === note.id ? "ring-2 ring-primary" : ""
         } ${!isSharedIn ? "cursor-grab active:cursor-grabbing" : ""}`}
       >
@@ -505,7 +507,7 @@ export function NotesView({
             </button>
           </div>
         </div>
-      </div>
+      </motion.div>
     );
   };
 

@@ -66,8 +66,20 @@ function fmtDate(d: Date): string {
   return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function isoDate(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+// Las Netlify Functions corren siempre en huso UTC, sin importar dónde esté el usuario —
+// confirmado en vivo que esto dejaba cada partido mostrado ~3 horas adelantado (ej. un partido
+// a las 21:30 hora Argentina aparecía como si fuera a las 00:30). Argentina es UTC-3 fijo (sin
+// horario de verano desde 2009), así que restar 3 horas y leer los componentes en UTC del
+// resultado da directamente la hora de reloj real en Argentina, sin depender del huso del
+// runtime.
+const ARGENTINA_OFFSET_MS = 3 * 60 * 60 * 1000;
+function toArgentinaDate(d: Date): Date {
+  return new Date(d.getTime() - ARGENTINA_OFFSET_MS);
+}
+
+function isoDateArgentina(d: Date): string {
+  const a = toArgentinaDate(d);
+  return `${a.getUTCFullYear()}-${String(a.getUTCMonth() + 1).padStart(2, "0")}-${String(a.getUTCDate()).padStart(2, "0")}`;
 }
 
 /**
@@ -104,8 +116,11 @@ function mapEvent(ev: any, sportId: "futbol" | "nba", competitionId: string, com
     // código crudo de la liga (ej. "eng.1") para fútbol en vez de un nombre de verdad, así que
     // se usa directamente el nombre curado que ya conocemos (footballCompetitions.ts / "NBA").
     competitionName,
-    date: isoDate(eventDate),
-    time: `${String(eventDate.getHours()).padStart(2, "0")}:${String(eventDate.getMinutes()).padStart(2, "0")}`,
+    date: isoDateArgentina(eventDate),
+    time: (() => {
+      const a = toArgentinaDate(eventDate);
+      return `${String(a.getUTCHours()).padStart(2, "0")}:${String(a.getUTCMinutes()).padStart(2, "0")}`;
+    })(),
     status: state === "in" ? "live" : state === "post" ? "finished" : "upcoming",
     statusText: comp.status?.type?.shortDetail || comp.status?.type?.description || "",
     homeTeam: homeComp.team?.displayName || "Local",
