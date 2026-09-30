@@ -2,6 +2,7 @@ import { schedule } from "@netlify/functions";
 import { initializeApp, getApps } from "firebase/app";
 import { getFirestore, doc, setDoc } from "firebase/firestore";
 import { parseSanJuanEvents } from "./_lib/sanJuanParser";
+import { argentinaDateStr } from "./_lib/argentinaTime";
 
 // Same Firebase project/config as the rest of the serverless functions (see
 // check-appointment-reminders.ts) — kept in sync manually since there's no shared env var
@@ -17,8 +18,10 @@ const firebaseConfig = {
 const FIRESTORE_DATABASE_ID = "ai-studio-fsrworkspace-54088f75-aeab-47ef-aff0-3ed53c6ba118";
 
 function currentMonthKey(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  // En base al calendario de Argentina, no al del runtime (UTC) — si no, en las ~3hs previas a
+  // medianoche UTC (que en Argentina ya son del día/mes siguiente) esto podía quedar leyendo el
+  // mes equivocado.
+  return argentinaDateStr(new Date()).slice(0, 7);
 }
 
 /**

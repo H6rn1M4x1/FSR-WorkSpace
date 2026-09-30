@@ -1381,14 +1381,16 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
           </p>
         ) : (
           <div className="space-y-2">
-            {/* Sin alto fijo adivinado — antes "h-[380px] overflow-hidden" recortaba la última
-                fila cuando las 6 tarjetas (3 filas) no entraban en ese alto. Ahora mide lo que
-                su contenido realmente necesita, nunca recorta, y "Partidos de Hoy"/NBA se
-                estiran para igualarlo (CSS grid stretch, ver el comentario en el div de la
-                fila). El slot de imagen h-32 se reserva SIEMPRE, tenga o no imagen el evento, y
-                cuando la última página tiene menos de SJ_PAGE_SIZE eventos se completa con
-                tarjetas invisibles del mismo tamaño — así la altura es consistente entre
-                páginas (evita el salto al paginar) sin depender de un número de píxeles fijo. */}
+            {/* Sin alto fijo adivinado en la tarjeta entera — antes "h-[380px] overflow-hidden"
+                recortaba la última fila cuando las 6 tarjetas (3 filas) no entraban en ese alto.
+                En cambio, CADA LÍNEA de cada tarjeta (imagen, título, ubicación, fecha, "ver
+                más") reserva siempre el mismo espacio fijo, tenga o no contenido esa línea en
+                ESTE evento puntual (ver min-h + " " de relleno más abajo) — así todas las
+                tarjetas, reales o placeholder, en cualquier página, miden exactamente lo mismo:
+                ni la cantidad de eventos en la página ni cuánto texto tenga cada uno hacen que
+                el conjunto se achique o crezca, sin depender de ningún número de píxeles
+                adivinado para la tarjeta completa. Cuando la última página tiene menos de
+                SJ_PAGE_SIZE eventos, se completa con tarjetas invisibles de ese mismo tamaño. */}
             <div className="overflow-hidden">
               <AnimatePresence mode="wait" initial={false}>
                 <motion.div
@@ -1411,7 +1413,10 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
                         <div key={`sj-placeholder-${i}`} className="invisible" aria-hidden="true">
                           <div className="w-full h-32" />
                           <div className="p-3 space-y-1">
-                            <p className="font-extrabold text-sm">&nbsp;</p>
+                            <p className="font-extrabold text-sm min-h-[2.5rem]">&nbsp;</p>
+                            <p className="text-[11px] min-h-[1rem]">&nbsp;</p>
+                            <p className="text-xs min-h-[1rem]">&nbsp;</p>
+                            <p className="text-[10px]">&nbsp;</p>
                           </div>
                         </div>
                       );
@@ -1441,10 +1446,15 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
                             <MapPin className="w-6 h-6 text-zinc-400" />
                           )}
                         </div>
+                        {/* Las 4 líneas (título, ubicación, fecha, "ver más") se reservan
+                            siempre con min-h + " " de relleno cuando el evento no tiene ese
+                            dato — así todas las tarjetas de la grilla miden exactamente lo mismo,
+                            en vez de achicarse cuando a un evento puntual le falta ubicación o
+                            fecha (ver comentario más arriba sobre el alto fijo por línea). */}
                         <div className="p-3 space-y-1 flex-1">
-                          <p className="font-extrabold text-sm text-zinc-900 dark:text-zinc-100 line-clamp-2 pr-5">{ev.title}</p>
-                          {ev.location && <p className="text-[11px] text-zinc-500 dark:text-zinc-400 line-clamp-1">{ev.location}</p>}
-                          {ev.rawDate && <p className="text-xs text-primary font-bold">{ev.rawDate}</p>}
+                          <p className="font-extrabold text-sm text-zinc-900 dark:text-zinc-100 line-clamp-2 pr-5 min-h-[2.5rem]">{ev.title}</p>
+                          <p className="text-[11px] text-zinc-500 dark:text-zinc-400 line-clamp-1 min-h-[1rem]">{ev.location || " "}</p>
+                          <p className="text-xs text-primary font-bold min-h-[1rem]">{ev.rawDate || " "}</p>
                           <p className="text-[10px] text-zinc-400 flex items-center gap-1">
                             <ExternalLink className="w-3 h-3" /> Ver más
                           </p>
