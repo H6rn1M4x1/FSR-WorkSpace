@@ -569,20 +569,26 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
       return;
     }
 
+    // Mismo formato que matchScheduler.ts (homeTeam/homeLogo/awayTeam/awayLogo/competition) —
+    // getMatchTeamLogos() en lib/matchScheduler.ts busca exactamente esas claves para mostrar el
+    // partido con los escudos de cada equipo en la Agenda, igual que un partido auto-agendado del
+    // equipo favorito. Antes esto guardaba claves distintas (homeTeamBadge/awayTeamBadge, sin
+    // nombre de equipo) que esa función no reconocía, así que cada partido de "Eventos" terminaba
+    // mostrándose en la Agenda como un turno genérico con el JSON crudo a la vista.
+    const [homeTeam, awayTeam] = ev.title.split(/\s+vs\.?\s+/i).map((s) => s.trim());
     const nuevoTurno: TurnoCompromiso = {
       id,
       estatus: false,
       descripcion: ev.title,
       categoria: "Ocio",
-      fecha: ev.date,
+      fecha: `${ev.date}T${ev.time || "00:00"}`,
       lugar: ev.venue || ev.leagueName,
       informacionPersonalizada: JSON.stringify({
-        source: "sport",
-        sportId: ev.sportId,
-        leagueName: ev.leagueName,
-        time: ev.time,
-        homeTeamBadge: ev.homeTeamBadge,
-        awayTeamBadge: ev.awayTeamBadge,
+        homeTeam: homeTeam || undefined,
+        homeLogo: ev.homeTeamBadge,
+        awayTeam: awayTeam || undefined,
+        awayLogo: ev.awayTeamBadge,
+        competition: ev.leagueName,
       }),
     };
     setTurnosCompromisos((prev) => {

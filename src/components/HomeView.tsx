@@ -2394,7 +2394,7 @@ export default function HomeView({
                                       </span>
                                     </div>
                                   )}
-                                  {!String(tc.id).startsWith("match-") && tc.doctor && tc.doctor.trim() && (
+                                  {!matchLogos && tc.doctor && tc.doctor.trim() && (
                                     <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
                                       <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
                                         Profesional / Asignado
@@ -2404,7 +2404,7 @@ export default function HomeView({
                                       </span>
                                     </div>
                                   )}
-                                  {!String(tc.id).startsWith("match-") && (
+                                  {!matchLogos && (
                                     <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
                                       <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
                                         Categoría y Estatus
@@ -2422,7 +2422,7 @@ export default function HomeView({
                                     </div>
                                   )}
                                 </div>
-                                {tc.informacionPersonalizada && !String(tc.id).startsWith("match-") && (
+                                {tc.informacionPersonalizada && !matchLogos && (
                                   <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
                                     <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider mb-1">
                                       Información Personalizada
