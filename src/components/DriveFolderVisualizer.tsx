@@ -2397,12 +2397,7 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
   }
 
   return (
-    <div
-      ref={rootRef}
-      className={`relative space-y-6 transition-all duration-300 ${
-        isChatOpen && isChatExpanded ? "sm:pr-[max(25vw,360px)]" : ""
-      }`}
-    >
+    <div ref={rootRef} className="relative space-y-6">
       {/* Top Banner with Google Account Info & Disconnect option */}
       <div
         className={`p-4 rounded-2xl border flex flex-col sm:flex-row items-center justify-between gap-4 ${
@@ -3016,7 +3011,16 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
       </div>
 
       {/* Embedded File Viewer & Editor Panel (Directly inside the page) */}
+      {/* El padding derecho (para dejarle lugar al chat expandido) va SOLO en este bloque, no en
+          el contenedor raíz — así la barra de arriba (cuenta de Google Drive + breadcrumbs) se
+          mantiene como un bloque independiente que usa todo el ancho, y solo la parte donde está
+          el archivo abierto comparte espacio con el panel del chat. */}
       {selectedFile && (
+        <div
+          className={`transition-all duration-300 ${
+            isChatOpen && isChatExpanded ? "sm:pr-[max(25vw,360px)]" : ""
+          }`}
+        >
         <div
           ref={fileViewerRef}
           className={`rounded-3xl border overflow-hidden p-6 ${
@@ -3177,6 +3181,7 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
               guardarán automáticamente en tu cuenta de Google Drive.
             </p>
           </div>
+        </div>
         </div>
       )}
 

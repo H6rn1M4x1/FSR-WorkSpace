@@ -1381,13 +1381,14 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
           </p>
         ) : (
           <div className="space-y-2">
-            {/* Sin alto fijo — antes "h-[380px] overflow-hidden" recortaba la última fila
-                cuando las 6 tarjetas (3 filas) no entraban en ese alto. Ahora mide lo que su
-                contenido realmente necesita, nunca recorta, y "Partidos de Hoy"/NBA se estiran
-                para igualarlo (CSS grid stretch, ver el comentario en el div de la fila). El
-                slot de imagen h-32 se reserva SIEMPRE, tenga o no imagen el evento, para que la
-                altura de cada tarjeta sea consistente entre páginas (evita el salto al paginar,
-                sin necesitar una altura fija adivinada). */}
+            {/* Sin alto fijo adivinado — antes "h-[380px] overflow-hidden" recortaba la última
+                fila cuando las 6 tarjetas (3 filas) no entraban en ese alto. Ahora mide lo que
+                su contenido realmente necesita, nunca recorta, y "Partidos de Hoy"/NBA se
+                estiran para igualarlo (CSS grid stretch, ver el comentario en el div de la
+                fila). El slot de imagen h-32 se reserva SIEMPRE, tenga o no imagen el evento, y
+                cuando la última página tiene menos de SJ_PAGE_SIZE eventos se completa con
+                tarjetas invisibles del mismo tamaño — así la altura es consistente entre
+                páginas (evita el salto al paginar) sin depender de un número de píxeles fijo. */}
             <div className="overflow-hidden">
               <AnimatePresence mode="wait" initial={false}>
                 <motion.div
@@ -1398,7 +1399,23 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
                   transition={{ duration: 0.35, ease: "easeInOut" }}
                   className="grid grid-cols-1 sm:grid-cols-2 gap-3"
                 >
-                  {sjPageEvents.map((ev) => {
+                  {/* Se rellena hasta SJ_PAGE_SIZE con espacios invisibles (mismo tamaño de
+                      tarjeta) cuando la última página tiene menos eventos — así la tarjeta
+                      entera mantiene siempre el mismo alto entre páginas, en vez de achicarse y
+                      hacer "saltar" las tarjetas vecinas (Partidos de Hoy/NBA, que se estiran a
+                      esta altura) y el contenido de abajo. */}
+                  {Array.from({ length: SJ_PAGE_SIZE }).map((_, i) => {
+                    const ev = sjPageEvents[i];
+                    if (!ev) {
+                      return (
+                        <div key={`sj-placeholder-${i}`} className="invisible" aria-hidden="true">
+                          <div className="w-full h-32" />
+                          <div className="p-3 space-y-1">
+                            <p className="font-extrabold text-sm">&nbsp;</p>
+                          </div>
+                        </div>
+                      );
+                    }
                     const scheduled = isSanJuanScheduled(ev);
                     return (
                       <a key={ev.id} href={ev.sourceUrl} target="_blank" rel="noopener noreferrer" className="relative rounded-2xl border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 overflow-hidden hover:shadow-md transition-all flex flex-col">

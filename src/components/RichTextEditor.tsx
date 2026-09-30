@@ -79,6 +79,36 @@ export function RichTextEditor({ value, onChange, placeholder, onShareClick, sha
     }
   };
 
+  // El navegador pega el HTML tal cual viene del origen, con su propia fuente y color
+  // inline — se despoja de eso para que el texto pegado herede siempre la tipografía y
+  // el color de la página (que ya reacciona al tema claro/oscuro vía las clases del
+  // propio editor), en vez de quedar con estilos ajenos incrustados.
+  const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const html = e.clipboardData.getData("text/html");
+    if (html) {
+      const doc = new DOMParser().parseFromString(html, "text/html");
+      doc.body.querySelectorAll("*").forEach((el) => {
+        const htmlEl = el as HTMLElement;
+        htmlEl.style.removeProperty("font-family");
+        htmlEl.style.removeProperty("font-size");
+        htmlEl.style.removeProperty("color");
+        htmlEl.style.removeProperty("background");
+        htmlEl.style.removeProperty("background-color");
+        htmlEl.removeAttribute("face");
+        htmlEl.removeAttribute("color");
+        if (htmlEl.tagName === "FONT") {
+          const span = document.createElement("span");
+          span.innerHTML = htmlEl.innerHTML;
+          htmlEl.replaceWith(span);
+        }
+      });
+      execCommand("insertHTML", doc.body.innerHTML);
+    } else {
+      execCommand("insertText", e.clipboardData.getData("text/plain"));
+    }
+  };
+
   const handleAddImage = () => {
     fileInputRef.current?.click();
   };
@@ -272,6 +302,7 @@ export function RichTextEditor({ value, onChange, placeholder, onShareClick, sha
         className="w-full min-h-[120px] p-3 text-sm text-slate-900 dark:text-white outline-none cursor-text empty:before:content-[attr(data-placeholder)] empty:before:text-slate-400 dark:empty:before:text-zinc-600 prose dark:prose-invert prose-sm max-w-none [&_ol_ol]:list-[lower-alpha] [&_ol_ol_ol]:list-[lower-roman]"
         onInput={handleInput}
         onBlur={handleInput}
+        onPaste={handlePaste}
         onKeyDown={(e) => {
           if (e.key === 'Tab') {
             e.preventDefault();
