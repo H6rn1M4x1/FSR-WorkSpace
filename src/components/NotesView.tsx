@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from "react";
-import { StickyNote as StickyNoteIcon, KeyRound, Pin, Trash2, Plus, X, Send, Share2, Check } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { StickyNote as StickyNoteIcon, KeyRound, Pin, Trash2, Plus, X, Send, Share2, Check, Maximize2, Pencil } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useNotes } from "../hooks/useNotes";
 import { useToast } from "../context/ToastContext";
@@ -307,6 +308,17 @@ export function NotesView({
   // Drag-and-drop reordering (press and hold, then drag).
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
+  // Bloquea nuevos cambios de posición en vivo por un instante después de cada swap — sin esto,
+  // la animación (layout) que corre a las notas para hacerles lugar termina moviendo OTRA nota
+  // justo debajo del cursor a mitad de la transición, lo que dispara otro dragover para esa nota
+  // y la vuelve a cambiar de posición, y así en bucle ("se bugea... cambia constantemente"). Al
+  // ignorar nuevos targets hasta que la animación en curso termine de asentarse, cada posición
+  // detectada se mantiene estática en vez de oscilar.
+  const dragSwapLockRef = useRef(false);
+
+  // Nota expandida en un modal grande, con su propio modo lectura/edición.
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedEditing, setExpandedEditing] = useState(false);
 
   useEffect(() => {
     if (!rightClickMenu) return;
@@ -401,20 +413,38 @@ export function NotesView({
       }));
 
     return (
-      <motion.div
+      // Envoltorio de plain <div> (no motion) SOLO para el drag nativo: motion.div reinterpreta
+      // "onDragStart"/"onDragEnd" como sus propios gestos de arrastre (firma distinta, sin
+      // dataTransfer) en vez de los eventos nativos de HTML5 drag-and-drop que necesitamos acá —
+      // de ahí que la animación de layout viva en el motion.div de adentro, no en este.
+      <div
         key={note.id}
-        layout
-        transition={{ layout: { duration: 0.28, ease: [0.16, 1, 0.3, 1] } }}
         draggable={!isSharedIn}
-        onDragStart={() => setDraggingId(note.id)}
+        onDragStart={(e) => {
+          setDraggingId(note.id);
+          // Sin esto, el navegador genera su propia "foto" semitransparente de la nota para
+          // mostrar pegada al cursor — pasarle el elemento real como imagen de arrastre lo
+          // reemplaza por una versión totalmente opaca.
+          const rect = e.currentTarget.getBoundingClientRect();
+          try {
+            e.dataTransfer.setDragImage(e.currentTarget, e.clientX - rect.left, e.clientY - rect.top);
+          } catch {
+            // setDragImage puede fallar en algún navegador viejo — no es crítico, sigue
+            // funcionando el drag, solo sin la imagen personalizada.
+          }
+        }}
         onDragEnd={() => {
           setDraggingId(null);
           setDragOverId(null);
+          dragSwapLockRef.current = false;
         }}
         onDragOver={(e) => {
           if (!draggingId || draggingId === note.id) return;
           e.preventDefault();
-          if (dragOverId !== note.id) setDragOverId(note.id);
+          if (dragOverId === note.id || dragSwapLockRef.current) return;
+          dragSwapLockRef.current = true;
+          setDragOverId(note.id);
+          window.setTimeout(() => { dragSwapLockRef.current = false; }, 320);
         }}
         onDragLeave={() => setDragOverId((prev) => (prev === note.id ? null : prev))}
         onDrop={(e) => {
@@ -426,7 +456,12 @@ export function NotesView({
           e.preventDefault();
           setRightClickMenu({ id: note.id, x: e.clientX, y: e.clientY });
         }}
-        className={`break-inside-avoid mb-4 min-w-[280px] rounded-2xl border p-3 shadow-sm hover:shadow-md transition-all ${
+        className="break-inside-avoid mb-4"
+      >
+      <motion.div
+        layout
+        transition={{ layout: { duration: 0.28, ease: [0.16, 1, 0.3, 1] } }}
+        className={`min-w-[280px] rounded-2xl border p-3 shadow-sm hover:shadow-md transition-all ${
           palette.card
         } ${draggingId === note.id ? "ring-2 ring-primary shadow-xl scale-[1.02]" : ""} ${
           dragOverId === note.id ? "ring-2 ring-primary" : ""
@@ -509,6 +544,14 @@ export function NotesView({
             )}
             <button
               type="button"
+              onClick={() => { setExpandedId(note.id); setExpandedEditing(false); }}
+              className="p-1.5 rounded-lg hover:bg-white/15 text-zinc-200 cursor-pointer"
+              title="Ver en grande"
+            >
+              <Maximize2 className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
               onClick={() => togglePin(note.id)}
               className="p-1.5 rounded-lg hover:bg-white/15 text-zinc-200 cursor-pointer"
               title={note.pinned ? "Desfijar" : "Fijar"}
@@ -525,7 +568,93 @@ export function NotesView({
             </button>
           </div>
         </div>
+
+        {/* Modal "ver en grande": muestra la nota completa de lectura, con un botón de lápiz que
+            pasa a modo edición (mismo draft/auto-guardado que la tarjeta chica) sin tener que
+            cerrarlo. Va por portal a document.body — si quedara anidado dentro de este
+            motion.div (que anima con "layout"/transform), el position:fixed de abajo quedaría
+            relativo a ESE ancestro transformado en vez de a toda la pantalla. */}
+        {typeof document !== "undefined" &&
+          createPortal(
+            <AnimatePresence>
+              {expandedId === note.id && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.18 }}
+                  className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/60"
+                  onClick={() => setExpandedId(null)}
+                >
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.96, y: 12 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.96, y: 12 }}
+                    transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                    onClick={(e) => e.stopPropagation()}
+                    className={`w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl border p-5 shadow-2xl ${palette.card}`}
+                  >
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      {expandedEditing ? (
+                        <input
+                          autoFocus
+                          value={titleValue}
+                          onChange={(e) => setDraft({ title: e.target.value })}
+                          placeholder="Título"
+                          className="flex-1 bg-transparent text-lg font-extrabold text-zinc-900 dark:text-white focus:outline-none placeholder:text-zinc-400"
+                        />
+                      ) : (
+                        <h3 className="flex-1 text-lg font-extrabold text-zinc-900 dark:text-white break-words">
+                          {titleValue || "Sin título"}
+                        </h3>
+                      )}
+                      <div className="flex items-center gap-1 shrink-0">
+                        {!isSharedIn && (
+                          <button
+                            type="button"
+                            onClick={() => setExpandedEditing((v) => !v)}
+                            className="p-1.5 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 text-zinc-500 dark:text-zinc-300 cursor-pointer"
+                            title={expandedEditing ? "Listo" : "Editar"}
+                          >
+                            {expandedEditing ? <Check className="w-4 h-4" /> : <Pencil className="w-4 h-4" />}
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setExpandedId(null)}
+                          className="p-1.5 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 text-zinc-500 dark:text-zinc-300 cursor-pointer"
+                          title="Cerrar"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {expandedEditing ? (
+                      <RichTextEditor
+                        value={textValue}
+                        onChange={(html) => setDraft({ text: html })}
+                        placeholder="Escribí algo..."
+                        darkToolbar
+                        attachments={note.attachments || []}
+                        onAttachmentsChange={(atts) => updateNote(note.id, { attachments: atts })}
+                      />
+                    ) : (
+                      <div
+                        className="rich-text-content prose dark:prose-invert prose-sm max-w-none text-sm text-zinc-900 dark:text-white [&_ol_ol]:list-[lower-alpha]"
+                        dangerouslySetInnerHTML={{
+                          __html: textValue || "<p class='text-zinc-400 italic'>Nota vacía.</p>",
+                        }}
+                      />
+                    )}
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>,
+            document.body
+          )}
       </motion.div>
+      </div>
     );
   };
 
