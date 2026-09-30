@@ -363,6 +363,24 @@ export function NotesView({
     await reorderNotes(reordered);
   };
 
+  // Mientras se arrastra una nota sobre otra del mismo grupo, se recalcula acá (solo para el
+  // render) dónde quedaría si se soltara ahora — así, junto con el "layout" de motion.div en cada
+  // tarjeta, el resto de las notas se corren de lugar con animación EN VIVO mientras se sostiene
+  // el arrastre, en vez de recién moverse de golpe al soltar. El orden real que se persiste sigue
+  // calculándose en handleDrop, sobre el orden estable (sin esta vista previa).
+  const getGroupRenderOrder = (group: StickyNote[]): StickyNote[] => {
+    if (!draggingId || !dragOverId || draggingId === dragOverId) return group;
+    const ids = group.map((n) => n.id);
+    const fromIndex = ids.indexOf(draggingId);
+    const toIndex = ids.indexOf(dragOverId);
+    if (fromIndex === -1 || toIndex === -1) return group; // se está arrastrando sobre otro grupo
+    const reorderedIds = [...ids];
+    reorderedIds.splice(fromIndex, 1);
+    reorderedIds.splice(toIndex, 0, draggingId);
+    const byId = new Map(group.map((n) => [n.id, n]));
+    return reorderedIds.map((id) => byId.get(id)!);
+  };
+
   const renderNote = (note: StickyNote, group: StickyNote[]) => {
     const palette = NOTE_COLORS[note.color] || NOTE_COLORS.default;
     const draft = drafts[note.id];
@@ -410,7 +428,7 @@ export function NotesView({
         }}
         className={`break-inside-avoid mb-4 min-w-[280px] rounded-2xl border p-3 shadow-sm hover:shadow-md transition-all ${
           palette.card
-        } ${draggingId === note.id ? "opacity-90 ring-2 ring-primary shadow-lg" : ""} ${
+        } ${draggingId === note.id ? "ring-2 ring-primary shadow-xl scale-[1.02]" : ""} ${
           dragOverId === note.id ? "ring-2 ring-primary" : ""
         } ${!isSharedIn ? "cursor-grab active:cursor-grabbing" : ""}`}
       >
@@ -643,7 +661,7 @@ export function NotesView({
             <p className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
               <Pin className="w-3 h-3" /> Fijadas
             </p>
-            <div className="columns-[380px] gap-4">{pinned.map((n) => renderNote(n, pinned))}</div>
+            <div className="columns-[380px] gap-4">{getGroupRenderOrder(pinned).map((n) => renderNote(n, pinned))}</div>
           </div>
         )}
 
@@ -652,7 +670,7 @@ export function NotesView({
             {pinned.length > 0 && (
               <p className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-400">Otras</p>
             )}
-            <div className="columns-[380px] gap-4">{others.map((n) => renderNote(n, others))}</div>
+            <div className="columns-[380px] gap-4">{getGroupRenderOrder(others).map((n) => renderNote(n, others))}</div>
           </div>
         )}
       </div>

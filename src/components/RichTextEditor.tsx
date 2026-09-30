@@ -299,7 +299,7 @@ export function RichTextEditor({ value, onChange, placeholder, onShareClick, sha
       <div 
         ref={editorRef}
         contentEditable
-        className="w-full min-h-[120px] p-3 text-sm text-slate-900 dark:text-white outline-none cursor-text empty:before:content-[attr(data-placeholder)] empty:before:text-slate-400 dark:empty:before:text-zinc-600 prose dark:prose-invert prose-sm max-w-none [&_ol_ol]:list-[lower-alpha] [&_ol_ol_ol]:list-[lower-roman]"
+        className="rich-text-content w-full min-h-[120px] p-3 text-sm text-slate-900 dark:text-white outline-none cursor-text empty:before:content-[attr(data-placeholder)] empty:before:text-slate-400 dark:empty:before:text-zinc-600 prose dark:prose-invert prose-sm max-w-none [&_ol_ol]:list-[lower-alpha] [&_ol_ol_ol]:list-[lower-roman]"
         onInput={handleInput}
         onBlur={handleInput}
         onPaste={handlePaste}

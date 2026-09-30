@@ -86,6 +86,14 @@ html, body {
   -webkit-backdrop-filter: blur(20px);
 }
 
+/* RichTextEditor (notas, formularios, etc.): el contenido pegado o guardado de antes puede traer
+   su propia font-family incrustada — como este editor no tiene ninguna función para elegir
+   tipografía a mano, se fuerza siempre a la fuente de toda la página, sin importar de dónde haya
+   salido el texto (tipeado, pegado, o ya guardado en Firestore de antes de este cambio). */
+.rich-text-content, .rich-text-content * {
+  font-family: var(--font-sans) !important;
+}
+
 .dark .glass-panel {
   background-color: rgba(15, 15, 18, 0.8) !important;
   backdrop-filter: blur(20px);
