@@ -73,7 +73,7 @@ const COLOR_KEYS = Object.keys(NOTE_COLORS);
 const DARK_PANEL = "bg-black/55 backdrop-blur-md rounded-2xl border border-white/10 shadow-lg";
 
 type NoteMenu = "format" | "color" | "list" | "share" | "bgcolor" | null;
-type Draft = { title: string; text: string };
+export type Draft = { title: string; text: string };
 
 function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
@@ -308,13 +308,17 @@ export function NotesView({
   // Drag-and-drop reordering (press and hold, then drag).
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
-  // Bloquea nuevos cambios de posición en vivo por un instante después de cada swap — sin esto,
-  // la animación (layout) que corre a las notas para hacerles lugar termina moviendo OTRA nota
-  // justo debajo del cursor a mitad de la transición, lo que dispara otro dragover para esa nota
-  // y la vuelve a cambiar de posición, y así en bucle ("se bugea... cambia constantemente"). Al
-  // ignorar nuevos targets hasta que la animación en curso termine de asentarse, cada posición
-  // detectada se mantiene estática en vez de oscilar.
-  const dragSwapLockRef = useRef(false);
+  // Posición (DOMRect) de cada nota del grupo, congelada en el instante en que arranca el
+  // arrastre — la clave de esto es NO recalcularla mientras se arrastra. Si en cambio se usara
+  // qué elemento está físicamente bajo el cursor en cada instante (dragover nativo), la propia
+  // animación que corre a las notas para hacerles lugar termina moviendo OTRA nota justo debajo
+  // del cursor a mitad de camino, lo que dispara otro reordenamiento y así en bucle infinito ("se
+  // bugea... cambia constantemente"). Comparando en cambio la posición del CURSOR contra estas
+  // posiciones congeladas, el objetivo del arrastre solo cambia cuando el usuario realmente mueve
+  // el mouse a otra nota, nunca como efecto secundario de la propia animación.
+  const dragSnapshotRef = useRef<Map<string, DOMRect>>(new Map());
+  // Elemento DOM de cada nota (de cualquier grupo) — se usa para tomar la foto de arriba.
+  const noteElsRef = useRef<Map<string, HTMLDivElement>>(new Map());
 
   // Nota expandida en un modal grande, con su propio modo lectura/edición.
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -419,9 +423,22 @@ export function NotesView({
       // de ahí que la animación de layout viva en el motion.div de adentro, no en este.
       <div
         key={note.id}
+        ref={(el) => {
+          if (el) noteElsRef.current.set(note.id, el);
+          else noteElsRef.current.delete(note.id);
+        }}
         draggable={!isSharedIn}
         onDragStart={(e) => {
           setDraggingId(note.id);
+          // Foto de la posición de cada nota del grupo, tomada ahora (antes de que nada se
+          // empiece a mover) — el resto del arrastre compara el cursor contra ESTA foto, nunca
+          // contra las posiciones en vivo (ver el comentario junto a dragSnapshotRef).
+          const snapshot = new Map<string, DOMRect>();
+          group.forEach((n) => {
+            const el = noteElsRef.current.get(n.id);
+            if (el) snapshot.set(n.id, el.getBoundingClientRect());
+          });
+          dragSnapshotRef.current = snapshot;
           // Sin esto, el navegador genera su propia "foto" semitransparente de la nota para
           // mostrar pegada al cursor — pasarle el elemento real como imagen de arrastre lo
           // reemplaza por una versión totalmente opaca.
@@ -436,17 +453,27 @@ export function NotesView({
         onDragEnd={() => {
           setDraggingId(null);
           setDragOverId(null);
-          dragSwapLockRef.current = false;
+          dragSnapshotRef.current = new Map();
         }}
         onDragOver={(e) => {
-          if (!draggingId || draggingId === note.id) return;
+          if (!draggingId) return;
           e.preventDefault();
-          if (dragOverId === note.id || dragSwapLockRef.current) return;
-          dragSwapLockRef.current = true;
-          setDragOverId(note.id);
-          window.setTimeout(() => { dragSwapLockRef.current = false; }, 320);
+          const snapshot = dragSnapshotRef.current;
+          if (snapshot.size === 0) return;
+          // Nota más cercana al cursor según la foto congelada — no según qué elemento quedó
+          // físicamente debajo del cursor ahora mismo, que va cambiando por la propia animación.
+          let closestId: string | null = null;
+          let closestDist = Infinity;
+          snapshot.forEach((r, id) => {
+            if (id === draggingId) return;
+            const dist = Math.hypot(e.clientX - (r.left + r.width / 2), e.clientY - (r.top + r.height / 2));
+            if (dist < closestDist) {
+              closestDist = dist;
+              closestId = id;
+            }
+          });
+          if (closestId && closestId !== dragOverId) setDragOverId(closestId);
         }}
-        onDragLeave={() => setDragOverId((prev) => (prev === note.id ? null : prev))}
         onDrop={(e) => {
           e.preventDefault();
           handleDrop(group, note.id);
@@ -850,7 +877,7 @@ export function NotesView({
  * the user stops typing, instead of on every keystroke or relying on blur (which the
  * editor's own toolbar clicks would trigger prematurely).
  */
-function SaveOnIdle({
+export function SaveOnIdle({
   draft,
   original,
   onSave,

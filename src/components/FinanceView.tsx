@@ -108,6 +108,10 @@ interface FinanceViewProps {
   token?: string | null;
   activeSubTab?: string;
   onSubTabChange?: (tab: string) => void;
+  /** Cambia (a cualquier valor distinto del anterior) para navegar directo a "Todos los Pagos"
+   *  y abrir el formulario de "Agregar Pago" — usado por el botón "Agendar" de Inicio. */
+  autoOpenQuickAdd?: number;
+  onQuickAddHandled?: () => void;
 }
 
 interface CustomSelectProps {
@@ -376,6 +380,8 @@ export default function FinanceView({
   activeSubTab: propActiveSubTab,
   onSubTabChange,
   itemsIShared = [],
+  autoOpenQuickAdd,
+  onQuickAddHandled,
 }: FinanceViewProps) {
   const { isSharedOut, sharedOutWith } = makeSharedOutHelpers(itemsIShared);
   const { showToast } = useToast();
@@ -3562,6 +3568,8 @@ export default function FinanceView({
                       darkMode={darkMode}
                       token={token}
                       userEmail={userEmail}
+                      autoOpenQuickAdd={autoOpenQuickAdd}
+                      onQuickAddHandled={onQuickAddHandled}
                     />
                   </motion.div>
                 ) : (

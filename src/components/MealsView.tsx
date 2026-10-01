@@ -405,6 +405,10 @@ interface MealsViewProps {
   >;
   activeSubTab?: string;
   onSubTabChange?: (tab: string) => void;
+  /** Cambia (a cualquier valor distinto del anterior) para abrir automáticamente el formulario
+   *  de "Agregar Planificación Semanal" — usado por el botón "Agendar" de Inicio. */
+  autoOpenQuickAdd?: number;
+  onQuickAddHandled?: () => void;
 }
 
 export default function MealsView({
@@ -427,6 +431,8 @@ export default function MealsView({
   activeSubTab: propActiveSubTab,
   onSubTabChange,
   itemsIShared = [],
+  autoOpenQuickAdd,
+  onQuickAddHandled,
 }: MealsViewProps) {
   const { isSharedOut, sharedOutWith } = makeSharedOutHelpers(itemsIShared);
   // Subtab navigation
@@ -1098,6 +1104,18 @@ export default function MealsView({
   const [orgFecha, setOrgFecha] = useState("");
   const [orgPlatoId, setOrgPlatoId] = useState("");
   const [orgSearchQuery, setOrgSearchQuery] = useState("");
+
+  // Botón "Agendar" de Inicio: abre directo el formulario de "Agregar Planificación Semanal"
+  // (misma secuencia que el botón de esta pantalla).
+  useEffect(() => {
+    if (!autoOpenQuickAdd) return;
+    setEditingOrgId(null);
+    setOrgFecha("");
+    setOrgPlatoId("");
+    setShowAddOrg(true);
+    onQuickAddHandled?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOpenQuickAdd]);
 
   const getDiaDeLaSemana = (fechaStr: string): string => {
     if (!fechaStr) return "-";

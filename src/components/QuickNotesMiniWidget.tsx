@@ -1,6 +1,10 @@
-import React from "react";
-import { StickyNote, Pin, Plus } from "lucide-react";
+import React, { useState } from "react";
+import { createPortal } from "react-dom";
+import { motion, AnimatePresence } from "motion/react";
+import { StickyNote, Pin, Plus, Maximize2, Pencil, Check, X } from "lucide-react";
 import { useNotes } from "../hooks/useNotes";
+import { RichTextEditor } from "./RichTextEditor";
+import { SaveOnIdle, type Draft } from "./NotesView";
 
 // Mismos colores que NotesView.tsx (NOTE_COLORS), en versión compacta — solo la clase de fondo
 // de la tarjeta, sin duplicar el resto de esa paleta (swatch/label) que acá no hace falta.
@@ -22,9 +26,10 @@ function stripHtml(html: string): string {
 
 /**
  * Miniatura de "Notas Rápidas" para Inicio, en reemplazo de "Seguimiento Semanal de Equipos"
- * (MultiTeamMatchWidget) — mismas notas que NotesView.tsx (vía el mismo hook useNotes), solo
- * lectura acá: título + primeras líneas, hasta 6, las fijadas primero. "Ver todas" navega a la
- * pestaña real de Notas Rápidas.
+ * (MultiTeamMatchWidget) — mismas notas que NotesView.tsx (vía el mismo hook useNotes). Cada
+ * tarjeta tiene su propio botón de expandir (ver en grande + editar sin salir de Inicio, mismo
+ * modal/auto-guardado que NotesView.tsx) — hacer click en el resto de la tarjeta sigue
+ * navegando a la pestaña real de Notas Rápidas, igual que antes.
  */
 export function QuickNotesMiniWidget({
   userId,
@@ -35,7 +40,10 @@ export function QuickNotesMiniWidget({
   darkMode: boolean;
   onOpenAll?: () => void;
 }) {
-  const { notes } = useNotes(userId);
+  const { notes, updateNote } = useNotes(userId);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<Draft | null>(null);
 
   const preview = [...notes]
     .sort((a, b) => {
@@ -43,6 +51,18 @@ export function QuickNotesMiniWidget({
       return b.updatedAt - a.updatedAt;
     })
     .slice(0, 6);
+
+  const expandedNote = notes.find((n) => n.id === expandedId) || null;
+  const palette = expandedNote ? NOTE_CARD_COLOR[expandedNote.color] || NOTE_CARD_COLOR.default : "";
+
+  const openExpanded = (e: React.MouseEvent, noteId: string) => {
+    e.stopPropagation();
+    const note = notes.find((n) => n.id === noteId);
+    if (!note) return;
+    setExpandedId(noteId);
+    setEditing(false);
+    setDraft({ title: note.title || "", text: note.text });
+  };
 
   return (
     <div
@@ -83,25 +103,122 @@ export function QuickNotesMiniWidget({
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           {preview.map((note) => (
-            <button
+            <div
               key={note.id}
-              type="button"
+              role="button"
+              tabIndex={0}
               onClick={onOpenAll}
-              className={`text-left rounded-2xl border p-3 flex flex-col gap-1 h-28 overflow-hidden hover:shadow-md transition-all cursor-pointer ${
+              onKeyDown={(e) => {
+                if (e.key === "Enter") onOpenAll?.();
+              }}
+              className={`relative text-left rounded-2xl border p-3 flex flex-col gap-1 h-28 overflow-hidden hover:shadow-md transition-all cursor-pointer ${
                 NOTE_CARD_COLOR[note.color] || NOTE_CARD_COLOR.default
               }`}
             >
-              <div className="flex items-center gap-1 min-w-0">
+              <button
+                type="button"
+                onClick={(e) => openExpanded(e, note.id)}
+                className="absolute top-1.5 right-1.5 z-10 p-1 rounded-md bg-black/5 hover:bg-black/15 dark:bg-white/10 dark:hover:bg-white/20 text-zinc-500 dark:text-zinc-300 cursor-pointer"
+                title="Ver en grande"
+              >
+                <Maximize2 className="w-3 h-3" />
+              </button>
+              <div className="flex items-center gap-1 min-w-0 pr-5">
                 {note.pinned && <Pin className="w-3 h-3 text-primary fill-primary shrink-0" />}
                 <p className="font-extrabold text-xs text-zinc-900 dark:text-zinc-100 truncate">
                   {note.title?.trim() || "Sin título"}
                 </p>
               </div>
               <p className="text-[10px] text-zinc-600 dark:text-zinc-400 line-clamp-3">{stripHtml(note.text) || "Nota vacía"}</p>
-            </button>
+            </div>
           ))}
         </div>
       )}
+
+      {/* Modal "ver en grande" — por portal, igual que en NotesView.tsx. */}
+      {typeof document !== "undefined" &&
+        createPortal(
+          <AnimatePresence>
+            {expandedNote && draft && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.18 }}
+                className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/60"
+                onClick={() => setExpandedId(null)}
+              >
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.96, y: 12 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.96, y: 12 }}
+                  transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                  onClick={(e) => e.stopPropagation()}
+                  className={`w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl border p-5 shadow-2xl ${palette}`}
+                >
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    {editing ? (
+                      <input
+                        autoFocus
+                        value={draft.title}
+                        onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+                        placeholder="Título"
+                        className="flex-1 bg-transparent text-lg font-extrabold text-zinc-900 dark:text-white focus:outline-none placeholder:text-zinc-400"
+                      />
+                    ) : (
+                      <h3 className="flex-1 text-lg font-extrabold text-zinc-900 dark:text-white break-words">
+                        {draft.title || "Sin título"}
+                      </h3>
+                    )}
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setEditing((v) => !v)}
+                        className="p-1.5 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 text-zinc-500 dark:text-zinc-300 cursor-pointer"
+                        title={editing ? "Listo" : "Editar"}
+                      >
+                        {editing ? <Check className="w-4 h-4" /> : <Pencil className="w-4 h-4" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setExpandedId(null)}
+                        className="p-1.5 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 text-zinc-500 dark:text-zinc-300 cursor-pointer"
+                        title="Cerrar"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {editing ? (
+                    <RichTextEditor
+                      value={draft.text}
+                      onChange={(html) => setDraft({ ...draft, text: html })}
+                      placeholder="Escribí algo..."
+                      darkToolbar
+                      attachments={expandedNote.attachments || []}
+                      onAttachmentsChange={(atts) => updateNote(expandedNote.id, { attachments: atts })}
+                    />
+                  ) : (
+                    <div
+                      className="rich-text-content prose dark:prose-invert prose-sm max-w-none text-sm text-zinc-900 dark:text-white [&_ol_ol]:list-[lower-alpha]"
+                      dangerouslySetInnerHTML={{
+                        __html: draft.text || "<p class='text-zinc-400 italic'>Nota vacía.</p>",
+                      }}
+                    />
+                  )}
+
+                  <SaveOnIdle
+                    draft={draft}
+                    original={{ title: expandedNote.title || "", text: expandedNote.text }}
+                    onSave={(patch) => { updateNote(expandedNote.id, patch); }}
+                  />
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>,
+          document.body
+        )}
     </div>
   );
 }

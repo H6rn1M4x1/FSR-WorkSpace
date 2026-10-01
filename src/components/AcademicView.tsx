@@ -802,6 +802,10 @@ interface AcademicViewProps {
   setExamenes: React.Dispatch<React.SetStateAction<ExamenItem[]>>;
   activeSubTab?: string;
   onSubTabChange?: (tab: string) => void;
+  /** Cambia (a cualquier valor distinto del anterior) para abrir automáticamente el formulario
+   *  de "Nuevo Examen / Trabajo" — usado por el botón "Agendar" de Inicio. */
+  autoOpenQuickAdd?: number;
+  onQuickAddHandled?: () => void;
 }
 
 export default function AcademicView({
@@ -824,6 +828,8 @@ export default function AcademicView({
   activeSubTab: propActiveSubTab,
   onSubTabChange,
   itemsIShared = [],
+  autoOpenQuickAdd,
+  onQuickAddHandled,
 }: AcademicViewProps) {
   const { isSharedOut, sharedOutWith } = makeSharedOutHelpers(itemsIShared);
   const { showToast } = useToast();
@@ -937,6 +943,21 @@ export default function AcademicView({
   const [exInstancia, setExInstancia] = useState("Primero");
   const [exAula, setExAula] = useState("");
   const [tiFilter, setTiFilter] = useState("Todos");
+
+  // Botón "Agendar" de Inicio: abre directo el formulario de "Nuevo Examen / Trabajo" (misma
+  // secuencia que el botón "Nuevo Examen / Trabajo" de esta pantalla).
+  useEffect(() => {
+    if (!autoOpenQuickAdd) return;
+    setEditingExamenId(null);
+    setExMateria("");
+    setExFecha("");
+    setExEstado("Parcial");
+    setExInstancia("Primero");
+    setExAula("");
+    setShowExamenModal(true);
+    onQuickAddHandled?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOpenQuickAdd]);
 
   // Resumen Agenda & Calendar states
   const [resumenCalendarDate, setResumenCalendarDate] = useState<Date>(new Date());

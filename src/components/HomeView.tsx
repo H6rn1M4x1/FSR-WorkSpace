@@ -53,6 +53,8 @@ import {
   BellOff,
   Shield,
   AudioLines,
+  Pill,
+  CalendarPlus,
 } from "lucide-react";
 import { AudioTranscriptionPlayer } from "./AudioTranscriptionPlayer";
 import {
@@ -60,7 +62,6 @@ import {
   getNotificationPermission,
   evaluateAndNotifyTodayAgenda,
   showAgendaNotification,
-  formatAgendaItemNotification,
 } from "../services/notificationService";
 import {
   Appointment,
@@ -125,6 +126,9 @@ interface HomeViewProps {
   materiasInfo?: MateriaInfo[];
   /** Navega a la pestaña de Notas Rápidas — usado por el "Ver todas" de la miniatura en Inicio. */
   onOpenNotes?: () => void;
+  /** Navega a la pestaña real de la categoría elegida y le pide que abra directo su formulario
+   *  de "nuevo" — usado por el botón "Agendar" de Inicio. */
+  onQuickAdd?: (category: "turno" | "finanzas" | "universidad" | "salud" | "comidas") => void;
 }
 
 export default function HomeView({
@@ -158,6 +162,7 @@ export default function HomeView({
   subjects = [],
   materiasInfo = [],
   onOpenNotes,
+  onQuickAdd,
 }: HomeViewProps) {
   const homeUserId = user?.email || userProfile?.email || "hernanmaximiliano10@gmail.com";
   const { showToast } = useToast();
@@ -221,6 +226,20 @@ export default function HomeView({
     const withOffset = new Date(local.getTime() - offset * 60 * 1000);
     return withOffset.toISOString().split("T")[0];
   });
+
+  // Menú desplegable del botón "Agendar" (reemplaza a "Probar Aviso"/"Push Activo").
+  const [quickAddMenuOpen, setQuickAddMenuOpen] = useState(false);
+  const quickAddMenuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!quickAddMenuOpen) return;
+    const close = (e: MouseEvent) => {
+      if (quickAddMenuRef.current && !quickAddMenuRef.current.contains(e.target as Node)) {
+        setQuickAddMenuOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", close);
+    return () => window.removeEventListener("mousedown", close);
+  }, [quickAddMenuOpen]);
 
   // State for selected note details modal
   const [expandedHomeItemId, setExpandedHomeItemId] = useState<string | null>(null);
@@ -340,39 +359,6 @@ export default function HomeView({
       }
       setTimeout(() => setNotifSuccessMsg(null), 5000);
     }
-  };
-
-  const handleTestTodayNotifications = async () => {
-    if (agendaListItems.length === 0) {
-      await showAgendaNotification({
-        title: "Agenda Central Integrada",
-        body: "No tienes actividades pendientes para hoy. ¡Todo al día!",
-        category: "turnos",
-        tag: `test-${Date.now()}`,
-      });
-      setNotifSuccessMsg("Aviso de prueba enviado a tu móvil.");
-    } else {
-      let sentCount = 0;
-      const sentTitles: string[] = [];
-      for (const item of agendaListItems) {
-        const payload = formatAgendaItemNotification(item);
-        if (payload) {
-          // Ensure unique tag for manual test so mobile doesn't collapse or skip
-          payload.tag = `${payload.tag}-test-${Date.now()}`;
-          const ok = await showAgendaNotification(payload);
-          if (ok) {
-            sentCount++;
-            sentTitles.push(payload.title);
-          }
-        }
-      }
-      if (sentCount > 0) {
-        setNotifSuccessMsg(`Se enviaron ${sentCount} avisos: ${sentTitles.slice(0, 2).join(", ")}${sentTitles.length > 2 ? "..." : ""}`);
-      } else {
-        setNotifSuccessMsg("Asegúrate de permitir las notificaciones en la app instalada.");
-      }
-    }
-    setTimeout(() => setNotifSuccessMsg(null), 6000);
   };
 
   const handleScheduleMatches = async () => {
@@ -1981,27 +1967,60 @@ export default function HomeView({
                 </h3>
               </div>
               <div className="flex items-center gap-2">
+                {/* Botón "Agendar": acceso directo a cargar un turno, pago, examen, medicamento o
+                    comida planificada sin tener que ir a buscar esa pestaña — abre el formulario
+                    real de esa sección (ver App.tsx/handleQuickAdd). */}
+                <div className="relative" ref={quickAddMenuRef}>
+                  <button
+                    type="button"
+                    onClick={() => setQuickAddMenuOpen((v) => !v)}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-extrabold bg-primary text-white dark:text-zinc-950 hover:bg-primary/90 transition-all cursor-pointer active:scale-95 shadow-xs"
+                    title="Agendar un turno, pago, examen, medicamento o comida planificada"
+                  >
+                    <CalendarPlus className="w-3.5 h-3.5 shrink-0" />
+                    <span>Agendar</span>
+                    <ChevronDown className={`w-3 h-3 shrink-0 transition-transform ${quickAddMenuOpen ? "rotate-180" : ""}`} />
+                  </button>
+                  <AnimatePresence>
+                    {quickAddMenuOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -6, scale: 0.96 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -6, scale: 0.96 }}
+                        transition={{ duration: 0.15 }}
+                        className={`absolute right-0 top-full mt-1.5 z-30 w-52 rounded-xl border shadow-lg overflow-hidden ${
+                          darkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-zinc-200"
+                        }`}
+                      >
+                        {(
+                          [
+                            { id: "turno", label: "Turno / Compromiso", icon: Calendar },
+                            { id: "finanzas", label: "Pago (Finanzas)", icon: DollarSign },
+                            { id: "universidad", label: "Examen / Trabajo", icon: BookOpen },
+                            { id: "salud", label: "Medicamento", icon: Pill },
+                            { id: "comidas", label: "Comida Planificada", icon: UtensilsCrossed },
+                          ] as const
+                        ).map((opt) => (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => {
+                              setQuickAddMenuOpen(false);
+                              onQuickAdd?.(opt.id);
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-left hover:bg-primary/10 text-zinc-700 dark:text-zinc-200 cursor-pointer transition-colors"
+                          >
+                            <opt.icon className="w-3.5 h-3.5 text-primary shrink-0" />
+                            <span>{opt.label}</span>
+                          </button>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
                 {/* Push Notification Toggle & Test Button */}
-                {notifPerm === "granted" ? (
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={handleTestTodayNotifications}
-                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-extrabold bg-primary text-white dark:text-zinc-950 hover:bg-primary/90 transition-all cursor-pointer active:scale-95 shadow-xs"
-                      title="Probar y enviar las notificaciones de hoy a la barra de estado de tu móvil"
-                    >
-                      <BellRing className="w-3.5 h-3.5 shrink-0" />
-                      <span>Probar Aviso</span>
-                    </button>
-                    <span
-                      className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
-                      title="Notificaciones Push activas en este dispositivo"
-                    >
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                      <span>Push Activo</span>
-                    </span>
-                  </div>
-                ) : notifPerm === "denied" ? (
+                {notifPerm === "granted" ? null : notifPerm === "denied" ? (
                   <span
                     className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-zinc-100 dark:bg-zinc-800/60 text-zinc-400 border border-zinc-200 dark:border-zinc-700"
                     title="Permiso de notificaciones bloqueado en los ajustes del dispositivo/navegador"

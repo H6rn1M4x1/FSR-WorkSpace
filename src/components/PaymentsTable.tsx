@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import { saveItemToFirestore, deleteItemFromFirestore } from "../lib/firestoreSyncService";
 import { generateUniqueId } from "../utils/id";
@@ -47,6 +47,10 @@ interface PaymentsTableProps {
   darkMode: boolean;
   token?: string | null;
   userEmail?: string;
+  /** Cambia (a cualquier valor distinto del anterior) para abrir automáticamente el formulario
+   *  de "Agregar Pago" — usado por el botón "Agendar" de Inicio. */
+  autoOpenQuickAdd?: number;
+  onQuickAddHandled?: () => void;
 }
 
 interface CustomSelectProps {
@@ -294,12 +298,22 @@ export default function PaymentsTable({
   darkMode,
   token,
   userEmail,
+  autoOpenQuickAdd,
+  onQuickAddHandled,
 }: PaymentsTableProps) {
   const { showToast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showAddPayment, setShowAddPayment] = useState(false);
   const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
+
+  // Botón "Agendar" de Inicio: abre directo este mismo formulario de "Agregar Pago".
+  useEffect(() => {
+    if (!autoOpenQuickAdd) return;
+    setShowAddPayment(true);
+    onQuickAddHandled?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOpenQuickAdd]);
   const [uploadingState, setUploadingState] = useState<{
     [key: string]: boolean;
   }>({});
