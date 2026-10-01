@@ -55,6 +55,7 @@ import {
   AudioLines,
   Pill,
   CalendarPlus,
+  Pencil,
 } from "lucide-react";
 import { AudioTranscriptionPlayer } from "./AudioTranscriptionPlayer";
 import {
@@ -129,6 +130,12 @@ interface HomeViewProps {
   /** Navega a la pestaña real de la categoría elegida y le pide que abra directo su formulario
    *  de "nuevo" — usado por el botón "Agendar" de Inicio. */
   onQuickAdd?: (category: "turno" | "finanzas" | "universidad" | "salud" | "comidas") => void;
+  /** Navega a la pestaña real de la categoría elegida y le pide que abra directo el formulario
+   *  de EDICIÓN de ese ítem puntual — usado por el botón de lápiz en cada tarjeta de la Agenda. */
+  onQuickEdit?: (
+    category: "turno" | "finanzas" | "universidad" | "salud" | "comidas",
+    itemId: string
+  ) => void;
 }
 
 export default function HomeView({
@@ -163,6 +170,7 @@ export default function HomeView({
   materiasInfo = [],
   onOpenNotes,
   onQuickAdd,
+  onQuickEdit,
 }: HomeViewProps) {
   const homeUserId = user?.email || userProfile?.email || "hernanmaximiliano10@gmail.com";
   const { showToast } = useToast();
@@ -1974,7 +1982,7 @@ export default function HomeView({
                   <button
                     type="button"
                     onClick={() => setQuickAddMenuOpen((v) => !v)}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-extrabold bg-primary text-white dark:text-zinc-950 hover:bg-primary/90 transition-all cursor-pointer active:scale-95 shadow-xs"
+                    className="w-52 flex items-center justify-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-extrabold bg-primary text-white dark:text-zinc-950 hover:bg-primary/90 transition-all cursor-pointer active:scale-95 shadow-xs"
                     title="Agendar un turno, pago, examen, medicamento o comida planificada"
                   >
                     <CalendarPlus className="w-3.5 h-3.5 shrink-0" />
@@ -2279,6 +2287,16 @@ export default function HomeView({
                                   <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-primary/10 text-primary">
                                     Realizado
                                   </span>
+                                )}
+                                {onQuickEdit && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); onQuickEdit("turno", tc.id); }}
+                                    className="p-1 rounded-lg hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
+                                    title="Ver y editar"
+                                  >
+                                    <Pencil className="w-3 h-3" />
+                                  </button>
                                 )}
                                 <ChevronDown
                                   className={`w-3.5 h-3.5 text-primary transition-transform duration-200 ${
@@ -2688,6 +2706,16 @@ export default function HomeView({
                                   isSharedOut={isItemSharedOut("detailed_payments", dp.id)}
                                   sharedOutWith={sharedOutWithNames("detailed_payments", dp.id)}
                                 />
+                                {onQuickEdit && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); onQuickEdit("finanzas", dp.id); }}
+                                    className="p-1 rounded-lg hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
+                                    title="Ver y editar"
+                                  >
+                                    <Pencil className="w-3 h-3" />
+                                  </button>
+                                )}
                                 <ChevronDown
                                   className={`w-3.5 h-3.5 text-primary transition-transform duration-200 ${
                                     isExpanded ? "rotate-180" : ""
@@ -2863,6 +2891,16 @@ export default function HomeView({
                                 >
                                   {details.estado}
                                 </span>
+                                {onQuickEdit && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); onQuickEdit("salud", disp.medicamentoId); }}
+                                    className="p-1 rounded-lg hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
+                                    title="Ver y editar"
+                                  >
+                                    <Pencil className="w-3 h-3" />
+                                  </button>
+                                )}
                                 <ChevronDown
                                   className={`w-3.5 h-3.5 text-primary transition-transform duration-200 ${
                                     isExpanded ? "rotate-180" : ""
@@ -2970,6 +3008,16 @@ export default function HomeView({
                                 <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-primary/10 text-primary">
                                   Comidas
                                 </span>
+                                {onQuickEdit && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); onQuickEdit("comidas", m.id); }}
+                                    className="p-1 rounded-lg hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
+                                    title="Ver y editar"
+                                  >
+                                    <Pencil className="w-3 h-3" />
+                                  </button>
+                                )}
                                 <ChevronDown
                                   className={`w-3.5 h-3.5 text-primary transition-transform duration-200 ${
                                     isExpanded ? "rotate-180" : ""
@@ -3184,6 +3232,16 @@ export default function HomeView({
                                   <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-primary/10 text-primary">
                                     {e.estado || "Examen"}
                                   </span>
+                                  {onQuickEdit && (
+                                    <button
+                                      type="button"
+                                      onClick={(evt) => { evt.stopPropagation(); onQuickEdit("universidad", e.id); }}
+                                      className="p-1 rounded-lg hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
+                                      title="Ver y editar"
+                                    >
+                                      <Pencil className="w-3 h-3" />
+                                    </button>
+                                  )}
                                   <ChevronDown
                                     className={`w-3.5 h-3.5 text-primary transition-transform duration-200 ${
                                       isExpanded ? "rotate-180" : ""

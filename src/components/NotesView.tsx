@@ -476,7 +476,14 @@ export function NotesView({
         }}
         onDrop={(e) => {
           e.preventDefault();
-          handleDrop(group, note.id);
+          // Usa dragOverId (calculado contra la foto congelada), NUNCA note.id de este
+          // elemento puntual — el evento nativo "drop" dispara sobre lo que esté físicamente
+          // bajo el cursor en ese instante, que puede no coincidir con el destino ya mostrado
+          // en la vista previa (sobre todo con una nota grande, cuya propia animación puede
+          // dejar al cursor momentáneamente sobre la nota arrastrada u otra distinta). Sin
+          // esto, a veces el "drop" terminaba cayendo sobre la misma nota arrastrada y
+          // handleDrop no hacía nada, volviendo todo a como estaba.
+          if (dragOverId) handleDrop(group, dragOverId);
         }}
         onContextMenu={(e) => {
           if (isSharedIn) return; // can't re-share something shared to me
