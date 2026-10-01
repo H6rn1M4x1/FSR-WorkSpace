@@ -113,13 +113,20 @@ export function getMatchTeamLogos(tc: TurnoCompromiso): {
   if (tc.informacionPersonalizada) {
     try {
       const parsed = JSON.parse(tc.informacionPersonalizada);
-      if (parsed && (parsed.homeLogo || parsed.awayLogo)) {
+      // Los partidos agendados desde "Eventos deportivos" antes de que EventsView.tsx
+      // empezara a guardar homeLogo/awayLogo guardaban homeTeamBadge/awayTeamBadge (y
+      // leagueName en vez de competition) — se acepta ese formato viejo también, así los
+      // partidos ya agendados de antes se ven con sus escudos sin tener que volver a
+      // agendarlos.
+      const homeLogo = parsed?.homeLogo || parsed?.homeTeamBadge;
+      const awayLogo = parsed?.awayLogo || parsed?.awayTeamBadge;
+      if (parsed && (homeLogo || awayLogo)) {
         return {
           homeTeam: parsed.homeTeam,
-          homeLogo: parsed.homeLogo,
+          homeLogo,
           awayTeam: parsed.awayTeam,
-          awayLogo: parsed.awayLogo,
-          competition: parsed.competition,
+          awayLogo,
+          competition: parsed.competition || parsed.leagueName,
         };
       }
     } catch (e) {

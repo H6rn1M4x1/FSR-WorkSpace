@@ -119,6 +119,12 @@ export default function App() {
   // Layout State & Aesthetic Preferences (LocalStorage EXCLUSIVE per device)
   const [currentTab, setCurrentTab] = useState("home");
   const [activeSubTab, setActiveSubTab] = useState("");
+  // Botón "Agendar" de Inicio: navega a la pestaña real de la categoría elegida y le avisa a esa
+  // vista (via el prop autoOpenQuickAdd, que cada una consume con su propio useEffect) que abra
+  // directo su formulario real de "nuevo" — en vez de reconstruir 5 formularios aparte solo para
+  // este botón. El nonce (Date.now()) es lo que dispara el efecto aunque se pida la misma
+  // categoría dos veces seguidas.
+  const [quickAddNonce, setQuickAddNonce] = useState<number | undefined>(undefined);
   const [subPanelRows, setSubPanelRows] = useState<NavPanelRow[] | null>(null);
   const [darkMode, setDarkMode] = useState<boolean>(() => AestheticStorageService.getDarkMode());
   const [backgroundStyle, setBackgroundStyle] = useState<"dither" | "pixelblast" | "plasma">(() => AestheticStorageService.getBackgroundStyle());
@@ -260,6 +266,22 @@ export default function App() {
       setActiveSubTab("");
     }
   };
+
+  // Botón "Agendar" de Inicio — ver el comentario junto a quickAddNonce.
+  const QUICK_ADD_TARGETS = {
+    turno: { tab: "appointments", subTab: "registro" },
+    finanzas: { tab: "finances", subTab: "todos_pagos" },
+    universidad: { tab: "academic", subTab: "examenes" },
+    salud: { tab: "health", subTab: "medicamentos" },
+    comidas: { tab: "meals", subTab: "organizacion_semanal" },
+  } as const;
+  const handleQuickAdd = (category: keyof typeof QUICK_ADD_TARGETS) => {
+    const target = QUICK_ADD_TARGETS[category];
+    handleTabChange(target.tab);
+    setActiveSubTab(target.subTab);
+    setQuickAddNonce(Date.now());
+  };
+  const handleQuickAddHandled = () => setQuickAddNonce(undefined);
 
   // Check periodically or on user changes if Firestore quota is exceeded
   const [quotaExceeded, setQuotaExceeded] = useState(false);
@@ -2235,6 +2257,7 @@ export default function App() {
                     handleTabChange("notes");
                     setActiveSubTab("quick");
                   }}
+                  onQuickAdd={handleQuickAdd}
                 />
               )}
 
@@ -2259,6 +2282,8 @@ export default function App() {
                   setExamenes={setExamenes}
                   activeSubTab={activeSubTab}
                   onSubTabChange={setActiveSubTab}
+                  autoOpenQuickAdd={quickAddNonce}
+                  onQuickAddHandled={handleQuickAddHandled}
                 />
               )}
 
@@ -2283,6 +2308,8 @@ export default function App() {
                   setOrganizacionSemanal={setOrganizacionSemanal}
                   activeSubTab={activeSubTab}
                   onSubTabChange={setActiveSubTab}
+                  autoOpenQuickAdd={quickAddNonce}
+                  onQuickAddHandled={handleQuickAddHandled}
                 />
               )}
 
@@ -2314,6 +2341,8 @@ export default function App() {
                   token={token}
                   activeSubTab={activeSubTab}
                   onSubTabChange={setActiveSubTab}
+                  autoOpenQuickAdd={quickAddNonce}
+                  onQuickAddHandled={handleQuickAddHandled}
                 />
               )}
 
@@ -2337,6 +2366,8 @@ export default function App() {
                   medicalRecords={medicalRecords}
                   activeSubTab={activeSubTab}
                   onSubTabChange={setActiveSubTab}
+                  autoOpenQuickAdd={quickAddNonce}
+                  onQuickAddHandled={handleQuickAddHandled}
                 />
               )}
 
@@ -2379,6 +2410,8 @@ export default function App() {
                     localStorage.setItem("liquid_user_profile", JSON.stringify(updated));
                   }}
                   onOpenSettings={() => setIsUserSettingsOpen(true)}
+                  autoOpenQuickAdd={quickAddNonce}
+                  onQuickAddHandled={handleQuickAddHandled}
                 />
               )}
 

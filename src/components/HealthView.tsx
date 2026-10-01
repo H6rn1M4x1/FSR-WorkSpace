@@ -558,6 +558,10 @@ interface HealthViewProps {
   userProfile?: UserProfileData | null;
   onUpdateUserProfile?: (updated: UserProfileData) => void;
   onOpenSettings?: () => void;
+  /** Cambia (a cualquier valor distinto del anterior) para abrir automáticamente el formulario
+   *  de "Agregar Medicamento" — usado por el botón "Agendar" de Inicio. */
+  autoOpenQuickAdd?: number;
+  onQuickAddHandled?: () => void;
 }
 
 const compressImageIfNeeded = async (base64Str: string, maxSizeBytes = 600 * 1024): Promise<string> => {
@@ -636,6 +640,8 @@ export default function HealthView({
   onUpdateUserProfile,
   onOpenSettings,
   itemsIShared = [],
+  autoOpenQuickAdd,
+  onQuickAddHandled,
 }: HealthViewProps) {
   const { isSharedOut, sharedOutWith } = makeSharedOutHelpers(itemsIShared);
   const { showToast } = useToast();
@@ -2363,6 +2369,15 @@ export default function HealthView({
     setDetFechaInicio(new Date().toISOString().split("T")[0]);
     setShowDetailedModal(true);
   };
+
+  // Botón "Agendar" de Inicio: abre directo el formulario de "Agregar Medicamento" (mismo
+  // openAddModal que usa el botón de esta pantalla).
+  useEffect(() => {
+    if (!autoOpenQuickAdd) return;
+    openAddModal();
+    onQuickAddHandled?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOpenQuickAdd]);
 
   // Open Edit Modal
   const openEditModal = (med: MedicamentoDetallado) => {

@@ -586,6 +586,11 @@ interface AppointmentsViewProps {
   activeSubTab?: string;
   onSubTabChange?: (tab: string) => void;
   onSilentFetch?: () => void;
+  /** Cambia (a cualquier valor distinto del anterior, ej. Date.now()) para abrir automáticamente
+   *  el formulario de "Nuevo Turno / Compromiso" al entrar a esta vista — usado por el botón
+   *  "Agendar" de Inicio para saltar directo al formulario real de esta sección. */
+  autoOpenQuickAdd?: number;
+  onQuickAddHandled?: () => void;
 }
 
 // Reusable CustomSelect styled exactly like Finance's Todos los Pagos with Portal support
@@ -971,6 +976,8 @@ export default function AppointmentsView({
   activeSubTab: propActiveSubTab,
   onSubTabChange,
   itemsIShared = [],
+  autoOpenQuickAdd,
+  onQuickAddHandled,
 }: AppointmentsViewProps) {
   const { isSharedOut, sharedOutWith } = makeSharedOutHelpers(itemsIShared);
   const { showToast } = useToast();
@@ -1723,6 +1730,16 @@ export default function AppointmentsView({
     }
     setShowAddTurnoComp(true);
   };
+
+  // Botón "Agendar" de Inicio: al llegar acá con un pedido pendiente (App.tsx ya nos deja en
+  // el sub-tab "registro"), se abre directo el formulario real de esta sección (el mismo que
+  // usa el botón "Cargar Nuevo Turno / Compromiso") en vez de que el usuario tenga que buscarlo.
+  useEffect(() => {
+    if (!autoOpenQuickAdd) return;
+    handleOpenNewTurnoCompModal();
+    onQuickAddHandled?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOpenQuickAdd]);
 
   const handleEditTurnoCompromiso = (tc: TurnoCompromiso) => {
     searchSeqRef.current++;
