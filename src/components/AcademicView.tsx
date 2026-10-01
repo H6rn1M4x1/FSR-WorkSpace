@@ -806,6 +806,10 @@ interface AcademicViewProps {
    *  de "Nuevo Examen / Trabajo" — usado por el botón "Agendar" de Inicio. */
   autoOpenQuickAdd?: number;
   onQuickAddHandled?: () => void;
+  /** Id de un examen/trabajo puntual a editar. Usado por el botón de lápiz de Inicio. */
+  autoOpenEditId?: string;
+  autoOpenEditNonce?: number;
+  onQuickEditHandled?: () => void;
 }
 
 export default function AcademicView({
@@ -830,6 +834,9 @@ export default function AcademicView({
   itemsIShared = [],
   autoOpenQuickAdd,
   onQuickAddHandled,
+  autoOpenEditId,
+  autoOpenEditNonce,
+  onQuickEditHandled,
 }: AcademicViewProps) {
   const { isSharedOut, sharedOutWith } = makeSharedOutHelpers(itemsIShared);
   const { showToast } = useToast();
@@ -958,6 +965,23 @@ export default function AcademicView({
     onQuickAddHandled?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoOpenQuickAdd]);
+
+  // Botón de lápiz de la Agenda en Inicio: abre directo el formulario de edición de ese examen.
+  useEffect(() => {
+    if (!autoOpenEditNonce || !autoOpenEditId) return;
+    const ex = examenes.find((x) => x.id === autoOpenEditId);
+    if (ex) {
+      setEditingExamenId(ex.id);
+      setExMateria(ex.materia);
+      setExFecha(ex.fecha);
+      setExEstado(ex.estado);
+      setExInstancia(ex.instancia || "Primero");
+      setExAula(ex.aula);
+      setShowExamenModal(true);
+    }
+    onQuickEditHandled?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOpenEditNonce]);
 
   // Resumen Agenda & Calendar states
   const [resumenCalendarDate, setResumenCalendarDate] = useState<Date>(new Date());

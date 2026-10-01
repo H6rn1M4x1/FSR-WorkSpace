@@ -562,6 +562,10 @@ interface HealthViewProps {
    *  de "Agregar Medicamento" — usado por el botón "Agendar" de Inicio. */
   autoOpenQuickAdd?: number;
   onQuickAddHandled?: () => void;
+  /** Id de un medicamento puntual a editar. Usado por el botón de lápiz de Inicio. */
+  autoOpenEditId?: string;
+  autoOpenEditNonce?: number;
+  onQuickEditHandled?: () => void;
 }
 
 const compressImageIfNeeded = async (base64Str: string, maxSizeBytes = 600 * 1024): Promise<string> => {
@@ -642,6 +646,9 @@ export default function HealthView({
   itemsIShared = [],
   autoOpenQuickAdd,
   onQuickAddHandled,
+  autoOpenEditId,
+  autoOpenEditNonce,
+  onQuickEditHandled,
 }: HealthViewProps) {
   const { isSharedOut, sharedOutWith } = makeSharedOutHelpers(itemsIShared);
   const { showToast } = useToast();
@@ -2394,6 +2401,15 @@ export default function HealthView({
     setDetFechaInicio(med.fechaInicio || new Date().toISOString().split("T")[0]);
     setShowDetailedModal(true);
   };
+
+  // Botón de lápiz de la Agenda en Inicio: abre directo la edición de ese medicamento.
+  useEffect(() => {
+    if (!autoOpenEditNonce || !autoOpenEditId) return;
+    const med = medicamentosDetallados.find((m) => m.id === autoOpenEditId);
+    if (med) openEditModal(med);
+    onQuickEditHandled?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOpenEditNonce]);
 
   // Save Detailed Medication
   const handleSaveDetailedMed = async (e: React.FormEvent) => {

@@ -283,6 +283,17 @@ export default function App() {
   };
   const handleQuickAddHandled = () => setQuickAddNonce(undefined);
 
+  // Botón de lápiz en cada tarjeta de la Agenda de Inicio — mismo mecanismo que "Agendar", pero
+  // apunta al formulario de EDICIÓN de un ítem puntual en vez de al de "nuevo".
+  const [quickEditTarget, setQuickEditTarget] = useState<{ id: string; nonce: number } | undefined>(undefined);
+  const handleQuickEdit = (category: keyof typeof QUICK_ADD_TARGETS, itemId: string) => {
+    const target = QUICK_ADD_TARGETS[category];
+    handleTabChange(target.tab);
+    setActiveSubTab(target.subTab);
+    setQuickEditTarget({ id: itemId, nonce: Date.now() });
+  };
+  const handleQuickEditHandled = () => setQuickEditTarget(undefined);
+
   // Check periodically or on user changes if Firestore quota is exceeded
   const [quotaExceeded, setQuotaExceeded] = useState(false);
   const [appConfirmModal, setAppConfirmModal] = useState<{
@@ -2258,6 +2269,7 @@ export default function App() {
                     setActiveSubTab("quick");
                   }}
                   onQuickAdd={handleQuickAdd}
+                  onQuickEdit={handleQuickEdit}
                 />
               )}
 
@@ -2284,6 +2296,9 @@ export default function App() {
                   onSubTabChange={setActiveSubTab}
                   autoOpenQuickAdd={quickAddNonce}
                   onQuickAddHandled={handleQuickAddHandled}
+                  autoOpenEditId={quickEditTarget?.id}
+                  autoOpenEditNonce={quickEditTarget?.nonce}
+                  onQuickEditHandled={handleQuickEditHandled}
                 />
               )}
 
@@ -2310,6 +2325,9 @@ export default function App() {
                   onSubTabChange={setActiveSubTab}
                   autoOpenQuickAdd={quickAddNonce}
                   onQuickAddHandled={handleQuickAddHandled}
+                  autoOpenEditId={quickEditTarget?.id}
+                  autoOpenEditNonce={quickEditTarget?.nonce}
+                  onQuickEditHandled={handleQuickEditHandled}
                 />
               )}
 
@@ -2343,6 +2361,9 @@ export default function App() {
                   onSubTabChange={setActiveSubTab}
                   autoOpenQuickAdd={quickAddNonce}
                   onQuickAddHandled={handleQuickAddHandled}
+                  autoOpenEditId={quickEditTarget?.id}
+                  autoOpenEditNonce={quickEditTarget?.nonce}
+                  onQuickEditHandled={handleQuickEditHandled}
                 />
               )}
 
@@ -2368,6 +2389,9 @@ export default function App() {
                   onSubTabChange={setActiveSubTab}
                   autoOpenQuickAdd={quickAddNonce}
                   onQuickAddHandled={handleQuickAddHandled}
+                  autoOpenEditId={quickEditTarget?.id}
+                  autoOpenEditNonce={quickEditTarget?.nonce}
+                  onQuickEditHandled={handleQuickEditHandled}
                 />
               )}
 
@@ -2412,6 +2436,9 @@ export default function App() {
                   onOpenSettings={() => setIsUserSettingsOpen(true)}
                   autoOpenQuickAdd={quickAddNonce}
                   onQuickAddHandled={handleQuickAddHandled}
+                  autoOpenEditId={quickEditTarget?.id}
+                  autoOpenEditNonce={quickEditTarget?.nonce}
+                  onQuickEditHandled={handleQuickEditHandled}
                 />
               )}
 

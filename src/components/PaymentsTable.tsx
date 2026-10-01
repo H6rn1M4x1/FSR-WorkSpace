@@ -51,6 +51,11 @@ interface PaymentsTableProps {
    *  de "Agregar Pago" — usado por el botón "Agendar" de Inicio. */
   autoOpenQuickAdd?: number;
   onQuickAddHandled?: () => void;
+  /** Id de un pago puntual a editar — abre el mismo formulario de "Agregar Pago" pero en modo
+   *  edición, precargado. Usado por el botón de lápiz de cada tarjeta en Inicio. */
+  autoOpenEditId?: string;
+  autoOpenEditNonce?: number;
+  onQuickEditHandled?: () => void;
 }
 
 interface CustomSelectProps {
@@ -300,6 +305,9 @@ export default function PaymentsTable({
   userEmail,
   autoOpenQuickAdd,
   onQuickAddHandled,
+  autoOpenEditId,
+  autoOpenEditNonce,
+  onQuickEditHandled,
 }: PaymentsTableProps) {
   const { showToast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
@@ -314,6 +322,15 @@ export default function PaymentsTable({
     onQuickAddHandled?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoOpenQuickAdd]);
+
+  // Botón de lápiz de la Agenda en Inicio: abre directo el formulario de edición de ese pago.
+  useEffect(() => {
+    if (!autoOpenEditNonce || !autoOpenEditId) return;
+    const p = payments.find((x) => x.id === autoOpenEditId);
+    if (p) handleEdit(p);
+    onQuickEditHandled?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOpenEditNonce]);
   const [uploadingState, setUploadingState] = useState<{
     [key: string]: boolean;
   }>({});

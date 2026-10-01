@@ -409,6 +409,10 @@ interface MealsViewProps {
    *  de "Agregar Planificación Semanal" — usado por el botón "Agendar" de Inicio. */
   autoOpenQuickAdd?: number;
   onQuickAddHandled?: () => void;
+  /** Id de una planificación semanal puntual a editar. Usado por el botón de lápiz de Inicio. */
+  autoOpenEditId?: string;
+  autoOpenEditNonce?: number;
+  onQuickEditHandled?: () => void;
 }
 
 export default function MealsView({
@@ -433,6 +437,9 @@ export default function MealsView({
   itemsIShared = [],
   autoOpenQuickAdd,
   onQuickAddHandled,
+  autoOpenEditId,
+  autoOpenEditNonce,
+  onQuickEditHandled,
 }: MealsViewProps) {
   const { isSharedOut, sharedOutWith } = makeSharedOutHelpers(itemsIShared);
   // Subtab navigation
@@ -1116,6 +1123,15 @@ export default function MealsView({
     onQuickAddHandled?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoOpenQuickAdd]);
+
+  // Botón de lápiz de la Agenda en Inicio: abre directo la edición de esa planificación.
+  useEffect(() => {
+    if (!autoOpenEditNonce || !autoOpenEditId) return;
+    const item = organizacionSemanal.find((o) => o.id === autoOpenEditId);
+    if (item) handleEditOrgClick(item);
+    onQuickEditHandled?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOpenEditNonce]);
 
   const getDiaDeLaSemana = (fechaStr: string): string => {
     if (!fechaStr) return "-";

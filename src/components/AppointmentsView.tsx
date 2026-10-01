@@ -591,6 +591,11 @@ interface AppointmentsViewProps {
    *  "Agendar" de Inicio para saltar directo al formulario real de esta sección. */
   autoOpenQuickAdd?: number;
   onQuickAddHandled?: () => void;
+  /** Id de un Turno/Compromiso puntual a editar — abre el mismo formulario de arriba pero en
+   *  modo edición, precargado. Usado por el botón de lápiz de cada tarjeta en Inicio. */
+  autoOpenEditId?: string;
+  autoOpenEditNonce?: number;
+  onQuickEditHandled?: () => void;
 }
 
 // Reusable CustomSelect styled exactly like Finance's Todos los Pagos with Portal support
@@ -978,6 +983,9 @@ export default function AppointmentsView({
   itemsIShared = [],
   autoOpenQuickAdd,
   onQuickAddHandled,
+  autoOpenEditId,
+  autoOpenEditNonce,
+  onQuickEditHandled,
 }: AppointmentsViewProps) {
   const { isSharedOut, sharedOutWith } = makeSharedOutHelpers(itemsIShared);
   const { showToast } = useToast();
@@ -1790,6 +1798,15 @@ export default function AppointmentsView({
     setTcLon(hasValidCoords ? Number(tc.lon) : undefined);
     setShowAddTurnoComp(true);
   };
+
+  // Botón de lápiz de la Agenda en Inicio: abre directo el formulario de edición de ese turno.
+  useEffect(() => {
+    if (!autoOpenEditNonce || !autoOpenEditId) return;
+    const tc = turnosCompromisos.find((t) => t.id === autoOpenEditId);
+    if (tc) handleEditTurnoCompromiso(tc);
+    onQuickEditHandled?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOpenEditNonce]);
 
   const handleCloseTurnoCompModal = () => {
     searchSeqRef.current++;

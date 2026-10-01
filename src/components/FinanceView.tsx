@@ -112,6 +112,9 @@ interface FinanceViewProps {
    *  y abrir el formulario de "Agregar Pago" — usado por el botón "Agendar" de Inicio. */
   autoOpenQuickAdd?: number;
   onQuickAddHandled?: () => void;
+  autoOpenEditId?: string;
+  autoOpenEditNonce?: number;
+  onQuickEditHandled?: () => void;
 }
 
 interface CustomSelectProps {
@@ -382,6 +385,9 @@ export default function FinanceView({
   itemsIShared = [],
   autoOpenQuickAdd,
   onQuickAddHandled,
+  autoOpenEditId,
+  autoOpenEditNonce,
+  onQuickEditHandled,
 }: FinanceViewProps) {
   const { isSharedOut, sharedOutWith } = makeSharedOutHelpers(itemsIShared);
   const { showToast } = useToast();
@@ -3570,6 +3576,9 @@ export default function FinanceView({
                       userEmail={userEmail}
                       autoOpenQuickAdd={autoOpenQuickAdd}
                       onQuickAddHandled={onQuickAddHandled}
+                      autoOpenEditId={autoOpenEditId}
+                      autoOpenEditNonce={autoOpenEditNonce}
+                      onQuickEditHandled={onQuickEditHandled}
                     />
                   </motion.div>
                 ) : (
