@@ -180,7 +180,7 @@ function HomeDetailModal({
             exit={{ opacity: 0, scale: 0.96, y: 12 }}
             transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 force-solid-bg shadow-2xl p-5 space-y-2 text-xs"
+            className="w-full max-w-lg max-h-[85vh] overflow-y-auto no-scrollbar rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 force-solid-bg shadow-2xl p-5 space-y-2 text-xs"
           >
             <div className="flex justify-end -mt-1 -mr-1 mb-1">
               <button
@@ -2278,30 +2278,30 @@ export default function HomeView({
                           </div>
 
                           <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} title={app.title} icon={Calendar}>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <div className="flex flex-col gap-3">
                                   {app.doctorName && (
-                                    <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                    <div>
                                       <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
                                         Profesional / Especialidad
                                       </span>
-                                      <span className="font-semibold text-zinc-800 dark:text-zinc-200">
+                                      <span className="text-zinc-800 dark:text-zinc-200">
                                         {app.doctorName} {app.specialty ? `(${app.specialty})` : ""}
                                       </span>
                                     </div>
                                   )}
                                   {app.location && (
-                                    <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                    <div>
                                       <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
                                         Lugar / Dirección
                                       </span>
-                                      <span className="font-semibold text-zinc-800 dark:text-zinc-200">
+                                      <span className="text-zinc-800 dark:text-zinc-200">
                                         {app.location}
                                       </span>
                                     </div>
                                   )}
                                 </div>
                                 {app.notes && (
-                                  <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                  <div>
                                     <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider mb-1">
                                       Notas
                                     </span>
@@ -2463,12 +2463,12 @@ export default function HomeView({
                           </div>
 
                           <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} title={tc.descripcion.replace(/⚽\s*/g, "")} icon={CatIcon}>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                  <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                <div className="flex flex-col gap-3">
+                                  <div>
                                     <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
                                       Fecha y Hora
                                     </span>
-                                    <span className="font-semibold text-zinc-800 dark:text-zinc-200">
+                                    <span className="text-zinc-800 dark:text-zinc-200">
                                       {formatDateFriendly ? formatDateFriendly(tc.fecha) : tc.fecha}
                                     </span>
                                   </div>
@@ -2477,31 +2477,31 @@ export default function HomeView({
                                     tc.lugar.toLowerCase() !== "sin dirección" &&
                                     tc.lugar.toLowerCase() !== "sin direccion" &&
                                     tc.lugar.toLowerCase() !== "sin lugar asignado" && (
-                                    <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                    <div>
                                       <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
                                         Lugar / Ubicación
                                       </span>
-                                      <span className="font-semibold text-zinc-800 dark:text-zinc-200">
+                                      <span className="text-zinc-800 dark:text-zinc-200">
                                         {tc.lugar}
                                       </span>
                                     </div>
                                   )}
                                   {!matchLogos && tc.doctor && tc.doctor.trim() && (
-                                    <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                    <div>
                                       <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
                                         Profesional / Asignado
                                       </span>
-                                      <span className="font-semibold text-zinc-800 dark:text-zinc-200">
+                                      <span className="text-zinc-800 dark:text-zinc-200">
                                         {tc.doctor}
                                       </span>
                                     </div>
                                   )}
                                   {!matchLogos && (
-                                    <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                    <div>
                                       <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
                                         Categoría y Estatus
                                       </span>
-                                      <span className="font-semibold text-zinc-800 dark:text-zinc-200">
+                                      <span className="text-zinc-800 dark:text-zinc-200">
                                         {getCategoryLabel(tc.categoria)} • {(() => {
                                           if (tc.estatus) return "Realizado";
                                           const todayStr = getLocalDateString();
@@ -2515,7 +2515,7 @@ export default function HomeView({
                                   )}
                                 </div>
                                 {tc.informacionPersonalizada && !matchLogos && (
-                                  <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                  <div>
                                     <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider mb-1">
                                       Información Personalizada
                                     </span>
@@ -2526,7 +2526,7 @@ export default function HomeView({
                                   </div>
                                 )}
                                 {tc.transcripcionAutomatica && (
-                                  <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                  <div>
                                     <span className="flex items-center gap-1 text-[9px] font-extrabold text-green-500 uppercase tracking-wider mb-1">
                                       <AudioLines className="w-3 h-3" /> Transcripción de Audio
                                     </span>
@@ -2579,7 +2579,7 @@ export default function HomeView({
                                   </div>
                                 )}
                                 {tc.medicamentosAPedir && tc.medicamentosAPedir.length > 0 && (
-                                  <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                  <div>
                                     <span className="flex items-center gap-1 text-[9px] font-extrabold text-primary uppercase tracking-wider mb-1.5">
                                       <Pill className="w-3 h-3" /> Medicamentos a Pedir
                                     </span>
@@ -2692,39 +2692,39 @@ export default function HomeView({
                           </div>
 
                           <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} title={inv.title} icon={Receipt}>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                  <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                <div className="flex flex-col gap-3">
+                                  <div>
                                     <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
                                       Monto
                                     </span>
-                                    <span className="font-semibold text-zinc-800 dark:text-zinc-200">
+                                    <span className="text-zinc-800 dark:text-zinc-200">
                                       ${inv.amount.toLocaleString("es-AR")} ARS
                                     </span>
                                   </div>
-                                  <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                  <div>
                                     <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
                                       Estado de Pago
                                     </span>
-                                    <span className="font-semibold text-zinc-800 dark:text-zinc-200">
+                                    <span className="text-zinc-800 dark:text-zinc-200">
                                       {inv.paid ? "Pagado / Al día" : "Pendiente de pago"}
                                     </span>
                                   </div>
                                   {inv.dueDate && (
-                                  <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                  <div>
                                     <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
                                       Vencimiento
                                     </span>
-                                    <span className="font-semibold text-zinc-800 dark:text-zinc-200">
+                                    <span className="text-zinc-800 dark:text-zinc-200">
                                       {inv.dueDate}
                                     </span>
                                   </div>
                                   )}
                                   {inv.category && (
-                                  <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                  <div>
                                     <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
                                       Categoría
                                     </span>
-                                    <span className="font-semibold text-zinc-800 dark:text-zinc-200">
+                                    <span className="text-zinc-800 dark:text-zinc-200">
                                       {inv.category}
                                     </span>
                                   </div>
@@ -2849,66 +2849,66 @@ export default function HomeView({
                           </div>
 
                           <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} title={dp.descripcion} icon={isClosing || dp.categoria === "Tarjeta de Credito" ? CreditCard : Receipt}>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                  <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                <div className="flex flex-col gap-3">
+                                  <div>
                                     <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
                                       Categoría / Método
                                     </span>
-                                    <span className="font-semibold text-zinc-800 dark:text-zinc-200">
+                                    <span className="text-zinc-800 dark:text-zinc-200">
                                       {dp.categoria || "General"} • {dp.metodoPago || "Efectivo/Debito"}
                                     </span>
                                   </div>
                                   {dp.dondePagar && (
-                                  <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                  <div>
                                     <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
                                       ¿Dónde Pagar?
                                     </span>
-                                    <span className="font-semibold text-zinc-800 dark:text-zinc-200">
+                                    <span className="text-zinc-800 dark:text-zinc-200">
                                       {dp.dondePagar}
                                     </span>
                                   </div>
                                   )}
                                   {dp.conQuePagar && (
-                                  <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                  <div>
                                     <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
                                       ¿Con Qué Pagar?
                                     </span>
-                                    <span className="font-semibold text-zinc-800 dark:text-zinc-200">
+                                    <span className="text-zinc-800 dark:text-zinc-200">
                                       {dp.conQuePagar}
                                     </span>
                                   </div>
                                   )}
-                                  <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                  <div>
                                     <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
                                       Recurrente
                                     </span>
-                                    <span className="font-semibold text-zinc-800 dark:text-zinc-200">
+                                    <span className="text-zinc-800 dark:text-zinc-200">
                                       {dp.pagoRecurrente ? "Sí" : "No"}
                                     </span>
                                   </div>
                                   {dp.fechaCierre && (
-                                    <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                    <div>
                                       <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
                                         Fecha de Cierre
                                       </span>
-                                      <span className="font-semibold text-zinc-800 dark:text-zinc-200">
+                                      <span className="text-zinc-800 dark:text-zinc-200">
                                         {dp.fechaCierre}
                                       </span>
                                     </div>
                                   )}
                                   {(dp.facturaEmitida || dp.comprobantePago) && (
-                                    <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                    <div>
                                       <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
                                         Archivos
                                       </span>
-                                      <span className="font-semibold text-zinc-800 dark:text-zinc-200">
+                                      <span className="text-zinc-800 dark:text-zinc-200">
                                         {dp.facturaEmitida ? "Factura ✓" : "Sin factura"} • {dp.comprobantePago ? "Comprobante ✓" : "Sin comprobante"}
                                       </span>
                                     </div>
                                   )}
                                 </div>
                                 {dp.observaciones && (
-                                  <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                  <div>
                                     <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider mb-1">
                                       Observaciones
                                     </span>
@@ -2993,43 +2993,43 @@ export default function HomeView({
                           </div>
 
                           <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} title={details.marca} icon={Stethoscope}>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <div className="flex flex-col gap-3">
                                   {details.droga && (
-                                  <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                  <div>
                                     <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
                                       Droga / Fármaco
                                     </span>
-                                    <span className="font-semibold text-zinc-800 dark:text-zinc-200">
+                                    <span className="text-zinc-800 dark:text-zinc-200">
                                       {details.droga}
                                     </span>
                                   </div>
                                   )}
 
                                   {details.funcionTratamiento && (
-                                  <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                  <div>
                                     <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
                                       Función / Tratamiento
                                     </span>
-                                    <span className="font-semibold text-zinc-800 dark:text-zinc-200">
+                                    <span className="text-zinc-800 dark:text-zinc-200">
                                       {details.funcionTratamiento}
                                     </span>
                                   </div>
                                   )}
 
-                                  <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                  <div>
                                     <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
                                       Disponibilidad
                                     </span>
-                                    <span className="font-semibold text-zinc-800 dark:text-zinc-200">
+                                    <span className="text-zinc-800 dark:text-zinc-200">
                                       {details.disponibleHasta} ({details.disponibleParaDias.toFixed(1)} días)
                                     </span>
                                   </div>
 
-                                  <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                  <div>
                                     <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
                                       Stock (Inicial / Restante)
                                     </span>
-                                    <span className="font-semibold text-zinc-800 dark:text-zinc-200">
+                                    <span className="text-zinc-800 dark:text-zinc-200">
                                       {disp.cantidadRegistrada} registradas / {details.cantidadDisponible.toFixed(1)} restantes
                                     </span>
                                   </div>
@@ -3096,11 +3096,11 @@ export default function HomeView({
                           </div>
 
                           <HomeDetailModal isOpen={isExpanded && !!matchedPlato} onClose={() => setExpandedHomeItemId(null)}>
-                                <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                <div>
                                   <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider mb-1">
                                     Detalles del Plato
                                   </span>
-                                  <span className="font-semibold text-zinc-800 dark:text-zinc-200 block">
+                                  <span className="text-zinc-800 dark:text-zinc-200 block">
                                     {matchedPlato.nombrePlato}
                                   </span>
                                   {matchedPlato.descripcion && (
@@ -3109,23 +3109,23 @@ export default function HomeView({
                                     </p>
                                   )}
                                 </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <div className="flex flex-col gap-3">
                                   {matchedPlato.calorias !== undefined && matchedPlato.calorias !== null && (
-                                  <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                  <div>
                                     <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
                                       Calorías
                                     </span>
-                                    <span className="font-semibold text-zinc-800 dark:text-zinc-200">
+                                    <span className="text-zinc-800 dark:text-zinc-200">
                                       {matchedPlato.calorias} kcal
                                     </span>
                                   </div>
                                   )}
                                   {(matchedPlato.ingredientesPersonalizados?.length > 0 || matchedPlato.alimentoId1 || matchedPlato.alimentoId2 || matchedPlato.alimentoId3) && (
-                                  <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                  <div>
                                     <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
                                       Ingredientes
                                     </span>
-                                    <span className="font-semibold text-zinc-800 dark:text-zinc-200">
+                                    <span className="text-zinc-800 dark:text-zinc-200">
                                       {matchedPlato.ingredientesPersonalizados && matchedPlato.ingredientesPersonalizados.length > 0
                                         ? matchedPlato.ingredientesPersonalizados.join(", ")
                                         : [matchedPlato.alimentoId1, matchedPlato.alimentoId2, matchedPlato.alimentoId3]

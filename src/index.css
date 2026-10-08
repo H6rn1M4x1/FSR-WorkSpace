@@ -1249,28 +1249,28 @@ html:not(.dark) .map-instruction-banner span {
   color: #f8fafc !important;
 }
 
+/* Nota: sin forzar "opacity: 1" acá — background-color ya queda 100% opaco por sí solo (sin
+   canal alpha), y forzar la propiedad "opacity" del elemento entero rompería la animación de
+   aparición/desaparición (fade) que hacen los modales con framer-motion sobre este mismo
+   elemento. */
 .dark .force-solid-bg {
   background-color: #18181b !important;
-  opacity: 1 !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
 .dark .force-solid-input-bg {
   background-color: #09090b !important;
-  opacity: 1 !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
 
 html:not(.dark) .force-solid-bg {
   background-color: #ffffff !important;
-  opacity: 1 !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
 html:not(.dark) .force-solid-input-bg {
   background-color: #f8fafc !important;
-  opacity: 1 !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
