@@ -2402,11 +2402,17 @@ export default function HealthView({
     setShowDetailedModal(true);
   };
 
-  // Botón de lápiz de la Agenda en Inicio: abre directo la edición de ese medicamento.
+  // Botón de lápiz de la Agenda en Inicio: la tarjeta de "medicamento" en la Agenda muestra un
+  // registro de DISPONIBILIDAD (cuándo se termina el stock) — así que editarla tiene que abrir
+  // "Stock y Disponibilidad" (handleOpenEditDisp), no el formulario de datos del medicamento en
+  // sí (openEditModal, que es "Historial").
   useEffect(() => {
     if (!autoOpenEditNonce || !autoOpenEditId) return;
-    const med = medicamentosDetallados.find((m) => m.id === autoOpenEditId);
-    if (med) openEditModal(med);
+    const disp = disponibilidadMedicamentos.find((d) => d.id === autoOpenEditId);
+    if (disp) {
+      setMedsActiveTab("stock");
+      handleOpenEditDisp(disp);
+    }
     onQuickEditHandled?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoOpenEditNonce]);

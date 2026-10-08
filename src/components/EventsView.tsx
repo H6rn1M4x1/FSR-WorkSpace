@@ -18,6 +18,7 @@ import {
   Bell,
   BellOff,
   Clock,
+  Maximize2,
 } from "lucide-react";
 import { useToast } from "../context/ToastContext";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
@@ -621,6 +622,7 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
   // que "Eventos deportivos" y "Eventos del Día" — 6 tarjetas por página, 3 por columna (grilla
   // de 2 columnas), como pidió el usuario.
   const [sjPage, setSjPage] = useState(1);
+  const [expandedSjEvent, setExpandedSjEvent] = useState<SanJuanEvent | null>(null);
   const SJ_PAGE_SIZE = 6;
   useEffect(() => { setSjPage(1); }, [sjEvents]);
   const sjTotalPages = Math.max(1, Math.ceil(sjEvents.length / SJ_PAGE_SIZE));
@@ -1417,7 +1419,7 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
                     if (!ev) {
                       return (
                         <div key={`sj-placeholder-${i}`} className="invisible" aria-hidden="true">
-                          <div className="w-full h-32" />
+                          <div className="w-full h-20" />
                           <div className="p-3 space-y-1">
                             <p className="font-extrabold text-sm min-h-[2.5rem]">&nbsp;</p>
                             <p className="text-[11px] min-h-[1rem]">&nbsp;</p>
@@ -1429,7 +1431,14 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
                     }
                     const scheduled = isSanJuanScheduled(ev);
                     return (
-                      <a key={ev.id} href={ev.sourceUrl} target="_blank" rel="noopener noreferrer" className="relative rounded-2xl border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 overflow-hidden hover:shadow-md transition-all flex flex-col">
+                      <div
+                        key={ev.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setExpandedSjEvent(ev)}
+                        onKeyDown={(e) => { if (e.key === "Enter") setExpandedSjEvent(ev); }}
+                        className="relative rounded-2xl border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 overflow-hidden hover:shadow-md transition-all flex flex-col cursor-pointer"
+                      >
                         <button
                           type="button"
                           title={scheduled ? "Quitar de mis turnos" : "Agendar en mis turnos (Ocio)"}
@@ -1440,7 +1449,9 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
                         >
                           {scheduled ? <Bell className="w-3.5 h-3.5 fill-current" /> : <BellOff className="w-3.5 h-3.5" />}
                         </button>
-                        <div className="w-full h-32 shrink-0 flex items-center justify-center bg-slate-100 dark:bg-zinc-800">
+                        {/* Imagen más chica (antes h-32) — ya cumple su función como
+                            miniatura; la foto grande se ve en el modal al tocar la tarjeta. */}
+                        <div className="w-full h-20 shrink-0 flex items-center justify-center bg-slate-100 dark:bg-zinc-800">
                           {ev.imageUrl ? (
                             <img
                               src={ev.imageUrl}
@@ -1462,10 +1473,10 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
                           <p className="text-[11px] text-zinc-500 dark:text-zinc-400 line-clamp-1 min-h-[1rem]">{ev.location || " "}</p>
                           <p className="text-xs text-primary font-bold min-h-[1rem]">{ev.rawDate || " "}</p>
                           <p className="text-[10px] text-zinc-400 flex items-center gap-1">
-                            <ExternalLink className="w-3 h-3" /> Ver más
+                            <Maximize2 className="w-3 h-3" /> Ver detalle
                           </p>
                         </div>
-                      </a>
+                      </div>
                     );
                   })}
                 </motion.div>
@@ -1508,6 +1519,83 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
           </div>
         )}
       </div>
+
+      {/* Modal "ver detalle" de un evento de San Juan — por portal, con toda la info (foto
+          grande, título, ubicación, fecha) y un link al sitio original. */}
+      {typeof document !== "undefined" &&
+        createPortal(
+          <AnimatePresence>
+            {expandedSjEvent && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.18 }}
+                className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/60"
+                onClick={() => setExpandedSjEvent(null)}
+              >
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.96, y: 12 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.96, y: 12 }}
+                  transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-2xl"
+                >
+                  <div className="relative w-full h-48 shrink-0 flex items-center justify-center bg-slate-100 dark:bg-zinc-800">
+                    {expandedSjEvent.imageUrl ? (
+                      <img
+                        src={expandedSjEvent.imageUrl}
+                        alt={expandedSjEvent.title}
+                        className="w-full h-full object-cover"
+                        onError={(e) => { e.currentTarget.style.display = "none"; }}
+                      />
+                    ) : (
+                      <MapPin className="w-10 h-10 text-zinc-400" />
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setExpandedSjEvent(null)}
+                      className="absolute top-2 right-2 p-1.5 rounded-full bg-black/50 hover:bg-black/70 text-white cursor-pointer"
+                      title="Cerrar"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className="p-5 space-y-3">
+                    <h3 className="text-lg font-extrabold text-zinc-900 dark:text-white">
+                      {expandedSjEvent.title}
+                    </h3>
+                    {expandedSjEvent.location && (
+                      <p className="text-sm text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5">
+                        <MapPin className="w-4 h-4 text-primary shrink-0" />
+                        {expandedSjEvent.location}
+                      </p>
+                    )}
+                    {expandedSjEvent.rawDate && (
+                      <p className="text-sm text-primary font-bold flex items-center gap-1.5">
+                        <CalendarIcon className="w-4 h-4 shrink-0" />
+                        {expandedSjEvent.rawDate}
+                      </p>
+                    )}
+                    {expandedSjEvent.sourceUrl && (
+                      <a
+                        href={expandedSjEvent.sourceUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-xs font-bold text-primary hover:underline pt-1"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        Ver en el sitio original
+                      </a>
+                    )}
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>,
+          document.body
+        )}
 
       {/* Fútbol y NBA: mismo comportamiento (pestañas de día, tus equipos / competencias que
           seguís, scroll con animación), cada una su propia tarjeta e independiente entre sí. */}

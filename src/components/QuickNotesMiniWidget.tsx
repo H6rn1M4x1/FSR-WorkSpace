@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
-import { StickyNote, Pin, Plus, Maximize2, Pencil, Check, X } from "lucide-react";
+import { StickyNote, Pin, Plus, Pencil, Check, X } from "lucide-react";
 import { useNotes } from "../hooks/useNotes";
 import { RichTextEditor } from "./RichTextEditor";
 import { SaveOnIdle, type Draft } from "./NotesView";
@@ -55,8 +55,7 @@ export function QuickNotesMiniWidget({
   const expandedNote = notes.find((n) => n.id === expandedId) || null;
   const palette = expandedNote ? NOTE_CARD_COLOR[expandedNote.color] || NOTE_CARD_COLOR.default : "";
 
-  const openExpanded = (e: React.MouseEvent, noteId: string) => {
-    e.stopPropagation();
+  const openExpanded = (noteId: string) => {
     const note = notes.find((n) => n.id === noteId);
     if (!note) return;
     setExpandedId(noteId);
@@ -107,22 +106,15 @@ export function QuickNotesMiniWidget({
               key={note.id}
               role="button"
               tabIndex={0}
-              onClick={onOpenAll}
+              onClick={() => openExpanded(note.id)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") onOpenAll?.();
+                if (e.key === "Enter") openExpanded(note.id);
               }}
-              className={`relative text-left rounded-2xl border p-3 flex flex-col gap-1 h-28 overflow-hidden hover:shadow-md transition-all cursor-pointer ${
+              title="Ver en grande"
+              className={`text-left rounded-2xl border p-3 flex flex-col gap-1 h-28 overflow-hidden hover:shadow-md transition-all cursor-pointer ${
                 NOTE_CARD_COLOR[note.color] || NOTE_CARD_COLOR.default
               }`}
             >
-              <button
-                type="button"
-                onClick={(e) => openExpanded(e, note.id)}
-                className="absolute top-1.5 right-1.5 z-10 p-1 rounded-md bg-black/5 hover:bg-black/15 dark:bg-white/10 dark:hover:bg-white/20 text-zinc-500 dark:text-zinc-300 cursor-pointer"
-                title="Ver en grande"
-              >
-                <Maximize2 className="w-3 h-3" />
-              </button>
               <div className="flex items-center gap-1 min-w-0 pr-5">
                 {note.pinned && <Pin className="w-3 h-3 text-primary fill-primary shrink-0" />}
                 <p className="font-extrabold text-xs text-zinc-900 dark:text-zinc-100 truncate">
