@@ -33,6 +33,19 @@ export interface FootballLeagueStandings {
   entries: StandingsEntry[];
 }
 
+/**
+ * Diagnóstico visible en pantalla (no solo en la consola del navegador, que no todos los
+ * usuarios saben abrir) de por qué una tabla de posiciones da puntos en 0 — queda acá, en
+ * memoria del módulo, para que los paneles (StandingsPanels.tsx) lo lean después de cada fetch
+ * y lo muestren directo en la tarjeta "No disponible" en vez de pedir que alguien revise la
+ * consola. Se borra sin usar si en algún momento se confirma el nombre correcto del campo.
+ */
+export const standingsDebug: {
+  football: Record<string, string | undefined>; // por leagueCode
+  f1Drivers?: string;
+  f1Constructors?: string;
+} = { football: {} };
+
 // Mismos códigos ESPN ya confirmados válidos en footballCompetitions.ts, uno por cada liga de
 // FOOTBALL_LEAGUES (data/footballLeagues.ts) — para poder pedir la tabla de posiciones de la
 // liga de cada equipo seguido.
@@ -100,7 +113,11 @@ export async function fetchFootballStandings(leagueCode: string, leagueName: str
   // la primera entrada para poder identificar el nombre correcto sin tener que adivinar de
   // nuevo a ciegas.
   if (entries.every((e) => e.points === 0) && rawEntries[0]) {
+    const raw = JSON.stringify(rawEntries[0]?.stats ?? []);
     console.warn(`[standingsService] Fútbol (${leagueName}): todos los puntos dieron 0 — stats crudos de la primera entrada:`, rawEntries[0]?.stats);
+    standingsDebug.football[leagueCode] = raw;
+  } else {
+    delete standingsDebug.football[leagueCode];
   }
 
   return { leagueCode, leagueName, entries };
@@ -163,6 +180,9 @@ export async function fetchF1DriverStandings(): Promise<F1DriverStanding[]> {
   // Diagnóstico temporal — ver el mismo comentario en fetchFootballStandings.
   if (entries.length && entries.every((e) => e.points === 0) && rawEntries[0]) {
     console.warn("[standingsService] F1 pilotos: todos los puntos dieron 0 — stats crudos de la primera entrada:", rawEntries[0]?.stats);
+    standingsDebug.f1Drivers = JSON.stringify(rawEntries[0]?.stats ?? []);
+  } else {
+    delete standingsDebug.f1Drivers;
   }
 
   return entries;
@@ -208,6 +228,9 @@ export async function fetchF1ConstructorStandings(): Promise<F1ConstructorStandi
       "[standingsService] F1 constructores: ningún piloto de ESPN matcheó contra data/f1.ts — nombres de ESPN:",
       drivers.map((d) => d.driverName)
     );
+    standingsDebug.f1Constructors = `Nombres de ESPN sin match: ${drivers.map((d) => d.driverName).join(", ")}`;
+  } else {
+    delete standingsDebug.f1Constructors;
   }
 
   const entries: F1ConstructorStanding[] = F1_TEAMS.filter((t) => pointsByTeamId.has(t.id))

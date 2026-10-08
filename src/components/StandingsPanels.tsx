@@ -7,6 +7,7 @@ import {
   fetchF1ConstructorStandings,
   fetchF1NextRace,
   fetchNbaStandings,
+  standingsDebug,
   FootballLeagueStandings,
   F1DriverStanding,
   F1ConstructorStanding,
@@ -42,6 +43,16 @@ function LoadingState() {
     <div className="min-h-[292px] flex items-center gap-2 text-xs text-zinc-500">
       <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Cargando posiciones...
     </div>
+  );
+}
+
+/** Diagnóstico visible directo en la tarjeta (ver standingsDebug en standingsService.ts) — para
+ *  no depender de que alguien abra la consola del navegador para mandar el dato real de ESPN. */
+function DebugRawStats({ raw }: { raw: string }) {
+  return (
+    <p className="mt-2 text-[9px] font-mono text-zinc-400 dark:text-zinc-600 break-all select-all">
+      Puntos en 0 — datos crudos de ESPN para depurar: {raw}
+    </p>
   );
 }
 
@@ -156,6 +167,9 @@ export function FootballStandingsPanel({
                       );
                     })}
                   </div>
+                  {standingsDebug.football[current.code] && (
+                    <DebugRawStats raw={standingsDebug.football[current.code]!} />
+                  )}
                 </div>
               )}
             </motion.div>
@@ -323,6 +337,12 @@ export function F1StandingsPanel({ darkMode, driverName, teamName }: { darkMode:
                       })}
                   {(page === "drivers" ? !drivers?.length : !constructors?.length) && (
                     <p className="text-xs text-zinc-500 py-4 text-center">No disponible.</p>
+                  )}
+                  {page === "drivers" && standingsDebug.f1Drivers && (
+                    <DebugRawStats raw={standingsDebug.f1Drivers} />
+                  )}
+                  {page === "constructors" && standingsDebug.f1Constructors && (
+                    <DebugRawStats raw={standingsDebug.f1Constructors} />
                   )}
                 </div>
               </motion.div>

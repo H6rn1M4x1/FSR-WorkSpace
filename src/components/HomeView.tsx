@@ -138,6 +138,62 @@ interface HomeViewProps {
   ) => void;
 }
 
+/**
+ * Modal flotante para "ver toda la información detallada" de una tarjeta de Agenda Central
+ * Integrada (turno, pago, examen, medicamento, comida, etc.) — antes esa info se desplegaba
+ * inline dentro de la misma tarjeta (acordeón), empujando hacia abajo todo lo que estaba debajo;
+ * ahora se muestra en un modal por portal, igual que el de Notas Rápidas y el de "Qué hacer en
+ * San Juan". El contenido interno (las cajitas de Fecha y Hora, Lugar, etc.) queda igual que
+ * antes — esto solo cambia dónde se muestra.
+ */
+function HomeDetailModal({
+  isOpen,
+  onClose,
+  children,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+          className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/60"
+          onClick={onClose}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96, y: 12 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.96, y: 12 }}
+            transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-2xl p-5 space-y-2 text-xs"
+          >
+            <div className="flex justify-end -mt-1 -mr-1 mb-1">
+              <button
+                type="button"
+                onClick={onClose}
+                className="p-1.5 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 text-zinc-400 cursor-pointer"
+                title="Cerrar"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            {children}
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>,
+    document.body
+  );
+}
+
 export default function HomeView({
   darkMode,
   user,
@@ -2202,16 +2258,7 @@ export default function HomeView({
                             </div>
                           </div>
 
-                          <AnimatePresence>
-                            {isExpanded && (
-                              <motion.div
-                                initial={{ opacity: 0, height: 0 }}
-                                animate={{ opacity: 1, height: "auto" }}
-                                exit={{ opacity: 0, height: 0 }}
-                                transition={{ duration: 0.2 }}
-                                className="pt-2 border-t border-primary/20 space-y-2 text-xs"
-                                onClick={(e) => e.stopPropagation()}
-                              >
+                          <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)}>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                   {app.doctorName && (
                                     <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
@@ -2244,9 +2291,7 @@ export default function HomeView({
                                     </p>
                                   </div>
                                 )}
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
+                          </HomeDetailModal>
                         </div>
                       );
                     }
@@ -2398,16 +2443,7 @@ export default function HomeView({
                             </div>
                           </div>
 
-                          <AnimatePresence>
-                            {isExpanded && (
-                              <motion.div
-                                initial={{ opacity: 0, height: 0 }}
-                                animate={{ opacity: 1, height: "auto" }}
-                                exit={{ opacity: 0, height: 0 }}
-                                transition={{ duration: 0.2 }}
-                                className="pt-2 border-t border-primary/20 space-y-2 text-xs"
-                                onClick={(e) => e.stopPropagation()}
-                              >
+                          <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)}>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                   <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
                                     <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
@@ -2523,9 +2559,7 @@ export default function HomeView({
                                     ))}
                                   </div>
                                 )}
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
+                          </HomeDetailModal>
                         </div>
                       );
                     }
@@ -2599,16 +2633,7 @@ export default function HomeView({
                             </div>
                           </div>
 
-                          <AnimatePresence>
-                            {isExpanded && (
-                              <motion.div
-                                initial={{ opacity: 0, height: 0 }}
-                                animate={{ opacity: 1, height: "auto" }}
-                                exit={{ opacity: 0, height: 0 }}
-                                transition={{ duration: 0.2 }}
-                                className="pt-2 border-t border-primary/20 space-y-2 text-xs"
-                                onClick={(e) => e.stopPropagation()}
-                              >
+                          <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)}>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                   <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
                                     <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
@@ -2647,9 +2672,7 @@ export default function HomeView({
                                   </div>
                                   )}
                                 </div>
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
+                          </HomeDetailModal>
                         </div>
                       );
                     }
@@ -2767,16 +2790,7 @@ export default function HomeView({
                             </div>
                           </div>
 
-                          <AnimatePresence>
-                            {isExpanded && (
-                              <motion.div
-                                initial={{ opacity: 0, height: 0 }}
-                                animate={{ opacity: 1, height: "auto" }}
-                                exit={{ opacity: 0, height: 0 }}
-                                transition={{ duration: 0.2 }}
-                                className="pt-2 border-t border-primary/20 space-y-2 text-xs"
-                                onClick={(e) => e.stopPropagation()}
-                              >
+                          <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)}>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                   <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
                                     <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
@@ -2845,9 +2859,7 @@ export default function HomeView({
                                     </p>
                                   </div>
                                 )}
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
+                          </HomeDetailModal>
                         </div>
                       );
                     }
@@ -2922,16 +2934,7 @@ export default function HomeView({
                             </div>
                           </div>
 
-                          <AnimatePresence>
-                            {isExpanded && (
-                              <motion.div
-                                initial={{ opacity: 0, height: 0 }}
-                                animate={{ opacity: 1, height: "auto" }}
-                                exit={{ opacity: 0, height: 0 }}
-                                transition={{ duration: 0.2 }}
-                                className="pt-2 border-t border-primary/20 space-y-2 text-xs"
-                                onClick={(e) => e.stopPropagation()}
-                              >
+                          <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)}>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                   {details.droga && (
                                   <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
@@ -2973,9 +2976,7 @@ export default function HomeView({
                                     </span>
                                   </div>
                                 </div>
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
+                          </HomeDetailModal>
                         </div>
                       );
                     }
@@ -3036,16 +3037,7 @@ export default function HomeView({
                             </div>
                           </div>
 
-                          <AnimatePresence>
-                            {isExpanded && matchedPlato && (
-                              <motion.div
-                                initial={{ opacity: 0, height: 0 }}
-                                animate={{ opacity: 1, height: "auto" }}
-                                exit={{ opacity: 0, height: 0 }}
-                                transition={{ duration: 0.2 }}
-                                className="pt-2 border-t border-primary/20 space-y-2 text-xs"
-                                onClick={(e) => e.stopPropagation()}
-                              >
+                          <HomeDetailModal isOpen={isExpanded && !!matchedPlato} onClose={() => setExpandedHomeItemId(null)}>
                                 <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
                                   <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider mb-1">
                                     Detalles del Plato
@@ -3086,9 +3078,7 @@ export default function HomeView({
                                   </div>
                                   )}
                                 </div>
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
+                          </HomeDetailModal>
                         </div>
                       );
                     }
@@ -3147,16 +3137,7 @@ export default function HomeView({
                             </div>
                           </div>
 
-                          <AnimatePresence>
-                            {isExpanded && (
-                              <motion.div
-                                initial={{ opacity: 0, height: 0 }}
-                                animate={{ opacity: 1, height: "auto" }}
-                                exit={{ opacity: 0, height: 0 }}
-                                transition={{ duration: 0.2 }}
-                                className="pt-2 border-t border-primary/20 space-y-2 text-xs"
-                                onClick={(e) => e.stopPropagation()}
-                              >
+                          <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)}>
                                 <div className="p-3 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30 space-y-1.5">
                                   <div className="flex items-center justify-between">
                                     <span className="text-[9px] font-extrabold text-primary uppercase tracking-wider">
@@ -3200,9 +3181,7 @@ export default function HomeView({
                                     )}
                                   </div>
                                 </div>
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
+                          </HomeDetailModal>
                         </div>
                       );
                     }
@@ -3277,16 +3256,7 @@ export default function HomeView({
                             </div>
                           </div>
 
-                          <AnimatePresence>
-                            {isExpanded && (
-                              <motion.div
-                                initial={{ opacity: 0, height: 0 }}
-                                animate={{ opacity: 1, height: "auto" }}
-                                exit={{ opacity: 0, height: 0 }}
-                                transition={{ duration: 0.2 }}
-                                className="pt-2 border-t border-primary/20 space-y-2 text-xs"
-                                onClick={(e) => e.stopPropagation()}
-                              >
+                          <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)}>
                                 <div className="p-3 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30 space-y-1.5">
                                   <div className="flex items-center justify-between">
                                     <span className="text-[9px] font-extrabold text-primary uppercase tracking-wider">
@@ -3338,9 +3308,7 @@ export default function HomeView({
                                     )}
                                   </div>
                                 </div>
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
+                          </HomeDetailModal>
                         </div>
                       );
                     }
@@ -3452,16 +3420,7 @@ export default function HomeView({
                             )}
                           </div>
 
-                          <AnimatePresence>
-                            {isExpanded && (
-                              <motion.div
-                                initial={{ opacity: 0, height: 0 }}
-                                animate={{ opacity: 1, height: "auto" }}
-                                exit={{ opacity: 0, height: 0 }}
-                                transition={{ duration: 0.2 }}
-                                className="pt-2 border-t border-primary/20 space-y-2 text-xs"
-                                onClick={(e) => e.stopPropagation()}
-                              >
+                          <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)}>
                                 <div className="p-3 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30 space-y-1.5">
                                   <div className="flex items-center justify-between">
                                     <span className="text-[9px] font-extrabold text-primary uppercase tracking-wider">
@@ -3511,9 +3470,7 @@ export default function HomeView({
                                     )}
                                   </div>
                                 </div>
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
+                          </HomeDetailModal>
                         </div>
                       );
                     }
