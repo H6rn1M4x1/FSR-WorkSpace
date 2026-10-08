@@ -6,7 +6,7 @@ interface LocationPickerMapProps {
   lat?: number;
   lon?: number;
   locationName?: string;
-  onSelectLocation: (location: {
+  onSelectLocation?: (location: {
     lat: number;
     lon: number;
     address?: string;
@@ -14,6 +14,9 @@ interface LocationPickerMapProps {
     display_name?: string;
   }) => void;
   heightClass?: string;
+  // Modo de solo-visualización (p.ej. modales de detalle): oculta "Mi GPS" y el banner de
+  // instrucciones, y deshabilita arrastrar el marcador / click en el mapa para mover el punto.
+  readOnly?: boolean;
 }
 
 // Fix Leaflet default marker icon path issue in bundled environments
@@ -47,6 +50,7 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
   locationName,
   onSelectLocation,
   heightClass = "h-52",
+  readOnly = false,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -96,7 +100,7 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
       const res = await fetch(`/api/reverse-geocode?lat=${targetLat}&lon=${targetLon}`);
       if (res.ok) {
         const data = await res.json();
-        onSelectLocation({
+        onSelectLocation?.({
           lat: targetLat,
           lon: targetLon,
           address: data.address || data.display_name,
@@ -104,7 +108,7 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
           display_name: data.display_name,
         });
       } else {
-        onSelectLocation({
+        onSelectLocation?.({
           lat: targetLat,
           lon: targetLon,
           display_name: `${targetLat.toFixed(5)}, ${targetLon.toFixed(5)}`,
@@ -112,7 +116,7 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
       }
     } catch (err) {
       console.warn("Reverse geocode failed:", err);
-      onSelectLocation({
+      onSelectLocation?.({
         lat: targetLat,
         lon: targetLon,
         display_name: `${targetLat.toFixed(5)}, ${targetLon.toFixed(5)}`,
@@ -147,25 +151,27 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
       // OpenStreetMap Marker
       const marker = L.marker([currentLat, currentLon], {
         icon: customIcon,
-        draggable: true,
+        draggable: !readOnly,
       }).addTo(map);
 
       if (locationName) {
         marker.bindTooltip(locationName, { permanent: false, direction: "top" });
       }
 
-      // On marker drag end
-      marker.on("dragend", (e: any) => {
-        const position = e.target.getLatLng();
-        handleReverseGeocode(position.lat, position.lng);
-      });
+      if (!readOnly) {
+        // On marker drag end
+        marker.on("dragend", (e: any) => {
+          const position = e.target.getLatLng();
+          handleReverseGeocode(position.lat, position.lng);
+        });
 
-      // On map click
-      map.on("click", (e: L.LeafletMouseEvent) => {
-        const { lat: clickedLat, lng: clickedLon } = e.latlng;
-        marker.setLatLng([clickedLat, clickedLon]);
-        handleReverseGeocode(clickedLat, clickedLon);
-      });
+        // On map click
+        map.on("click", (e: L.LeafletMouseEvent) => {
+          const { lat: clickedLat, lng: clickedLon } = e.latlng;
+          marker.setLatLng([clickedLat, clickedLon]);
+          handleReverseGeocode(clickedLat, clickedLon);
+        });
+      }
 
       mapRef.current = map;
       markerRef.current = marker;
@@ -285,16 +291,18 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
 
         {/* Map Controls */}
         <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={handleGpsLocation}
-            disabled={locatingGps}
-            title="Mi Ubicación GPS Actual"
-            className="flex items-center gap-1 px-2.5 py-1 bg-white dark:bg-zinc-900 border border-primary/30 text-primary hover:bg-primary hover:text-white rounded-lg text-[10px] font-bold shadow-xs transition-all cursor-pointer disabled:opacity-50"
-          >
-            <Locate className={`w-3.5 h-3.5 ${locatingGps ? "animate-spin text-primary" : "text-primary"}`} />
-            <span>Mi GPS</span>
-          </button>
+          {!readOnly && (
+            <button
+              type="button"
+              onClick={handleGpsLocation}
+              disabled={locatingGps}
+              title="Mi Ubicación GPS Actual"
+              className="flex items-center gap-1 px-2.5 py-1 bg-white dark:bg-zinc-900 border border-primary/30 text-primary hover:bg-primary hover:text-white rounded-lg text-[10px] font-bold shadow-xs transition-all cursor-pointer disabled:opacity-50"
+            >
+              <Locate className={`w-3.5 h-3.5 ${locatingGps ? "animate-spin text-primary" : "text-primary"}`} />
+              <span>Mi GPS</span>
+            </button>
+          )}
 
           {lat && lon && (
             <a
@@ -326,11 +334,11 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
             />
           </div>
         ) : (
-          <div ref={mapContainerRef} className={`w-full ${heightClass} z-10 cursor-crosshair`} />
+          <div ref={mapContainerRef} className={`w-full ${heightClass} z-10 ${readOnly ? "" : "cursor-crosshair"}`} />
         )}
 
         {/* Floating Instruction Banner */}
-        {!embedMode && (
+        {!embedMode && !readOnly && (
           <div className="absolute bottom-2 left-2 z-20 px-2.5 py-1 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-primary/30 dark:border-primary/20 rounded-xl text-[10px] text-slate-800 dark:text-zinc-100 font-semibold shadow-md flex items-center gap-1.5 pointer-events-none ring-1 ring-primary/20 map-instruction-banner">
             <Navigation className="w-3 h-3 text-primary animate-bounce fill-primary/20" />
             <span>Haz clic o arrastra el marcador para fijar la ubicación exacta</span>

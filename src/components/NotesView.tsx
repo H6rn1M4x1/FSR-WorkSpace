@@ -626,7 +626,9 @@ export function NotesView({
                     exit={{ opacity: 0, scale: 0.96, y: 12 }}
                     transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
                     onClick={(e) => e.stopPropagation()}
-                    className={`w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl border p-5 shadow-2xl ${palette.card}`}
+                    className={`w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl border p-5 shadow-2xl ${palette.card} ${
+                      !note.color || note.color === "default" ? "force-solid-bg" : ""
+                    }`}
                   >
                     <div className="flex items-start justify-between gap-3 mb-3">
                       {expandedEditing ? (

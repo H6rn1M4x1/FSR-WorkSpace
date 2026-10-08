@@ -14,6 +14,7 @@ import { PillFilterBar } from "./PillFilterBar";
 import { getMatchTeamLogos, syncMonthlyMatches } from "../lib/matchScheduler";
 import { motion, AnimatePresence } from "motion/react";
 import { ConfirmationModal } from "./ConfirmationModal";
+import { LocationPickerMap } from "./LocationPickerMap";
 import { shareItemWith, unshareItem } from "../lib/itemSharingService";
 import {
   Calendar,
@@ -149,10 +150,16 @@ interface HomeViewProps {
 function HomeDetailModal({
   isOpen,
   onClose,
+  title,
+  icon: Icon,
   children,
 }: {
   isOpen: boolean;
   onClose: () => void;
+  // Título e ícono opcionales: se omiten en los tipos que ya muestran su propio título dentro
+  // del contenido (clase, examen, trabajo, meal), para no duplicarlo.
+  title?: string;
+  icon?: React.ComponentType<{ className?: string }>;
   children: React.ReactNode;
 }) {
   if (typeof document === "undefined") return null;
@@ -173,7 +180,7 @@ function HomeDetailModal({
             exit={{ opacity: 0, scale: 0.96, y: 12 }}
             transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-2xl p-5 space-y-2 text-xs"
+            className="w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 force-solid-bg shadow-2xl p-5 space-y-2 text-xs"
           >
             <div className="flex justify-end -mt-1 -mr-1 mb-1">
               <button
@@ -185,6 +192,18 @@ function HomeDetailModal({
                 <X className="w-4 h-4" />
               </button>
             </div>
+            {title && (
+              <div className="flex items-center gap-2 pb-2 -mt-2 mb-1 border-b border-slate-200 dark:border-zinc-800">
+                {Icon && (
+                  <span className="p-1.5 rounded-lg bg-primary/10 text-primary shrink-0">
+                    <Icon className="w-4 h-4" />
+                  </span>
+                )}
+                <h3 className="font-extrabold text-sm text-zinc-900 dark:text-white leading-snug">
+                  {title}
+                </h3>
+              </div>
+            )}
             {children}
           </motion.div>
         </motion.div>
@@ -2258,7 +2277,7 @@ export default function HomeView({
                             </div>
                           </div>
 
-                          <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)}>
+                          <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} title={app.title} icon={Calendar}>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                   {app.doctorName && (
                                     <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
@@ -2443,7 +2462,7 @@ export default function HomeView({
                             </div>
                           </div>
 
-                          <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)}>
+                          <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} title={tc.descripcion.replace(/⚽\s*/g, "")} icon={CatIcon}>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                   <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
                                     <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
@@ -2559,6 +2578,45 @@ export default function HomeView({
                                     ))}
                                   </div>
                                 )}
+                                {tc.medicamentosAPedir && tc.medicamentosAPedir.length > 0 && (
+                                  <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                    <span className="flex items-center gap-1 text-[9px] font-extrabold text-primary uppercase tracking-wider mb-1.5">
+                                      <Pill className="w-3 h-3" /> Medicamentos a Pedir
+                                    </span>
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {tc.medicamentosAPedir.map((medId: string) => {
+                                        const med = medicamentosDetallados.find((m) => m.id === medId);
+                                        if (!med) return null;
+                                        return (
+                                          <span
+                                            key={medId}
+                                            className="px-2 py-1 rounded-full bg-white dark:bg-black/40 text-[10px] font-bold text-zinc-700 dark:text-zinc-300 border border-primary/20"
+                                          >
+                                            {med.marca}{med.droga ? ` (${med.droga})` : ""}
+                                          </span>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
+                                {typeof tc.lat === "number" &&
+                                  typeof tc.lon === "number" &&
+                                  !isNaN(tc.lat) &&
+                                  !isNaN(tc.lon) &&
+                                  !(tc.lat === 0 && tc.lon === 0) && (
+                                  <div>
+                                    <span className="flex items-center gap-1 text-[9px] font-extrabold text-primary uppercase tracking-wider mb-1.5">
+                                      <MapPin className="w-3 h-3" /> Mapa
+                                    </span>
+                                    <LocationPickerMap
+                                      lat={tc.lat}
+                                      lon={tc.lon}
+                                      locationName={tc.lugar}
+                                      heightClass="h-40"
+                                      readOnly
+                                    />
+                                  </div>
+                                )}
                           </HomeDetailModal>
                         </div>
                       );
@@ -2633,7 +2691,7 @@ export default function HomeView({
                             </div>
                           </div>
 
-                          <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)}>
+                          <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} title={inv.title} icon={Receipt}>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                   <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
                                     <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
@@ -2790,7 +2848,7 @@ export default function HomeView({
                             </div>
                           </div>
 
-                          <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)}>
+                          <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} title={dp.descripcion} icon={isClosing || dp.categoria === "Tarjeta de Credito" ? CreditCard : Receipt}>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                   <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
                                     <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
@@ -2934,7 +2992,7 @@ export default function HomeView({
                             </div>
                           </div>
 
-                          <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)}>
+                          <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} title={details.marca} icon={Stethoscope}>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                   {details.droga && (
                                   <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
@@ -3530,7 +3588,7 @@ export default function HomeView({
           >
             <div
               onClick={(e) => e.stopPropagation()}
-              className={`w-full max-w-lg rounded-3xl border p-6 shadow-2xl relative transition-all cursor-default ${
+              className={`w-full max-w-lg rounded-3xl border p-6 shadow-2xl relative transition-all cursor-default force-solid-bg ${
                 darkMode
                   ? "bg-zinc-950 border-zinc-800 text-white shadow-primary/5"
                   : "bg-white border-zinc-200 text-zinc-800 shadow-slate-200"
