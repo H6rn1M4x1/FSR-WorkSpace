@@ -152,6 +152,7 @@ function HomeDetailModal({
   onClose,
   title,
   icon: Icon,
+  onEdit,
   children,
 }: {
   isOpen: boolean;
@@ -160,6 +161,9 @@ function HomeDetailModal({
   // del contenido (clase, examen, trabajo, meal), para no duplicarlo.
   title?: string;
   icon?: React.ComponentType<{ className?: string }>;
+  // Botón de editar opcional: solo en los tipos que ya tienen edición rápida cableada
+  // (turno, pago detallado, medicamento, comida, examen).
+  onEdit?: () => void;
   children: React.ReactNode;
 }) {
   if (typeof document === "undefined") return null;
@@ -182,7 +186,20 @@ function HomeDetailModal({
             onClick={(e) => e.stopPropagation()}
             className="w-full max-w-lg max-h-[85vh] overflow-y-auto no-scrollbar rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 force-solid-bg shadow-2xl p-5 space-y-2 text-xs"
           >
-            <div className="flex justify-end -mt-1 -mr-1 mb-1">
+            <div className="flex justify-end items-center gap-1 -mt-1 -mr-1 mb-1">
+              {onEdit && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onEdit();
+                    onClose();
+                  }}
+                  className="p-1.5 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 text-zinc-400 cursor-pointer"
+                  title="Editar"
+                >
+                  <Pencil className="w-4 h-4" />
+                </button>
+              )}
               <button
                 type="button"
                 onClick={onClose}
@@ -2462,7 +2479,7 @@ export default function HomeView({
                             </div>
                           </div>
 
-                          <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} title={tc.descripcion.replace(/⚽\s*/g, "")} icon={CatIcon}>
+                          <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} title={tc.descripcion.replace(/⚽\s*/g, "")} icon={CatIcon} onEdit={onQuickEdit ? () => onQuickEdit("turno", tc.id) : undefined}>
                                 <div className="flex flex-col gap-3">
                                   <div>
                                     <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
@@ -2848,7 +2865,7 @@ export default function HomeView({
                             </div>
                           </div>
 
-                          <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} title={dp.descripcion} icon={isClosing || dp.categoria === "Tarjeta de Credito" ? CreditCard : Receipt}>
+                          <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} title={dp.descripcion} icon={isClosing || dp.categoria === "Tarjeta de Credito" ? CreditCard : Receipt} onEdit={onQuickEdit ? () => onQuickEdit("finanzas", dp.id) : undefined}>
                                 <div className="flex flex-col gap-3">
                                   <div>
                                     <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
@@ -2992,7 +3009,7 @@ export default function HomeView({
                             </div>
                           </div>
 
-                          <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} title={details.marca} icon={Stethoscope}>
+                          <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} title={details.marca} icon={Stethoscope} onEdit={onQuickEdit ? () => onQuickEdit("salud", disp.id) : undefined}>
                                 <div className="flex flex-col gap-3">
                                   {details.droga && (
                                   <div>
@@ -3095,7 +3112,7 @@ export default function HomeView({
                             </div>
                           </div>
 
-                          <HomeDetailModal isOpen={isExpanded && !!matchedPlato} onClose={() => setExpandedHomeItemId(null)}>
+                          <HomeDetailModal isOpen={isExpanded && !!matchedPlato} onClose={() => setExpandedHomeItemId(null)} onEdit={onQuickEdit ? () => onQuickEdit("comidas", m.id) : undefined}>
                                 <div>
                                   <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider mb-1">
                                     Detalles del Plato
@@ -3314,7 +3331,7 @@ export default function HomeView({
                             </div>
                           </div>
 
-                          <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)}>
+                          <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} onEdit={onQuickEdit ? () => onQuickEdit("universidad", e.id) : undefined}>
                                 <div className="p-3 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30 space-y-1.5">
                                   <div className="flex items-center justify-between">
                                     <span className="text-[9px] font-extrabold text-primary uppercase tracking-wider">

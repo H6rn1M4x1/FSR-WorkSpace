@@ -5,15 +5,19 @@
  * vacío y el panel correspondiente lo muestra como "no disponible" en vez de romperse o inventar
  * filas.
  *
- * IMPORTANTE: los endpoints de standings (a diferencia de scoreboard/schedule, ya confirmados
- * en vivo muchas veces en este proyecto) todavía NO se probaron contra la API real de ESPN desde
- * esta sesión — no hay forma de alcanzar site.api.espn.com desde este entorno. Si al desplegar
- * alguna tabla aparece vacía o con datos raros, hay que revisar el JSON real en la consola del
- * navegador (mismo mecanismo ya usado en todo este proyecto) antes de asumir que el resto del
- * código está mal.
+ * Endpoints de standings confirmados en vivo con JSON real de ESPN (antes no se había podido,
+ * por una restricción de red del entorno de desarrollo ya levantada). Dos hallazgos reales:
+ * 1) Una liga de fútbol puede devolver más de un grupo en `children` (zonas/conferencias, no
+ *    solo "liga dividida en grupos" de ejemplo — ahora mismo la Liga Profesional Argentina está
+ *    repartida en "Group A"/"Group B" de 15 equipos cada una por el formato de Clausura). Tomar
+ *    solo `children[0]` perdía en silencio la mitad de esos equipos.
+ * 2) El campeonato de constructores de F1 SÍ viene armado y correcto en el propio endpoint de
+ *    standings (un segundo grupo en `children` con `entries[].team` en vez de `entries[].athlete`,
+ *    y su propio stat "points" ya sumado) — no hace falta reconstruirlo sumando puntos de
+ *    pilotos por escudería.
  */
 
-import { F1_TEAMS, F1_TEAM_LOGOS, F1_DRIVERS } from "../data/f1";
+import { F1_TEAMS, F1_TEAM_LOGOS } from "../data/f1";
 
 export interface StandingsEntry {
   teamId: string;
@@ -71,18 +75,26 @@ async function fetchJson(url: string): Promise<any | null> {
 /**
  * Tabla de posiciones de una liga de fútbol. El endpoint "site" de ESPN expone standings bajo
  * /apis/v2/sports/{sport}/{league}/standings (distinto del prefijo /apis/site/v2/... que usan
- * scoreboard/schedule) — sin verificar en vivo todavía, ver nota arriba del archivo.
+ * scoreboard/schedule) — confirmado en vivo, ver nota arriba del archivo.
  */
 export async function fetchFootballStandings(leagueCode: string, leagueName: string): Promise<FootballLeagueStandings | null> {
   const data = await fetchJson(`https://site.api.espn.com/apis/v2/sports/soccer/${leagueCode}/standings`);
   if (!data) return null;
 
   // La forma exacta del JSON de standings de ESPN varía entre "standings.entries" directo y
-  // "children[].standings.entries" (cuando la liga se divide en grupos/conferencias) — se
-  // prueban ambas formas y, si hay grupos, se usa el primero (la tabla general).
-  const rawEntries: any[] =
-    data?.standings?.entries || data?.children?.[0]?.standings?.entries || data?.groups?.[0]?.standings?.entries || [];
+  // "children[].standings.entries" — y, en este último caso, puede haber MÁS DE UN grupo
+  // (zonas/conferencias: p.ej. la Liga Profesional Argentina se reparte en "Group A"/"Group B"
+  // durante el Clausura) — se combinan todos los grupos, no solo el primero, para no perder
+  // equipos en silencio.
+  const rawGroups: any[][] = data?.standings?.entries
+    ? [data.standings.entries]
+    : data?.children?.length
+      ? data.children.map((c: any) => c?.standings?.entries || []).filter((arr: any[]) => arr.length)
+      : data?.groups?.[0]?.standings?.entries
+        ? [data.groups[0].standings.entries]
+        : [];
 
+  const rawEntries: any[] = rawGroups.flat();
   if (!rawEntries.length) return null;
 
   const entries: StandingsEntry[] = rawEntries
@@ -106,6 +118,16 @@ export async function fetchFootballStandings(leagueCode: string, leagueName: str
     .sort((a, b) => a.rank - b.rank);
 
   if (!entries.length) return null;
+
+  // Si la liga vino repartida en más de un grupo, el "rank" de ESPN es relativo a cada grupo
+  // por separado (dos equipos distintos con rank 1, etc.) — se recalcula un único ranking por
+  // puntos totales para que la tabla combinada tenga sentido.
+  if (rawGroups.length > 1) {
+    entries.sort((a, b) => b.points - a.points);
+    entries.forEach((e, idx) => {
+      e.rank = idx + 1;
+    });
+  }
 
   // Diagnóstico temporal: si TODOS los puntos dieron 0 pese a haber equipos reales, lo más
   // probable es que el stat se llame distinto a "points" en este endpoint puntual (nunca
@@ -197,52 +219,55 @@ export interface F1ConstructorStanding {
 }
 
 /**
- * Campeonato de constructores de F1. El endpoint de standings de ESPN trae un segundo grupo de
- * "constructor/manufacturer standings" en `children`, pero confirmado en vivo que sus puntos
- * siempre dan 0 (campo distinto al de pilotos, nunca identificado con certeza) — en vez de
- * seguir adivinando el nombre del stat, se suman los puntos reales de cada piloto (ya
- * confirmados, "championshipPts") por escudería, usando el mapeo piloto→equipo de data/f1.ts.
- * Es exactamente cómo se calculan los puntos de constructores en la F1 real (suma de ambos
- * pilotos del equipo), así que el resultado es correcto, no una aproximación.
+ * Campeonato de constructores de F1. Confirmado en vivo con JSON real de ESPN: el endpoint de
+ * standings trae un segundo grupo en `children` con las escuderías ya armadas y sus puntos
+ * reales (entries con "team" en vez de "athlete", stat "points" — no "championshipPts" como en
+ * pilotos — ya sumado y correcto). Se usa ese grupo directo, en vez de reconstruirlo sumando
+ * puntos de pilotos por escudería contra el roster de data/f1.ts (enfoque anterior, que fallaba
+ * en 0 apenas un nombre de piloto de ESPN no coincidía exactamente con ese roster).
  */
 export async function fetchF1ConstructorStandings(): Promise<F1ConstructorStanding[]> {
-  const drivers = await fetchF1DriverStandings();
-  if (!drivers.length) return [];
+  const data = await fetchJson("https://site.api.espn.com/apis/v2/sports/racing/f1/standings");
+  if (!data) return [];
 
-  const pointsByTeamId = new Map<string, number>();
-  for (const d of drivers) {
-    const known = F1_DRIVERS.find((fd) => {
-      const a = fd.name.toLowerCase();
-      const b = d.driverName.toLowerCase();
-      return a === b || a.includes(b) || b.includes(a);
-    });
-    if (!known) continue;
-    pointsByTeamId.set(known.teamId, (pointsByTeamId.get(known.teamId) ?? 0) + d.points);
-  }
+  const children: any[] = data?.children || [];
+  // El grupo de escuderías se identifica por tener "team" en sus entries (el de pilotos tiene
+  // "athlete") en vez de depender de que siempre sea children[1].
+  const constructorGroup = children.find((c: any) => c?.standings?.entries?.[0]?.team);
+  const rawEntries: any[] = constructorGroup?.standings?.entries || [];
 
-  // Diagnóstico temporal: si ESPN sí trae pilotos pero ninguno matcheó contra data/f1.ts (ej.
-  // la plantilla de pilotos/equipos quedó desactualizada tras cambios de la temporada), esto
-  // da 0 puntos en TODAS las escuderías aunque los pilotos individuales se vean bien.
-  if (drivers.length && pointsByTeamId.size === 0) {
-    console.warn(
-      "[standingsService] F1 constructores: ningún piloto de ESPN matcheó contra data/f1.ts — nombres de ESPN:",
-      drivers.map((d) => d.driverName)
-    );
-    standingsDebug.f1Constructors = `Nombres de ESPN sin match: ${drivers.map((d) => d.driverName).join(", ")}`;
+  const entries: F1ConstructorStanding[] = rawEntries
+    .map((entry: any, idx: number): F1ConstructorStanding | null => {
+      const team = entry.team;
+      if (!team) return null;
+      const stat = (name: string) => entry.stats?.find((s: any) => s.name === name)?.value;
+      // Logo propio solo si el nombre de ESPN matchea contra data/f1.ts (mismo criterio laxo
+      // ya usado para pilotos) — si no matchea, se muestra sin logo en vez de romper.
+      const known = F1_TEAMS.find((t) => {
+        const a = t.name.toLowerCase();
+        const b = (team.displayName || team.name || "").toLowerCase();
+        return a === b || a.includes(b) || b.includes(a);
+      });
+      return {
+        teamId: String(team.id ?? idx),
+        teamName: team.displayName || team.name || "Escudería",
+        teamLogo: known ? F1_TEAM_LOGOS[known.id] : undefined,
+        rank: Math.round(stat("rank") ?? idx + 1),
+        points: Math.round(stat("points") ?? 0),
+      };
+    })
+    .filter((e): e is F1ConstructorStanding => e !== null)
+    .sort((a, b) => a.rank - b.rank);
+
+  // Diagnóstico temporal: si ESPN no trae un grupo de escuderías reconocible esta vez (cambio
+  // de formato del endpoint), queda visible en vez de fallar en silencio.
+  if (!entries.length) {
+    standingsDebug.f1Constructors = constructorGroup
+      ? "El grupo de escuderías no trajo entries."
+      : `No se encontró un grupo de escuderías entre los children del endpoint (nombres: ${children.map((c) => c?.name).join(", ")}).`;
   } else {
     delete standingsDebug.f1Constructors;
   }
-
-  const entries: F1ConstructorStanding[] = F1_TEAMS.filter((t) => pointsByTeamId.has(t.id))
-    .map((t) => ({
-      teamId: t.id,
-      teamName: t.name,
-      teamLogo: F1_TEAM_LOGOS[t.id],
-      rank: 0,
-      points: pointsByTeamId.get(t.id) ?? 0,
-    }))
-    .sort((a, b) => b.points - a.points)
-    .map((e, idx) => ({ ...e, rank: idx + 1 }));
 
   return entries;
 }
