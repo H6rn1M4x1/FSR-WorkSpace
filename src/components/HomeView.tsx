@@ -2894,7 +2894,7 @@ export default function HomeView({
                                 {onQuickEdit && (
                                   <button
                                     type="button"
-                                    onClick={(e) => { e.stopPropagation(); onQuickEdit("salud", disp.medicamentoId); }}
+                                    onClick={(e) => { e.stopPropagation(); onQuickEdit("salud", disp.id); }}
                                     className="p-1 rounded-lg hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
                                     title="Ver y editar"
                                   >

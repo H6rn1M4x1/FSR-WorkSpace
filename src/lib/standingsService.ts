@@ -93,6 +93,16 @@ export async function fetchFootballStandings(leagueCode: string, leagueName: str
     .sort((a, b) => a.rank - b.rank);
 
   if (!entries.length) return null;
+
+  // Diagnóstico temporal: si TODOS los puntos dieron 0 pese a haber equipos reales, lo más
+  // probable es que el stat se llame distinto a "points" en este endpoint puntual (nunca
+  // confirmado en vivo, ver nota al principio del archivo) — loguea el array de stats crudo de
+  // la primera entrada para poder identificar el nombre correcto sin tener que adivinar de
+  // nuevo a ciegas.
+  if (entries.every((e) => e.points === 0) && rawEntries[0]) {
+    console.warn(`[standingsService] Fútbol (${leagueName}): todos los puntos dieron 0 — stats crudos de la primera entrada:`, rawEntries[0]?.stats);
+  }
+
   return { leagueCode, leagueName, entries };
 }
 
@@ -150,6 +160,11 @@ export async function fetchF1DriverStandings(): Promise<F1DriverStanding[]> {
     .filter((e): e is F1DriverStanding => e !== null)
     .sort((a, b) => a.rank - b.rank);
 
+  // Diagnóstico temporal — ver el mismo comentario en fetchFootballStandings.
+  if (entries.length && entries.every((e) => e.points === 0) && rawEntries[0]) {
+    console.warn("[standingsService] F1 pilotos: todos los puntos dieron 0 — stats crudos de la primera entrada:", rawEntries[0]?.stats);
+  }
+
   return entries;
 }
 
@@ -183,6 +198,16 @@ export async function fetchF1ConstructorStandings(): Promise<F1ConstructorStandi
     });
     if (!known) continue;
     pointsByTeamId.set(known.teamId, (pointsByTeamId.get(known.teamId) ?? 0) + d.points);
+  }
+
+  // Diagnóstico temporal: si ESPN sí trae pilotos pero ninguno matcheó contra data/f1.ts (ej.
+  // la plantilla de pilotos/equipos quedó desactualizada tras cambios de la temporada), esto
+  // da 0 puntos en TODAS las escuderías aunque los pilotos individuales se vean bien.
+  if (drivers.length && pointsByTeamId.size === 0) {
+    console.warn(
+      "[standingsService] F1 constructores: ningún piloto de ESPN matcheó contra data/f1.ts — nombres de ESPN:",
+      drivers.map((d) => d.driverName)
+    );
   }
 
   const entries: F1ConstructorStanding[] = F1_TEAMS.filter((t) => pointsByTeamId.has(t.id))

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import { generateUniqueId } from "../utils/id";
 import { auth } from "../lib/supabase";
@@ -296,6 +296,11 @@ export const AddressBookModal: React.FC<AddressBookModalProps> = ({
   const [justMovedId, setJustMovedId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
+  // Guardar una dirección cierra el formulario y vuelve a la lista (dentro del mismo
+  // contenedor con scroll) — si el usuario había bajado para llenar el formulario, el scroll
+  // se quedaba ahí, lejos de la dirección recién creada (que se agrega al principio de la
+  // lista) y de poder seguir agendando. Este ref deja volver arriba después de guardar.
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -437,6 +442,7 @@ export const AddressBookModal: React.FC<AddressBookModalProps> = ({
       setNewLat("");
       setNewLon("");
       setNewNotes("");
+      scrollContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
       console.error("Error saving address:", err);
       showToast("No se pudo guardar la dirección.", "error");
@@ -568,7 +574,7 @@ export const AddressBookModal: React.FC<AddressBookModalProps> = ({
         {/* layoutScroll: las filas usan animación `layout` para acomodarse al cambiar de
             posición con las flechas — si este contenedor scrollea, necesita declarar
             layoutScroll para que esa animación mida bien las posiciones. */}
-        <motion.div layoutScroll className="flex-1 overflow-y-auto p-4 space-y-3">
+        <motion.div ref={scrollContainerRef} layoutScroll className="flex-1 overflow-y-auto p-4 space-y-3">
           {/* Add / Edit Form */}
           {showAddForm && (
             <form

@@ -441,7 +441,13 @@ async function getCachedSportEvents(): Promise<CachedSportEvent[]> {
 export async function getTeamCachedEvents(espnTeamId: string): Promise<CachedSportEvent[]> {
   if (!espnTeamId) return [];
   const cached = await getCachedSportEvents();
-  return cached.filter((ev) => ev.homeTeamId === espnTeamId || ev.awayTeamId === espnTeamId);
+  // El caché compartido mezcla fútbol y NBA, y ESPN numera los ids de equipo por separado en
+  // cada deporte — confirmado en vivo que el id de un club de fútbol (ej. Boca Juniors) puede
+  // coincidir con el de un equipo de NBA sin relación alguna, haciendo que un partido de NBA
+  // apareciera como "próximo partido" del equipo favorito de fútbol. Los dos llamadores de
+  // esta función (FavoriteTeamWidget, matchScheduler) son siempre para equipos de fútbol, así
+  // que se filtra también por deporte.
+  return cached.filter((ev) => ev.sportId === "futbol" && (ev.homeTeamId === espnTeamId || ev.awayTeamId === espnTeamId));
 }
 
 function cachedEventToSportEvent(ev: CachedSportEvent, matchedBy: "team" | "competition"): SportEvent {
