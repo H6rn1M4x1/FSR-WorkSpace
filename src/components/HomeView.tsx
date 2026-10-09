@@ -15,6 +15,7 @@ import { getMatchTeamLogos, syncMonthlyMatches } from "../lib/matchScheduler";
 import { motion, AnimatePresence } from "motion/react";
 import { ConfirmationModal } from "./ConfirmationModal";
 import { LocationPickerMap } from "./LocationPickerMap";
+import { DetailModal as HomeDetailModal } from "./DetailModal";
 import { shareItemWith, unshareItem } from "../lib/itemSharingService";
 import {
   Calendar,
@@ -137,97 +138,6 @@ interface HomeViewProps {
     category: "turno" | "finanzas" | "universidad" | "salud" | "comidas",
     itemId: string
   ) => void;
-}
-
-/**
- * Modal flotante para "ver toda la información detallada" de una tarjeta de Agenda Central
- * Integrada (turno, pago, examen, medicamento, comida, etc.) — antes esa info se desplegaba
- * inline dentro de la misma tarjeta (acordeón), empujando hacia abajo todo lo que estaba debajo;
- * ahora se muestra en un modal por portal, igual que el de Notas Rápidas y el de "Qué hacer en
- * San Juan". El contenido interno (las cajitas de Fecha y Hora, Lugar, etc.) queda igual que
- * antes — esto solo cambia dónde se muestra.
- */
-function HomeDetailModal({
-  isOpen,
-  onClose,
-  title,
-  icon: Icon,
-  onEdit,
-  children,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  // Título e ícono opcionales: se omiten en los tipos que ya muestran su propio título dentro
-  // del contenido (clase, examen, trabajo, meal), para no duplicarlo.
-  title?: string;
-  icon?: React.ComponentType<{ className?: string }>;
-  // Botón de editar opcional: solo en los tipos que ya tienen edición rápida cableada
-  // (turno, pago detallado, medicamento, comida, examen).
-  onEdit?: () => void;
-  children: React.ReactNode;
-}) {
-  if (typeof document === "undefined") return null;
-  return createPortal(
-    <AnimatePresence>
-      {isOpen && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.18 }}
-          className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/60"
-          onClick={onClose}
-        >
-          <motion.div
-            initial={{ opacity: 0, scale: 0.96, y: 12 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.96, y: 12 }}
-            transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-lg max-h-[85vh] overflow-y-auto no-scrollbar rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 force-solid-bg shadow-2xl p-5 space-y-2 text-xs"
-          >
-            <div className="flex justify-end items-center gap-1 -mt-1 -mr-1 mb-1">
-              {onEdit && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onEdit();
-                    onClose();
-                  }}
-                  className="p-1.5 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 text-zinc-400 cursor-pointer"
-                  title="Editar"
-                >
-                  <Pencil className="w-4 h-4" />
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={onClose}
-                className="p-1.5 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 text-zinc-400 cursor-pointer"
-                title="Cerrar"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            {title && (
-              <div className="flex items-center gap-2 pb-2 -mt-2 mb-1 border-b border-slate-200 dark:border-zinc-800">
-                {Icon && (
-                  <span className="p-1.5 rounded-lg bg-primary/10 text-primary shrink-0">
-                    <Icon className="w-4 h-4" />
-                  </span>
-                )}
-                <h3 className="font-extrabold text-sm text-zinc-900 dark:text-white leading-snug">
-                  {title}
-                </h3>
-              </div>
-            )}
-            {children}
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>,
-    document.body
-  );
 }
 
 export default function HomeView({
@@ -495,7 +405,7 @@ export default function HomeView({
   const [sharingModalOpen, setSharingModalOpen] = useState(false);
 
   useLockBodyScroll(
-    Boolean(sharingModalOpen || activeDetailItem)
+    Boolean(sharingModalOpen || activeDetailItem || expandedHomeItemId)
   );
   const [sharingModalItem, setSharingModalItem] = useState<{
     type:
@@ -1609,7 +1519,7 @@ export default function HomeView({
     const monthName = monthNames[dateObj.getMonth()];
     const yearNum = parts[0];
     
-    let result = `${dayOfWeek}, ${dayNum} de ${monthName} de ${yearNum}`;
+    let result = `${dayOfWeek} ${dayNum} de ${monthName} de ${yearNum}`;
     if (timeStr) {
       const cleanTime = timeStr.replace("hs", "").trim();
       result += ` - ${cleanTime} hs`;

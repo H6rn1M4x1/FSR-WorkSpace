@@ -14,6 +14,7 @@ import { useToast } from "../context/ToastContext";
 import AnimatedList from "./AnimatedList";
 import { PillFilterBar } from "./PillFilterBar";
 import { ConfirmationModal } from "./ConfirmationModal";
+import { DetailModal } from "./DetailModal";
 import { calculateIngredientCalories, calcularNutricionPlato, getIngredientWeight, getIngredientNutriVal, getCalorieDensity } from "../lib/calories";
 import { createPortal } from "react-dom";
 import {
@@ -706,7 +707,7 @@ export default function HealthView({
     const dayNum = parts[2];
     const monthName = monthNames[dateObj.getMonth()];
     const yearNum = parts[0];
-    return `${dayOfWeek}, ${dayNum} de ${monthName} de ${yearNum}`;
+    return `${dayOfWeek} ${dayNum} de ${monthName} de ${yearNum}`;
   };
 
   // --- NUEVOS ESTADOS PARA SALUD METABÓLICA ---
@@ -2316,7 +2317,8 @@ export default function HealthView({
         showBpTableModal ||
         showDetailedModal ||
         showActividadModal ||
-        showDispModal
+        showDispModal ||
+        expandedDispId
     )
   );
   const [dispReceta, setDispReceta] = useState(false);
@@ -3523,60 +3525,55 @@ export default function HealthView({
                                   </div>
                                 </div>
 
-                                <AnimatePresence>
-                                  {isExpanded && (
-                                    <motion.div
-                                      initial={{ opacity: 0, height: 0 }}
-                                      animate={{ opacity: 1, height: "auto" }}
-                                      exit={{ opacity: 0, height: 0 }}
-                                      transition={{ duration: 0.2 }}
-                                      className="pt-2 border-t border-primary/20 space-y-2 mt-1 text-xs"
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                        {details.droga && (
-                                        <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
-                                          <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
-                                            Droga / Fármaco
-                                          </span>
-                                          <span className="font-semibold text-zinc-800 dark:text-zinc-200">
-                                            {details.droga}
-                                          </span>
-                                        </div>
-                                        )}
+                                <DetailModal
+                                  isOpen={isExpanded}
+                                  onClose={() => setExpandedDispId(null)}
+                                  title={details.marca}
+                                  icon={Pill}
+                                  onEdit={() => handleOpenEditDisp(disp)}
+                                >
+                                  <div className="flex flex-col gap-3">
+                                    {details.droga && (
+                                    <div>
+                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                        Droga / Fármaco
+                                      </span>
+                                      <span className="text-zinc-800 dark:text-zinc-200">
+                                        {details.droga}
+                                      </span>
+                                    </div>
+                                    )}
 
-                                        {details.funcionTratamiento && (
-                                        <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
-                                          <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
-                                            Función / Tratamiento
-                                          </span>
-                                          <span className="font-semibold text-zinc-800 dark:text-zinc-200">
-                                            {details.funcionTratamiento}
-                                          </span>
-                                        </div>
-                                        )}
+                                    {details.funcionTratamiento && (
+                                    <div>
+                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                        Función / Tratamiento
+                                      </span>
+                                      <span className="text-zinc-800 dark:text-zinc-200">
+                                        {details.funcionTratamiento}
+                                      </span>
+                                    </div>
+                                    )}
 
-                                        <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
-                                          <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
-                                            Disponibilidad
-                                          </span>
-                                          <span className="font-semibold text-zinc-800 dark:text-zinc-200">
-                                            {details.disponibleHasta} ({details.disponibleParaDias.toFixed(1)} días)
-                                          </span>
-                                        </div>
+                                    <div>
+                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                        Disponibilidad
+                                      </span>
+                                      <span className="text-zinc-800 dark:text-zinc-200">
+                                        {details.disponibleHasta} ({details.disponibleParaDias.toFixed(1)} días)
+                                      </span>
+                                    </div>
 
-                                        <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
-                                          <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
-                                            Stock (Inicial / Restante)
-                                          </span>
-                                          <span className="font-semibold text-zinc-800 dark:text-zinc-200">
-                                            {disp.cantidadRegistrada} registradas / {details.cantidadDisponible.toFixed(1)} restantes
-                                          </span>
-                                        </div>
-                                      </div>
-                                    </motion.div>
-                                  )}
-                                </AnimatePresence>
+                                    <div>
+                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                        Stock (Inicial / Restante)
+                                      </span>
+                                      <span className="text-zinc-800 dark:text-zinc-200">
+                                        {disp.cantidadRegistrada} registradas / {details.cantidadDisponible.toFixed(1)} restantes
+                                      </span>
+                                    </div>
+                                  </div>
+                                </DetailModal>
                               </div>
                             );
                           }
@@ -3636,63 +3633,57 @@ export default function HealthView({
                                 </div>
                               </div>
 
-                              <AnimatePresence>
-                                {isExpanded && (
-                                  <motion.div
-                                    initial={{ opacity: 0, height: 0 }}
-                                    animate={{ opacity: 1, height: "auto" }}
-                                    exit={{ opacity: 0, height: 0 }}
-                                    transition={{ duration: 0.2 }}
-                                    className="pt-2 border-t border-primary/20 space-y-2 mt-1 text-xs"
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                      <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
-                                        <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
-                                          Categoría / Paciente
-                                        </span>
-                                        <span className="font-semibold text-zinc-800 dark:text-zinc-200">
-                                          {turno.categoria}
-                                        </span>
-                                      </div>
+                              <DetailModal
+                                isOpen={isExpanded}
+                                onClose={() => setExpandedDispId(null)}
+                                title={turno.descripcion || "Turno Médico"}
+                                icon={Stethoscope}
+                              >
+                                <div className="flex flex-col gap-3">
+                                  <div>
+                                    <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                      Categoría / Paciente
+                                    </span>
+                                    <span className="text-zinc-800 dark:text-zinc-200">
+                                      {turno.categoria}
+                                    </span>
+                                  </div>
 
-                                      {turno.doctor && (
-                                        <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
-                                          <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
-                                            Médico / Especialista
-                                          </span>
-                                          <span className="font-semibold text-zinc-800 dark:text-zinc-200">
-                                            {turno.doctor}
-                                          </span>
-                                        </div>
-                                      )}
-
-                                      {turno.lugar && (
-                                        <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30 sm:col-span-2">
-                                          <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
-                                            Lugar / Centro Médico
-                                          </span>
-                                          <span className="font-semibold text-zinc-800 dark:text-zinc-200 flex items-center gap-1 mt-0.5">
-                                            <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
-                                            {turno.lugar}
-                                          </span>
-                                        </div>
-                                      )}
-
-                                      {turno.informacionPersonalizada && (
-                                        <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30 sm:col-span-2">
-                                          <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
-                                            Notas / Información Adicional
-                                          </span>
-                                          <span className="font-semibold text-zinc-800 dark:text-zinc-200">
-                                            {turno.informacionPersonalizada}
-                                          </span>
-                                        </div>
-                                      )}
+                                  {turno.doctor && (
+                                    <div>
+                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                        Médico / Especialista
+                                      </span>
+                                      <span className="text-zinc-800 dark:text-zinc-200">
+                                        {turno.doctor}
+                                      </span>
                                     </div>
-                                  </motion.div>
-                                )}
-                              </AnimatePresence>
+                                  )}
+
+                                  {turno.lugar && (
+                                    <div>
+                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                        Lugar / Centro Médico
+                                      </span>
+                                      <span className="text-zinc-800 dark:text-zinc-200 flex items-center gap-1 mt-0.5">
+                                        <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
+                                        {turno.lugar}
+                                      </span>
+                                    </div>
+                                  )}
+
+                                  {turno.informacionPersonalizada && (
+                                    <div>
+                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                        Notas / Información Adicional
+                                      </span>
+                                      <span className="text-zinc-800 dark:text-zinc-200">
+                                        {turno.informacionPersonalizada}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              </DetailModal>
                             </div>
                           );
                         }}

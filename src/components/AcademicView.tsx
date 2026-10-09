@@ -40,6 +40,7 @@ import {
 } from "lucide-react";
 import AnimatedList from "./AnimatedList";
 import { ConfirmationModal } from "./ConfirmationModal";
+import { DetailModal } from "./DetailModal";
 import {
   AcademicSubject,
   AcademicTask,
@@ -1024,7 +1025,7 @@ export default function AcademicView({
     const dateObj = new Date(y, m - 1, d);
     const dayName = getDayNameFromDateStr(dateStr);
     const monthName = MONTH_NAMES_ES[dateObj.getMonth()];
-    return `${dayName}, ${d} de ${monthName} de ${y}`;
+    return `${dayName} ${d} de ${monthName} de ${y}`;
   };
 
   const getDaysInMonth = (dateObj: Date) => {
@@ -1260,7 +1261,8 @@ export default function AcademicView({
         showHorarioModal ||
         showExamenModal ||
         showMateriaModal ||
-        showAddTask
+        showAddTask ||
+        expandedAgendaItemId
     )
   );
   const [newTaskTitle, setNewTaskTitle] = useState("");
@@ -2204,34 +2206,51 @@ export default function AcademicView({
                                   </div>
 
                                   {/* EXPANDED DETAILS PANEL */}
-                                  <AnimatePresence>
-                                    {isExpanded && (
-                                      <motion.div
-                                        initial={{ opacity: 0, height: 0 }}
-                                        animate={{ opacity: 1, height: "auto" }}
-                                        exit={{ opacity: 0, height: 0 }}
-                                        transition={{ duration: 0.2, ease: "easeOut" }}
-                                        className="pt-2 border-t border-slate-200/60 dark:border-zinc-800/80 space-y-3 mt-1"
-                                      >
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                                  <DetailModal
+                                    isOpen={isExpanded}
+                                    onClose={() => setExpandedAgendaItemId(null)}
+                                    title={item.title}
+                                    icon={GraduationCap}
+                                    onEdit={() => {
+                                      if (item.type === "clase" && item.rawHorario) {
+                                        setEditingHorarioId(item.rawHorario.id);
+                                        setHDia(item.rawHorario.dia);
+                                        setHHoraInicio(item.rawHorario.horaInicio);
+                                        setHHoraFin(item.rawHorario.horaFin);
+                                        setHMateria(item.rawHorario.materia);
+                                        setHAulas(item.rawHorario.aulas);
+                                        setHProfesores(item.rawHorario.profesores);
+                                        setShowHorarioModal(true);
+                                      } else if (item.type === "examen" && item.rawExamen) {
+                                        setEditingExamenId(item.rawExamen.id);
+                                        setExMateria(item.rawExamen.materia);
+                                        setExFecha(item.rawExamen.fecha);
+                                        setExEstado(item.rawExamen.estado);
+                                        setExInstancia(item.rawExamen.instancia || "Primero");
+                                        setExAula(item.rawExamen.aula);
+                                        setShowExamenModal(true);
+                                      }
+                                    }}
+                                  >
+                                    <div className="flex flex-col gap-3 text-xs">
                                           {item.type === "clase" && (
                                             <>
                                               {item.aulas && (
-                                              <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                              <div>
                                                 <span className="block text-[9px] font-extrabold text-primary dark:text-primary/90 uppercase tracking-wider mb-0.5">
                                                   Aula / Ubicación
                                                 </span>
-                                                <span className="font-bold text-slate-900 dark:text-white text-xs">
+                                                <span className="text-slate-900 dark:text-white text-xs">
                                                   {item.aulas}
                                                 </span>
                                               </div>
                                               )}
                                               {item.profesores && (
-                                              <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                              <div>
                                                 <span className="block text-[9px] font-extrabold text-primary dark:text-primary/90 uppercase tracking-wider mb-0.5">
                                                   Profesores / Cátedra
                                                 </span>
-                                                <span className="font-bold text-slate-900 dark:text-white text-xs">
+                                                <span className="text-slate-900 dark:text-white text-xs">
                                                   {item.profesores}
                                                 </span>
                                               </div>
@@ -2241,7 +2260,7 @@ export default function AcademicView({
 
                                           {item.type === "examen" && (
                                             <>
-                                              <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                              <div>
                                                 <span className="block text-[9px] font-extrabold text-primary dark:text-primary/90 uppercase tracking-wider mb-0.5">
                                                   Tipo / Estado Examen
                                                 </span>
@@ -2250,11 +2269,11 @@ export default function AcademicView({
                                                 </span>
                                               </div>
                                               {(item.instancia || item.aula) && (
-                                              <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                              <div>
                                                 <span className="block text-[9px] font-extrabold text-primary dark:text-primary/90 uppercase tracking-wider mb-0.5">
                                                   Instancia / Aula
                                                 </span>
-                                                <span className="font-bold text-slate-900 dark:text-white text-xs">
+                                                <span className="text-slate-900 dark:text-white text-xs">
                                                   {[item.instancia && `Instancia: ${item.instancia}`, item.aula && `Aula: ${item.aula}`].filter(Boolean).join(" • ")}
                                                 </span>
                                               </div>
@@ -2264,7 +2283,7 @@ export default function AcademicView({
 
                                           {item.type === "trabajo" && (
                                             <>
-                                              <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                              <div>
                                                 <span className="block text-[9px] font-extrabold text-primary dark:text-primary/90 uppercase tracking-wider mb-0.5">
                                                   Estado de Entrega
                                                 </span>
@@ -2272,11 +2291,11 @@ export default function AcademicView({
                                                   {item.completed ? "✓ Completado" : "⏳ Pendiente de Entrega"}
                                                 </span>
                                               </div>
-                                              <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                              <div>
                                                 <span className="block text-[9px] font-extrabold text-primary dark:text-primary/90 uppercase tracking-wider mb-0.5">
                                                   Materia Asociada
                                                 </span>
-                                                <span className="font-bold text-slate-900 dark:text-white text-xs">
+                                                <span className="text-slate-900 dark:text-white text-xs">
                                                   {item.subjectName || "General"}
                                                 </span>
                                               </div>
@@ -2285,7 +2304,7 @@ export default function AcademicView({
                                         </div>
 
                                         {/* ACTION BUTTONS */}
-                                        <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-200/40 dark:border-zinc-800/50">
+                                        <div className="flex items-center justify-end gap-2 pt-2 mt-1 border-t border-slate-200/40 dark:border-zinc-800/50">
                                           {item.type === "clase" && item.rawHorario && (
                                             <>
                                               <button
@@ -2384,9 +2403,7 @@ export default function AcademicView({
                                             </>
                                           )}
                                         </div>
-                                      </motion.div>
-                                    )}
-                                  </AnimatePresence>
+                                  </DetailModal>
                                 </div>
                               );
                             }}

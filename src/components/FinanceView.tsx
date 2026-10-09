@@ -17,6 +17,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { createPortal } from "react-dom";
 import AnimatedList from "./AnimatedList";
 import { ConfirmationModal } from "./ConfirmationModal";
+import { DetailModal } from "./DetailModal";
 import {
   DollarSign,
   TrendingUp,
@@ -765,14 +766,14 @@ export default function FinanceView({
     const dayNum = parts[2];
     const monthName = monthNames[dateObj.getMonth()];
     const yearNum = parts[0];
-    return `${dayOfWeek}, ${dayNum} de ${monthName} de ${yearNum}`;
+    return `${dayOfWeek} ${dayNum} de ${monthName} de ${yearNum}`;
   };
 
   // Add Invoice / Expense Form
   const [showAddForm, setShowAddForm] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
 
-  useLockBodyScroll(Boolean(showAddForm || showEmailModal));
+  useLockBodyScroll(Boolean(showAddForm || showEmailModal || expandedPaymentId));
   const [newTitle, setNewTitle] = useState("");
   const [newAmount, setNewAmount] = useState<string>("");
   const [newDueDate, setNewDueDate] = useState("");
@@ -1807,22 +1808,13 @@ export default function FinanceView({
                                   </div>
                                 </div>
 
-                                <AnimatePresence>
-                                  {isExpanded && (
-                                    <motion.div
-                                      initial={{ opacity: 0, height: 0 }}
-                                      animate={{ opacity: 1, height: "auto" }}
-                                      exit={{ opacity: 0, height: 0 }}
-                                      transition={{ duration: 0.2 }}
-                                      className="pt-2 border-t border-primary/20 space-y-2 mt-1 text-xs"
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                        <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                <DetailModal isOpen={isExpanded} onClose={() => setExpandedPaymentId(null)} title={p.descripcion} icon={Receipt}>
+                                      <div className="flex flex-col gap-3">
+                                        <div>
                                           <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
                                             Fechas (Vencimiento / Cierre)
                                           </span>
-                                          <span className="font-semibold text-zinc-800 dark:text-zinc-200 break-words">
+                                          <span className="text-zinc-800 dark:text-zinc-200 break-words">
                                             Vence: {formatFechaDMY(p.fechaVencimiento)}
                                             {p.fechaCierre
                                               ? ` • Cierre: ${formatFechaDMY(p.fechaCierre)}`
@@ -1830,11 +1822,11 @@ export default function FinanceView({
                                           </span>
                                         </div>
 
-                                        <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                        <div>
                                           <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
                                             Método de Pago
                                           </span>
-                                          <span className="font-semibold text-zinc-800 dark:text-zinc-200 break-words">
+                                          <span className="text-zinc-800 dark:text-zinc-200 break-words">
                                             {p.metodoPago || "Debito Automatico"}
                                             {p.conQuePagar
                                               ? ` (${p.conQuePagar})`
@@ -1842,27 +1834,27 @@ export default function FinanceView({
                                           </span>
                                         </div>
 
-                                        <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                        <div>
                                           <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
                                             Dónde / Medio de Pago
                                           </span>
-                                          <span className="font-semibold text-zinc-800 dark:text-zinc-200 break-words">
+                                          <span className="text-zinc-800 dark:text-zinc-200 break-words">
                                             {p.dondePagar || "Homebanking / Entidad Bancaria"}
                                           </span>
                                         </div>
 
-                                        <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                        <div>
                                           <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
                                             Recurrencia y Estado
                                           </span>
-                                          <span className="font-semibold text-zinc-800 dark:text-zinc-200 break-words">
+                                          <span className="text-zinc-800 dark:text-zinc-200 break-words">
                                             {p.pagoRecurrente ? "Pago Recurrente" : "Pago Único"} • Pendiente
                                           </span>
                                         </div>
                                       </div>
 
                                       {p.observaciones && (
-                                        <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                        <div>
                                           <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
                                             Observaciones
                                           </span>
@@ -1871,9 +1863,7 @@ export default function FinanceView({
                                           </p>
                                         </div>
                                       )}
-                                    </motion.div>
-                                  )}
-                                </AnimatePresence>
+                                </DetailModal>
                               </div>
                             );
                           }}
@@ -2001,22 +1991,13 @@ export default function FinanceView({
                                   </button>
                                 </div>
 
-                                <AnimatePresence>
-                                  {isExpanded && (
-                                    <motion.div
-                                      initial={{ opacity: 0, height: 0 }}
-                                      animate={{ opacity: 1, height: "auto" }}
-                                      exit={{ opacity: 0, height: 0 }}
-                                      transition={{ duration: 0.2 }}
-                                      className="pt-2 border-t border-primary/20 space-y-2 mt-1 text-xs"
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                        <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                <DetailModal isOpen={isExpanded} onClose={() => setExpandedPaymentId(null)} title={p.descripcion} icon={Receipt}>
+                                      <div className="flex flex-col gap-3">
+                                        <div>
                                           <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
                                             Fechas (Vencimiento / Cierre)
                                           </span>
-                                          <span className="font-semibold text-zinc-800 dark:text-zinc-200 break-words">
+                                          <span className="text-zinc-800 dark:text-zinc-200 break-words">
                                             Vence: {formatFechaDMY(p.fechaVencimiento)}
                                             {p.fechaCierre
                                               ? ` • Cierre: ${formatFechaDMY(p.fechaCierre)}`
@@ -2024,11 +2005,11 @@ export default function FinanceView({
                                           </span>
                                         </div>
 
-                                        <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                        <div>
                                           <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
                                             Método de Pago
                                           </span>
-                                          <span className="font-semibold text-zinc-800 dark:text-zinc-200 break-words">
+                                          <span className="text-zinc-800 dark:text-zinc-200 break-words">
                                             {p.metodoPago || "Debito Automatico"}
                                             {p.conQuePagar
                                               ? ` (${p.conQuePagar})`
@@ -2036,27 +2017,27 @@ export default function FinanceView({
                                           </span>
                                         </div>
 
-                                        <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                        <div>
                                           <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
                                             Dónde / Medio de Pago
                                           </span>
-                                          <span className="font-semibold text-zinc-800 dark:text-zinc-200 break-words">
+                                          <span className="text-zinc-800 dark:text-zinc-200 break-words">
                                             {p.dondePagar || "Homebanking / Entidad Bancaria"}
                                           </span>
                                         </div>
 
-                                        <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                        <div>
                                           <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
                                             Recurrencia y Estado
                                           </span>
-                                          <span className="font-semibold text-zinc-800 dark:text-zinc-200 break-words">
+                                          <span className="text-zinc-800 dark:text-zinc-200 break-words">
                                             {p.pagoRecurrente ? "Pago Recurrente" : "Pago Único"} • Pagado
                                           </span>
                                         </div>
                                       </div>
 
                                       {p.observaciones && (
-                                        <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
+                                        <div>
                                           <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
                                             Observaciones
                                           </span>
@@ -2065,9 +2046,7 @@ export default function FinanceView({
                                           </p>
                                         </div>
                                       )}
-                                    </motion.div>
-                                  )}
-                                </AnimatePresence>
+                                </DetailModal>
                               </div>
                             );
                           }}
