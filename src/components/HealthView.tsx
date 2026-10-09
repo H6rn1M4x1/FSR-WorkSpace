@@ -15,6 +15,7 @@ import AnimatedList from "./AnimatedList";
 import { PillFilterBar } from "./PillFilterBar";
 import { ConfirmationModal } from "./ConfirmationModal";
 import { DetailModal } from "./DetailModal";
+import { LocationPickerMap } from "./LocationPickerMap";
 import { calculateIngredientCalories, calcularNutricionPlato, getIngredientWeight, getIngredientNutriVal, getCalorieDensity } from "../lib/calories";
 import { createPortal } from "react-dom";
 import {
@@ -3642,23 +3643,12 @@ export default function HealthView({
                                 <div className="flex flex-col gap-3">
                                   <div>
                                     <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
-                                      Categoría / Paciente
+                                      Fecha y Hora
                                     </span>
                                     <span className="text-zinc-800 dark:text-zinc-200">
-                                      {turno.categoria}
+                                      {formatDateFriendly(turno.fecha)}
                                     </span>
                                   </div>
-
-                                  {turno.doctor && (
-                                    <div>
-                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
-                                        Médico / Especialista
-                                      </span>
-                                      <span className="text-zinc-800 dark:text-zinc-200">
-                                        {turno.doctor}
-                                      </span>
-                                    </div>
-                                  )}
 
                                   {turno.lugar && (
                                     <div>
@@ -3672,17 +3662,57 @@ export default function HealthView({
                                     </div>
                                   )}
 
-                                  {turno.informacionPersonalizada && (
+                                  {turno.doctor && (
                                     <div>
                                       <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
-                                        Notas / Información Adicional
+                                        Médico / Especialista
                                       </span>
                                       <span className="text-zinc-800 dark:text-zinc-200">
-                                        {turno.informacionPersonalizada}
+                                        {turno.doctor}
                                       </span>
                                     </div>
                                   )}
+
+                                  <div>
+                                    <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                      Categoría / Paciente
+                                    </span>
+                                    <span className="text-zinc-800 dark:text-zinc-200">
+                                      {turno.categoria}
+                                    </span>
+                                  </div>
                                 </div>
+
+                                {turno.informacionPersonalizada && (
+                                  <div>
+                                    <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider mb-1">
+                                      Información Personalizada
+                                    </span>
+                                    <div
+                                      className="text-zinc-700 dark:text-zinc-300 italic text-[11px] prose dark:prose-invert prose-sm max-h-[120px] overflow-y-auto"
+                                      dangerouslySetInnerHTML={{ __html: turno.informacionPersonalizada }}
+                                    />
+                                  </div>
+                                )}
+
+                                {typeof turno.lat === "number" &&
+                                  typeof turno.lon === "number" &&
+                                  !isNaN(turno.lat) &&
+                                  !isNaN(turno.lon) &&
+                                  !(turno.lat === 0 && turno.lon === 0) && (
+                                  <div>
+                                    <span className="flex items-center gap-1 text-[9px] font-extrabold text-primary uppercase tracking-wider mb-1.5">
+                                      <MapPin className="w-3 h-3" /> Mapa
+                                    </span>
+                                    <LocationPickerMap
+                                      lat={turno.lat}
+                                      lon={turno.lon}
+                                      locationName={turno.lugar}
+                                      heightClass="h-40"
+                                      readOnly
+                                    />
+                                  </div>
+                                )}
                               </DetailModal>
                             </div>
                           );
