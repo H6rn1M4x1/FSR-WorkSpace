@@ -23,6 +23,7 @@ import {
 import { useToast } from "../context/ToastContext";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import { NbaLogo } from "./icons/NbaLogo";
+import { DetailModal } from "./DetailModal";
 import { PillFilterBar } from "./PillFilterBar";
 import { SPORTS_CATALOG } from "../lib/sportsCatalog";
 import { StorageService } from "../lib/storage";
@@ -658,7 +659,10 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
   // Firestore on every click — all edits happen on this local draft, committed only on Guardar.
   const [sportsModalOpen, setSportsModalOpen] = useState(false);
   const [draftPrefs, setDraftPrefs] = useState<EventPreferences | null>(null);
-  useLockBodyScroll(sportsModalOpen);
+  // Id (índice dentro de la página actual) de la tarjeta de "Eventos del Día" expandida en el
+  // DetailModal — estos eventos no tienen un id propio, así que se identifican por posición.
+  const [expandedDayEventId, setExpandedDayEventId] = useState<number | null>(null);
+  useLockBodyScroll(Boolean(sportsModalOpen || expandedDayEventId !== null));
 
   const openSportsModal = () => {
     setDraftPrefs(prefs || { followedSports: [], followedTeams: {}, updatedAt: Date.now() });
@@ -1032,7 +1036,7 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
             <div>
               <p className="text-[9px] text-zinc-400 font-bold uppercase tracking-widest">Día Seleccionado</p>
               <p className="text-xs md:text-sm font-extrabold text-black dark:text-zinc-200 mt-0.5 capitalize">
-                {new Date(selectedDay + "T00:00:00").toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" })}
+                {new Date(selectedDay + "T00:00:00").toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" }).replace(",", "")}
               </p>
             </div>
             <PillFilterBar
@@ -1067,7 +1071,12 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
                   {selectedDayPageEvents.map((ev, i) => {
                     const CatIcon = ev.kind === "sanjuan" ? MapPin : Trophy;
                     return (
-                      <div key={i} className="p-3.5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/85 flex items-start gap-3">
+                      <div
+                        key={i}
+                        onClick={() => setExpandedDayEventId(i)}
+                        title="Click para ver más info desplegada"
+                        className="p-3.5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/85 flex items-start gap-3 cursor-pointer"
+                      >
                         <div className="p-2 bg-primary/10 text-primary rounded-xl shrink-0 mt-0.5">
                           {ev.kind === "sport" && ev.sportId === "f1" && sportLogos.f1 ? (
                             <img src={sportLogos.f1} alt="" className="w-4 h-4 object-contain brightness-0 dark:invert" />
@@ -1103,6 +1112,40 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
                             </div>
                           )}
                         </div>
+                        <DetailModal
+                          isOpen={expandedDayEventId === i}
+                          onClose={() => setExpandedDayEventId(null)}
+                          title={ev.label}
+                          icon={CatIcon}
+                        >
+                          <div className="flex flex-col gap-3">
+                            <div>
+                              <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">Categoría</span>
+                              <span className="text-zinc-800 dark:text-zinc-200">{ev.categoryLabel}</span>
+                            </div>
+                            {ev.time && (
+                              <div>
+                                <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">Hora</span>
+                                <span className="text-zinc-800 dark:text-zinc-200">{ev.time}</span>
+                              </div>
+                            )}
+                            {ev.location && (
+                              <div>
+                                <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">Lugar</span>
+                                <span className="text-zinc-800 dark:text-zinc-200">{ev.location}</span>
+                              </div>
+                            )}
+                            {(ev.homeTeamBadge || ev.awayTeamBadge) && (
+                              <div>
+                                <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider mb-1">Equipos</span>
+                                <div className="flex items-center gap-3">
+                                  {ev.homeTeamBadge && <img src={ev.homeTeamBadge} alt="" className="w-8 h-8 rounded-full bg-white object-contain border border-white" />}
+                                  {ev.awayTeamBadge && <img src={ev.awayTeamBadge} alt="" className="w-8 h-8 rounded-full bg-white object-contain border border-white" />}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </DetailModal>
                       </div>
                     );
                   })}

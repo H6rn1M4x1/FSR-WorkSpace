@@ -11,6 +11,7 @@ import { createPortal } from "react-dom";
 import { useToast } from "../context/ToastContext";
 import AnimatedList from "./AnimatedList";
 import { ConfirmationModal } from "./ConfirmationModal";
+import { DetailModal } from "./DetailModal";
 import {
   Loader2,
   UtensilsCrossed,
@@ -1350,7 +1351,7 @@ export default function MealsView({
     const dayNum = parts[2];
     const monthName = monthNames[dateObj.getMonth()];
     const yearNum = parts[0];
-    return `${dayOfWeek}, ${dayNum} de ${monthName} de ${yearNum}`;
+    return `${dayOfWeek} ${dayNum} de ${monthName} de ${yearNum}`;
   };
 
   // Lista de compras custom state
@@ -1728,7 +1729,8 @@ export default function MealsView({
         showAddOrg ||
         showAddManualShop ||
         showAddPantry ||
-        showAddMercaderia
+        showAddMercaderia ||
+        activeDetailItem
     )
   );
   const [editingMercaderiaId, setEditingMercaderiaId] = useState<string | null>(
@@ -5489,162 +5491,119 @@ export default function MealsView({
     )}
 
       {/* DETAILED MODAL POPUP (Mini Menu Desplegado) */}
-      {activeDetailItem &&
-        createPortal(
-          (() => {
-            const matchedPlato = platos.find(
-              (p) => p.id === activeDetailItem.platoId,
-            );
-            const matchedAlimentos = matchedPlato
-              ? [
-                  alimentos.find((a) => a.id === matchedPlato.alimentoId1),
-                  alimentos.find((a) => a.id === matchedPlato.alimentoId2),
-                  alimentos.find((a) => a.id === matchedPlato.alimentoId3),
-                ].filter(Boolean)
-              : [];
+      {(() => {
+        const matchedPlato = activeDetailItem
+          ? platos.find((p) => p.id === activeDetailItem.platoId)
+          : undefined;
+        const matchedAlimentos = matchedPlato
+          ? [
+              alimentos.find((a) => a.id === matchedPlato.alimentoId1),
+              alimentos.find((a) => a.id === matchedPlato.alimentoId2),
+              alimentos.find((a) => a.id === matchedPlato.alimentoId3),
+            ].filter(Boolean)
+          : [];
 
-            return (
-              <div
-                className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in cursor-pointer"
-                onClick={() => setActiveDetailItem(null)}
-              >
-                <div
-                  className={`w-full max-w-lg rounded-3xl border shadow-2xl relative transition-all cursor-default overflow-hidden flex flex-col max-h-[90vh] ${
-                    darkMode
-                      ? "bg-zinc-950 border-zinc-800 text-white shadow-primary/20"
-                      : "bg-white border-zinc-200 text-zinc-800 shadow-slate-200"
-                  }`}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <div className="w-full h-40 shrink-0 overflow-hidden border-b border-inherit bg-slate-100 dark:bg-zinc-800/50">
-                    <img
-                      src={`https://tse2.mm.bing.net/th?q=${encodeURIComponent((matchedPlato ? matchedPlato.nombrePlato : "Comida") + " comida receta")}&w=800&h=400&c=7&rs=1`}
-                      alt={matchedPlato ? matchedPlato.nombrePlato : "Comida"}
-                      className="w-full h-full object-cover"
-                      referrerPolicy="no-referrer"
-                    />
-                  </div>
-                  {/* Close button */}
-                  <button
-                    onClick={() => setActiveDetailItem(null)}
-                    className="absolute top-4 right-4 p-2 rounded-full bg-black/40 hover:bg-black/60 text-white cursor-pointer transition-colors backdrop-blur-sm shadow-sm z-10"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-
-                  <div className="p-6 space-y-4 overflow-y-auto">
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-primary/10 text-primary rounded-xl text-xs font-bold w-fit">
-                      <UtensilsCrossed className="w-4 h-4" />
-                      <span>Organización Semanal / Comidas</span>
-                    </div>
-                    <h3 className="text-lg font-extrabold force-text-black organizacion-semanal-plato-title text-black dark:text-zinc-100 pr-8 flex items-center gap-1.5" data-plato-title="true" style={{ color: darkMode ? "#ffffff" : "#000000" }}>
-                      <UtensilsCrossed className="w-4 h-4 text-primary shrink-0 self-center" />
-                      <span className="self-center translate-y-[0.5px]">
-                        {matchedPlato
-                          ? matchedPlato.nombrePlato
-                          : "Comida Desconocida"}
-                      </span>
-                    </h3>
-                    <div className="grid grid-cols-2 gap-3 text-xs text-zinc-400 font-bold">
-                      <div className="bg-slate-50 dark:bg-black/60 p-3 rounded-xl border border-slate-100 dark:border-zinc-800/40">
-                        <p className="text-[9px] uppercase tracking-wider text-zinc-500">
-                          Día de la Semana
-                        </p>
-                        <p className="text-slate-800 dark:text-zinc-200 font-extrabold mt-0.5">
-                          {getDiaDeLaSemana(activeDetailItem.fecha)}
-                        </p>
-                      </div>
-                      <div className="bg-slate-50 dark:bg-black/60 p-3 rounded-xl border border-slate-100 dark:border-zinc-800/40">
-                        <p className="text-[9px] uppercase tracking-wider text-zinc-500">
-                          Fecha del Menú
-                        </p>
-                        <p className="text-slate-800 dark:text-zinc-200 font-extrabold mt-0.5">
-                          {formatFechaDMY(activeDetailItem.fecha)}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="space-y-3">
-                      <h4 className="text-xs font-extrabold uppercase tracking-widest text-zinc-400">
-                        Ingredientes y Composición del Plato:
-                      </h4>
-                      {matchedAlimentos.length > 0 ? (
-                        <div className="space-y-2">
-                          {matchedAlimentos.map((ali: any, idx: number) => (
-                            <div
-                              key={idx}
-                              className="p-3.5 rounded-xl bg-slate-50 dark:bg-black/40 border border-slate-100 dark:border-zinc-800/60"
-                            >
-                              <p className="text-xs font-extrabold text-primary">
-                                {ali.mercaderiaName}
-                              </p>
-                              <div className="grid grid-cols-3 gap-2 mt-2 text-[10px] text-zinc-400 font-semibold">
-                                {ali.ingrediente1 && (
-                                  <div>
-                                    <p className="text-[8px] uppercase tracking-wider text-zinc-500">
-                                      Ingr. 1
-                                    </p>
-                                    <p className="text-zinc-700 dark:text-zinc-300 font-extrabold truncate">
-                                      {ali.ingrediente1}
-                                    </p>
-                                    <p className="text-primary font-bold">
-                                      {ali.cantidad1} {ali.unidad1}
-                                    </p>
-                                  </div>
-                                )}
-                                {ali.ingrediente2 && (
-                                  <div>
-                                    <p className="text-[8px] uppercase tracking-wider text-zinc-500">
-                                      Ingr. 2
-                                    </p>
-                                    <p className="text-zinc-700 dark:text-zinc-300 font-extrabold truncate">
-                                      {ali.ingrediente2}
-                                    </p>
-                                    <p className="text-primary font-bold">
-                                      {ali.cantidad2} {ali.unidad2}
-                                    </p>
-                                  </div>
-                                )}
-                                {ali.ingrediente3 && (
-                                  <div>
-                                    <p className="text-[8px] uppercase tracking-wider text-zinc-500">
-                                      Ingr. 3
-                                    </p>
-                                    <p className="text-zinc-700 dark:text-zinc-300 font-extrabold truncate">
-                                      {ali.ingrediente3}
-                                    </p>
-                                    <p className="text-primary font-bold">
-                                      {ali.cantidad3} {ali.unidad3}
-                                    </p>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="p-4 rounded-xl bg-slate-50 dark:bg-black/40 border border-dashed border-zinc-700 text-center text-xs text-zinc-400 font-medium">
-                          No hay ingredientes específicos guardados para este
-                          plato en tu despensa.
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="pt-2 flex justify-end">
-                      <button
-                        onClick={() => setActiveDetailItem(null)}
-                        className="px-5 py-2.5 rounded-full bg-zinc-500/10 hover:bg-zinc-500/20 text-xs font-bold cursor-pointer text-primary transition-colors"
-                      >
-                        Entendido / Cerrar
-                      </button>
-                    </div>
-                  </div>
-                </div>
+        return (
+          <DetailModal
+            isOpen={!!activeDetailItem}
+            onClose={() => setActiveDetailItem(null)}
+            title={matchedPlato ? matchedPlato.nombrePlato : "Comida Desconocida"}
+            icon={UtensilsCrossed}
+            onEdit={activeDetailItem ? () => handleEditOrgClick(activeDetailItem) : undefined}
+          >
+            <img
+              src={`https://tse2.mm.bing.net/th?q=${encodeURIComponent((matchedPlato ? matchedPlato.nombrePlato : "Comida") + " comida receta")}&w=800&h=400&c=7&rs=1`}
+              alt={matchedPlato ? matchedPlato.nombrePlato : "Comida"}
+              className="w-full h-32 object-cover rounded-xl"
+              referrerPolicy="no-referrer"
+            />
+            <div className="flex flex-col gap-3">
+              <div>
+                <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                  Día de la Semana
+                </span>
+                <span className="text-zinc-800 dark:text-zinc-200">
+                  {activeDetailItem ? getDiaDeLaSemana(activeDetailItem.fecha) : ""}
+                </span>
               </div>
-            );
-          })(),
-          document.body,
-        )}
+              <div>
+                <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                  Fecha del Menú
+                </span>
+                <span className="text-zinc-800 dark:text-zinc-200">
+                  {activeDetailItem ? formatFechaDMY(activeDetailItem.fecha) : ""}
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <h4 className="text-xs font-extrabold uppercase tracking-widest text-zinc-400">
+                Ingredientes y Composición del Plato:
+              </h4>
+              {matchedAlimentos.length > 0 ? (
+                <div className="space-y-2">
+                  {matchedAlimentos.map((ali: any, idx: number) => (
+                    <div
+                      key={idx}
+                      className="p-3.5 rounded-xl bg-slate-50 dark:bg-black/40 border border-slate-100 dark:border-zinc-800/60"
+                    >
+                      <p className="text-xs font-extrabold text-primary">
+                        {ali.mercaderiaName}
+                      </p>
+                      <div className="grid grid-cols-3 gap-2 mt-2 text-[10px] text-zinc-400 font-semibold">
+                        {ali.ingrediente1 && (
+                          <div>
+                            <p className="text-[8px] uppercase tracking-wider text-zinc-500">
+                              Ingr. 1
+                            </p>
+                            <p className="text-zinc-700 dark:text-zinc-300 font-extrabold truncate">
+                              {ali.ingrediente1}
+                            </p>
+                            <p className="text-primary font-bold">
+                              {ali.cantidad1} {ali.unidad1}
+                            </p>
+                          </div>
+                        )}
+                        {ali.ingrediente2 && (
+                          <div>
+                            <p className="text-[8px] uppercase tracking-wider text-zinc-500">
+                              Ingr. 2
+                            </p>
+                            <p className="text-zinc-700 dark:text-zinc-300 font-extrabold truncate">
+                              {ali.ingrediente2}
+                            </p>
+                            <p className="text-primary font-bold">
+                              {ali.cantidad2} {ali.unidad2}
+                            </p>
+                          </div>
+                        )}
+                        {ali.ingrediente3 && (
+                          <div>
+                            <p className="text-[8px] uppercase tracking-wider text-zinc-500">
+                              Ingr. 3
+                            </p>
+                            <p className="text-zinc-700 dark:text-zinc-300 font-extrabold truncate">
+                              {ali.ingrediente3}
+                            </p>
+                            <p className="text-primary font-bold">
+                              {ali.cantidad3} {ali.unidad3}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-4 rounded-xl bg-slate-50 dark:bg-black/40 border border-dashed border-zinc-700 text-center text-xs text-zinc-400 font-medium">
+                  No hay ingredientes específicos guardados para este
+                  plato en tu despensa.
+                </div>
+              )}
+            </div>
+          </DetailModal>
+        );
+      })()}
 
       {/* CUSTOM CONFIRMATION DIALOG MODAL CON ANIMACIÓN & ESTADO ELIMINANDO */}
       <ConfirmationModal

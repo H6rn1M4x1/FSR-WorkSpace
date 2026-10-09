@@ -19,6 +19,7 @@ import { useToast } from "../context/ToastContext";
 import { AddressBookModal, loadSavedAddressBook, AddressEntry } from "./AddressBookModal";
 import { PillFilterBar } from "./PillFilterBar";
 import { ConfirmationModal } from "./ConfirmationModal";
+import { DetailModal } from "./DetailModal";
 import { motion, AnimatePresence } from "motion/react";
 import { createPortal } from "react-dom";
 import {
@@ -1181,7 +1182,8 @@ export default function AppointmentsView({
         editingTurnoComp ||
         showAddApp ||
         showAddRout ||
-        previewFileUrl
+        previewFileUrl ||
+        expandedTurnoId
     )
   );
   const [tcCategoria, setTcCategoria] =
@@ -2404,7 +2406,7 @@ export default function AppointmentsView({
     const monthName = monthNames[dateObj.getMonth()];
     const yearNum = parts[0];
     
-    let result = `${dayOfWeek}, ${dayNum} de ${monthName} de ${yearNum}`;
+    let result = `${dayOfWeek} ${dayNum} de ${monthName} de ${yearNum}`;
     if (timeStr) {
       const cleanTime = timeStr.replace("hs", "").trim();
       result += ` - ${cleanTime} hs`;
@@ -2925,97 +2927,92 @@ export default function AppointmentsView({
                             </div>
 
                               {/* Expanded Detailed View */}
-                              <AnimatePresence>
-                                {isExpanded && (
-                                  <motion.div
-                                    initial={{ opacity: 0, height: 0 }}
-                                    animate={{ opacity: 1, height: "auto" }}
-                                    exit={{ opacity: 0, height: 0 }}
-                                    transition={{ duration: 0.2 }}
-                                    className="pt-2 border-t border-primary/20 space-y-2 mt-2 text-xs"
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                      <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
-                                        <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
-                                          Fecha y Hora
-                                        </span>
-                                        <span className="font-semibold text-zinc-800 dark:text-zinc-200">
-                                          {formatDateFriendly(tc.fecha)}
-                                        </span>
-                                      </div>
+                              <DetailModal
+                                isOpen={isExpanded}
+                                onClose={() => setExpandedTurnoId(null)}
+                                title={tc.descripcion.replace(/⚽\s*/g, "")}
+                                icon={getCategoryIcon(tc.categoria)}
+                                onEdit={() => handleEditTurnoCompromiso(tc)}
+                              >
+                                <div className="flex flex-col gap-3">
+                                  <div>
+                                    <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                      Fecha y Hora
+                                    </span>
+                                    <span className="text-zinc-800 dark:text-zinc-200">
+                                      {formatDateFriendly(tc.fecha)}
+                                    </span>
+                                  </div>
 
-                                      {tc.lugar &&
-                                      tc.lugar.trim() &&
-                                      tc.lugar.toLowerCase() !== "sin dirección" &&
-                                      tc.lugar.toLowerCase() !== "sin direccion" &&
-                                      tc.lugar.toLowerCase() !== "sin lugar asignado" && (
-                                      <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
-                                        <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
-                                          Lugar / Ubicación
-                                        </span>
-                                        <span className="font-semibold text-zinc-800 dark:text-zinc-200">
-                                          {tc.lugar}
-                                        </span>
-                                      </div>
-                                      )}
+                                  {tc.lugar &&
+                                  tc.lugar.trim() &&
+                                  tc.lugar.toLowerCase() !== "sin dirección" &&
+                                  tc.lugar.toLowerCase() !== "sin direccion" &&
+                                  tc.lugar.toLowerCase() !== "sin lugar asignado" && (
+                                  <div>
+                                    <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                      Lugar / Ubicación
+                                    </span>
+                                    <span className="text-zinc-800 dark:text-zinc-200">
+                                      {tc.lugar}
+                                    </span>
+                                  </div>
+                                  )}
 
-                                      {!String(tc.id).startsWith("match-") && tc.doctor && tc.doctor.trim() && (
-                                      <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
-                                        <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
-                                          Profesional / Asignado
-                                        </span>
-                                        <span className="font-semibold text-zinc-800 dark:text-zinc-200">
-                                          {tc.doctor}
-                                        </span>
-                                      </div>
-                                      )}
+                                  {!String(tc.id).startsWith("match-") && tc.doctor && tc.doctor.trim() && (
+                                  <div>
+                                    <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                      Profesional / Asignado
+                                    </span>
+                                    <span className="text-zinc-800 dark:text-zinc-200">
+                                      {tc.doctor}
+                                    </span>
+                                  </div>
+                                  )}
 
-                                      {!String(tc.id).startsWith("match-") && (
-                                      <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
-                                        <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
-                                          Categoría y Estatus
-                                        </span>
-                                        <span className="font-semibold text-zinc-800 dark:text-zinc-200">
-                                          {getCategoryLabel(tc.categoria)} • {estado}
-                                        </span>
-                                      </div>
-                                      )}
-                                    </div>
+                                  {!String(tc.id).startsWith("match-") && (
+                                  <div>
+                                    <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                      Categoría y Estatus
+                                    </span>
+                                    <span className="text-zinc-800 dark:text-zinc-200">
+                                      {getCategoryLabel(tc.categoria)} • {estado}
+                                    </span>
+                                  </div>
+                                  )}
+                                </div>
 
-                                    {tc.informacionPersonalizada && !String(tc.id).startsWith("match-") && (
-                                      <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
-                                        <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider mb-1">
-                                          Información Personalizada
-                                        </span>
-                                        <div
-                                          className="text-zinc-700 dark:text-zinc-300 italic text-[11px] prose dark:prose-invert prose-sm max-h-[120px] overflow-y-auto"
-                                          dangerouslySetInnerHTML={{ __html: tc.informacionPersonalizada }}
-                                        />
-                                      </div>
-                                    )}
-
-                                    {tc.transcripcionAutomatica && (
-                                      <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30">
-                                        <span className="flex items-center gap-1 text-[9px] font-extrabold text-green-500 uppercase tracking-wider mb-1">
-                                          <AudioLines className="w-3 h-3" /> Transcripción de Audio
-                                        </span>
-                                        {(() => {
-                                          const audioFile = tc.archivosNecesarios?.find(a => a.name.startsWith('Audio_') && a.url.startsWith('data:audio/'));
-                                          if (audioFile) {
-                                            return <AudioTranscriptionPlayer audioUrl={audioFile.url} transcript={tc.transcripcionAutomatica} />;
-                                          }
-                                          return (
-                                            <div className="text-zinc-700 dark:text-zinc-300 italic text-[11px] max-h-[100px] overflow-y-auto">
-                                              {tc.transcripcionAutomatica}
-                                            </div>
-                                          );
-                                        })()}
-                                      </div>
-                                    )}
-                                  </motion.div>
+                                {tc.informacionPersonalizada && !String(tc.id).startsWith("match-") && (
+                                  <div>
+                                    <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider mb-1">
+                                      Información Personalizada
+                                    </span>
+                                    <div
+                                      className="text-zinc-700 dark:text-zinc-300 italic text-[11px] prose dark:prose-invert prose-sm max-h-[120px] overflow-y-auto"
+                                      dangerouslySetInnerHTML={{ __html: tc.informacionPersonalizada }}
+                                    />
+                                  </div>
                                 )}
-                              </AnimatePresence>
+
+                                {tc.transcripcionAutomatica && (
+                                  <div>
+                                    <span className="flex items-center gap-1 text-[9px] font-extrabold text-green-500 uppercase tracking-wider mb-1">
+                                      <AudioLines className="w-3 h-3" /> Transcripción de Audio
+                                    </span>
+                                    {(() => {
+                                      const audioFile = tc.archivosNecesarios?.find(a => a.name.startsWith('Audio_') && a.url.startsWith('data:audio/'));
+                                      if (audioFile) {
+                                        return <AudioTranscriptionPlayer audioUrl={audioFile.url} transcript={tc.transcripcionAutomatica} />;
+                                      }
+                                      return (
+                                        <div className="text-zinc-700 dark:text-zinc-300 italic text-[11px] max-h-[100px] overflow-y-auto">
+                                          {tc.transcripcionAutomatica}
+                                        </div>
+                                      );
+                                    })()}
+                                  </div>
+                                )}
+                              </DetailModal>
 
                             {/* Attached Files Section if any */}
                             {(tc.pedidoDocumento || tc.estudioInformeDoc || (tc.archivosNecesarios && tc.archivosNecesarios.length > 0)) && (
