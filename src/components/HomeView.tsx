@@ -2447,7 +2447,7 @@ export default function HomeView({
                                       Información Personalizada
                                     </span>
                                     <div
-                                      className="text-zinc-700 dark:text-zinc-300 italic text-[11px]"
+                                      className="text-zinc-700 dark:text-zinc-300 italic text-[11px] prose dark:prose-invert prose-sm max-h-[120px] overflow-y-auto"
                                       dangerouslySetInnerHTML={{ __html: tc.informacionPersonalizada }}
                                     />
                                   </div>

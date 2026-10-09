@@ -3012,6 +3012,25 @@ export default function AppointmentsView({
                                     })()}
                                   </div>
                                 )}
+
+                                {typeof tc.lat === "number" &&
+                                  typeof tc.lon === "number" &&
+                                  !isNaN(tc.lat) &&
+                                  !isNaN(tc.lon) &&
+                                  !(tc.lat === 0 && tc.lon === 0) && (
+                                  <div>
+                                    <span className="flex items-center gap-1 text-[9px] font-extrabold text-primary uppercase tracking-wider mb-1.5">
+                                      <MapPin className="w-3 h-3" /> Mapa
+                                    </span>
+                                    <LocationPickerMap
+                                      lat={tc.lat}
+                                      lon={tc.lon}
+                                      locationName={tc.lugar}
+                                      heightClass="h-40"
+                                      readOnly
+                                    />
+                                  </div>
+                                )}
                               </DetailModal>
 
                             {/* Attached Files Section if any */}
