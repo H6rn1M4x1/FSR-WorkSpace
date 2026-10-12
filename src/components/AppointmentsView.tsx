@@ -885,6 +885,15 @@ const SavedAddressesScrollRow: React.FC<{
   );
 };
 
+// Un turno auto-generado al agendar un partido (de "Equipo Favorito" con prefijo "match-", o
+// desde "Eventos" con prefijo "sport-") no es un compromiso real con lugar/doctor propios —
+// guarda el JSON de equipos/escudos en informacionPersonalizada, así que se excluye de los
+// campos de texto libre y del mapa de localizaciones agendadas.
+export const isAutoScheduledMatchTurno = (id: string | null | undefined) => {
+  const s = String(id || "");
+  return s.startsWith("match-") || s.startsWith("sport-");
+};
+
 export const getTurnoCategoryIcon = (category: string) => {
   const cat = (category || "").toLowerCase().trim();
   if (
@@ -1495,7 +1504,7 @@ export default function AppointmentsView({
   const validLocationsCount = useMemo(() => {
     const validPlaces = new Set<string>();
     (turnosCompromisos || []).forEach((tc) => {
-      if (String(tc?.id || "").startsWith("match-")) return; // football match stadiums don't belong on this map
+      if (isAutoScheduledMatchTurno(tc?.id)) return; // football match stadiums don't belong on this map
       const l = (tc?.lugar || "").trim();
       if (
         !l ||
@@ -2959,7 +2968,7 @@ export default function AppointmentsView({
                                   </div>
                                   )}
 
-                                  {!String(tc.id).startsWith("match-") && tc.doctor && tc.doctor.trim() && (
+                                  {!isAutoScheduledMatchTurno(tc.id) && tc.doctor && tc.doctor.trim() && (
                                   <div>
                                     <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
                                       Profesional / Asignado
@@ -2970,7 +2979,7 @@ export default function AppointmentsView({
                                   </div>
                                   )}
 
-                                  {!String(tc.id).startsWith("match-") && (
+                                  {!isAutoScheduledMatchTurno(tc.id) && (
                                   <div>
                                     <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
                                       Categoría y Estatus
@@ -2982,7 +2991,7 @@ export default function AppointmentsView({
                                   )}
                                 </div>
 
-                                {tc.informacionPersonalizada && !String(tc.id).startsWith("match-") && (
+                                {tc.informacionPersonalizada && !isAutoScheduledMatchTurno(tc.id) && (
                                   <div>
                                     <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider mb-1">
                                       Información Personalizada
@@ -3019,6 +3028,7 @@ export default function AppointmentsView({
                                   !isNaN(tc.lon) &&
                                   !(tc.lat === 0 && tc.lon === 0) && (
                                   <div>
+                                    <div className="w-10 h-0.5 rounded-full bg-primary/50 mb-2" />
                                     <span className="flex items-center gap-1 text-[9px] font-extrabold text-primary uppercase tracking-wider mb-1.5">
                                       <MapPin className="w-3 h-3" /> Mapa
                                     </span>
@@ -3118,7 +3128,7 @@ export default function AppointmentsView({
               </motion.a>
             </div>
             <MapComponent
-              turnosCompromisos={(turnosCompromisos || []).filter((tc) => !String(tc?.id || "").startsWith("match-"))}
+              turnosCompromisos={(turnosCompromisos || []).filter((tc) => !isAutoScheduledMatchTurno(tc?.id))}
               locationCoords={locationCoords}
               darkMode={darkMode}
               getCategoryLabel={getCategoryLabel}
@@ -3326,7 +3336,7 @@ export default function AppointmentsView({
                                   sharedOutWith={sharedOutWith("turnos_compromisos", tc.id)}
                                 />
                               </span>
-                              {tc.informacionPersonalizada && !String(tc.id).startsWith("match-") && (
+                              {tc.informacionPersonalizada && !isAutoScheduledMatchTurno(tc.id) && (
                                 <span 
                                   className="text-[10px] text-zinc-500 italic line-clamp-1 prose dark:prose-invert prose-p:my-0 prose-ul:my-0 prose-ol:my-0 prose-sm [&_*]:!text-[10px] [&_*]:!text-zinc-500 [&_ol_ol]:list-[lower-alpha] [&_ol_ol_ol]:list-[lower-roman]" 
                                   title="Información personalizada adjunta"
@@ -4090,7 +4100,7 @@ export default function AppointmentsView({
                   </div>
 
                                     {/* Información Personalizada — no aplica a turnos de partido (guardan JSON, no texto libre) */}
-                  {!editingTurnoComp?.id?.startsWith("match-") && (
+                  {!isAutoScheduledMatchTurno(editingTurnoComp?.id) && (
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest">

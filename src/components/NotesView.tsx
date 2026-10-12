@@ -6,6 +6,7 @@ import { useNotes } from "../hooks/useNotes";
 import { useToast } from "../context/ToastContext";
 import { ConfirmationModal } from "./ConfirmationModal";
 import { RichTextEditor } from "./RichTextEditor";
+import { InteractiveRichText } from "./InteractiveRichText";
 import { SharedBadge } from "./SharedBadge";
 import { SubNav } from "./SubNav";
 import { PasswordVaultPanel } from "./PasswordVaultPanel";
@@ -676,10 +677,14 @@ export function NotesView({
                         onAttachmentsChange={(atts) => updateNote(note.id, { attachments: atts })}
                       />
                     ) : (
-                      <div
+                      <InteractiveRichText
                         className="rich-text-content prose dark:prose-invert prose-sm max-w-none text-sm text-zinc-900 dark:text-white [&_ol_ol]:list-[lower-alpha]"
-                        dangerouslySetInnerHTML={{
-                          __html: textValue || "<p class='text-zinc-400 italic'>Nota vacía.</p>",
+                        html={textValue || "<p class='text-zinc-400 italic'>Nota vacía.</p>"}
+                        onToggleCheckbox={(newHtml) => {
+                          setDraft({ text: newHtml });
+                          updateNote(note.id, { text: newHtml })
+                            .then(() => showToast("Nota actualizada.", "success"))
+                            .catch((err: any) => showToast(err?.message || "No se pudo guardar el cambio.", "error"));
                         }}
                       />
                     )}

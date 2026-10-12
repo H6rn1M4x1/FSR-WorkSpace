@@ -4,7 +4,9 @@ import { motion, AnimatePresence } from "motion/react";
 import { StickyNote, Pin, Plus, Pencil, Check, X } from "lucide-react";
 import { useNotes } from "../hooks/useNotes";
 import { RichTextEditor } from "./RichTextEditor";
+import { InteractiveRichText } from "./InteractiveRichText";
 import { SaveOnIdle, type Draft } from "./NotesView";
+import { useToast } from "../context/ToastContext";
 
 // Mismos colores que NotesView.tsx (NOTE_COLORS), en versión compacta — solo la clase de fondo
 // de la tarjeta, sin duplicar el resto de esa paleta (swatch/label) que acá no hace falta.
@@ -41,9 +43,20 @@ export function QuickNotesMiniWidget({
   onOpenAll?: () => void;
 }) {
   const { notes, updateNote } = useNotes(userId);
+  const { showToast } = useToast();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
+
+  // Tildar un checkbox en modo lectura (no editando) debe guardar el cambio al toque, no
+  // quedar solo visual hasta que se abra "Editar" — mismo criterio que cualquier otra acción
+  // rápida de esta app (confirma con un toast).
+  const handleToggleCheckbox = (noteId: string, newHtml: string) => {
+    if (draft && expandedId === noteId) setDraft({ ...draft, text: newHtml });
+    updateNote(noteId, { text: newHtml })
+      .then(() => showToast("Nota actualizada.", "success"))
+      .catch((err: any) => showToast(err?.message || "No se pudo guardar el cambio.", "error"));
+  };
 
   const preview = [...notes]
     .sort((a, b) => {
@@ -113,7 +126,7 @@ export function QuickNotesMiniWidget({
               title="Ver en grande"
               className={`text-left rounded-2xl border p-3 flex flex-col gap-1 h-28 overflow-hidden hover:shadow-md transition-all cursor-pointer ${
                 NOTE_CARD_COLOR[note.color] || NOTE_CARD_COLOR.default
-              }`}
+              } ${note.pinned ? "ring-2 ring-primary border-primary" : ""}`}
             >
               <div className="flex items-center gap-1 min-w-0 pr-5">
                 {note.pinned && <Pin className="w-3 h-3 text-primary fill-primary shrink-0" />}
@@ -194,11 +207,10 @@ export function QuickNotesMiniWidget({
                       onAttachmentsChange={(atts) => updateNote(expandedNote.id, { attachments: atts })}
                     />
                   ) : (
-                    <div
+                    <InteractiveRichText
                       className="rich-text-content prose dark:prose-invert prose-sm max-w-none text-sm text-zinc-900 dark:text-white [&_ol_ol]:list-[lower-alpha]"
-                      dangerouslySetInnerHTML={{
-                        __html: draft.text || "<p class='text-zinc-400 italic'>Nota vacía.</p>",
-                      }}
+                      html={draft.text || "<p class='text-zinc-400 italic'>Nota vacía.</p>"}
+                      onToggleCheckbox={(newHtml) => handleToggleCheckbox(expandedNote.id, newHtml)}
                     />
                   )}
 

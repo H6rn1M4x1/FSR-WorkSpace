@@ -357,19 +357,33 @@ export function RichTextEditor({ value, onChange, placeholder, onShareClick, sha
                    } else {
                      // Insert new checklist line as a real sibling block, so it always
                      // lands on its own line instead of appearing inline (execCommand
-                     // insertHTML was unreliable for this across browsers).
+                     // insertHTML was unreliable for this across browsers) — y, como
+                     // cualquier editor de texto, corta el contenido que queda DESPUÉS
+                     // del cursor dentro de la línea actual para moverlo a la línea
+                     // nueva, en vez de dejarlo pegado arriba con una línea vacía debajo.
+                     const originalRange = selection.getRangeAt(0).cloneRange();
+                     const tailRange = originalRange.cloneRange();
+                     tailRange.setEnd(lineDiv, lineDiv.childNodes.length);
+                     const tailFragment = tailRange.extractContents();
+
                      const newLine = document.createElement("div");
-                     newLine.innerHTML = '<input type="checkbox" style="margin-right: 6px; cursor: pointer;" />&nbsp;';
+                     const checkbox = document.createElement("input");
+                     checkbox.type = "checkbox";
+                     checkbox.style.marginRight = "6px";
+                     checkbox.style.cursor = "pointer";
+                     newLine.appendChild(checkbox);
+                     if (tailFragment.textContent && tailFragment.textContent.length > 0) {
+                       newLine.appendChild(tailFragment);
+                     } else {
+                       newLine.appendChild(document.createTextNode(" "));
+                     }
                      lineDiv.insertAdjacentElement("afterend", newLine);
 
                      const range = document.createRange();
-                     const caretNode = newLine.lastChild;
-                     if (caretNode) {
-                       range.setStart(caretNode, caretNode.textContent?.length || 0);
-                       range.collapse(true);
-                       selection.removeAllRanges();
-                       selection.addRange(range);
-                     }
+                     range.setStart(newLine, 1);
+                     range.collapse(true);
+                     selection.removeAllRanges();
+                     selection.addRange(range);
                      handleInput();
                    }
                 }

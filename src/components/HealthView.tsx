@@ -711,6 +711,17 @@ export default function HealthView({
     return `${dayOfWeek} ${dayNum} de ${monthName} de ${yearNum}`;
   };
 
+  // DD-MM-YYYY para mostrar fechas cortas (tablas, badges) — la fecha se guarda en formato ISO
+  // (YYYY-MM-DD) y mostrarla así, cruda, confunde al leerla.
+  const formatFechaDMY = (fechaStr: string): string => {
+    if (!fechaStr) return "-";
+    const parts = fechaStr.split("T")[0].split(" ")[0].split("-");
+    if (parts.length === 3) {
+      return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    }
+    return fechaStr;
+  };
+
   // --- NUEVOS ESTADOS PARA SALUD METABÓLICA ---
   const [selectedActivityFactor, setSelectedActivityFactor] = useState<number>(1.2);
   const [selectedAlimDate, setSelectedAlimDate] = useState<Date | null>(null);
@@ -3521,7 +3532,7 @@ export default function HealthView({
                                       Disponible Hasta
                                     </span>
                                     <span className="font-extrabold font-mono text-[11px] text-slate-900 dark:text-white">
-                                      {details.disponibleHasta}
+                                      {formatFechaDMY(details.disponibleHasta)}
                                     </span>
                                   </div>
                                 </div>
@@ -3561,7 +3572,7 @@ export default function HealthView({
                                         Disponibilidad
                                       </span>
                                       <span className="text-zinc-800 dark:text-zinc-200">
-                                        {details.disponibleHasta} ({details.disponibleParaDias.toFixed(1)} días)
+                                        {formatFechaDMY(details.disponibleHasta)} ({details.disponibleParaDias.toFixed(1)} días)
                                       </span>
                                     </div>
 
@@ -3701,6 +3712,7 @@ export default function HealthView({
                                   !isNaN(turno.lon) &&
                                   !(turno.lat === 0 && turno.lon === 0) && (
                                   <div>
+                                    <div className="w-10 h-0.5 rounded-full bg-primary/50 mb-2" />
                                     <span className="flex items-center gap-1 text-[9px] font-extrabold text-primary uppercase tracking-wider mb-1.5">
                                       <MapPin className="w-3 h-3" /> Mapa
                                     </span>
@@ -6257,10 +6269,10 @@ export default function HealthView({
                                   </span>
                                 </td>
                                 <td className="px-4 py-4 text-slate-500 dark:text-zinc-400 font-medium font-mono whitespace-nowrap min-w-[125px]">
-                                  {disp.fechaRegistro}
+                                  {formatFechaDMY(disp.fechaRegistro)}
                                 </td>
                                 <td className="px-4 py-4 text-slate-950 dark:text-zinc-100 font-extrabold font-mono whitespace-nowrap min-w-[125px]">
-                                  {d.disponibleHasta}
+                                  {formatFechaDMY(d.disponibleHasta)}
                                 </td>
                                 <td className="px-4 py-4 text-center font-bold text-slate-700 dark:text-zinc-300 font-mono whitespace-nowrap min-w-[90px]">
                                   {disp.cantidadRegistrada}

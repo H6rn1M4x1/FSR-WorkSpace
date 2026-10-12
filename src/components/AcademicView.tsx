@@ -967,7 +967,9 @@ export default function AcademicView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoOpenQuickAdd]);
 
-  // Botón de lápiz de la Agenda en Inicio: abre directo el formulario de edición de ese examen.
+  // Botón de lápiz de la Agenda en Inicio: abre directo el formulario de edición de ese examen o
+  // esa clase (busca en ambas listas, ya que un mismo id de "universidad" puede ser cualquiera
+  // de los dos tipos).
   useEffect(() => {
     if (!autoOpenEditNonce || !autoOpenEditId) return;
     const ex = examenes.find((x) => x.id === autoOpenEditId);
@@ -979,6 +981,18 @@ export default function AcademicView({
       setExInstancia(ex.instancia || "Primero");
       setExAula(ex.aula);
       setShowExamenModal(true);
+    } else {
+      const h = horarios.find((x) => x.id === autoOpenEditId);
+      if (h) {
+        setEditingHorarioId(h.id);
+        setHDia(h.dia);
+        setHHoraInicio(h.horaInicio);
+        setHHoraFin(h.horaFin);
+        setHMateria(h.materia);
+        setHAulas(h.aulas);
+        setHProfesores(h.profesores);
+        setShowHorarioModal(true);
+      }
     }
     onQuickEditHandled?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps

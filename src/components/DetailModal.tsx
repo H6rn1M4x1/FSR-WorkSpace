@@ -49,41 +49,43 @@ export function DetailModal({
             onClick={(e) => e.stopPropagation()}
             className="w-full max-w-lg max-h-[85vh] overflow-y-auto no-scrollbar rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 force-solid-bg shadow-2xl p-5 space-y-2 text-xs"
           >
-            <div className="flex justify-end items-center gap-1 -mt-1 -mr-1 mb-1">
-              {onEdit && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onEdit();
-                    onClose();
-                  }}
-                  className="p-1.5 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 text-zinc-400 cursor-pointer"
-                  title="Editar"
-                >
-                  <Pencil className="w-4 h-4" />
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={onClose}
-                className="p-1.5 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 text-zinc-400 cursor-pointer"
-                title="Cerrar"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            {title && (
-              <div className="flex items-center gap-2 pb-2 -mt-2 mb-1 border-b border-slate-200 dark:border-zinc-800">
+            <div className="flex items-center justify-between gap-2 pb-2 mb-1 border-b border-slate-200 dark:border-zinc-800">
+              <div className="flex items-center gap-2 min-w-0">
                 {Icon && (
                   <span className="p-1.5 rounded-lg bg-primary/10 text-primary shrink-0">
                     <Icon className="w-4 h-4" />
                   </span>
                 )}
-                <h3 className="font-extrabold text-sm text-zinc-900 dark:text-white leading-snug">
-                  {title}
-                </h3>
+                {title && (
+                  <h3 className="font-extrabold text-sm text-zinc-900 dark:text-white leading-snug truncate">
+                    {title}
+                  </h3>
+                )}
               </div>
-            )}
+              <div className="flex items-center gap-1 shrink-0">
+                {onEdit && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onEdit();
+                      onClose();
+                    }}
+                    className="p-1.5 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 text-zinc-400 cursor-pointer"
+                    title="Editar"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="p-1.5 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 text-zinc-400 cursor-pointer"
+                  title="Cerrar"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
             {children}
           </motion.div>
         </motion.div>
