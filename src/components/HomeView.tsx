@@ -1710,6 +1710,19 @@ export default function HomeView({
         item.itemType === "trabajo"
       );
     return true;
+  }).sort((a, b) => {
+    const getMinutes = (item: typeof a) => {
+      let timeStr = "";
+      if (item.itemType === "appointment") timeStr = (item.data as any).time || "";
+      else if (item.itemType === "turno") timeStr = getHoraFromFecha((item.data as any).fecha);
+      else if (item.itemType === "clase") timeStr = (item.data as any).horaInicio || "";
+      else if (item.itemType === "examen") timeStr = (item.data as any).hora || "";
+      if (!timeStr) return Infinity;
+      const [h, m] = timeStr.split(":").map((n: string) => parseInt(n, 10));
+      if (isNaN(h)) return Infinity;
+      return h * 60 + (isNaN(m) ? 0 : m);
+    };
+    return getMinutes(a) - getMinutes(b);
   });
 
   // Automatically evaluate and send notifications for today's pending agenda tasks (100% in-memory, 0 Firebase/network calls)
@@ -2181,10 +2194,12 @@ export default function HomeView({
                                 <Calendar className="w-4 h-4" />
                               </div>
                               <div className="min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-primary/10 text-primary">
-                                    Turno Cita
-                                  </span>
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-primary/10 text-primary">
+                                      Turno Cita
+                                    </span>
+                                  </div>
                                   <button
                                     type="button"
                                     onClick={(evt) => { evt.stopPropagation(); setExpandedHomeItemId(isExpanded ? null : itemId); }}
@@ -2227,20 +2242,20 @@ export default function HomeView({
                                 <div className="flex flex-col gap-3">
                                   {app.doctorName && (
                                     <div>
-                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                         Profesional / Especialidad
                                       </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                         {app.doctorName} {app.specialty ? `(${app.specialty})` : ""}
                                       </span>
                                     </div>
                                   )}
                                   {app.location && (
                                     <div>
-                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                         Lugar / Dirección
                                       </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                         {app.location}
                                       </span>
                                     </div>
@@ -2248,7 +2263,7 @@ export default function HomeView({
                                 </div>
                                 {app.notes && (
                                   <div>
-                                    <span className="block text-[11px] font-extrabold text-primary detail-label mb-1">
+                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                       Notas
                                     </span>
                                     <p className="text-zinc-700 dark:text-zinc-300 italic">
@@ -2288,34 +2303,38 @@ export default function HomeView({
                               <CatIcon className="w-4 h-4" />
                             </div>
                             <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2">
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-primary/10 text-primary">
-                                  <CatIcon className="w-3 h-3 shrink-0" />
-                                  <span>{getCategoryLabel(tc.categoria)}</span>
-                                </span>
-                                {tc.estatus && (
-                                  <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-primary/10 text-primary">
-                                    Realizado
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-primary/10 text-primary">
+                                    <CatIcon className="w-3 h-3 shrink-0" />
+                                    <span>{getCategoryLabel(tc.categoria)}</span>
                                   </span>
-                                )}
-                                {onQuickEdit && (
+                                  {tc.estatus && (
+                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-primary/10 text-primary">
+                                      Realizado
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {onQuickEdit && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => { e.stopPropagation(); onQuickEdit("turno", tc.id); }}
+                                      className="p-1 rounded-lg hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
+                                      title="Ver y editar"
+                                    >
+                                      <Pencil className="w-3 h-3" />
+                                    </button>
+                                  )}
                                   <button
                                     type="button"
-                                    onClick={(e) => { e.stopPropagation(); onQuickEdit("turno", tc.id); }}
+                                    onClick={(evt) => { evt.stopPropagation(); setExpandedHomeItemId(isExpanded ? null : itemId); }}
                                     className="p-1 rounded-lg hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
-                                    title="Ver y editar"
+                                    title="Ver detalles"
                                   >
-                                    <Pencil className="w-3 h-3" />
+                                    <Search className="w-3.5 h-3.5" />
                                   </button>
-                                )}
-                                <button
-                                  type="button"
-                                  onClick={(evt) => { evt.stopPropagation(); setExpandedHomeItemId(isExpanded ? null : itemId); }}
-                                  className="p-1 rounded-lg hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
-                                  title="Ver detalles"
-                                >
-                                  <Search className="w-3.5 h-3.5" />
-                                </button>
+                                </div>
                               </div>
 
                               {matchLogos && (matchLogos.homeLogo || matchLogos.awayLogo) ? (
@@ -2414,10 +2433,10 @@ export default function HomeView({
                           <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} title={tc.descripcion.replace(/⚽\s*/g, "")} icon={CatIcon} onEdit={onQuickEdit ? () => onQuickEdit("turno", tc.id) : undefined}>
                                 <div className="flex flex-col gap-3">
                                   <div>
-                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                       Fecha y Hora
                                     </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                       {formatDateFriendly ? formatDateFriendly(tc.fecha) : tc.fecha}
                                     </span>
                                   </div>
@@ -2427,30 +2446,30 @@ export default function HomeView({
                                     tc.lugar.toLowerCase() !== "sin direccion" &&
                                     tc.lugar.toLowerCase() !== "sin lugar asignado" && (
                                     <div>
-                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                         Lugar / Ubicación
                                       </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                         {tc.lugar}
                                       </span>
                                     </div>
                                   )}
                                   {!matchLogos && tc.doctor && tc.doctor.trim() && (
                                     <div>
-                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                         Profesional / Asignado
                                       </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                         {tc.doctor}
                                       </span>
                                     </div>
                                   )}
                                   {!matchLogos && (
                                     <div>
-                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                         Categoría y Estatus
                                       </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                         {getCategoryLabel(tc.categoria)} • {(() => {
                                           if (tc.estatus) return "Realizado";
                                           const todayStr = getLocalDateString();
@@ -2465,11 +2484,11 @@ export default function HomeView({
                                 </div>
                                 {tc.informacionPersonalizada && !matchLogos && (
                                   <div>
-                                    <span className="block text-[11px] font-extrabold text-primary detail-label mb-1">
+                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                       Información Personalizada
                                     </span>
                                     <div
-                                      className="text-[10px] text-zinc-700 dark:text-zinc-300 italic pl-2 prose dark:prose-invert prose-sm max-h-[120px] overflow-y-auto"
+                                      className="text-[10px] text-zinc-700 dark:text-zinc-300 italic block pl-2 prose dark:prose-invert prose-sm max-h-[120px] overflow-y-auto [&_*]:!text-[10px]"
                                       dangerouslySetInnerHTML={{ __html: tc.informacionPersonalizada }}
                                     />
                                   </div>
@@ -2477,7 +2496,7 @@ export default function HomeView({
                                 {tc.transcripcionAutomatica && (
                                   <div>
                                     <span className="flex items-center gap-1 mb-1">
-                                      <AudioLines className="w-3 h-3 text-green-500" /> <span className="inline-block text-[11px] font-extrabold text-green-500 detail-label">Transcripción de audio</span>
+                                      <AudioLines className="w-3 h-3 text-green-500" /> <span className="inline-block text-[13px] font-extrabold text-green-500 detail-label">Transcripción de audio</span>
                                     </span>
                                     {(() => {
                                       const audioFile = tc.archivosNecesarios?.find((a: any) => a.name.startsWith('Audio_') && a.url.startsWith('data:audio/'));
@@ -2485,7 +2504,7 @@ export default function HomeView({
                                         return <AudioTranscriptionPlayer audioUrl={audioFile.url} transcript={tc.transcripcionAutomatica} />;
                                       }
                                       return (
-                                        <div className="text-[10px] text-zinc-700 dark:text-zinc-300 italic max-h-[100px] overflow-y-auto pl-2">
+                                        <div className="text-[10px] text-zinc-700 dark:text-zinc-300 italic max-h-[100px] overflow-y-auto block pl-2">
                                           {tc.transcripcionAutomatica}
                                         </div>
                                       );
@@ -2530,7 +2549,7 @@ export default function HomeView({
                                 {tc.medicamentosAPedir && tc.medicamentosAPedir.length > 0 && (
                                   <div>
                                     <span className="flex items-center gap-1 mb-1.5">
-                                      <Pill className="w-3 h-3 text-primary" /> <span className="inline-block text-[11px] font-extrabold text-primary detail-label">Medicamentos a Pedir</span>
+                                      <Pill className="w-3 h-3 text-primary" /> <span className="inline-block text-[13px] font-extrabold text-primary detail-label">Medicamentos a Pedir</span>
                                     </span>
                                     <div className="flex flex-wrap gap-1.5">
                                       {tc.medicamentosAPedir.map((medId: string) => {
@@ -2556,7 +2575,7 @@ export default function HomeView({
                                   <div>
                                     <div className="w-full h-px bg-primary/50 mb-2" />
                                     <span className="flex items-center gap-1 mb-1.5">
-                                      <MapPin className="w-3 h-3 text-primary" /> <span className="inline-block text-[11px] font-extrabold text-primary detail-label">Mapa</span>
+                                      <MapPin className="w-3 h-3 text-primary" /> <span className="inline-block text-[13px] font-extrabold text-primary detail-label">Mapa</span>
                                     </span>
                                     <LocationPickerMap
                                       lat={tc.lat}
@@ -2597,19 +2616,21 @@ export default function HomeView({
                               <Receipt className="w-4 h-4" />
                             </div>
                             <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2">
-                                <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-primary/10 text-primary">
-                                  Factura / Finanzas
-                                </span>
-                                {inv.paid ? (
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex flex-wrap items-center gap-1.5 min-w-0">
                                   <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-primary/10 text-primary">
-                                    Pagado
+                                    Factura / Finanzas
                                   </span>
-                                ) : (
-                                  <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-red-500/15 text-red-500">
-                                    Vencimiento
-                                  </span>
-                                )}
+                                  {inv.paid ? (
+                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-primary/10 text-primary">
+                                      Pagado
+                                    </span>
+                                  ) : (
+                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-red-500/15 text-red-500">
+                                      Vencimiento
+                                    </span>
+                                  )}
+                                </div>
                                 <button
                                   type="button"
                                   onClick={(evt) => { evt.stopPropagation(); setExpandedHomeItemId(isExpanded ? null : itemId); }}
@@ -2647,37 +2668,37 @@ export default function HomeView({
                           <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} title={inv.title} icon={Receipt}>
                                 <div className="flex flex-col gap-3">
                                   <div>
-                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                       Monto
                                     </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                       ${inv.amount.toLocaleString("es-AR")} ARS
                                     </span>
                                   </div>
                                   <div>
-                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                       Estado de Pago
                                     </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                       {inv.paid ? "Pagado / Al día" : "Pendiente de pago"}
                                     </span>
                                   </div>
                                   {inv.dueDate && (
                                   <div>
-                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                       Vencimiento
                                     </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                       {inv.dueDate}
                                     </span>
                                   </div>
                                   )}
                                   {inv.category && (
                                   <div>
-                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                       Categoría
                                     </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                       {inv.category}
                                     </span>
                                   </div>
@@ -2718,46 +2739,50 @@ export default function HomeView({
                               )}
                             </div>
                             <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2">
-                                <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-primary/10 text-primary">
-                                  {isClosing
-                                    ? "Cierre Tarjeta"
-                                    : "Vencimiento Pago"}
-                                </span>
-                                {dp.pago ? (
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex flex-wrap items-center gap-1.5 min-w-0">
                                   <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-primary/10 text-primary">
-                                    Liquidado
+                                    {isClosing
+                                      ? "Cierre Tarjeta"
+                                      : "Vencimiento Pago"}
                                   </span>
-                                ) : (
-                                  <span
-                                    className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide ${isClosing ? "bg-primary/10 text-primary" : "bg-red-500/15 text-red-500"}`}
-                                  >
-                                    {isClosing ? "Pendiente" : "Impago"}
-                                  </span>
-                                )}
-                                <SharedBadge
-                                  item={dp}
-                                  isSharedOut={isItemSharedOut("detailed_payments", dp.id)}
-                                  sharedOutWith={sharedOutWithNames("detailed_payments", dp.id)}
-                                />
-                                {onQuickEdit && (
+                                  {dp.pago ? (
+                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-primary/10 text-primary">
+                                      Liquidado
+                                    </span>
+                                  ) : (
+                                    <span
+                                      className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide ${isClosing ? "bg-primary/10 text-primary" : "bg-red-500/15 text-red-500"}`}
+                                    >
+                                      {isClosing ? "Pendiente" : "Impago"}
+                                    </span>
+                                  )}
+                                  <SharedBadge
+                                    item={dp}
+                                    isSharedOut={isItemSharedOut("detailed_payments", dp.id)}
+                                    sharedOutWith={sharedOutWithNames("detailed_payments", dp.id)}
+                                  />
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {onQuickEdit && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => { e.stopPropagation(); onQuickEdit("finanzas", dp.id); }}
+                                      className="p-1 rounded-lg hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
+                                      title="Ver y editar"
+                                    >
+                                      <Pencil className="w-3 h-3" />
+                                    </button>
+                                  )}
                                   <button
                                     type="button"
-                                    onClick={(e) => { e.stopPropagation(); onQuickEdit("finanzas", dp.id); }}
+                                    onClick={(evt) => { evt.stopPropagation(); setExpandedHomeItemId(isExpanded ? null : itemId); }}
                                     className="p-1 rounded-lg hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
-                                    title="Ver y editar"
+                                    title="Ver detalles"
                                   >
-                                    <Pencil className="w-3 h-3" />
+                                    <Search className="w-3.5 h-3.5" />
                                   </button>
-                                )}
-                                <button
-                                  type="button"
-                                  onClick={(evt) => { evt.stopPropagation(); setExpandedHomeItemId(isExpanded ? null : itemId); }}
-                                  className="p-1 rounded-lg hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
-                                  title="Ver detalles"
-                                >
-                                  <Search className="w-3.5 h-3.5" />
-                                </button>
+                                </div>
                               </div>
                               <div className="flex items-center gap-2 mt-1.5 min-w-0">
                                 <div
@@ -2807,57 +2832,57 @@ export default function HomeView({
                           <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} title={dp.descripcion} icon={isClosing || dp.categoria === "Tarjeta de Credito" ? CreditCard : Receipt} onEdit={onQuickEdit ? () => onQuickEdit("finanzas", dp.id) : undefined}>
                                 <div className="flex flex-col gap-3">
                                   <div>
-                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                       Categoría / Método
                                     </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                       {dp.categoria || "General"} • {dp.metodoPago || "Efectivo/Debito"}
                                     </span>
                                   </div>
                                   {dp.dondePagar && (
                                   <div>
-                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                       ¿Dónde Pagar?
                                     </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                       {dp.dondePagar}
                                     </span>
                                   </div>
                                   )}
                                   {dp.conQuePagar && (
                                   <div>
-                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                       ¿Con Qué Pagar?
                                     </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                       {dp.conQuePagar}
                                     </span>
                                   </div>
                                   )}
                                   <div>
-                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                       Recurrente
                                     </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                       {dp.pagoRecurrente ? "Sí" : "No"}
                                     </span>
                                   </div>
                                   {dp.fechaCierre && (
                                     <div>
-                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                         Fecha de Cierre
                                       </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                         {dp.fechaCierre}
                                       </span>
                                     </div>
                                   )}
                                   {(dp.facturaEmitida || dp.comprobantePago) && (
                                     <div>
-                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                         Archivos
                                       </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                         {dp.facturaEmitida ? "Factura ✓" : "Sin factura"} • {dp.comprobantePago ? "Comprobante ✓" : "Sin comprobante"}
                                       </span>
                                     </div>
@@ -2865,7 +2890,7 @@ export default function HomeView({
                                 </div>
                                 {dp.observaciones && (
                                   <div>
-                                    <span className="block text-[11px] font-extrabold text-primary detail-label mb-1">
+                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                       Observaciones
                                     </span>
                                     <p className="text-zinc-700 dark:text-zinc-300 italic">
@@ -2904,37 +2929,41 @@ export default function HomeView({
                               <Stethoscope className="w-4 h-4" />
                             </div>
                             <div className="min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-primary/10 text-primary">
-                                  Salud / Medicamento
-                                </span>
-                                <span
-                                  className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide ${
-                                    details.estado === "Comprar Medicamento"
-                                      ? "bg-red-500/15 text-red-500"
-                                      : "bg-primary/10 text-primary"
-                                  }`}
-                                >
-                                  {details.estado}
-                                </span>
-                                {onQuickEdit && (
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                                  <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-primary/10 text-primary">
+                                    Salud / Medicamento
+                                  </span>
+                                  <span
+                                    className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide ${
+                                      details.estado === "Comprar Medicamento"
+                                        ? "bg-red-500/15 text-red-500"
+                                        : "bg-primary/10 text-primary"
+                                    }`}
+                                  >
+                                    {details.estado}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {onQuickEdit && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => { e.stopPropagation(); onQuickEdit("salud", disp.id); }}
+                                      className="p-1 rounded-lg hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
+                                      title="Ver y editar"
+                                    >
+                                      <Pencil className="w-3 h-3" />
+                                    </button>
+                                  )}
                                   <button
                                     type="button"
-                                    onClick={(e) => { e.stopPropagation(); onQuickEdit("salud", disp.id); }}
+                                    onClick={(evt) => { evt.stopPropagation(); setExpandedHomeItemId(isExpanded ? null : itemId); }}
                                     className="p-1 rounded-lg hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
-                                    title="Ver y editar"
+                                    title="Ver detalles"
                                   >
-                                    <Pencil className="w-3 h-3" />
+                                    <Search className="w-3.5 h-3.5" />
                                   </button>
-                                )}
-                                <button
-                                  type="button"
-                                  onClick={(evt) => { evt.stopPropagation(); setExpandedHomeItemId(isExpanded ? null : itemId); }}
-                                  className="p-1 rounded-lg hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
-                                  title="Ver detalles"
-                                >
-                                  <Search className="w-3.5 h-3.5" />
-                                </button>
+                                </div>
                               </div>
                               <h4 className="font-extrabold text-xs text-black dark:text-white mt-1.5 truncate" style={{ color: darkMode ? undefined : '#000000' }}>
                                 {details.marca}
@@ -2955,10 +2984,10 @@ export default function HomeView({
                                 <div className="flex flex-col gap-3">
                                   {details.droga && (
                                   <div>
-                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                       Droga / Fármaco
                                     </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                       {details.droga}
                                     </span>
                                   </div>
@@ -2966,29 +2995,29 @@ export default function HomeView({
 
                                   {details.funcionTratamiento && (
                                   <div>
-                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                       Función / Tratamiento
                                     </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                       {details.funcionTratamiento}
                                     </span>
                                   </div>
                                   )}
 
                                   <div>
-                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                       Disponibilidad
                                     </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                       {formatFechaDMY(details.disponibleHasta)} ({details.disponibleParaDias.toFixed(1)} días)
                                     </span>
                                   </div>
 
                                   <div>
-                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                       Stock (Inicial / Restante)
                                     </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                       {disp.cantidadRegistrada} registradas / {details.cantidadDisponible.toFixed(1)} restantes
                                     </span>
                                   </div>
@@ -3022,10 +3051,13 @@ export default function HomeView({
                               <UtensilsCrossed className="w-4 h-4" />
                             </div>
                             <div className="min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-primary/10 text-primary">
-                                  Comidas
-                                </span>
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                                  <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-primary/10 text-primary">
+                                    Comidas
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
                                 {onQuickEdit && (
                                   <button
                                     type="button"
@@ -3044,6 +3076,7 @@ export default function HomeView({
                                 >
                                   <Search className="w-3.5 h-3.5" />
                                 </button>
+                                </div>
                               </div>
                               <h4 className="font-extrabold text-xs text-black dark:text-white mt-1.5 truncate" style={{ color: darkMode ? undefined : '#000000' }}>
                                 Plato Planeado:{" "}
@@ -3059,14 +3092,14 @@ export default function HomeView({
 
                           <HomeDetailModal isOpen={isExpanded && !!matchedPlato} onClose={() => setExpandedHomeItemId(null)} title={matchedPlato?.nombrePlato} icon={UtensilsCrossed} onEdit={onQuickEdit ? () => onQuickEdit("comidas", m.id) : undefined}>
                                 <div>
-                                  <span className="block text-[11px] font-extrabold text-primary detail-label mb-1">
+                                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                     Detalles del Plato
                                   </span>
                                   <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                     {matchedPlato.nombrePlato}
                                   </span>
                                   {matchedPlato.descripcion && (
-                                    <p className="text-[10px] text-zinc-600 dark:text-zinc-400 mt-1 italic pl-2">
+                                    <p className="text-[10px] text-zinc-600 dark:text-zinc-400 mt-1 italic block pl-2">
                                       {matchedPlato.descripcion}
                                     </p>
                                   )}
@@ -3074,20 +3107,20 @@ export default function HomeView({
                                 <div className="flex flex-col gap-3">
                                   {matchedPlato.calorias !== undefined && matchedPlato.calorias !== null && (
                                   <div>
-                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                       Calorías
                                     </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                       {matchedPlato.calorias} kcal
                                     </span>
                                   </div>
                                   )}
                                   {(matchedPlato.ingredientesPersonalizados?.length > 0 || matchedPlato.alimentoId1 || matchedPlato.alimentoId2 || matchedPlato.alimentoId3) && (
                                   <div>
-                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                       Ingredientes
                                     </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                       {matchedPlato.ingredientesPersonalizados && matchedPlato.ingredientesPersonalizados.length > 0
                                         ? matchedPlato.ingredientesPersonalizados.join(", ")
                                         : [matchedPlato.alimentoId1, matchedPlato.alimentoId2, matchedPlato.alimentoId3]
@@ -3124,10 +3157,12 @@ export default function HomeView({
                                 <GraduationCap className="w-4 h-4" />
                               </div>
                               <div className="min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-primary/10 text-primary">
-                                    Clase Académica
-                                  </span>
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-primary/10 text-primary">
+                                      Clase Académica
+                                    </span>
+                                  </div>
                                   <button
                                     type="button"
                                     onClick={(evt) => { evt.stopPropagation(); setExpandedHomeItemId(isExpanded ? null : itemId); }}
@@ -3163,49 +3198,49 @@ export default function HomeView({
                           <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} title={h.materia} icon={GraduationCap} onEdit={onQuickEdit ? () => onQuickEdit("universidad", h.id) : undefined}>
                                 <div className="flex flex-col gap-3">
                                   <div>
-                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                       Día y Horario
                                     </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                       {h.dia} • {h.horaInicio || "--:--"} a {h.horaFin || "--:--"} hs
                                     </span>
                                   </div>
                                   {h.aulas && (
                                     <div>
-                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                         Aula / Espacio
                                       </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                         {h.aulas}
                                       </span>
                                     </div>
                                   )}
                                   {h.profesores && (
                                     <div>
-                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                         Profesores
                                       </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                         {h.profesores}
                                       </span>
                                     </div>
                                   )}
                                   {h.comision && (
                                     <div>
-                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                         Comisión
                                       </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                         {h.comision}
                                       </span>
                                     </div>
                                   )}
                                   {h.modalidad && (
                                     <div>
-                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                         Modalidad
                                       </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                         {h.modalidad}
                                       </span>
                                     </div>
@@ -3237,28 +3272,32 @@ export default function HomeView({
                                 <BookOpen className="w-4 h-4" />
                               </div>
                               <div className="min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-primary/10 text-primary">
-                                    {e.estado || "Examen"}
-                                  </span>
-                                  {onQuickEdit && (
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-primary/10 text-primary">
+                                      {e.estado || "Examen"}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    {onQuickEdit && (
+                                      <button
+                                        type="button"
+                                        onClick={(evt) => { evt.stopPropagation(); onQuickEdit("universidad", e.id); }}
+                                        className="p-1 rounded-lg hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
+                                        title="Ver y editar"
+                                      >
+                                        <Pencil className="w-3 h-3" />
+                                      </button>
+                                    )}
                                     <button
                                       type="button"
-                                      onClick={(evt) => { evt.stopPropagation(); onQuickEdit("universidad", e.id); }}
+                                      onClick={(evt) => { evt.stopPropagation(); setExpandedHomeItemId(isExpanded ? null : itemId); }}
                                       className="p-1 rounded-lg hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
-                                      title="Ver y editar"
+                                      title="Ver detalles"
                                     >
-                                      <Pencil className="w-3 h-3" />
+                                      <Search className="w-3.5 h-3.5" />
                                     </button>
-                                  )}
-                                  <button
-                                    type="button"
-                                    onClick={(evt) => { evt.stopPropagation(); setExpandedHomeItemId(isExpanded ? null : itemId); }}
-                                    className="p-1 rounded-lg hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
-                                    title="Ver detalles"
-                                  >
-                                    <Search className="w-3.5 h-3.5" />
-                                  </button>
+                                  </div>
                                 </div>
                                 <h4
                                   className="font-extrabold text-xs text-black dark:text-white mt-1.5 truncate"
@@ -3292,49 +3331,49 @@ export default function HomeView({
                           <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} title={e.materia} icon={BookOpen} onEdit={onQuickEdit ? () => onQuickEdit("universidad", e.id) : undefined}>
                                 <div className="flex flex-col gap-3">
                                   <div>
-                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                       Tipo / Estado Examen
                                     </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                       {e.estado || "Examen"}
                                     </span>
                                   </div>
                                   {(e.instancia || e.aula) && (
                                     <div>
-                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                         Instancia / Aula
                                       </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                         {[e.instancia && `Instancia: ${e.instancia}`, e.aula && `Aula: ${e.aula}`].filter(Boolean).join(" • ")}
                                       </span>
                                     </div>
                                   )}
                                   {(e.fecha || e.hora) && (
                                     <div>
-                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                         Fecha y Hora
                                       </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                         {[e.fecha, e.hora && `${e.hora} hs`].filter(Boolean).join(" • ")}
                                       </span>
                                     </div>
                                   )}
                                   {e.nota !== undefined && e.nota !== null && (
                                     <div>
-                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                         Calificación
                                       </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                         {e.nota}
                                       </span>
                                     </div>
                                   )}
                                   {e.contenidos && (
                                     <div>
-                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                         Temas / Contenidos
                                       </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                         {e.contenidos}
                                       </span>
                                     </div>
@@ -3375,16 +3414,18 @@ export default function HomeView({
                                 <FileText className="w-4 h-4" />
                               </div>
                               <div className="min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <span
-                                    className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide ${
-                                      t.completed
-                                        ? "bg-emerald-500/10 text-emerald-500"
-                                        : "bg-primary/10 text-primary"
-                                    }`}
-                                  >
-                                    {t.type || "Trabajo"}
-                                  </span>
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                                    <span
+                                      className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide ${
+                                        t.completed
+                                          ? "bg-emerald-500/10 text-emerald-500"
+                                          : "bg-primary/10 text-primary"
+                                      }`}
+                                    >
+                                      {t.type || "Trabajo"}
+                                    </span>
+                                  </div>
                                   <button
                                     type="button"
                                     onClick={(evt) => { evt.stopPropagation(); setExpandedHomeItemId(isExpanded ? null : itemId); }}
@@ -3458,57 +3499,57 @@ export default function HomeView({
                           <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} title={t.title} icon={FileText}>
                                 <div className="flex flex-col gap-3">
                                   <div>
-                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                       Estado de Entrega
                                     </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                       {t.completed ? "Completado" : "Pendiente"}
                                     </span>
                                   </div>
                                   <div>
-                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                       Materia
                                     </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                       {subjectName}
                                     </span>
                                   </div>
                                   {t.dueDate && (
                                     <div>
-                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                         Fecha Límite
                                       </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                         {t.dueDate}
                                       </span>
                                     </div>
                                   )}
                                   {t.type && (
                                     <div>
-                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                         Tipo
                                       </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                         {t.type}
                                       </span>
                                     </div>
                                   )}
                                   {t.grade !== undefined && t.grade !== null && (
                                     <div>
-                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                         Calificación
                                       </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                         {t.grade}
                                       </span>
                                     </div>
                                   )}
                                   {t.description && (
                                     <div>
-                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                         Descripción
                                       </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                         {t.description}
                                       </span>
                                     </div>

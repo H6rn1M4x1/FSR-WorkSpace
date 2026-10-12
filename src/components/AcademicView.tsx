@@ -1857,6 +1857,7 @@ export default function AcademicView({
               instancia?: string;
               aula?: string;
               fecha?: string;
+              hora?: string;
               rawHorario?: HorarioItem;
               rawExamen?: ExamenItem;
               rawTask?: AcademicTask;
@@ -1896,6 +1897,7 @@ export default function AcademicView({
                   instancia: e.instancia,
                   aula: e.aula,
                   fecha: e.fecha,
+                  hora: e.hora,
                   rawExamen: e,
                 });
               });
@@ -1916,6 +1918,16 @@ export default function AcademicView({
                 });
               });
             }
+
+            const timeToMinutes = (time?: string) => {
+              if (!time) return Infinity;
+              const [h, m] = time.split(":").map((n) => parseInt(n, 10));
+              if (isNaN(h)) return Infinity;
+              return h * 60 + (isNaN(m) ? 0 : m);
+            };
+            agendaItemsList = [...agendaItemsList].sort(
+              (a, b) => timeToMinutes(a.horaInicio || a.hora) - timeToMinutes(b.horaInicio || b.hora),
+            );
 
             return (
               <>
@@ -2261,20 +2273,20 @@ export default function AcademicView({
                                             <>
                                               {item.aulas && (
                                               <div>
-                                                <span className="block text-[11px] font-extrabold text-primary dark:text-primary/90 detail-label mb-0.5">
+                                                <span className="block text-[13px] font-extrabold text-primary dark:text-primary/90 detail-label mb-2">
                                                   Aula / Ubicación
                                                 </span>
-                                                <span className="text-[10px] text-slate-900 dark:text-white pl-2">
+                                                <span className="text-[10px] text-slate-900 dark:text-white block pl-2">
                                                   {item.aulas}
                                                 </span>
                                               </div>
                                               )}
                                               {item.profesores && (
                                               <div>
-                                                <span className="block text-[11px] font-extrabold text-primary dark:text-primary/90 detail-label mb-0.5">
+                                                <span className="block text-[13px] font-extrabold text-primary dark:text-primary/90 detail-label mb-2">
                                                   Profesores / Cátedra
                                                 </span>
-                                                <span className="text-[10px] text-slate-900 dark:text-white pl-2">
+                                                <span className="text-[10px] text-slate-900 dark:text-white block pl-2">
                                                   {item.profesores}
                                                 </span>
                                               </div>
@@ -2285,19 +2297,19 @@ export default function AcademicView({
                                           {item.type === "examen" && (
                                             <>
                                               <div>
-                                                <span className="block text-[11px] font-extrabold text-primary dark:text-primary/90 detail-label mb-0.5">
+                                                <span className="block text-[13px] font-extrabold text-primary dark:text-primary/90 detail-label mb-2">
                                                   Tipo / Estado Examen
                                                 </span>
-                                                <span className="text-[10px] text-slate-900 dark:text-white pl-2">
+                                                <span className="text-[10px] text-slate-900 dark:text-white block pl-2">
                                                   {item.estado || "Examen"}
                                                 </span>
                                               </div>
                                               {(item.instancia || item.aula) && (
                                               <div>
-                                                <span className="block text-[11px] font-extrabold text-primary dark:text-primary/90 detail-label mb-0.5">
+                                                <span className="block text-[13px] font-extrabold text-primary dark:text-primary/90 detail-label mb-2">
                                                   Instancia / Aula
                                                 </span>
-                                                <span className="text-[10px] text-slate-900 dark:text-white pl-2">
+                                                <span className="text-[10px] text-slate-900 dark:text-white block pl-2">
                                                   {[item.instancia && `Instancia: ${item.instancia}`, item.aula && `Aula: ${item.aula}`].filter(Boolean).join(" • ")}
                                                 </span>
                                               </div>
@@ -2308,7 +2320,7 @@ export default function AcademicView({
                                           {item.type === "trabajo" && (
                                             <>
                                               <div>
-                                                <span className="block text-[11px] font-extrabold text-primary dark:text-primary/90 detail-label mb-0.5">
+                                                <span className="block text-[13px] font-extrabold text-primary dark:text-primary/90 detail-label mb-2">
                                                   Estado de Entrega
                                                 </span>
                                                 <span className={`font-extrabold text-xs ${item.completed ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}>
@@ -2316,10 +2328,10 @@ export default function AcademicView({
                                                 </span>
                                               </div>
                                               <div>
-                                                <span className="block text-[11px] font-extrabold text-primary dark:text-primary/90 detail-label mb-0.5">
+                                                <span className="block text-[13px] font-extrabold text-primary dark:text-primary/90 detail-label mb-2">
                                                   Materia Asociada
                                                 </span>
-                                                <span className="text-[10px] text-slate-900 dark:text-white pl-2">
+                                                <span className="text-[10px] text-slate-900 dark:text-white block pl-2">
                                                   {item.subjectName || "General"}
                                                 </span>
                                               </div>
