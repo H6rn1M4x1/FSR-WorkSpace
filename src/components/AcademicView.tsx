@@ -2157,6 +2157,27 @@ export default function AcademicView({
                             } as React.CSSProperties}
                             renderItem={(item) => {
                               const isExpanded = expandedAgendaItemId === item.id;
+                              const canEdit = (item.type === "clase" && !!item.rawHorario) || (item.type === "examen" && !!item.rawExamen);
+                              const handleEditAgendaItem = () => {
+                                if (item.type === "clase" && item.rawHorario) {
+                                  setEditingHorarioId(item.rawHorario.id);
+                                  setHDia(item.rawHorario.dia);
+                                  setHHoraInicio(item.rawHorario.horaInicio);
+                                  setHHoraFin(item.rawHorario.horaFin);
+                                  setHMateria(item.rawHorario.materia);
+                                  setHAulas(item.rawHorario.aulas);
+                                  setHProfesores(item.rawHorario.profesores);
+                                  setShowHorarioModal(true);
+                                } else if (item.type === "examen" && item.rawExamen) {
+                                  setEditingExamenId(item.rawExamen.id);
+                                  setExMateria(item.rawExamen.materia);
+                                  setExFecha(item.rawExamen.fecha);
+                                  setExEstado(item.rawExamen.estado);
+                                  setExInstancia(item.rawExamen.instancia || "Primero");
+                                  setExAula(item.rawExamen.aula);
+                                  setShowExamenModal(true);
+                                }
+                              };
                               return (
                                 <div
                                   key={item.id}
@@ -2167,76 +2188,61 @@ export default function AcademicView({
                                       : "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/85 backdrop-blur-md hover:bg-zinc-50 dark:hover:bg-zinc-900/80"
                                   }`}
                                 >
-                                  {/* COLLAPSED HEADER LINE */}
-                                  <div className="flex flex-col sm:flex-row sm:items-center justify-between w-full gap-2">
-                                    <div className="flex items-center justify-between sm:justify-start gap-2.5 min-w-0 w-full sm:w-auto">
-                                      <div className="flex items-center gap-2.5 min-w-0">
-                                        <GraduationCap className="w-4 h-4 text-primary shrink-0 self-center" />
-                                        <div className="min-w-0">
-                                          <div className="flex items-center gap-2 flex-wrap">
-                                            <p className="text-xs font-black truncate text-slate-800 dark:text-zinc-100">
-                                              {item.title}
-                                            </p>
-                                            <SharedBadge
-                                              item={item}
-                                              isSharedOut={isSharedOut(item.type === "examen" ? "examenes" : "tasks", item.id)}
-                                              sharedOutWith={sharedOutWith(item.type === "examen" ? "examenes" : "tasks", item.id)}
-                                            />
-                                            {item.subjectName && (
-                                              <span className="text-[10px] text-zinc-500 font-medium truncate">
-                                                ({item.subjectName})
-                                              </span>
-                                            )}
-                                          </div>
-                                          {!isExpanded && item.detailsInfo && (
-                                            <p className="text-[10px] text-zinc-500 font-medium truncate mt-0.5">
-                                              {item.detailsInfo}
-                                            </p>
+                                  {/* COLLAPSED HEADER LINE (mismo estilo que las tarjetas de Inicio) */}
+                                  <div className="flex items-start gap-3 min-w-0">
+                                    <div className="p-2 bg-primary/10 text-primary rounded-xl shrink-0 mt-0.5">
+                                      <GraduationCap className="w-4 h-4" />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center justify-between gap-2">
+                                        <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                                          <span
+                                            className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-md ${
+                                              item.type === "clase"
+                                                ? "bg-primary/20 text-primary border border-primary/30"
+                                                : item.type === "examen"
+                                                ? "bg-primary/15 text-primary/90 border border-primary/25"
+                                                : "bg-primary/10 text-primary/75 border border-primary/20"
+                                            }`}
+                                          >
+                                            {item.badge}
+                                          </span>
+                                          <SharedBadge
+                                            item={item}
+                                            isSharedOut={isSharedOut(item.type === "examen" ? "examenes" : "tasks", item.id)}
+                                            sharedOutWith={sharedOutWith(item.type === "examen" ? "examenes" : "tasks", item.id)}
+                                          />
+                                        </div>
+                                        <div className="flex items-center gap-1 shrink-0">
+                                          {canEdit && (
+                                            <button
+                                              type="button"
+                                              onClick={(e) => { e.stopPropagation(); handleEditAgendaItem(); }}
+                                              className="p-1 rounded-lg hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
+                                              title="Editar"
+                                            >
+                                              <Edit2 className="w-3.5 h-3.5" />
+                                            </button>
                                           )}
+                                          <button
+                                            type="button"
+                                            onClick={(e) => { e.stopPropagation(); setExpandedAgendaItemId(isExpanded ? null : item.id); }}
+                                            className="p-1 rounded-lg hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
+                                            title="Ver detalles"
+                                          >
+                                            <Search className="w-3.5 h-3.5" />
+                                          </button>
                                         </div>
                                       </div>
-
-                                      {/* Mobile-only "ver detalles" button in top right */}
-                                      <button
-                                        type="button"
-                                        onClick={(e) => { e.stopPropagation(); setExpandedAgendaItemId(isExpanded ? null : item.id); }}
-                                        className={`sm:hidden p-1 rounded-lg hover:bg-primary/10 shrink-0 cursor-pointer ${
-                                          isExpanded ? "text-primary" : "text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-200"
-                                        }`}
-                                        title="Ver detalles"
-                                      >
-                                        <Search className="w-4 h-4" />
-                                      </button>
-                                    </div>
-
-                                    {/* Secondary line on mobile (pl-6.5 to align with text), right-aligned on desktop */}
-                                    <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0 w-full sm:w-auto pl-6.5 sm:pl-0">
-                                      <span className="text-[11px] font-mono font-bold text-slate-700 dark:text-zinc-300">
-                                        {item.timeInfo}
-                                      </span>
-                                      <div className="flex items-center gap-2 shrink-0">
-                                        <span
-                                          className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-md ${
-                                            item.type === "clase"
-                                              ? "bg-primary/20 text-primary border border-primary/30"
-                                              : item.type === "examen"
-                                              ? "bg-primary/15 text-primary/90 border border-primary/25"
-                                              : "bg-primary/10 text-primary/75 border border-primary/20"
-                                          }`}
-                                        >
-                                          {item.badge}
+                                      <p className="text-xs font-black truncate text-slate-800 dark:text-zinc-100 mt-1.5">
+                                        {item.title}
+                                      </p>
+                                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-zinc-400 mt-1 font-medium">
+                                        {item.subjectName && <span>{item.subjectName}</span>}
+                                        <span className="font-mono font-bold text-slate-700 dark:text-zinc-300">
+                                          {item.timeInfo}
                                         </span>
-                                        {/* Desktop-only "ver detalles" button */}
-                                        <button
-                                          type="button"
-                                          onClick={(e) => { e.stopPropagation(); setExpandedAgendaItemId(isExpanded ? null : item.id); }}
-                                          className={`hidden sm:flex p-1 rounded-lg hover:bg-primary/10 cursor-pointer ${
-                                            isExpanded ? "text-primary" : "text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-200"
-                                          }`}
-                                          title="Ver detalles"
-                                        >
-                                          <Search className="w-4 h-4" />
-                                        </button>
+                                        {!isExpanded && item.detailsInfo && <span>{item.detailsInfo}</span>}
                                       </div>
                                     </div>
                                   </div>
@@ -2247,26 +2253,7 @@ export default function AcademicView({
                                     onClose={() => setExpandedAgendaItemId(null)}
                                     title={item.title}
                                     icon={GraduationCap}
-                                    onEdit={() => {
-                                      if (item.type === "clase" && item.rawHorario) {
-                                        setEditingHorarioId(item.rawHorario.id);
-                                        setHDia(item.rawHorario.dia);
-                                        setHHoraInicio(item.rawHorario.horaInicio);
-                                        setHHoraFin(item.rawHorario.horaFin);
-                                        setHMateria(item.rawHorario.materia);
-                                        setHAulas(item.rawHorario.aulas);
-                                        setHProfesores(item.rawHorario.profesores);
-                                        setShowHorarioModal(true);
-                                      } else if (item.type === "examen" && item.rawExamen) {
-                                        setEditingExamenId(item.rawExamen.id);
-                                        setExMateria(item.rawExamen.materia);
-                                        setExFecha(item.rawExamen.fecha);
-                                        setExEstado(item.rawExamen.estado);
-                                        setExInstancia(item.rawExamen.instancia || "Primero");
-                                        setExAula(item.rawExamen.aula);
-                                        setShowExamenModal(true);
-                                      }
-                                    }}
+                                    onEdit={canEdit ? handleEditAgendaItem : undefined}
                                   >
                                     <div className="flex flex-col gap-3 text-xs">
                                           {item.type === "clase" && (

@@ -34,6 +34,7 @@ import {
   CheckCircle,
   HelpCircle,
   Search,
+  Pencil,
   Filter,
   Upload,
   Image as ImageIcon,
@@ -3321,7 +3322,7 @@ export default function HealthView({
                   <div className="flex items-center gap-2">
                     <Pill className="w-5 h-5 text-primary" />
                     <h3 className="font-bold text-md">
-                      Control de Medicamentos
+                      Control de Medicamentos y Turnos
                     </h3>
                   </div>
                 </div>
@@ -3516,6 +3517,14 @@ export default function HealthView({
                                       />
                                       <button
                                         type="button"
+                                        onClick={(e) => { e.stopPropagation(); handleOpenEditDisp(disp); }}
+                                        className="p-0.5 rounded hover:bg-primary/10 text-primary cursor-pointer shrink-0"
+                                        title="Editar"
+                                      >
+                                        <Pencil className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button
+                                        type="button"
                                         onClick={(e) => { e.stopPropagation(); setExpandedDispId(isExpanded ? null : disp.id); }}
                                         className="p-0.5 rounded hover:bg-primary/10 text-primary cursor-pointer shrink-0"
                                         title="Ver detalles"
@@ -3622,6 +3631,16 @@ export default function HealthView({
                                   <span className="font-extrabold text-xs flex items-center gap-1.5 text-slate-900 dark:text-white">
                                     <Stethoscope className="w-3.5 h-3.5 text-primary shrink-0 self-center" />
                                      <span className="self-center translate-y-[0.5px]">{turno.descripcion || "Turno Médico"}</span>
+                                    {onQuickEdit && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); onQuickEdit("turno", turno.id); }}
+                                        className="p-0.5 rounded hover:bg-primary/10 text-primary cursor-pointer shrink-0"
+                                        title="Editar"
+                                      >
+                                        <Pencil className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
                                     <button
                                       type="button"
                                       onClick={(e) => { e.stopPropagation(); setExpandedDispId(isExpanded ? null : turno.id); }}

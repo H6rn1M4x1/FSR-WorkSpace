@@ -50,6 +50,7 @@ import {
   Calculator,
   ExternalLink,
   Search,
+  Pencil,
 } from "lucide-react";
 import {
   Invoice,
@@ -1791,6 +1792,14 @@ export default function FinanceView({
                                     />
                                     <button
                                       type="button"
+                                      onClick={(e) => { e.stopPropagation(); handleEditPaymentCard(p.id); }}
+                                      className="p-0.5 rounded hover:bg-primary/10 text-primary cursor-pointer shrink-0"
+                                      title="Editar"
+                                    >
+                                      <Pencil className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
                                       onClick={(e) => { e.stopPropagation(); setExpandedPaymentId(isExpanded ? null : p.id); }}
                                       className="p-0.5 rounded hover:bg-primary/10 text-primary cursor-pointer shrink-0"
                                       title="Ver detalles"
@@ -1985,6 +1994,14 @@ export default function FinanceView({
                                       isSharedOut={isSharedOut("detailed_payments", p.id)}
                                       sharedOutWith={sharedOutWith("detailed_payments", p.id)}
                                     />
+                                    <button
+                                      type="button"
+                                      onClick={(e) => { e.stopPropagation(); handleEditPaymentCard(p.id); }}
+                                      className="p-0.5 rounded hover:bg-primary/10 text-primary cursor-pointer shrink-0"
+                                      title="Editar"
+                                    >
+                                      <Pencil className="w-3.5 h-3.5" />
+                                    </button>
                                     <button
                                       type="button"
                                       onClick={(e) => { e.stopPropagation(); setExpandedPaymentId(isExpanded ? null : p.id); }}
