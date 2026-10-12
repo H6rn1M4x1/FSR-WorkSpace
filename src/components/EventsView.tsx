@@ -23,6 +23,7 @@ import {
 import { useToast } from "../context/ToastContext";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import { NbaLogo } from "./icons/NbaLogo";
+import { SanJuanIcon } from "./icons/SanJuanIcon";
 import { DetailModal } from "./DetailModal";
 import { PillFilterBar } from "./PillFilterBar";
 import { SPORTS_CATALOG } from "../lib/sportsCatalog";
@@ -78,6 +79,7 @@ interface DayEvent {
   location?: string;
   time?: string;
   categoryLabel: string;
+  imageUrl?: string;
 }
 
 type DayEventFilter = "Todos" | "San Juan" | "Deportes";
@@ -628,12 +630,12 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
   useEffect(() => { setSjPage(1); }, [sjEvents]);
   const sjTotalPages = Math.max(1, Math.ceil(sjEvents.length / SJ_PAGE_SIZE));
   useEffect(() => {
-    if (sjTotalPages <= 1) return;
+    if (sjTotalPages <= 1 || expandedSjEvent) return;
     const id = setInterval(() => {
       setSjPage((p) => (p >= sjTotalPages ? 1 : p + 1));
     }, 6000);
     return () => clearInterval(id);
-  }, [sjTotalPages]);
+  }, [sjTotalPages, expandedSjEvent]);
   const sjPageEvents = useMemo(() => {
     const start = (sjPage - 1) * SJ_PAGE_SIZE;
     return sjEvents.slice(start, start + SJ_PAGE_SIZE);
@@ -742,6 +744,22 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Wrappers para poder usar los logos de F1/FIFA (imágenes) como si fueran un ícono de
+  // componente (className-only), igual que NbaLogo — así "Eventos del Día" puede elegir un solo
+  // componente de ícono por evento sin repetir la lógica del <img> en cada lugar que lo muestra.
+  const F1Icon = ({ className }: { className?: string }) =>
+    sportLogos.f1 ? (
+      <img src={sportLogos.f1} alt="" className={`object-contain brightness-0 dark:invert ${className || ""}`} />
+    ) : (
+      <Trophy className={className} />
+    );
+  const FutbolIcon = ({ className }: { className?: string }) =>
+    sportLogos.futbol ? (
+      <img src={sportLogos.futbol} alt="" className={`object-contain brightness-0 dark:invert ${className || ""}`} />
+    ) : (
+      <Trophy className={className} />
+    );
 
   // Escudo de cada competencia (Libertadores, Premier League, etc.), al lado de su nombre en
   // "Eventos deportivos" — mismo mecanismo que sportLogos de arriba (thumbnail de Wikipedia por
@@ -863,7 +881,7 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
     const map: Record<string, DayEvent[]> = {};
     sjEvents.forEach((ev) => {
       const iso = guessIsoDate(ev.rawDate || ev.date);
-      if (iso) (map[iso] = map[iso] || []).push({ label: ev.title, kind: "sanjuan", location: ev.location, categoryLabel: "San Juan" });
+      if (iso) (map[iso] = map[iso] || []).push({ label: ev.title, kind: "sanjuan", location: ev.location, categoryLabel: "San Juan", imageUrl: ev.imageUrl });
     });
     sportEvents.forEach((ev) => {
       if (ev.date) {
@@ -901,14 +919,16 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
     (calDayPage - 1) * CAL_DAY_PAGE_SIZE,
     calDayPage * CAL_DAY_PAGE_SIZE
   );
-  // Mismo carrusel automático que "Eventos deportivos": avanza de página sola cada 6s.
+  // Mismo carrusel automático que "Eventos deportivos": avanza de página sola cada 6s. Se
+  // pausa mientras hay un evento expandido (modal de detalle abierto) para que la página no
+  // cambie por debajo mientras se está viendo la información, y retoma al cerrarlo.
   useEffect(() => {
-    if (calDayTotalPages <= 1) return;
+    if (calDayTotalPages <= 1 || expandedDayEventId !== null) return;
     const id = setInterval(() => {
       setCalDayPage((p) => (p >= calDayTotalPages ? 1 : p + 1));
     }, 6000);
     return () => clearInterval(id);
-  }, [calDayTotalPages]);
+  }, [calDayTotalPages, expandedDayEventId]);
 
   const monthGrid = useMemo(() => {
     const year = calMonth.getFullYear();
@@ -1069,7 +1089,16 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
                   className="space-y-2.5"
                 >
                   {selectedDayPageEvents.map((ev, i) => {
-                    const CatIcon = ev.kind === "sanjuan" ? MapPin : Trophy;
+                    const CatIcon =
+                      ev.kind === "sanjuan"
+                        ? SanJuanIcon
+                        : ev.sportId === "f1"
+                        ? F1Icon
+                        : ev.sportId === "nba"
+                        ? NbaLogo
+                        : ev.sportId === "futbol"
+                        ? FutbolIcon
+                        : Trophy;
                     return (
                       <div
                         key={i}
@@ -1078,10 +1107,8 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
                         className="p-3.5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/85 flex items-start gap-3 cursor-pointer"
                       >
                         <div className="p-2 bg-primary/10 text-primary rounded-xl shrink-0 mt-0.5">
-                          {ev.kind === "sport" && ev.sportId === "f1" && sportLogos.f1 ? (
-                            <img src={sportLogos.f1} alt="" className="w-4 h-4 object-contain brightness-0 dark:invert" />
-                          ) : ev.kind === "sport" && ev.sportId === "nba" ? (
-                            <NbaLogo className="h-4 w-auto max-w-[16px]" />
+                          {ev.sportId === "nba" ? (
+                            <CatIcon className="h-4 w-auto max-w-[16px]" />
                           ) : (
                             <CatIcon className="w-4 h-4" />
                           )}
@@ -1118,6 +1145,14 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
                           title={ev.label}
                           icon={CatIcon}
                         >
+                          {ev.imageUrl && (
+                            <img
+                              src={ev.imageUrl}
+                              alt={ev.label}
+                              className="w-full h-32 object-cover rounded-xl"
+                              referrerPolicy="no-referrer"
+                            />
+                          )}
                           <div className="flex flex-col gap-3">
                             <div>
                               <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Categoría</span>

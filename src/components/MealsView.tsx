@@ -2595,9 +2595,6 @@ export default function MealsView({
                                       <span className="px-2 py-0.5 rounded-full text-[9px] bg-slate-100 dark:bg-zinc-850 text-slate-500 dark:text-zinc-400">
                                         {formatFechaDMY(os.fecha)}
                                       </span>
-                                      <span className="text-[9px] text-primary opacity-0 group-hover:opacity-100 transition-opacity font-bold">
-                                        • Ver info desplegada
-                                      </span>
                                     </div>
 
                                     {/* Action Buttons */}
@@ -2611,6 +2608,13 @@ export default function MealsView({
                                         title="Editar Plan"
                                       >
                                         <Edit3 className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button
+                                        onClick={() => setActiveDetailItem(os)}
+                                        className="p-1 hover:bg-primary/10 rounded-lg text-slate-500 dark:text-zinc-400 hover:text-primary transition-all cursor-pointer"
+                                        title="Ver detalles"
+                                      >
+                                        <Search className="w-3.5 h-3.5" />
                                       </button>
                                       <button
                                         onClick={() => handleDeleteOrg(os.id)}
