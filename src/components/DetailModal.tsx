@@ -67,8 +67,11 @@ export function DetailModal({
                   <button
                     type="button"
                     onClick={() => {
-                      onEdit();
+                      // Cierra este modal y espera a que termine su animación de salida antes de
+                      // abrir el formulario de edición, para que se vea una transición de
+                      // cierre/apertura en vez de que el otro aparezca de golpe encima.
                       onClose();
+                      window.setTimeout(() => onEdit(), 220);
                     }}
                     className="p-1.5 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 text-zinc-400 cursor-pointer"
                     title="Editar"
