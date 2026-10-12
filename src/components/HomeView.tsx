@@ -1527,6 +1527,17 @@ export default function HomeView({
     return result;
   };
 
+  // DD-MM-YYYY para mostrar fechas cortas (tablas, badges) — la fecha se guarda en formato ISO
+  // (YYYY-MM-DD) y mostrarla así, cruda, confunde al leerla.
+  const formatFechaDMY = (fechaStr: string): string => {
+    if (!fechaStr) return "-";
+    const parts = fechaStr.split("T")[0].split(" ")[0].split("-");
+    if (parts.length === 3) {
+      return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    }
+    return fechaStr;
+  };
+
   // Extract hour from fecha string if present
   const getHoraFromFecha = (fecha: string) => {
     if (!fecha) return "";
@@ -2532,6 +2543,7 @@ export default function HomeView({
                                   !isNaN(tc.lon) &&
                                   !(tc.lat === 0 && tc.lon === 0) && (
                                   <div>
+                                    <div className="w-10 h-0.5 rounded-full bg-primary/50 mb-2" />
                                     <span className="flex items-center gap-1 text-[9px] font-extrabold text-primary uppercase tracking-wider mb-1.5">
                                       <MapPin className="w-3 h-3" /> Mapa
                                     </span>
@@ -2914,7 +2926,7 @@ export default function HomeView({
                               )}
                               <p className="text-[10px] text-zinc-400 mt-1 font-semibold">
                                 Vence/Termina el stock el{" "}
-                                {details.disponibleHasta}
+                                {formatFechaDMY(details.disponibleHasta)}
                               </p>
                             </div>
                           </div>
@@ -2948,7 +2960,7 @@ export default function HomeView({
                                       Disponibilidad
                                     </span>
                                     <span className="text-zinc-800 dark:text-zinc-200">
-                                      {details.disponibleHasta} ({details.disponibleParaDias.toFixed(1)} días)
+                                      {formatFechaDMY(details.disponibleHasta)} ({details.disponibleParaDias.toFixed(1)} días)
                                     </span>
                                   </div>
 
@@ -3122,7 +3134,7 @@ export default function HomeView({
                             </div>
                           </div>
 
-                          <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)}>
+                          <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} onEdit={onQuickEdit ? () => onQuickEdit("universidad", h.id) : undefined}>
                                 <div className="p-3 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30 space-y-1.5">
                                   <div className="flex items-center justify-between">
                                     <span className="text-[9px] font-extrabold text-primary uppercase tracking-wider">
