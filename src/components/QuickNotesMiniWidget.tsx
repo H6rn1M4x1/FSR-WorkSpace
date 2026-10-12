@@ -37,10 +37,12 @@ export function QuickNotesMiniWidget({
   userId,
   darkMode,
   onOpenAll,
+  onAddNote,
 }: {
   userId: string;
   darkMode: boolean;
   onOpenAll?: () => void;
+  onAddNote?: () => void;
 }) {
   const { notes, updateNote } = useNotes(userId);
   const { showToast } = useToast();
@@ -92,15 +94,27 @@ export function QuickNotesMiniWidget({
             <p className="text-[10px] text-zinc-400 font-bold">{notes.length} nota{notes.length === 1 ? "" : "s"}</p>
           </div>
         </div>
-        {onOpenAll && (
-          <button
-            type="button"
-            onClick={onOpenAll}
-            className="text-[11px] font-bold text-primary hover:underline cursor-pointer shrink-0"
-          >
-            Ver todas
-          </button>
-        )}
+        <div className="flex items-center gap-2 shrink-0">
+          {onAddNote && (
+            <button
+              type="button"
+              onClick={onAddNote}
+              className="p-1 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary cursor-pointer"
+              title="Agregar nota"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {onOpenAll && (
+            <button
+              type="button"
+              onClick={onOpenAll}
+              className="text-[11px] font-bold text-primary hover:underline cursor-pointer"
+            >
+              Ver todas
+            </button>
+          )}
+        </div>
       </div>
 
       {preview.length === 0 ? (
@@ -124,7 +138,7 @@ export function QuickNotesMiniWidget({
                 if (e.key === "Enter") openExpanded(note.id);
               }}
               title="Ver en grande"
-              className={`text-left rounded-2xl border p-3 flex flex-col gap-1 h-28 overflow-hidden hover:shadow-md transition-all cursor-pointer ${
+              className={`text-left rounded-2xl border p-3 flex flex-col gap-1 h-40 overflow-hidden hover:shadow-md transition-all cursor-pointer ${
                 NOTE_CARD_COLOR[note.color] || NOTE_CARD_COLOR.default
               } ${note.pinned ? "ring-2 ring-primary border-primary" : ""}`}
             >
@@ -134,7 +148,7 @@ export function QuickNotesMiniWidget({
                   {note.title?.trim() || "Sin título"}
                 </p>
               </div>
-              <p className="text-[10px] text-zinc-600 dark:text-zinc-400 line-clamp-3">{stripHtml(note.text) || "Nota vacía"}</p>
+              <p className="text-[10px] text-zinc-600 dark:text-zinc-400 line-clamp-6">{stripHtml(note.text) || "Nota vacía"}</p>
             </div>
           ))}
         </div>

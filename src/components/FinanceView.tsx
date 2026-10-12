@@ -49,6 +49,7 @@ import {
   Loader2,
   Calculator,
   ExternalLink,
+  Search,
 } from "lucide-react";
 import {
   Invoice,
@@ -1788,11 +1789,14 @@ export default function FinanceView({
                                       isSharedOut={isSharedOut("detailed_payments", p.id)}
                                       sharedOutWith={sharedOutWith("detailed_payments", p.id)}
                                     />
-                                    <ChevronDown
-                                      className={`w-3.5 h-3.5 text-primary shrink-0 self-center transition-transform duration-200 ${
-                                        isExpanded ? "rotate-180" : ""
-                                      }`}
-                                    />
+                                    <button
+                                      type="button"
+                                      onClick={(e) => { e.stopPropagation(); setExpandedPaymentId(isExpanded ? null : p.id); }}
+                                      className="p-0.5 rounded hover:bg-primary/10 text-primary cursor-pointer shrink-0"
+                                      title="Ver detalles"
+                                    >
+                                      <Search className="w-3.5 h-3.5" />
+                                    </button>
                                   </div>
                                 </div>
 
@@ -1838,10 +1842,10 @@ export default function FinanceView({
                                 <DetailModal isOpen={isExpanded} onClose={() => setExpandedPaymentId(null)} title={p.descripcion} icon={Receipt} onEdit={() => handleEditPaymentCard(p.id)}>
                                       <div className="flex flex-col gap-3">
                                         <div>
-                                          <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                          <span className="block text-[11px] font-extrabold text-primary detail-label">
                                             Fechas (Vencimiento / Cierre)
                                           </span>
-                                          <span className="text-zinc-800 dark:text-zinc-200 break-words">
+                                          <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words pl-2">
                                             Vence: {formatFechaDMY(p.fechaVencimiento)}
                                             {p.fechaCierre
                                               ? ` • Cierre: ${formatFechaDMY(p.fechaCierre)}`
@@ -1850,10 +1854,10 @@ export default function FinanceView({
                                         </div>
 
                                         <div>
-                                          <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                          <span className="block text-[11px] font-extrabold text-primary detail-label">
                                             Método de Pago
                                           </span>
-                                          <span className="text-zinc-800 dark:text-zinc-200 break-words">
+                                          <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words pl-2">
                                             {p.metodoPago || "Debito Automatico"}
                                             {p.conQuePagar
                                               ? ` (${p.conQuePagar})`
@@ -1862,19 +1866,19 @@ export default function FinanceView({
                                         </div>
 
                                         <div>
-                                          <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                          <span className="block text-[11px] font-extrabold text-primary detail-label">
                                             Dónde / Medio de Pago
                                           </span>
-                                          <span className="text-zinc-800 dark:text-zinc-200 break-words">
+                                          <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words pl-2">
                                             {p.dondePagar || "Homebanking / Entidad Bancaria"}
                                           </span>
                                         </div>
 
                                         <div>
-                                          <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                          <span className="block text-[11px] font-extrabold text-primary detail-label">
                                             Recurrencia y Estado
                                           </span>
-                                          <span className="text-zinc-800 dark:text-zinc-200 break-words">
+                                          <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words pl-2">
                                             {p.pagoRecurrente ? "Pago Recurrente" : "Pago Único"} • Pendiente
                                           </span>
                                         </div>
@@ -1882,7 +1886,7 @@ export default function FinanceView({
 
                                       {p.observaciones && (
                                         <div>
-                                          <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                          <span className="block text-[11px] font-extrabold text-primary detail-label">
                                             Observaciones
                                           </span>
                                           <p className="text-zinc-700 dark:text-zinc-300 italic">
@@ -1981,11 +1985,14 @@ export default function FinanceView({
                                       isSharedOut={isSharedOut("detailed_payments", p.id)}
                                       sharedOutWith={sharedOutWith("detailed_payments", p.id)}
                                     />
-                                    <ChevronDown
-                                      className={`w-3.5 h-3.5 text-primary shrink-0 self-center transition-transform duration-200 ${
-                                        isExpanded ? "rotate-180" : ""
-                                      }`}
-                                    />
+                                    <button
+                                      type="button"
+                                      onClick={(e) => { e.stopPropagation(); setExpandedPaymentId(isExpanded ? null : p.id); }}
+                                      className="p-0.5 rounded hover:bg-primary/10 text-primary cursor-pointer shrink-0"
+                                      title="Ver detalles"
+                                    >
+                                      <Search className="w-3.5 h-3.5" />
+                                    </button>
                                   </div>
                                 </div>
 
@@ -2021,10 +2028,10 @@ export default function FinanceView({
                                 <DetailModal isOpen={isExpanded} onClose={() => setExpandedPaymentId(null)} title={p.descripcion} icon={Receipt} onEdit={() => handleEditPaymentCard(p.id)}>
                                       <div className="flex flex-col gap-3">
                                         <div>
-                                          <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                          <span className="block text-[11px] font-extrabold text-primary detail-label">
                                             Fechas (Vencimiento / Cierre)
                                           </span>
-                                          <span className="text-zinc-800 dark:text-zinc-200 break-words">
+                                          <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words pl-2">
                                             Vence: {formatFechaDMY(p.fechaVencimiento)}
                                             {p.fechaCierre
                                               ? ` • Cierre: ${formatFechaDMY(p.fechaCierre)}`
@@ -2033,10 +2040,10 @@ export default function FinanceView({
                                         </div>
 
                                         <div>
-                                          <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                          <span className="block text-[11px] font-extrabold text-primary detail-label">
                                             Método de Pago
                                           </span>
-                                          <span className="text-zinc-800 dark:text-zinc-200 break-words">
+                                          <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words pl-2">
                                             {p.metodoPago || "Debito Automatico"}
                                             {p.conQuePagar
                                               ? ` (${p.conQuePagar})`
@@ -2045,19 +2052,19 @@ export default function FinanceView({
                                         </div>
 
                                         <div>
-                                          <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                          <span className="block text-[11px] font-extrabold text-primary detail-label">
                                             Dónde / Medio de Pago
                                           </span>
-                                          <span className="text-zinc-800 dark:text-zinc-200 break-words">
+                                          <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words pl-2">
                                             {p.dondePagar || "Homebanking / Entidad Bancaria"}
                                           </span>
                                         </div>
 
                                         <div>
-                                          <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                          <span className="block text-[11px] font-extrabold text-primary detail-label">
                                             Recurrencia y Estado
                                           </span>
-                                          <span className="text-zinc-800 dark:text-zinc-200 break-words">
+                                          <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words pl-2">
                                             {p.pagoRecurrente ? "Pago Recurrente" : "Pago Único"} • Pagado
                                           </span>
                                         </div>
@@ -2065,7 +2072,7 @@ export default function FinanceView({
 
                                       {p.observaciones && (
                                         <div>
-                                          <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                          <span className="block text-[11px] font-extrabold text-primary detail-label">
                                             Observaciones
                                           </span>
                                           <p className="text-zinc-700 dark:text-zinc-300 italic">

@@ -3514,11 +3514,14 @@ export default function HealthView({
                                         isSharedOut={isSharedOut("disponibilidad_medicamentos", disp.id)}
                                         sharedOutWith={sharedOutWith("disponibilidad_medicamentos", disp.id)}
                                       />
-                                      <ChevronDown
-                                        className={`w-3.5 h-3.5 text-primary transition-transform duration-200 ${
-                                          isExpanded ? "rotate-180" : ""
-                                        }`}
-                                      />
+                                      <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); setExpandedDispId(isExpanded ? null : disp.id); }}
+                                        className="p-0.5 rounded hover:bg-primary/10 text-primary cursor-pointer shrink-0"
+                                        title="Ver detalles"
+                                      >
+                                        <Search className="w-3.5 h-3.5" />
+                                      </button>
                                     </span>
                                     {details.droga && (
                                       <span className="text-[10px] text-zinc-500 font-medium truncate">
@@ -3555,10 +3558,10 @@ export default function HealthView({
                                   <div className="flex flex-col gap-3">
                                     {details.droga && (
                                     <div>
-                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
                                         Droga / Fármaco
                                       </span>
-                                      <span className="text-zinc-800 dark:text-zinc-200">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                         {details.droga}
                                       </span>
                                     </div>
@@ -3566,29 +3569,29 @@ export default function HealthView({
 
                                     {details.funcionTratamiento && (
                                     <div>
-                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
                                         Función / Tratamiento
                                       </span>
-                                      <span className="text-zinc-800 dark:text-zinc-200">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                         {details.funcionTratamiento}
                                       </span>
                                     </div>
                                     )}
 
                                     <div>
-                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
                                         Disponibilidad
                                       </span>
-                                      <span className="text-zinc-800 dark:text-zinc-200">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                         {formatFechaDMY(details.disponibleHasta)} ({details.disponibleParaDias.toFixed(1)} días)
                                       </span>
                                     </div>
 
                                     <div>
-                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
                                         Stock (Inicial / Restante)
                                       </span>
-                                      <span className="text-zinc-800 dark:text-zinc-200">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                         {disp.cantidadRegistrada} registradas / {details.cantidadDisponible.toFixed(1)} restantes
                                       </span>
                                     </div>
@@ -3619,11 +3622,14 @@ export default function HealthView({
                                   <span className="font-extrabold text-xs flex items-center gap-1.5 text-slate-900 dark:text-white">
                                     <Stethoscope className="w-3.5 h-3.5 text-primary shrink-0 self-center" />
                                      <span className="self-center translate-y-[0.5px]">{turno.descripcion || "Turno Médico"}</span>
-                                    <ChevronDown
-                                      className={`w-3.5 h-3.5 text-primary transition-transform duration-200 shrink-0 ${
-                                        isExpanded ? "rotate-180" : ""
-                                      }`}
-                                    />
+                                    <button
+                                      type="button"
+                                      onClick={(e) => { e.stopPropagation(); setExpandedDispId(isExpanded ? null : turno.id); }}
+                                      className="p-0.5 rounded hover:bg-primary/10 text-primary cursor-pointer shrink-0"
+                                      title="Ver detalles"
+                                    >
+                                      <Search className="w-3.5 h-3.5" />
+                                    </button>
                                   </span>
 
                                   {turno.doctor && (
@@ -3662,20 +3668,20 @@ export default function HealthView({
                               >
                                 <div className="flex flex-col gap-3">
                                   <div>
-                                    <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
                                       Fecha y Hora
                                     </span>
-                                    <span className="text-zinc-800 dark:text-zinc-200">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                       {formatDateFriendly(turno.fecha)}
                                     </span>
                                   </div>
 
                                   {turno.lugar && (
                                     <div>
-                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
                                         Lugar / Centro Médico
                                       </span>
-                                      <span className="text-zinc-800 dark:text-zinc-200 flex items-center gap-1 mt-0.5">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 flex items-center gap-1 mt-0.5 pl-2">
                                         <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
                                         {turno.lugar}
                                       </span>
@@ -3684,20 +3690,20 @@ export default function HealthView({
 
                                   {turno.doctor && (
                                     <div>
-                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
                                         Médico / Especialista
                                       </span>
-                                      <span className="text-zinc-800 dark:text-zinc-200">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                         {turno.doctor}
                                       </span>
                                     </div>
                                   )}
 
                                   <div>
-                                    <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
                                       Categoría / Paciente
                                     </span>
-                                    <span className="text-zinc-800 dark:text-zinc-200">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                       {turno.categoria}
                                     </span>
                                   </div>
@@ -3705,11 +3711,11 @@ export default function HealthView({
 
                                 {turno.informacionPersonalizada && (
                                   <div>
-                                    <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider mb-1">
+                                    <span className="block text-[11px] font-extrabold text-primary detail-label mb-1">
                                       Información Personalizada
                                     </span>
                                     <div
-                                      className="text-zinc-700 dark:text-zinc-300 italic text-[11px] prose dark:prose-invert prose-sm max-h-[120px] overflow-y-auto"
+                                      className="text-[10px] text-zinc-700 dark:text-zinc-300 italic pl-2 prose dark:prose-invert prose-sm max-h-[120px] overflow-y-auto"
                                       dangerouslySetInnerHTML={{ __html: turno.informacionPersonalizada }}
                                     />
                                   </div>
@@ -3722,8 +3728,8 @@ export default function HealthView({
                                   !(turno.lat === 0 && turno.lon === 0) && (
                                   <div>
                                     <div className="w-full h-px bg-primary/50 mb-2" />
-                                    <span className="flex items-center gap-1 text-[9px] font-extrabold text-primary uppercase tracking-wider mb-1.5">
-                                      <MapPin className="w-3 h-3" /> Mapa
+                                    <span className="flex items-center gap-1 mb-1.5">
+                                      <MapPin className="w-3 h-3 text-primary" /> <span className="inline-block text-[11px] font-extrabold text-primary detail-label">Mapa</span>
                                     </span>
                                     <LocationPickerMap
                                       lat={turno.lat}

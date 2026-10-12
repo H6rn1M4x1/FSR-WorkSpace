@@ -294,6 +294,15 @@ export default function App() {
   };
   const handleQuickEditHandled = () => setQuickEditTarget(undefined);
 
+  // Botón "+" de la miniatura de Notas Rápidas de Inicio — navega a Notas Rápidas con el
+  // formulario de "nueva nota" ya abierto (mismo mecanismo que "Agendar"/editar de arriba).
+  const [quickNoteComposeNonce, setQuickNoteComposeNonce] = useState<number | undefined>(undefined);
+  const handleAddQuickNote = () => {
+    handleTabChange("notes");
+    setActiveSubTab("quick");
+    setQuickNoteComposeNonce(Date.now());
+  };
+
   // Check periodically or on user changes if Firestore quota is exceeded
   const [quotaExceeded, setQuotaExceeded] = useState(false);
   const [appConfirmModal, setAppConfirmModal] = useState<{
@@ -2268,6 +2277,7 @@ export default function App() {
                     handleTabChange("notes");
                     setActiveSubTab("quick");
                   }}
+                  onAddNote={handleAddQuickNote}
                   onQuickAdd={handleQuickAdd}
                   onQuickEdit={handleQuickEdit}
                 />
@@ -2460,6 +2470,7 @@ export default function App() {
                   darkMode={darkMode}
                   activeSubTab={activeSubTab}
                   onSubTabChange={setActiveSubTab}
+                  autoOpenCompose={quickNoteComposeNonce}
                 />
               )}
             </>
