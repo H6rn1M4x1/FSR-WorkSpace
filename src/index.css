@@ -1284,6 +1284,16 @@ html:not(.dark) .force-search-icon {
   background-color: #000000 !important;
 }
 
+/* Etiquetas de campo en DetailModal ("Fecha y Hora", "Mapa", etc.): solo la primera letra en
+   mayúscula, sin importar cómo esté escrito el texto fuente (evita tener que reescribir cada
+   string a mano en cada sección). */
+.detail-label {
+  text-transform: lowercase;
+}
+.detail-label::first-letter {
+  text-transform: uppercase;
+}
+
 /* ==========================================================================
    FORCED HORIZONTAL SCROLL AND BUTTON LAYOUTS FOR MOBILE TABS
    ========================================================================== */

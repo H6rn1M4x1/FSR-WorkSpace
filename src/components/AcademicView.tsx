@@ -2184,12 +2184,17 @@ export default function AcademicView({
                                         </div>
                                       </div>
 
-                                      {/* Mobile-only Chevron in top right */}
-                                      <ChevronDown
-                                        className={`sm:hidden w-4 h-4 text-zinc-400 shrink-0 transition-transform duration-200 ${
-                                          isExpanded ? "rotate-180 text-primary" : "group-hover:text-zinc-600 dark:group-hover:text-zinc-200"
+                                      {/* Mobile-only "ver detalles" button in top right */}
+                                      <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); setExpandedAgendaItemId(isExpanded ? null : item.id); }}
+                                        className={`sm:hidden p-1 rounded-lg hover:bg-primary/10 shrink-0 cursor-pointer ${
+                                          isExpanded ? "text-primary" : "text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-200"
                                         }`}
-                                      />
+                                        title="Ver detalles"
+                                      >
+                                        <Search className="w-4 h-4" />
+                                      </button>
                                     </div>
 
                                     {/* Secondary line on mobile (pl-6.5 to align with text), right-aligned on desktop */}
@@ -2209,12 +2214,17 @@ export default function AcademicView({
                                         >
                                           {item.badge}
                                         </span>
-                                        {/* Desktop-only Chevron */}
-                                        <ChevronDown
-                                          className={`hidden sm:block w-4 h-4 text-zinc-400 transition-transform duration-200 ${
-                                            isExpanded ? "rotate-180 text-primary" : "group-hover:text-zinc-600 dark:group-hover:text-zinc-200"
+                                        {/* Desktop-only "ver detalles" button */}
+                                        <button
+                                          type="button"
+                                          onClick={(e) => { e.stopPropagation(); setExpandedAgendaItemId(isExpanded ? null : item.id); }}
+                                          className={`hidden sm:flex p-1 rounded-lg hover:bg-primary/10 cursor-pointer ${
+                                            isExpanded ? "text-primary" : "text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-200"
                                           }`}
-                                        />
+                                          title="Ver detalles"
+                                        >
+                                          <Search className="w-4 h-4" />
+                                        </button>
                                       </div>
                                     </div>
                                   </div>
@@ -2251,20 +2261,20 @@ export default function AcademicView({
                                             <>
                                               {item.aulas && (
                                               <div>
-                                                <span className="block text-[9px] font-extrabold text-primary dark:text-primary/90 uppercase tracking-wider mb-0.5">
+                                                <span className="block text-[11px] font-extrabold text-primary dark:text-primary/90 detail-label mb-0.5">
                                                   Aula / Ubicación
                                                 </span>
-                                                <span className="text-slate-900 dark:text-white text-xs">
+                                                <span className="text-[10px] text-slate-900 dark:text-white pl-2">
                                                   {item.aulas}
                                                 </span>
                                               </div>
                                               )}
                                               {item.profesores && (
                                               <div>
-                                                <span className="block text-[9px] font-extrabold text-primary dark:text-primary/90 uppercase tracking-wider mb-0.5">
+                                                <span className="block text-[11px] font-extrabold text-primary dark:text-primary/90 detail-label mb-0.5">
                                                   Profesores / Cátedra
                                                 </span>
-                                                <span className="text-slate-900 dark:text-white text-xs">
+                                                <span className="text-[10px] text-slate-900 dark:text-white pl-2">
                                                   {item.profesores}
                                                 </span>
                                               </div>
@@ -2275,19 +2285,19 @@ export default function AcademicView({
                                           {item.type === "examen" && (
                                             <>
                                               <div>
-                                                <span className="block text-[9px] font-extrabold text-primary dark:text-primary/90 uppercase tracking-wider mb-0.5">
+                                                <span className="block text-[11px] font-extrabold text-primary dark:text-primary/90 detail-label mb-0.5">
                                                   Tipo / Estado Examen
                                                 </span>
-                                                <span className="text-slate-900 dark:text-white text-xs">
+                                                <span className="text-[10px] text-slate-900 dark:text-white pl-2">
                                                   {item.estado || "Examen"}
                                                 </span>
                                               </div>
                                               {(item.instancia || item.aula) && (
                                               <div>
-                                                <span className="block text-[9px] font-extrabold text-primary dark:text-primary/90 uppercase tracking-wider mb-0.5">
+                                                <span className="block text-[11px] font-extrabold text-primary dark:text-primary/90 detail-label mb-0.5">
                                                   Instancia / Aula
                                                 </span>
-                                                <span className="text-slate-900 dark:text-white text-xs">
+                                                <span className="text-[10px] text-slate-900 dark:text-white pl-2">
                                                   {[item.instancia && `Instancia: ${item.instancia}`, item.aula && `Aula: ${item.aula}`].filter(Boolean).join(" • ")}
                                                 </span>
                                               </div>
@@ -2298,7 +2308,7 @@ export default function AcademicView({
                                           {item.type === "trabajo" && (
                                             <>
                                               <div>
-                                                <span className="block text-[9px] font-extrabold text-primary dark:text-primary/90 uppercase tracking-wider mb-0.5">
+                                                <span className="block text-[11px] font-extrabold text-primary dark:text-primary/90 detail-label mb-0.5">
                                                   Estado de Entrega
                                                 </span>
                                                 <span className={`font-extrabold text-xs ${item.completed ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}>
@@ -2306,10 +2316,10 @@ export default function AcademicView({
                                                 </span>
                                               </div>
                                               <div>
-                                                <span className="block text-[9px] font-extrabold text-primary dark:text-primary/90 uppercase tracking-wider mb-0.5">
+                                                <span className="block text-[11px] font-extrabold text-primary dark:text-primary/90 detail-label mb-0.5">
                                                   Materia Asociada
                                                 </span>
-                                                <span className="text-slate-900 dark:text-white text-xs">
+                                                <span className="text-[10px] text-slate-900 dark:text-white pl-2">
                                                   {item.subjectName || "General"}
                                                 </span>
                                               </div>

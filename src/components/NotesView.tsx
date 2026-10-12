@@ -18,6 +18,9 @@ interface NotesViewProps {
   darkMode?: boolean;
   activeSubTab?: string;
   onSubTabChange?: (tab: string) => void;
+  /** Cambia (a cualquier valor distinto del anterior) para abrir directo el formulario de
+   *  "nueva nota" — usado por el botón "+" de la miniatura de Notas Rápidas de Inicio. */
+  autoOpenCompose?: number;
 }
 
 const NOTE_COLORS: Record<string, { card: string; swatch: string; label: string }> = {
@@ -238,6 +241,7 @@ export function NotesView({
   darkMode = false,
   activeSubTab: propActiveSubTab,
   onSubTabChange,
+  autoOpenCompose,
 }: NotesViewProps) {
   const {
     notes,
@@ -293,6 +297,9 @@ export function NotesView({
   }, []);
 
   const [composeOpen, setComposeOpen] = useState(false);
+  useEffect(() => {
+    if (autoOpenCompose) setComposeOpen(true);
+  }, [autoOpenCompose]);
   const [composeTitle, setComposeTitle] = useState("");
   const [composeHtml, setComposeHtml] = useState("");
   const [composeColor, setComposeColor] = useState("default");

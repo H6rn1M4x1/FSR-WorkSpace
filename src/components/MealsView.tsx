@@ -5519,18 +5519,18 @@ export default function MealsView({
             />
             <div className="flex flex-col gap-3">
               <div>
-                <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                <span className="block text-[11px] font-extrabold text-primary detail-label">
                   Día de la Semana
                 </span>
-                <span className="text-zinc-800 dark:text-zinc-200">
+                <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                   {activeDetailItem ? getDiaDeLaSemana(activeDetailItem.fecha) : ""}
                 </span>
               </div>
               <div>
-                <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                <span className="block text-[11px] font-extrabold text-primary detail-label">
                   Fecha del Menú
                 </span>
-                <span className="text-zinc-800 dark:text-zinc-200">
+                <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                   {activeDetailItem ? formatFechaDMY(activeDetailItem.fecha) : ""}
                 </span>
               </div>

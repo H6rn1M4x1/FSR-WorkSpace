@@ -2761,17 +2761,21 @@ export default function AppointmentsView({
                                         Realizado
                                       </span>
                                     )}
-                                    <ChevronDown
-                                      className={`w-3.5 h-3.5 text-primary transition-transform duration-200 ${
-                                        isExpanded ? "rotate-180" : ""
-                                      }`}
-                                    />
                                   </div>
 
                                   <div
                                     className="flex items-center gap-1 shrink-0"
                                     onClick={(e) => e.stopPropagation()}
                                   >
+                                    <button
+                                      onClick={() =>
+                                        setExpandedTurnoId(isExpanded ? null : tc.id)
+                                      }
+                                      className="p-1 text-slate-400 hover:text-primary rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800/50 transition-colors cursor-pointer"
+                                      title="Ver detalles"
+                                    >
+                                      <Search className="w-3.5 h-3.5" />
+                                    </button>
                                     <button
                                       onClick={() =>
                                         handleEditTurnoCompromiso(tc)
@@ -2945,10 +2949,10 @@ export default function AppointmentsView({
                               >
                                 <div className="flex flex-col gap-3">
                                   <div>
-                                    <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
                                       Fecha y Hora
                                     </span>
-                                    <span className="text-zinc-800 dark:text-zinc-200">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                       {formatDateFriendly(tc.fecha)}
                                     </span>
                                   </div>
@@ -2959,10 +2963,10 @@ export default function AppointmentsView({
                                   tc.lugar.toLowerCase() !== "sin direccion" &&
                                   tc.lugar.toLowerCase() !== "sin lugar asignado" && (
                                   <div>
-                                    <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
                                       Lugar / Ubicación
                                     </span>
-                                    <span className="text-zinc-800 dark:text-zinc-200">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                       {tc.lugar}
                                     </span>
                                   </div>
@@ -2970,10 +2974,10 @@ export default function AppointmentsView({
 
                                   {!isAutoScheduledMatchTurno(tc.id) && tc.doctor && tc.doctor.trim() && (
                                   <div>
-                                    <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
                                       Profesional / Asignado
                                     </span>
-                                    <span className="text-zinc-800 dark:text-zinc-200">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                       {tc.doctor}
                                     </span>
                                   </div>
@@ -2981,10 +2985,10 @@ export default function AppointmentsView({
 
                                   {!isAutoScheduledMatchTurno(tc.id) && (
                                   <div>
-                                    <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
                                       Categoría y Estatus
                                     </span>
-                                    <span className="text-zinc-800 dark:text-zinc-200">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                       {getCategoryLabel(tc.categoria)} • {estado}
                                     </span>
                                   </div>
@@ -2993,11 +2997,11 @@ export default function AppointmentsView({
 
                                 {tc.informacionPersonalizada && !isAutoScheduledMatchTurno(tc.id) && (
                                   <div>
-                                    <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider mb-1">
+                                    <span className="block text-[11px] font-extrabold text-primary detail-label mb-1">
                                       Información Personalizada
                                     </span>
                                     <div
-                                      className="text-zinc-700 dark:text-zinc-300 italic text-[11px] prose dark:prose-invert prose-sm max-h-[120px] overflow-y-auto"
+                                      className="text-[10px] text-zinc-700 dark:text-zinc-300 italic pl-2 prose dark:prose-invert prose-sm max-h-[120px] overflow-y-auto"
                                       dangerouslySetInnerHTML={{ __html: tc.informacionPersonalizada }}
                                     />
                                   </div>
@@ -3005,8 +3009,8 @@ export default function AppointmentsView({
 
                                 {tc.transcripcionAutomatica && (
                                   <div>
-                                    <span className="flex items-center gap-1 text-[9px] font-extrabold text-green-500 uppercase tracking-wider mb-1">
-                                      <AudioLines className="w-3 h-3" /> Transcripción de Audio
+                                    <span className="flex items-center gap-1 mb-1">
+                                      <AudioLines className="w-3 h-3 text-green-500" /> <span className="inline-block text-[11px] font-extrabold text-green-500 detail-label">Transcripción de audio</span>
                                     </span>
                                     {(() => {
                                       const audioFile = tc.archivosNecesarios?.find(a => a.name.startsWith('Audio_') && a.url.startsWith('data:audio/'));
@@ -3014,7 +3018,7 @@ export default function AppointmentsView({
                                         return <AudioTranscriptionPlayer audioUrl={audioFile.url} transcript={tc.transcripcionAutomatica} />;
                                       }
                                       return (
-                                        <div className="text-zinc-700 dark:text-zinc-300 italic text-[11px] max-h-[100px] overflow-y-auto">
+                                        <div className="text-[10px] text-zinc-700 dark:text-zinc-300 italic max-h-[100px] overflow-y-auto pl-2">
                                           {tc.transcripcionAutomatica}
                                         </div>
                                       );
@@ -3029,8 +3033,8 @@ export default function AppointmentsView({
                                   !(tc.lat === 0 && tc.lon === 0) && (
                                   <div>
                                     <div className="w-full h-px bg-primary/50 mb-2" />
-                                    <span className="flex items-center gap-1 text-[9px] font-extrabold text-primary uppercase tracking-wider mb-1.5">
-                                      <MapPin className="w-3 h-3" /> Mapa
+                                    <span className="flex items-center gap-1 mb-1.5">
+                                      <MapPin className="w-3 h-3 text-primary" /> <span className="inline-block text-[11px] font-extrabold text-primary detail-label">Mapa</span>
                                     </span>
                                     <LocationPickerMap
                                       lat={tc.lat}

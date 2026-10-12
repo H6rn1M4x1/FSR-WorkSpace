@@ -58,6 +58,7 @@ import {
   Pill,
   CalendarPlus,
   Pencil,
+  Search,
 } from "lucide-react";
 import { AudioTranscriptionPlayer } from "./AudioTranscriptionPlayer";
 import {
@@ -129,6 +130,9 @@ interface HomeViewProps {
   materiasInfo?: MateriaInfo[];
   /** Navega a la pestaña de Notas Rápidas — usado por el "Ver todas" de la miniatura en Inicio. */
   onOpenNotes?: () => void;
+  /** Navega a Notas Rápidas con el formulario de nueva nota ya abierto — usado por el botón "+"
+   *  de la miniatura en Inicio. */
+  onAddNote?: () => void;
   /** Navega a la pestaña real de la categoría elegida y le pide que abra directo su formulario
    *  de "nuevo" — usado por el botón "Agendar" de Inicio. */
   onQuickAdd?: (category: "turno" | "finanzas" | "universidad" | "salud" | "comidas") => void;
@@ -171,6 +175,7 @@ export default function HomeView({
   subjects = [],
   materiasInfo = [],
   onOpenNotes,
+  onAddNote,
   onQuickAdd,
   onQuickEdit,
 }: HomeViewProps) {
@@ -2180,11 +2185,14 @@ export default function HomeView({
                                   <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-primary/10 text-primary">
                                     Turno Cita
                                   </span>
-                                  <ChevronDown
-                                    className={`w-3.5 h-3.5 text-primary transition-transform duration-200 ${
-                                      isExpanded ? "rotate-180" : ""
-                                    }`}
-                                  />
+                                  <button
+                                    type="button"
+                                    onClick={(evt) => { evt.stopPropagation(); setExpandedHomeItemId(isExpanded ? null : itemId); }}
+                                    className="p-1 rounded-lg hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
+                                    title="Ver detalles"
+                                  >
+                                    <Search className="w-3.5 h-3.5" />
+                                  </button>
                                 </div>
                                 <h4 className="font-extrabold text-xs text-black dark:text-white mt-1.5" style={{ color: darkMode ? undefined : '#000000' }}>
                                   {app.title}
@@ -2219,20 +2227,20 @@ export default function HomeView({
                                 <div className="flex flex-col gap-3">
                                   {app.doctorName && (
                                     <div>
-                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
                                         Profesional / Especialidad
                                       </span>
-                                      <span className="text-zinc-800 dark:text-zinc-200">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                         {app.doctorName} {app.specialty ? `(${app.specialty})` : ""}
                                       </span>
                                     </div>
                                   )}
                                   {app.location && (
                                     <div>
-                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
                                         Lugar / Dirección
                                       </span>
-                                      <span className="text-zinc-800 dark:text-zinc-200">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                         {app.location}
                                       </span>
                                     </div>
@@ -2240,7 +2248,7 @@ export default function HomeView({
                                 </div>
                                 {app.notes && (
                                   <div>
-                                    <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider mb-1">
+                                    <span className="block text-[11px] font-extrabold text-primary detail-label mb-1">
                                       Notas
                                     </span>
                                     <p className="text-zinc-700 dark:text-zinc-300 italic">
@@ -2300,11 +2308,14 @@ export default function HomeView({
                                     <Pencil className="w-3 h-3" />
                                   </button>
                                 )}
-                                <ChevronDown
-                                  className={`w-3.5 h-3.5 text-primary transition-transform duration-200 ${
-                                    isExpanded ? "rotate-180" : ""
-                                  }`}
-                                />
+                                <button
+                                  type="button"
+                                  onClick={(evt) => { evt.stopPropagation(); setExpandedHomeItemId(isExpanded ? null : itemId); }}
+                                  className="p-1 rounded-lg hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
+                                  title="Ver detalles"
+                                >
+                                  <Search className="w-3.5 h-3.5" />
+                                </button>
                               </div>
 
                               {matchLogos && (matchLogos.homeLogo || matchLogos.awayLogo) ? (
@@ -2403,10 +2414,10 @@ export default function HomeView({
                           <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} title={tc.descripcion.replace(/⚽\s*/g, "")} icon={CatIcon} onEdit={onQuickEdit ? () => onQuickEdit("turno", tc.id) : undefined}>
                                 <div className="flex flex-col gap-3">
                                   <div>
-                                    <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
                                       Fecha y Hora
                                     </span>
-                                    <span className="text-zinc-800 dark:text-zinc-200">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                       {formatDateFriendly ? formatDateFriendly(tc.fecha) : tc.fecha}
                                     </span>
                                   </div>
@@ -2416,30 +2427,30 @@ export default function HomeView({
                                     tc.lugar.toLowerCase() !== "sin direccion" &&
                                     tc.lugar.toLowerCase() !== "sin lugar asignado" && (
                                     <div>
-                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
                                         Lugar / Ubicación
                                       </span>
-                                      <span className="text-zinc-800 dark:text-zinc-200">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                         {tc.lugar}
                                       </span>
                                     </div>
                                   )}
                                   {!matchLogos && tc.doctor && tc.doctor.trim() && (
                                     <div>
-                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
                                         Profesional / Asignado
                                       </span>
-                                      <span className="text-zinc-800 dark:text-zinc-200">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                         {tc.doctor}
                                       </span>
                                     </div>
                                   )}
                                   {!matchLogos && (
                                     <div>
-                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
                                         Categoría y Estatus
                                       </span>
-                                      <span className="text-zinc-800 dark:text-zinc-200">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                         {getCategoryLabel(tc.categoria)} • {(() => {
                                           if (tc.estatus) return "Realizado";
                                           const todayStr = getLocalDateString();
@@ -2454,19 +2465,19 @@ export default function HomeView({
                                 </div>
                                 {tc.informacionPersonalizada && !matchLogos && (
                                   <div>
-                                    <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider mb-1">
+                                    <span className="block text-[11px] font-extrabold text-primary detail-label mb-1">
                                       Información Personalizada
                                     </span>
                                     <div
-                                      className="text-zinc-700 dark:text-zinc-300 italic text-[11px] prose dark:prose-invert prose-sm max-h-[120px] overflow-y-auto"
+                                      className="text-[10px] text-zinc-700 dark:text-zinc-300 italic pl-2 prose dark:prose-invert prose-sm max-h-[120px] overflow-y-auto"
                                       dangerouslySetInnerHTML={{ __html: tc.informacionPersonalizada }}
                                     />
                                   </div>
                                 )}
                                 {tc.transcripcionAutomatica && (
                                   <div>
-                                    <span className="flex items-center gap-1 text-[9px] font-extrabold text-green-500 uppercase tracking-wider mb-1">
-                                      <AudioLines className="w-3 h-3" /> Transcripción de Audio
+                                    <span className="flex items-center gap-1 mb-1">
+                                      <AudioLines className="w-3 h-3 text-green-500" /> <span className="inline-block text-[11px] font-extrabold text-green-500 detail-label">Transcripción de audio</span>
                                     </span>
                                     {(() => {
                                       const audioFile = tc.archivosNecesarios?.find((a: any) => a.name.startsWith('Audio_') && a.url.startsWith('data:audio/'));
@@ -2474,7 +2485,7 @@ export default function HomeView({
                                         return <AudioTranscriptionPlayer audioUrl={audioFile.url} transcript={tc.transcripcionAutomatica} />;
                                       }
                                       return (
-                                        <div className="text-zinc-700 dark:text-zinc-300 italic text-[11px] max-h-[100px] overflow-y-auto">
+                                        <div className="text-[10px] text-zinc-700 dark:text-zinc-300 italic max-h-[100px] overflow-y-auto pl-2">
                                           {tc.transcripcionAutomatica}
                                         </div>
                                       );
@@ -2518,8 +2529,8 @@ export default function HomeView({
                                 )}
                                 {tc.medicamentosAPedir && tc.medicamentosAPedir.length > 0 && (
                                   <div>
-                                    <span className="flex items-center gap-1 text-[9px] font-extrabold text-primary uppercase tracking-wider mb-1.5">
-                                      <Pill className="w-3 h-3" /> Medicamentos a Pedir
+                                    <span className="flex items-center gap-1 mb-1.5">
+                                      <Pill className="w-3 h-3 text-primary" /> <span className="inline-block text-[11px] font-extrabold text-primary detail-label">Medicamentos a Pedir</span>
                                     </span>
                                     <div className="flex flex-wrap gap-1.5">
                                       {tc.medicamentosAPedir.map((medId: string) => {
@@ -2544,8 +2555,8 @@ export default function HomeView({
                                   !(tc.lat === 0 && tc.lon === 0) && (
                                   <div>
                                     <div className="w-full h-px bg-primary/50 mb-2" />
-                                    <span className="flex items-center gap-1 text-[9px] font-extrabold text-primary uppercase tracking-wider mb-1.5">
-                                      <MapPin className="w-3 h-3" /> Mapa
+                                    <span className="flex items-center gap-1 mb-1.5">
+                                      <MapPin className="w-3 h-3 text-primary" /> <span className="inline-block text-[11px] font-extrabold text-primary detail-label">Mapa</span>
                                     </span>
                                     <LocationPickerMap
                                       lat={tc.lat}
@@ -2599,11 +2610,14 @@ export default function HomeView({
                                     Vencimiento
                                   </span>
                                 )}
-                                <ChevronDown
-                                  className={`w-3.5 h-3.5 text-primary transition-transform duration-200 ${
-                                    isExpanded ? "rotate-180" : ""
-                                  }`}
-                                />
+                                <button
+                                  type="button"
+                                  onClick={(evt) => { evt.stopPropagation(); setExpandedHomeItemId(isExpanded ? null : itemId); }}
+                                  className="p-1 rounded-lg hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
+                                  title="Ver detalles"
+                                >
+                                  <Search className="w-3.5 h-3.5" />
+                                </button>
                               </div>
                               <div className="flex items-center gap-2 mt-1.5 min-w-0">
                                 <div
@@ -2633,37 +2647,37 @@ export default function HomeView({
                           <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} title={inv.title} icon={Receipt}>
                                 <div className="flex flex-col gap-3">
                                   <div>
-                                    <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
                                       Monto
                                     </span>
-                                    <span className="text-zinc-800 dark:text-zinc-200">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                       ${inv.amount.toLocaleString("es-AR")} ARS
                                     </span>
                                   </div>
                                   <div>
-                                    <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
                                       Estado de Pago
                                     </span>
-                                    <span className="text-zinc-800 dark:text-zinc-200">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                       {inv.paid ? "Pagado / Al día" : "Pendiente de pago"}
                                     </span>
                                   </div>
                                   {inv.dueDate && (
                                   <div>
-                                    <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
                                       Vencimiento
                                     </span>
-                                    <span className="text-zinc-800 dark:text-zinc-200">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                       {inv.dueDate}
                                     </span>
                                   </div>
                                   )}
                                   {inv.category && (
                                   <div>
-                                    <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
                                       Categoría
                                     </span>
-                                    <span className="text-zinc-800 dark:text-zinc-200">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                       {inv.category}
                                     </span>
                                   </div>
@@ -2736,11 +2750,14 @@ export default function HomeView({
                                     <Pencil className="w-3 h-3" />
                                   </button>
                                 )}
-                                <ChevronDown
-                                  className={`w-3.5 h-3.5 text-primary transition-transform duration-200 ${
-                                    isExpanded ? "rotate-180" : ""
-                                  }`}
-                                />
+                                <button
+                                  type="button"
+                                  onClick={(evt) => { evt.stopPropagation(); setExpandedHomeItemId(isExpanded ? null : itemId); }}
+                                  className="p-1 rounded-lg hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
+                                  title="Ver detalles"
+                                >
+                                  <Search className="w-3.5 h-3.5" />
+                                </button>
                               </div>
                               <div className="flex items-center gap-2 mt-1.5 min-w-0">
                                 <div
@@ -2790,57 +2807,57 @@ export default function HomeView({
                           <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} title={dp.descripcion} icon={isClosing || dp.categoria === "Tarjeta de Credito" ? CreditCard : Receipt} onEdit={onQuickEdit ? () => onQuickEdit("finanzas", dp.id) : undefined}>
                                 <div className="flex flex-col gap-3">
                                   <div>
-                                    <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
                                       Categoría / Método
                                     </span>
-                                    <span className="text-zinc-800 dark:text-zinc-200">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                       {dp.categoria || "General"} • {dp.metodoPago || "Efectivo/Debito"}
                                     </span>
                                   </div>
                                   {dp.dondePagar && (
                                   <div>
-                                    <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
                                       ¿Dónde Pagar?
                                     </span>
-                                    <span className="text-zinc-800 dark:text-zinc-200">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                       {dp.dondePagar}
                                     </span>
                                   </div>
                                   )}
                                   {dp.conQuePagar && (
                                   <div>
-                                    <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
                                       ¿Con Qué Pagar?
                                     </span>
-                                    <span className="text-zinc-800 dark:text-zinc-200">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                       {dp.conQuePagar}
                                     </span>
                                   </div>
                                   )}
                                   <div>
-                                    <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
                                       Recurrente
                                     </span>
-                                    <span className="text-zinc-800 dark:text-zinc-200">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                       {dp.pagoRecurrente ? "Sí" : "No"}
                                     </span>
                                   </div>
                                   {dp.fechaCierre && (
                                     <div>
-                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
                                         Fecha de Cierre
                                       </span>
-                                      <span className="text-zinc-800 dark:text-zinc-200">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                         {dp.fechaCierre}
                                       </span>
                                     </div>
                                   )}
                                   {(dp.facturaEmitida || dp.comprobantePago) && (
                                     <div>
-                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
                                         Archivos
                                       </span>
-                                      <span className="text-zinc-800 dark:text-zinc-200">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                         {dp.facturaEmitida ? "Factura ✓" : "Sin factura"} • {dp.comprobantePago ? "Comprobante ✓" : "Sin comprobante"}
                                       </span>
                                     </div>
@@ -2848,7 +2865,7 @@ export default function HomeView({
                                 </div>
                                 {dp.observaciones && (
                                   <div>
-                                    <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider mb-1">
+                                    <span className="block text-[11px] font-extrabold text-primary detail-label mb-1">
                                       Observaciones
                                     </span>
                                     <p className="text-zinc-700 dark:text-zinc-300 italic">
@@ -2910,11 +2927,14 @@ export default function HomeView({
                                     <Pencil className="w-3 h-3" />
                                   </button>
                                 )}
-                                <ChevronDown
-                                  className={`w-3.5 h-3.5 text-primary transition-transform duration-200 ${
-                                    isExpanded ? "rotate-180" : ""
-                                  }`}
-                                />
+                                <button
+                                  type="button"
+                                  onClick={(evt) => { evt.stopPropagation(); setExpandedHomeItemId(isExpanded ? null : itemId); }}
+                                  className="p-1 rounded-lg hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
+                                  title="Ver detalles"
+                                >
+                                  <Search className="w-3.5 h-3.5" />
+                                </button>
                               </div>
                               <h4 className="font-extrabold text-xs text-black dark:text-white mt-1.5 truncate" style={{ color: darkMode ? undefined : '#000000' }}>
                                 {details.marca}
@@ -2935,10 +2955,10 @@ export default function HomeView({
                                 <div className="flex flex-col gap-3">
                                   {details.droga && (
                                   <div>
-                                    <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
                                       Droga / Fármaco
                                     </span>
-                                    <span className="text-zinc-800 dark:text-zinc-200">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                       {details.droga}
                                     </span>
                                   </div>
@@ -2946,29 +2966,29 @@ export default function HomeView({
 
                                   {details.funcionTratamiento && (
                                   <div>
-                                    <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
                                       Función / Tratamiento
                                     </span>
-                                    <span className="text-zinc-800 dark:text-zinc-200">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                       {details.funcionTratamiento}
                                     </span>
                                   </div>
                                   )}
 
                                   <div>
-                                    <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
                                       Disponibilidad
                                     </span>
-                                    <span className="text-zinc-800 dark:text-zinc-200">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                       {formatFechaDMY(details.disponibleHasta)} ({details.disponibleParaDias.toFixed(1)} días)
                                     </span>
                                   </div>
 
                                   <div>
-                                    <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
                                       Stock (Inicial / Restante)
                                     </span>
-                                    <span className="text-zinc-800 dark:text-zinc-200">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                       {disp.cantidadRegistrada} registradas / {details.cantidadDisponible.toFixed(1)} restantes
                                     </span>
                                   </div>
@@ -3016,11 +3036,14 @@ export default function HomeView({
                                     <Pencil className="w-3 h-3" />
                                   </button>
                                 )}
-                                <ChevronDown
-                                  className={`w-3.5 h-3.5 text-primary transition-transform duration-200 ${
-                                    isExpanded ? "rotate-180" : ""
-                                  }`}
-                                />
+                                <button
+                                  type="button"
+                                  onClick={(evt) => { evt.stopPropagation(); setExpandedHomeItemId(isExpanded ? null : itemId); }}
+                                  className="p-1 rounded-lg hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
+                                  title="Ver detalles"
+                                >
+                                  <Search className="w-3.5 h-3.5" />
+                                </button>
                               </div>
                               <h4 className="font-extrabold text-xs text-black dark:text-white mt-1.5 truncate" style={{ color: darkMode ? undefined : '#000000' }}>
                                 Plato Planeado:{" "}
@@ -3036,14 +3059,14 @@ export default function HomeView({
 
                           <HomeDetailModal isOpen={isExpanded && !!matchedPlato} onClose={() => setExpandedHomeItemId(null)} title={matchedPlato?.nombrePlato} icon={UtensilsCrossed} onEdit={onQuickEdit ? () => onQuickEdit("comidas", m.id) : undefined}>
                                 <div>
-                                  <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider mb-1">
+                                  <span className="block text-[11px] font-extrabold text-primary detail-label mb-1">
                                     Detalles del Plato
                                   </span>
-                                  <span className="text-zinc-800 dark:text-zinc-200 block">
+                                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                     {matchedPlato.nombrePlato}
                                   </span>
                                   {matchedPlato.descripcion && (
-                                    <p className="text-zinc-600 dark:text-zinc-400 mt-1 italic">
+                                    <p className="text-[10px] text-zinc-600 dark:text-zinc-400 mt-1 italic pl-2">
                                       {matchedPlato.descripcion}
                                     </p>
                                   )}
@@ -3051,20 +3074,20 @@ export default function HomeView({
                                 <div className="flex flex-col gap-3">
                                   {matchedPlato.calorias !== undefined && matchedPlato.calorias !== null && (
                                   <div>
-                                    <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
                                       Calorías
                                     </span>
-                                    <span className="text-zinc-800 dark:text-zinc-200">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                       {matchedPlato.calorias} kcal
                                     </span>
                                   </div>
                                   )}
                                   {(matchedPlato.ingredientesPersonalizados?.length > 0 || matchedPlato.alimentoId1 || matchedPlato.alimentoId2 || matchedPlato.alimentoId3) && (
                                   <div>
-                                    <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
                                       Ingredientes
                                     </span>
-                                    <span className="text-zinc-800 dark:text-zinc-200">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                       {matchedPlato.ingredientesPersonalizados && matchedPlato.ingredientesPersonalizados.length > 0
                                         ? matchedPlato.ingredientesPersonalizados.join(", ")
                                         : [matchedPlato.alimentoId1, matchedPlato.alimentoId2, matchedPlato.alimentoId3]
@@ -3105,11 +3128,14 @@ export default function HomeView({
                                   <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-primary/10 text-primary">
                                     Clase Académica
                                   </span>
-                                  <ChevronDown
-                                    className={`w-3.5 h-3.5 text-primary transition-transform duration-200 ${
-                                      isExpanded ? "rotate-180" : ""
-                                    }`}
-                                  />
+                                  <button
+                                    type="button"
+                                    onClick={(evt) => { evt.stopPropagation(); setExpandedHomeItemId(isExpanded ? null : itemId); }}
+                                    className="p-1 rounded-lg hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
+                                    title="Ver detalles"
+                                  >
+                                    <Search className="w-3.5 h-3.5" />
+                                  </button>
                                 </div>
                                 <h4
                                   className="font-extrabold text-xs text-black dark:text-white mt-1.5 truncate"
@@ -3137,49 +3163,49 @@ export default function HomeView({
                           <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} title={h.materia} icon={GraduationCap} onEdit={onQuickEdit ? () => onQuickEdit("universidad", h.id) : undefined}>
                                 <div className="flex flex-col gap-3">
                                   <div>
-                                    <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
                                       Día y Horario
                                     </span>
-                                    <span className="text-zinc-800 dark:text-zinc-200">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                       {h.dia} • {h.horaInicio || "--:--"} a {h.horaFin || "--:--"} hs
                                     </span>
                                   </div>
                                   {h.aulas && (
                                     <div>
-                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
                                         Aula / Espacio
                                       </span>
-                                      <span className="text-zinc-800 dark:text-zinc-200">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                         {h.aulas}
                                       </span>
                                     </div>
                                   )}
                                   {h.profesores && (
                                     <div>
-                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
                                         Profesores
                                       </span>
-                                      <span className="text-zinc-800 dark:text-zinc-200">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                         {h.profesores}
                                       </span>
                                     </div>
                                   )}
                                   {h.comision && (
                                     <div>
-                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
                                         Comisión
                                       </span>
-                                      <span className="text-zinc-800 dark:text-zinc-200">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                         {h.comision}
                                       </span>
                                     </div>
                                   )}
                                   {h.modalidad && (
                                     <div>
-                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
                                         Modalidad
                                       </span>
-                                      <span className="text-zinc-800 dark:text-zinc-200">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                         {h.modalidad}
                                       </span>
                                     </div>
@@ -3225,11 +3251,14 @@ export default function HomeView({
                                       <Pencil className="w-3 h-3" />
                                     </button>
                                   )}
-                                  <ChevronDown
-                                    className={`w-3.5 h-3.5 text-primary transition-transform duration-200 ${
-                                      isExpanded ? "rotate-180" : ""
-                                    }`}
-                                  />
+                                  <button
+                                    type="button"
+                                    onClick={(evt) => { evt.stopPropagation(); setExpandedHomeItemId(isExpanded ? null : itemId); }}
+                                    className="p-1 rounded-lg hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
+                                    title="Ver detalles"
+                                  >
+                                    <Search className="w-3.5 h-3.5" />
+                                  </button>
                                 </div>
                                 <h4
                                   className="font-extrabold text-xs text-black dark:text-white mt-1.5 truncate"
@@ -3263,49 +3292,49 @@ export default function HomeView({
                           <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} title={e.materia} icon={BookOpen} onEdit={onQuickEdit ? () => onQuickEdit("universidad", e.id) : undefined}>
                                 <div className="flex flex-col gap-3">
                                   <div>
-                                    <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
                                       Tipo / Estado Examen
                                     </span>
-                                    <span className="text-zinc-800 dark:text-zinc-200">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                       {e.estado || "Examen"}
                                     </span>
                                   </div>
                                   {(e.instancia || e.aula) && (
                                     <div>
-                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
                                         Instancia / Aula
                                       </span>
-                                      <span className="text-zinc-800 dark:text-zinc-200">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                         {[e.instancia && `Instancia: ${e.instancia}`, e.aula && `Aula: ${e.aula}`].filter(Boolean).join(" • ")}
                                       </span>
                                     </div>
                                   )}
                                   {(e.fecha || e.hora) && (
                                     <div>
-                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
                                         Fecha y Hora
                                       </span>
-                                      <span className="text-zinc-800 dark:text-zinc-200">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                         {[e.fecha, e.hora && `${e.hora} hs`].filter(Boolean).join(" • ")}
                                       </span>
                                     </div>
                                   )}
                                   {e.nota !== undefined && e.nota !== null && (
                                     <div>
-                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
                                         Calificación
                                       </span>
-                                      <span className="text-zinc-800 dark:text-zinc-200">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                         {e.nota}
                                       </span>
                                     </div>
                                   )}
                                   {e.contenidos && (
                                     <div>
-                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
                                         Temas / Contenidos
                                       </span>
-                                      <span className="text-zinc-800 dark:text-zinc-200">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                         {e.contenidos}
                                       </span>
                                     </div>
@@ -3356,11 +3385,14 @@ export default function HomeView({
                                   >
                                     {t.type || "Trabajo"}
                                   </span>
-                                  <ChevronDown
-                                    className={`w-3.5 h-3.5 text-primary transition-transform duration-200 ${
-                                      isExpanded ? "rotate-180" : ""
-                                    }`}
-                                  />
+                                  <button
+                                    type="button"
+                                    onClick={(evt) => { evt.stopPropagation(); setExpandedHomeItemId(isExpanded ? null : itemId); }}
+                                    className="p-1 rounded-lg hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
+                                    title="Ver detalles"
+                                  >
+                                    <Search className="w-3.5 h-3.5" />
+                                  </button>
                                 </div>
                                 <h4
                                   className={`font-extrabold text-xs mt-1.5 truncate ${
@@ -3426,57 +3458,57 @@ export default function HomeView({
                           <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} title={t.title} icon={FileText}>
                                 <div className="flex flex-col gap-3">
                                   <div>
-                                    <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
                                       Estado de Entrega
                                     </span>
-                                    <span className="text-zinc-800 dark:text-zinc-200">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                       {t.completed ? "Completado" : "Pendiente"}
                                     </span>
                                   </div>
                                   <div>
-                                    <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
                                       Materia
                                     </span>
-                                    <span className="text-zinc-800 dark:text-zinc-200">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                       {subjectName}
                                     </span>
                                   </div>
                                   {t.dueDate && (
                                     <div>
-                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
                                         Fecha Límite
                                       </span>
-                                      <span className="text-zinc-800 dark:text-zinc-200">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                         {t.dueDate}
                                       </span>
                                     </div>
                                   )}
                                   {t.type && (
                                     <div>
-                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
                                         Tipo
                                       </span>
-                                      <span className="text-zinc-800 dark:text-zinc-200">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                         {t.type}
                                       </span>
                                     </div>
                                   )}
                                   {t.grade !== undefined && t.grade !== null && (
                                     <div>
-                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
                                         Calificación
                                       </span>
-                                      <span className="text-zinc-800 dark:text-zinc-200">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                         {t.grade}
                                       </span>
                                     </div>
                                   )}
                                   {t.description && (
                                     <div>
-                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
                                         Descripción
                                       </span>
-                                      <span className="text-zinc-800 dark:text-zinc-200">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
                                         {t.description}
                                       </span>
                                     </div>
@@ -3530,7 +3562,7 @@ export default function HomeView({
 
       {/* Miniatura de Notas Rápidas */}
       <div className="w-full relative z-30">
-        <QuickNotesMiniWidget userId={homeUserId} darkMode={darkMode} onOpenAll={onOpenNotes} />
+        <QuickNotesMiniWidget userId={homeUserId} darkMode={darkMode} onOpenAll={onOpenNotes} onAddNote={onAddNote} />
       </div>
 
       {/* DETAILED MODAL POPUP (Mini Menu Desplegado) */}
