@@ -567,6 +567,33 @@ export default function FinanceView({
   const [pagosSubTab, setPagosSubTab] = useState<
     "todos_pagos" | "gastos_varios"
   >("todos_pagos");
+
+  // Botón de editar en las tarjetas de "Facturas y Vencimientos"/"Historial de Pagos" (pestaña
+  // "Mis Finanzas"): el formulario de edición real vive en PaymentsTable (pestaña "Gastos
+  // Mensuales"), así que acá solo se dispara el mismo mecanismo autoOpenEditId que ya usa el
+  // lápiz de Inicio, y se navega a esa pestaña para que se vea el formulario abierto.
+  const [localEditPaymentId, setLocalEditPaymentId] = useState<string | undefined>(undefined);
+  const [localEditPaymentNonce, setLocalEditPaymentNonce] = useState(0);
+  const handleEditPaymentCard = (id: string) => {
+    setActiveTab("todos_pagos");
+    setLocalEditPaymentId(id);
+    setLocalEditPaymentNonce((n) => n + 1);
+  };
+
+  // Combina el disparador externo (lápiz de Inicio) con el local (tarjetas de esta vista) en un
+  // único id/nonce para pasarle a PaymentsTable, que solo entiende un mecanismo autoOpenEditId.
+  const [mergedEditPaymentId, setMergedEditPaymentId] = useState<string | undefined>(undefined);
+  const [mergedEditPaymentNonce, setMergedEditPaymentNonce] = useState(0);
+  useEffect(() => {
+    if (!autoOpenEditNonce) return;
+    setMergedEditPaymentId(autoOpenEditId);
+    setMergedEditPaymentNonce((n) => n + 1);
+  }, [autoOpenEditNonce]);
+  useEffect(() => {
+    if (!localEditPaymentNonce) return;
+    setMergedEditPaymentId(localEditPaymentId);
+    setMergedEditPaymentNonce((n) => n + 1);
+  }, [localEditPaymentNonce]);
   const [cotizacionesSubTab, setCotizacionesSubTab] = useState<
     "acciones" | "cripto"
   >("acciones");
@@ -1808,7 +1835,7 @@ export default function FinanceView({
                                   </div>
                                 </div>
 
-                                <DetailModal isOpen={isExpanded} onClose={() => setExpandedPaymentId(null)} title={p.descripcion} icon={Receipt}>
+                                <DetailModal isOpen={isExpanded} onClose={() => setExpandedPaymentId(null)} title={p.descripcion} icon={Receipt} onEdit={() => handleEditPaymentCard(p.id)}>
                                       <div className="flex flex-col gap-3">
                                         <div>
                                           <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
@@ -1991,7 +2018,7 @@ export default function FinanceView({
                                   </button>
                                 </div>
 
-                                <DetailModal isOpen={isExpanded} onClose={() => setExpandedPaymentId(null)} title={p.descripcion} icon={Receipt}>
+                                <DetailModal isOpen={isExpanded} onClose={() => setExpandedPaymentId(null)} title={p.descripcion} icon={Receipt} onEdit={() => handleEditPaymentCard(p.id)}>
                                       <div className="flex flex-col gap-3">
                                         <div>
                                           <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
@@ -3555,8 +3582,8 @@ export default function FinanceView({
                       userEmail={userEmail}
                       autoOpenQuickAdd={autoOpenQuickAdd}
                       onQuickAddHandled={onQuickAddHandled}
-                      autoOpenEditId={autoOpenEditId}
-                      autoOpenEditNonce={autoOpenEditNonce}
+                      autoOpenEditId={mergedEditPaymentId}
+                      autoOpenEditNonce={mergedEditPaymentNonce}
                       onQuickEditHandled={onQuickEditHandled}
                     />
                   </motion.div>

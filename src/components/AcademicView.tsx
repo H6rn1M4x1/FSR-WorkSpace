@@ -2278,7 +2278,7 @@ export default function AcademicView({
                                                 <span className="block text-[9px] font-extrabold text-primary dark:text-primary/90 uppercase tracking-wider mb-0.5">
                                                   Tipo / Estado Examen
                                                 </span>
-                                                <span className="font-extrabold text-primary text-xs">
+                                                <span className="text-slate-900 dark:text-white text-xs">
                                                   {item.estado || "Examen"}
                                                 </span>
                                               </div>

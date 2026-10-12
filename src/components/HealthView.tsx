@@ -568,6 +568,13 @@ interface HealthViewProps {
   autoOpenEditId?: string;
   autoOpenEditNonce?: number;
   onQuickEditHandled?: () => void;
+  /** Navega a la pestaña real de la categoría elegida y le pide que abra directo el formulario
+   *  de EDICIÓN de ese ítem puntual — usado por el botón de editar del turno médico de esta
+   *  vista, cuyo formulario real vive en Turnos y Compromisos (AppointmentsView), no acá. */
+  onQuickEdit?: (
+    category: "turno" | "finanzas" | "universidad" | "salud" | "comidas",
+    itemId: string
+  ) => void;
 }
 
 const compressImageIfNeeded = async (base64Str: string, maxSizeBytes = 600 * 1024): Promise<string> => {
@@ -651,6 +658,7 @@ export default function HealthView({
   autoOpenEditId,
   autoOpenEditNonce,
   onQuickEditHandled,
+  onQuickEdit,
 }: HealthViewProps) {
   const { isSharedOut, sharedOutWith } = makeSharedOutHelpers(itemsIShared);
   const { showToast } = useToast();
@@ -3640,7 +3648,7 @@ export default function HealthView({
                                     Fecha Turno
                                   </span>
                                   <span className="font-extrabold font-mono text-[11px] text-slate-900 dark:text-white">
-                                    {turno.fecha ? turno.fecha.split("T")[0] : ""}
+                                    {turno.fecha ? formatFechaDMY(turno.fecha.split("T")[0]) : ""}
                                   </span>
                                 </div>
                               </div>
@@ -3650,6 +3658,7 @@ export default function HealthView({
                                 onClose={() => setExpandedDispId(null)}
                                 title={turno.descripcion || "Turno Médico"}
                                 icon={Stethoscope}
+                                onEdit={onQuickEdit ? () => onQuickEdit("turno", turno.id) : undefined}
                               >
                                 <div className="flex flex-col gap-3">
                                   <div>
@@ -3712,7 +3721,7 @@ export default function HealthView({
                                   !isNaN(turno.lon) &&
                                   !(turno.lat === 0 && turno.lon === 0) && (
                                   <div>
-                                    <div className="w-10 h-0.5 rounded-full bg-primary/50 mb-2" />
+                                    <div className="w-10 h-1 rounded-full bg-primary mb-2" />
                                     <span className="flex items-center gap-1 text-[9px] font-extrabold text-primary uppercase tracking-wider mb-1.5">
                                       <MapPin className="w-3 h-3" /> Mapa
                                     </span>
