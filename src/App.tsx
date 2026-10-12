@@ -2439,6 +2439,7 @@ export default function App() {
                   autoOpenEditId={quickEditTarget?.id}
                   autoOpenEditNonce={quickEditTarget?.nonce}
                   onQuickEditHandled={handleQuickEditHandled}
+                  onQuickEdit={handleQuickEdit}
                 />
               )}
 

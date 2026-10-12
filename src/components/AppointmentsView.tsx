@@ -3028,7 +3028,7 @@ export default function AppointmentsView({
                                   !isNaN(tc.lon) &&
                                   !(tc.lat === 0 && tc.lon === 0) && (
                                   <div>
-                                    <div className="w-10 h-0.5 rounded-full bg-primary/50 mb-2" />
+                                    <div className="w-10 h-1 rounded-full bg-primary mb-2" />
                                     <span className="flex items-center gap-1 text-[9px] font-extrabold text-primary uppercase tracking-wider mb-1.5">
                                       <MapPin className="w-3 h-3" /> Mapa
                                     </span>
