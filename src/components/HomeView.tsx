@@ -2543,7 +2543,7 @@ export default function HomeView({
                                   !isNaN(tc.lon) &&
                                   !(tc.lat === 0 && tc.lon === 0) && (
                                   <div>
-                                    <div className="w-10 h-1 rounded-full bg-primary mb-2" />
+                                    <div className="w-full h-px bg-primary/50 mb-2" />
                                     <span className="flex items-center gap-1 text-[9px] font-extrabold text-primary uppercase tracking-wider mb-1.5">
                                       <MapPin className="w-3 h-3" /> Mapa
                                     </span>
@@ -3034,7 +3034,7 @@ export default function HomeView({
                             </div>
                           </div>
 
-                          <HomeDetailModal isOpen={isExpanded && !!matchedPlato} onClose={() => setExpandedHomeItemId(null)} onEdit={onQuickEdit ? () => onQuickEdit("comidas", m.id) : undefined}>
+                          <HomeDetailModal isOpen={isExpanded && !!matchedPlato} onClose={() => setExpandedHomeItemId(null)} title={matchedPlato?.nombrePlato} icon={UtensilsCrossed} onEdit={onQuickEdit ? () => onQuickEdit("comidas", m.id) : undefined}>
                                 <div>
                                   <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider mb-1">
                                     Detalles del Plato
@@ -3134,49 +3134,56 @@ export default function HomeView({
                             </div>
                           </div>
 
-                          <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} onEdit={onQuickEdit ? () => onQuickEdit("universidad", h.id) : undefined}>
-                                <div className="p-3 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30 space-y-1.5">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-[9px] font-extrabold text-primary uppercase tracking-wider">
-                                      Detalles de Cursada
+                          <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} title={h.materia} icon={GraduationCap} onEdit={onQuickEdit ? () => onQuickEdit("universidad", h.id) : undefined}>
+                                <div className="flex flex-col gap-3">
+                                  <div>
+                                    <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                      Día y Horario
                                     </span>
-                                    <span className="text-[10px] font-bold text-zinc-500">
-                                      {h.dia}
+                                    <span className="text-zinc-800 dark:text-zinc-200">
+                                      {h.dia} • {h.horaInicio || "--:--"} a {h.horaFin || "--:--"} hs
                                     </span>
                                   </div>
-                                  <p className="font-bold text-sm text-zinc-900 dark:text-zinc-100">
-                                    {h.materia}
-                                  </p>
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 text-[11px] text-zinc-600 dark:text-zinc-300">
+                                  {h.aulas && (
                                     <div>
-                                      <span className="font-semibold text-zinc-400">Horario: </span>
-                                      {h.horaInicio || "--:--"} a {h.horaFin || "--:--"} hs
-                                    </div>
-                                    {h.aulas && (
-                                      <div>
-                                        <span className="font-semibold text-zinc-400">Aula / Espacio: </span>
+                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                        Aula / Espacio
+                                      </span>
+                                      <span className="text-zinc-800 dark:text-zinc-200">
                                         {h.aulas}
-                                      </div>
-                                    )}
-                                    {h.profesores && (
-                                      <div>
-                                        <span className="font-semibold text-zinc-400">Profesores: </span>
+                                      </span>
+                                    </div>
+                                  )}
+                                  {h.profesores && (
+                                    <div>
+                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                        Profesores
+                                      </span>
+                                      <span className="text-zinc-800 dark:text-zinc-200">
                                         {h.profesores}
-                                      </div>
-                                    )}
-                                    {h.comision && (
-                                      <div>
-                                        <span className="font-semibold text-zinc-400">Comisión: </span>
+                                      </span>
+                                    </div>
+                                  )}
+                                  {h.comision && (
+                                    <div>
+                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                        Comisión
+                                      </span>
+                                      <span className="text-zinc-800 dark:text-zinc-200">
                                         {h.comision}
-                                      </div>
-                                    )}
-                                    {h.modalidad && (
-                                      <div>
-                                        <span className="font-semibold text-zinc-400">Modalidad: </span>
+                                      </span>
+                                    </div>
+                                  )}
+                                  {h.modalidad && (
+                                    <div>
+                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                        Modalidad
+                                      </span>
+                                      <span className="text-zinc-800 dark:text-zinc-200">
                                         {h.modalidad}
-                                      </div>
-                                    )}
-                                  </div>
+                                      </span>
+                                    </div>
+                                  )}
                                 </div>
                           </HomeDetailModal>
                         </div>
@@ -3253,57 +3260,56 @@ export default function HomeView({
                             </div>
                           </div>
 
-                          <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} onEdit={onQuickEdit ? () => onQuickEdit("universidad", e.id) : undefined}>
-                                <div className="p-3 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30 space-y-1.5">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-[9px] font-extrabold text-primary uppercase tracking-wider">
-                                      Evaluación Programada
+                          <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} title={e.materia} icon={BookOpen} onEdit={onQuickEdit ? () => onQuickEdit("universidad", e.id) : undefined}>
+                                <div className="flex flex-col gap-3">
+                                  <div>
+                                    <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                      Tipo / Estado Examen
                                     </span>
-                                    <span className="text-[10px] font-bold text-primary bg-primary/20 px-2 py-0.5 rounded-md">
-                                      {e.estado || "Programado"}
+                                    <span className="text-zinc-800 dark:text-zinc-200">
+                                      {e.estado || "Examen"}
                                     </span>
                                   </div>
-                                  <p className="font-bold text-sm text-zinc-900 dark:text-zinc-100">
-                                    {e.materia}
-                                  </p>
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 text-[11px] text-zinc-600 dark:text-zinc-300">
-                                    {e.instancia && (
-                                      <div>
-                                        <span className="font-semibold text-zinc-400">Instancia: </span>
-                                        {e.instancia}
-                                      </div>
-                                    )}
-                                    {e.fecha && (
-                                      <div>
-                                        <span className="font-semibold text-zinc-400">Fecha: </span>
-                                        {e.fecha}
-                                      </div>
-                                    )}
-                                    {e.hora && (
-                                      <div>
-                                        <span className="font-semibold text-zinc-400">Hora: </span>
-                                        {e.hora} hs
-                                      </div>
-                                    )}
-                                    {e.aula && (
-                                      <div>
-                                        <span className="font-semibold text-zinc-400">Aula: </span>
-                                        {e.aula}
-                                      </div>
-                                    )}
-                                    {e.nota !== undefined && e.nota !== null && (
-                                      <div>
-                                        <span className="font-semibold text-zinc-400">Calificación: </span>
-                                        <span className="font-bold text-primary">{e.nota}</span>
-                                      </div>
-                                    )}
-                                    {e.contenidos && (
-                                      <div className="col-span-full">
-                                        <span className="font-semibold text-zinc-400">Temas / Contenidos: </span>
+                                  {(e.instancia || e.aula) && (
+                                    <div>
+                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                        Instancia / Aula
+                                      </span>
+                                      <span className="text-zinc-800 dark:text-zinc-200">
+                                        {[e.instancia && `Instancia: ${e.instancia}`, e.aula && `Aula: ${e.aula}`].filter(Boolean).join(" • ")}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {(e.fecha || e.hora) && (
+                                    <div>
+                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                        Fecha y Hora
+                                      </span>
+                                      <span className="text-zinc-800 dark:text-zinc-200">
+                                        {[e.fecha, e.hora && `${e.hora} hs`].filter(Boolean).join(" • ")}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {e.nota !== undefined && e.nota !== null && (
+                                    <div>
+                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                        Calificación
+                                      </span>
+                                      <span className="text-zinc-800 dark:text-zinc-200">
+                                        {e.nota}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {e.contenidos && (
+                                    <div>
+                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                        Temas / Contenidos
+                                      </span>
+                                      <span className="text-zinc-800 dark:text-zinc-200">
                                         {e.contenidos}
-                                      </div>
-                                    )}
-                                  </div>
+                                      </span>
+                                    </div>
+                                  )}
                                 </div>
                           </HomeDetailModal>
                         </div>
@@ -3417,55 +3423,64 @@ export default function HomeView({
                             )}
                           </div>
 
-                          <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)}>
-                                <div className="p-3 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30 space-y-1.5">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-[9px] font-extrabold text-primary uppercase tracking-wider">
-                                      Entrega Académica
+                          <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} title={t.title} icon={FileText}>
+                                <div className="flex flex-col gap-3">
+                                  <div>
+                                    <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                      Estado de Entrega
                                     </span>
-                                    <span
-                                      className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
-                                        t.completed
-                                          ? "bg-emerald-500/20 text-emerald-500"
-                                          : "bg-amber-500/20 text-amber-500"
-                                      }`}
-                                    >
+                                    <span className="text-zinc-800 dark:text-zinc-200">
                                       {t.completed ? "Completado" : "Pendiente"}
                                     </span>
                                   </div>
-                                  <p className="font-bold text-sm text-zinc-900 dark:text-zinc-100">
-                                    {t.title}
-                                  </p>
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 text-[11px] text-zinc-600 dark:text-zinc-300">
-                                    <div>
-                                      <span className="font-semibold text-zinc-400">Materia: </span>
+                                  <div>
+                                    <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                      Materia
+                                    </span>
+                                    <span className="text-zinc-800 dark:text-zinc-200">
                                       {subjectName}
-                                    </div>
-                                    {t.dueDate && (
-                                      <div>
-                                        <span className="font-semibold text-zinc-400">Fecha Límite: </span>
-                                        {t.dueDate}
-                                      </div>
-                                    )}
-                                    {t.type && (
-                                      <div>
-                                        <span className="font-semibold text-zinc-400">Tipo: </span>
-                                        {t.type}
-                                      </div>
-                                    )}
-                                    {t.grade !== undefined && t.grade !== null && (
-                                      <div>
-                                        <span className="font-semibold text-zinc-400">Calificación: </span>
-                                        <span className="font-bold text-primary">{t.grade}</span>
-                                      </div>
-                                    )}
-                                    {t.description && (
-                                      <div className="col-span-full">
-                                        <span className="font-semibold text-zinc-400">Descripción: </span>
-                                        {t.description}
-                                      </div>
-                                    )}
+                                    </span>
                                   </div>
+                                  {t.dueDate && (
+                                    <div>
+                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                        Fecha Límite
+                                      </span>
+                                      <span className="text-zinc-800 dark:text-zinc-200">
+                                        {t.dueDate}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {t.type && (
+                                    <div>
+                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                        Tipo
+                                      </span>
+                                      <span className="text-zinc-800 dark:text-zinc-200">
+                                        {t.type}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {t.grade !== undefined && t.grade !== null && (
+                                    <div>
+                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                        Calificación
+                                      </span>
+                                      <span className="text-zinc-800 dark:text-zinc-200">
+                                        {t.grade}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {t.description && (
+                                    <div>
+                                      <span className="block text-[9px] font-extrabold text-primary uppercase tracking-wider">
+                                        Descripción
+                                      </span>
+                                      <span className="text-zinc-800 dark:text-zinc-200">
+                                        {t.description}
+                                      </span>
+                                    </div>
+                                  )}
                                 </div>
                           </HomeDetailModal>
                         </div>
