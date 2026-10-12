@@ -1842,10 +1842,10 @@ export default function FinanceView({
                                 <DetailModal isOpen={isExpanded} onClose={() => setExpandedPaymentId(null)} title={p.descripcion} icon={Receipt} onEdit={() => handleEditPaymentCard(p.id)}>
                                       <div className="flex flex-col gap-3">
                                         <div>
-                                          <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                          <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                             Fechas (Vencimiento / Cierre)
                                           </span>
-                                          <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words pl-2">
+                                          <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
                                             Vence: {formatFechaDMY(p.fechaVencimiento)}
                                             {p.fechaCierre
                                               ? ` • Cierre: ${formatFechaDMY(p.fechaCierre)}`
@@ -1854,10 +1854,10 @@ export default function FinanceView({
                                         </div>
 
                                         <div>
-                                          <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                          <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                             Método de Pago
                                           </span>
-                                          <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words pl-2">
+                                          <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
                                             {p.metodoPago || "Debito Automatico"}
                                             {p.conQuePagar
                                               ? ` (${p.conQuePagar})`
@@ -1866,19 +1866,19 @@ export default function FinanceView({
                                         </div>
 
                                         <div>
-                                          <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                          <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                             Dónde / Medio de Pago
                                           </span>
-                                          <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words pl-2">
+                                          <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
                                             {p.dondePagar || "Homebanking / Entidad Bancaria"}
                                           </span>
                                         </div>
 
                                         <div>
-                                          <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                          <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                             Recurrencia y Estado
                                           </span>
-                                          <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words pl-2">
+                                          <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
                                             {p.pagoRecurrente ? "Pago Recurrente" : "Pago Único"} • Pendiente
                                           </span>
                                         </div>
@@ -1886,7 +1886,7 @@ export default function FinanceView({
 
                                       {p.observaciones && (
                                         <div>
-                                          <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                          <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                             Observaciones
                                           </span>
                                           <p className="text-zinc-700 dark:text-zinc-300 italic">
@@ -2028,10 +2028,10 @@ export default function FinanceView({
                                 <DetailModal isOpen={isExpanded} onClose={() => setExpandedPaymentId(null)} title={p.descripcion} icon={Receipt} onEdit={() => handleEditPaymentCard(p.id)}>
                                       <div className="flex flex-col gap-3">
                                         <div>
-                                          <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                          <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                             Fechas (Vencimiento / Cierre)
                                           </span>
-                                          <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words pl-2">
+                                          <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
                                             Vence: {formatFechaDMY(p.fechaVencimiento)}
                                             {p.fechaCierre
                                               ? ` • Cierre: ${formatFechaDMY(p.fechaCierre)}`
@@ -2040,10 +2040,10 @@ export default function FinanceView({
                                         </div>
 
                                         <div>
-                                          <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                          <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                             Método de Pago
                                           </span>
-                                          <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words pl-2">
+                                          <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
                                             {p.metodoPago || "Debito Automatico"}
                                             {p.conQuePagar
                                               ? ` (${p.conQuePagar})`
@@ -2052,19 +2052,19 @@ export default function FinanceView({
                                         </div>
 
                                         <div>
-                                          <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                          <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                             Dónde / Medio de Pago
                                           </span>
-                                          <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words pl-2">
+                                          <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
                                             {p.dondePagar || "Homebanking / Entidad Bancaria"}
                                           </span>
                                         </div>
 
                                         <div>
-                                          <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                          <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                             Recurrencia y Estado
                                           </span>
-                                          <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words pl-2">
+                                          <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
                                             {p.pagoRecurrente ? "Pago Recurrente" : "Pago Único"} • Pagado
                                           </span>
                                         </div>
@@ -2072,7 +2072,7 @@ export default function FinanceView({
 
                                       {p.observaciones && (
                                         <div>
-                                          <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                          <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                             Observaciones
                                           </span>
                                           <p className="text-zinc-700 dark:text-zinc-300 italic">

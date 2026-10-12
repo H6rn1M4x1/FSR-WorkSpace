@@ -1120,24 +1120,24 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
                         >
                           <div className="flex flex-col gap-3">
                             <div>
-                              <span className="block text-[11px] font-extrabold text-primary detail-label">Categoría</span>
-                              <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">{ev.categoryLabel}</span>
+                              <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Categoría</span>
+                              <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">{ev.categoryLabel}</span>
                             </div>
                             {ev.time && (
                               <div>
-                                <span className="block text-[11px] font-extrabold text-primary detail-label">Hora</span>
-                                <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">{ev.time}</span>
+                                <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Hora</span>
+                                <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">{ev.time}</span>
                               </div>
                             )}
                             {ev.location && (
                               <div>
-                                <span className="block text-[11px] font-extrabold text-primary detail-label">Lugar</span>
-                                <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">{ev.location}</span>
+                                <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Lugar</span>
+                                <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">{ev.location}</span>
                               </div>
                             )}
                             {(ev.homeTeamBadge || ev.awayTeamBadge) && (
                               <div>
-                                <span className="block text-[11px] font-extrabold text-primary detail-label mb-1">Equipos</span>
+                                <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Equipos</span>
                                 <div className="flex items-center gap-3">
                                   {ev.homeTeamBadge && <img src={ev.homeTeamBadge} alt="" className="w-8 h-8 rounded-full bg-white object-contain border border-white" />}
                                   {ev.awayTeamBadge && <img src={ev.awayTeamBadge} alt="" className="w-8 h-8 rounded-full bg-white object-contain border border-white" />}

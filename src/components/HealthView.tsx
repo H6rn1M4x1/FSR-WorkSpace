@@ -3558,10 +3558,10 @@ export default function HealthView({
                                   <div className="flex flex-col gap-3">
                                     {details.droga && (
                                     <div>
-                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                         Droga / Fármaco
                                       </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                         {details.droga}
                                       </span>
                                     </div>
@@ -3569,29 +3569,29 @@ export default function HealthView({
 
                                     {details.funcionTratamiento && (
                                     <div>
-                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                         Función / Tratamiento
                                       </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                         {details.funcionTratamiento}
                                       </span>
                                     </div>
                                     )}
 
                                     <div>
-                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                         Disponibilidad
                                       </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                         {formatFechaDMY(details.disponibleHasta)} ({details.disponibleParaDias.toFixed(1)} días)
                                       </span>
                                     </div>
 
                                     <div>
-                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                         Stock (Inicial / Restante)
                                       </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                         {disp.cantidadRegistrada} registradas / {details.cantidadDisponible.toFixed(1)} restantes
                                       </span>
                                     </div>
@@ -3668,17 +3668,17 @@ export default function HealthView({
                               >
                                 <div className="flex flex-col gap-3">
                                   <div>
-                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                       Fecha y Hora
                                     </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                       {formatDateFriendly(turno.fecha)}
                                     </span>
                                   </div>
 
                                   {turno.lugar && (
                                     <div>
-                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                         Lugar / Centro Médico
                                       </span>
                                       <span className="text-[10px] text-zinc-800 dark:text-zinc-200 flex items-center gap-1 mt-0.5 pl-2">
@@ -3690,20 +3690,20 @@ export default function HealthView({
 
                                   {turno.doctor && (
                                     <div>
-                                      <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                         Médico / Especialista
                                       </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                         {turno.doctor}
                                       </span>
                                     </div>
                                   )}
 
                                   <div>
-                                    <span className="block text-[11px] font-extrabold text-primary detail-label">
+                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                       Categoría / Paciente
                                     </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 pl-2">
+                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
                                       {turno.categoria}
                                     </span>
                                   </div>
@@ -3711,11 +3711,11 @@ export default function HealthView({
 
                                 {turno.informacionPersonalizada && (
                                   <div>
-                                    <span className="block text-[11px] font-extrabold text-primary detail-label mb-1">
+                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                       Información Personalizada
                                     </span>
                                     <div
-                                      className="text-[10px] text-zinc-700 dark:text-zinc-300 italic pl-2 prose dark:prose-invert prose-sm max-h-[120px] overflow-y-auto"
+                                      className="text-[10px] text-zinc-700 dark:text-zinc-300 italic block pl-2 prose dark:prose-invert prose-sm max-h-[120px] overflow-y-auto [&_*]:!text-[10px]"
                                       dangerouslySetInnerHTML={{ __html: turno.informacionPersonalizada }}
                                     />
                                   </div>
@@ -3729,7 +3729,7 @@ export default function HealthView({
                                   <div>
                                     <div className="w-full h-px bg-primary/50 mb-2" />
                                     <span className="flex items-center gap-1 mb-1.5">
-                                      <MapPin className="w-3 h-3 text-primary" /> <span className="inline-block text-[11px] font-extrabold text-primary detail-label">Mapa</span>
+                                      <MapPin className="w-3 h-3 text-primary" /> <span className="inline-block text-[13px] font-extrabold text-primary detail-label">Mapa</span>
                                     </span>
                                     <LocationPickerMap
                                       lat={turno.lat}
