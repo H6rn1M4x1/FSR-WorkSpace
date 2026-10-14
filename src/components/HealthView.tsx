@@ -683,9 +683,12 @@ export default function HealthView({
   useEffect(() => {
     const el = medicalCalendarCardRef.current;
     if (!el || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver((entries) => {
-      const h = entries[0]?.contentRect?.height;
-      if (h) setMedicalCalendarCardHeight(Math.round(h));
+    // Usamos el.offsetHeight (la altura total "border-box": contenido + padding + borde) en vez
+    // de entries[0].contentRect.height del propio ResizeObserver, que mide solo el contenido
+    // interno SIN padding ni borde — aplicar ese valor más chico como max-height de la otra
+    // tarjeta (que sí cuenta su padding/borde) la dejaba ~48px más baja de lo que debía.
+    const observer = new ResizeObserver(() => {
+      setMedicalCalendarCardHeight(el.offsetHeight);
     });
     observer.observe(el);
     return () => observer.disconnect();
