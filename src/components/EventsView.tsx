@@ -1631,6 +1631,12 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
                 transition={{ duration: 0.18 }}
                 className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/60"
                 onClick={() => setExpandedSjEvent(null)}
+                onContextMenu={(e) => {
+                  // El clic derecho afuera también debe cerrar el modal, en vez de abrir el menú
+                  // contextual nativo del navegador sobre el fondo oscuro.
+                  e.preventDefault();
+                  setExpandedSjEvent(null);
+                }}
               >
                 <motion.div
                   initial={{ opacity: 0, scale: 0.96, y: 12 }}
@@ -1638,6 +1644,7 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
                   exit={{ opacity: 0, scale: 0.96, y: 12 }}
                   transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
                   onClick={(e) => e.stopPropagation()}
+                  onContextMenu={(e) => e.stopPropagation()}
                   className="w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 force-solid-bg shadow-2xl"
                 >
                   <div className="relative w-full h-48 shrink-0 flex items-center justify-center bg-slate-100 dark:bg-zinc-800">

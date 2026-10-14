@@ -1970,7 +1970,7 @@ export default function AcademicView({
                         {MONTH_NAMES_ES[resumenCalendarDate.getMonth()]} {resumenCalendarDate.getFullYear()}
                       </div>
 
-                      <div className={`p-3.5 rounded-3xl ${darkMode ? "bg-zinc-950 shadow-sm" : "bg-white shadow-sm border border-slate-100"}`}>
+                      <div className={`p-4 rounded-3xl ${darkMode ? "bg-zinc-950 shadow-sm" : "bg-white shadow-sm border border-slate-100"}`}>
                         {/* Day of Week Headers */}
                         <div className="grid grid-cols-7 gap-1 text-center font-bold text-[10px] text-zinc-400 dark:text-zinc-500 uppercase tracking-widest mb-2">
                           {WEEK_DAYS_ES.map((wd) => (
@@ -2013,17 +2013,12 @@ export default function AcademicView({
                                 <span>{day}</span>
 
                                 {events.total > 0 && (
-                                  <div className="flex items-center justify-center gap-0.5 absolute bottom-0.5">
-                                    {events.hasClases && (
-                                      <span className="w-1.5 h-1.5 rounded-full bg-primary" title="Horario / Clase" />
-                                    )}
-                                    {events.hasExams && (
-                                      <span className="w-1.5 h-1.5 rounded-full bg-primary/75 ring-1 ring-primary/40 animate-pulse" title="Examen" />
-                                    )}
-                                    {events.hasTrabs && (
-                                      <span className="w-1.5 h-1.5 rounded-full bg-primary/45" title="Trabajo Práctico" />
-                                    )}
-                                  </div>
+                                  <span
+                                    className={`absolute bottom-1 w-1 h-1 rounded-full ${
+                                      isSelected ? "bg-primary" : "bg-primary animate-pulse"
+                                    }`}
+                                    title={`${events.total} evento(s)`}
+                                  />
                                 )}
                               </button>
                             );
