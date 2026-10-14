@@ -1630,11 +1630,15 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.18 }}
                 className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/60"
-                onClick={() => setExpandedSjEvent(null)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setExpandedSjEvent(null);
+                }}
                 onContextMenu={(e) => {
                   // El clic derecho afuera también debe cerrar el modal, en vez de abrir el menú
                   // contextual nativo del navegador sobre el fondo oscuro.
                   e.preventDefault();
+                  e.stopPropagation();
                   setExpandedSjEvent(null);
                 }}
               >

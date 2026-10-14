@@ -39,11 +39,24 @@ export function DetailModal({
           exit={{ opacity: 0 }}
           transition={{ duration: 0.18 }}
           className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/60"
-          onClick={onClose}
+          onClick={(e) => {
+            // Este modal se renderiza por portal (createPortal) directamente en document.body,
+            // pero React sigue burbujeando el evento sintético a través del árbol de React (no
+            // del DOM real) — es decir, hacia el/los componentes padre en JSX que envuelven a
+            // <DetailModal>, aunque en el DOM estén en otro lugar. Si ese padre tiene su propio
+            // onClick (p. ej. una tarjeta que abre este mismo modal al hacer clic), el clic en el
+            // fondo volvería a disparar ese onClick justo después de cerrar, reabriendo el modal
+            // al instante. Cortamos la propagación acá para que cerrar "afuera" quede como clic
+            // único, sin que vuelva a burbujear hacia esos padres.
+            e.stopPropagation();
+            onClose();
+          }}
           onContextMenu={(e) => {
             // El clic derecho afuera también debe cerrar el modal, en vez de abrir el menú
-            // contextual nativo del navegador sobre el fondo oscuro.
+            // contextual nativo del navegador sobre el fondo oscuro. Mismo motivo de
+            // stopPropagation que el onClick de arriba.
             e.preventDefault();
+            e.stopPropagation();
             onClose();
           }}
         >
