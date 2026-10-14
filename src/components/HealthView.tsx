@@ -3092,8 +3092,8 @@ export default function HealthView({
         >
           {activeSubTab === "resumen" && (
             <>
-          {/* Top Grid: Calendario Médico, Control de Medicamentos & Tendencia Presión Arterial (3 Columnas) */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
+          {/* Top Grid: Calendario Médico & Control de Medicamentos (2 Columnas) */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
             {/* Columna 1: Calendario Médico */}
             <div
               className={`p-4 sm:p-5 rounded-3xl border flex flex-col h-full overflow-hidden min-h-0 max-h-[600px] ${
@@ -3753,294 +3753,6 @@ export default function HealthView({
               </div>
             </div>
 
-            {/* Blood Pressure Trends & SVG Chart */}
-            <div
-              className={`p-6 rounded-3xl border flex flex-col gap-4 h-full overflow-hidden min-h-0 max-h-[600px] ${
-                darkMode
-                  ? "bg-zinc-900/40 border-white/10 backdrop-blur-md"
-                  : "bg-white/40 border-slate-200 backdrop-blur-md"
-              }`}
-            >
-              <div
-                className={`p-4 sm:p-4 rounded-3xl border flex flex-col shrink-0 ${
-                  darkMode
-                    ? "bg-zinc-950 border-zinc-800 text-white shadow-lg"
-                    : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
-                }`}
-              >
-                {/* Title */}
-                <div className="flex items-center gap-2 mb-3 shrink-0">
-                  <Activity className="w-5 h-5 text-primary" />
-                  <h3 className="font-bold text-md">
-                    Tendencia Presión Arterial
-                  </h3>
-                </div>
-
-                {/* Button first, then Filter, using full width */}
-                <div className="flex items-center gap-2.5 w-full mb-3 shrink-0">
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.96 }}
-                    onClick={() => {
-                      setShowAddBp(!showAddBp);
-                    }}
-                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-primary hover:bg-primary-hover text-white dark:text-blue-950 text-xs font-bold cursor-pointer transition-all shadow-xs"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Registrar</span>
-                  </motion.button>
-
-                  <CustomSelect
-                    value={bpTrendFilterPatient}
-                    onChange={(val) => setBpTrendFilterPatient(val)}
-                    size="sm"
-                    darkMode={darkMode}
-                    className="flex-1 w-full"
-                    options={[
-                      { value: "Todos", label: "Todos" },
-                      { value: "Hernan", label: "Hernan" },
-                      { value: "Modesto", label: "Modesto" },
-                      { value: "Jessica", label: "Jessica" },
-                      { value: "Gladys", label: "Gladys" },
-                    ]}
-                  />
-                </div>
-
-                {/* Custom SVG Line graph for Blood Pressure */}
-                <div className="flex justify-center my-2 relative">
-                  {(() => {
-                    const trendBpLogs = (bpLogs || []).filter((log) => {
-                      const patientName = log.patient || "Hernan";
-                      return (
-                        bpTrendFilterPatient === "Todos" ||
-                        patientName === bpTrendFilterPatient
-                      );
-                    });
-
-                    if (trendBpLogs.length < 2) {
-                      return (
-                        <div className="w-full h-32 flex items-center justify-center border border-dashed border-zinc-500/20 rounded-2xl text-xs text-zinc-500 px-4 text-center">
-                          Registra al menos 2 mediciones{" "}
-                          {bpTrendFilterPatient !== "Todos"
-                            ? `para ${bpTrendFilterPatient}`
-                            : ""}{" "}
-                          para ver el gráfico de tendencia.
-                        </div>
-                      );
-                    }
-
-                    const reversedLogs = trendBpLogs.slice().reverse().map((log) => {
-                      const fechaLimpia = (log.date || "").split("T")[0].split(" ")[0] || "Hoy";
-                      return {
-                        ...log,
-                        fechaLimpia,
-                      };
-                    });
-
-                    return (
-                      <div className="w-full space-y-1.5 mt-1 shrink-0">
-                        <div className="h-[150px] min-h-[150px] w-full text-xs shrink-0">
-                          <ResponsiveContainer width="100%" height={150}>
-                            <LineChart
-                              data={reversedLogs}
-                              margin={{ top: 5, right: 10, bottom: 0, left: -20 }}
-                            >
-                              <CartesianGrid
-                                strokeDasharray="3 3"
-                                stroke={darkMode ? "#27272a" : "#f1f5f9"}
-                                vertical={false}
-                              />
-                              <XAxis
-                                dataKey="fechaLimpia"
-                                stroke={darkMode ? "#71717a" : "#94a3b8"}
-                                fontSize={9}
-                                tickLine={false}
-                                axisLine={false}
-                                tickFormatter={(val) =>
-                                  typeof val === "string" ? val.split("T")[0] : val
-                                }
-                              />
-                              <YAxis
-                                stroke={darkMode ? "#71717a" : "#94a3b8"}
-                                fontSize={9}
-                                tickLine={false}
-                                axisLine={false}
-                              />
-                              <Tooltip
-                                contentStyle={{
-                                  backgroundColor: darkMode ? "#18181b" : "#fff",
-                                  border: darkMode ? "1px solid #27272a" : "1px solid #e2e8f0",
-                                  borderRadius: "12px",
-                                }}
-                                itemStyle={{
-                                  color: darkMode ? "#f4f4f5" : "#18181b",
-                                }}
-                              />
-                              <Line
-                                type="monotone"
-                                dataKey="systolic"
-                                name="Sistólica (MAX)"
-                                stroke="var(--color-primary)"
-                                strokeWidth={3}
-                                dot={{ r: 4, fill: "var(--color-primary)", stroke: darkMode ? "#18181b" : "#ffffff", strokeWidth: 2 }}
-                                activeDot={{ r: 6 }}
-                              />
-                              <Line
-                                type="monotone"
-                                dataKey="diastolic"
-                                name="Diastólica (MIN)"
-                                stroke="color-mix(in srgb, var(--color-primary) 50%, #a1a1aa 50%)"
-                                strokeWidth={3}
-                                dot={{ r: 4, fill: "color-mix(in srgb, var(--color-primary) 50%, #a1a1aa 50%)", stroke: darkMode ? "#18181b" : "#ffffff", strokeWidth: 2 }}
-                                activeDot={{ r: 6 }}
-                              />
-                            </LineChart>
-                          </ResponsiveContainer>
-                        </div>
-                        <div className="flex items-center justify-center gap-4 text-[10px] font-bold text-zinc-500 uppercase mt-1">
-                          <span className="flex items-center gap-1">
-                            <span
-                              className="w-2.5 h-2.5 rounded-full inline-block"
-                              style={{ backgroundColor: "var(--color-primary)" }}
-                            ></span>
-                            Sistólica (MAX)
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <span
-                              className="w-2.5 h-2.5 rounded-full inline-block"
-                              style={{ backgroundColor: "color-mix(in srgb, var(--color-primary) 50%, #a1a1aa 50%)" }}
-                            ></span>
-                            Diastólica (MIN)
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-
-              </div>
-              
-              {/* List of past logs */}
-              <div
-                className={`p-4 sm:p-4 rounded-3xl border flex-1 flex flex-col min-h-[220px] overflow-hidden ${
-                  darkMode
-                    ? "bg-zinc-950 border-zinc-800 text-white shadow-lg"
-                    : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
-                }`}
-              >
-                <div className="flex-1 flex flex-col h-full min-h-0">
-                  {(() => {
-                    const trendBpLogs = (bpLogs || []).filter((log) => {
-                      const patientName = log.patient || "Hernan";
-                      return (
-                        bpTrendFilterPatient === "Todos" ||
-                        patientName === bpTrendFilterPatient
-                      );
-                    });
-
-                    if (trendBpLogs.length === 0) {
-                      return (
-                        <p className="text-zinc-500 text-xs text-center py-2">
-                          Sin registros para{" "}
-                          {bpTrendFilterPatient === "Todos"
-                            ? "ningún paciente"
-                            : bpTrendFilterPatient}
-                          .
-                        </p>
-                      );
-                    }
-
-                    const itemsPerPage = 4;
-                    const totalPages = Math.ceil(trendBpLogs.length / itemsPerPage);
-                    const safePage = Math.min(bpTrendPage, Math.max(totalPages, 1));
-                    const startIndex = (safePage - 1) * itemsPerPage;
-                    const paginatedLogs = trendBpLogs.slice(startIndex, startIndex + itemsPerPage);
-
-                    return (
-                      <div className="flex flex-col h-full min-h-0">
-                        <AnimatedList<BloodPressureLog>
-                          items={paginatedLogs}
-                          showGradients={true}
-                          enableArrowNavigation={true}
-                          className="flex-1 min-h-0 pr-1"
-                          style={{
-                            '--gradient-color': darkMode ? '#18181b' : '#ffffff',
-                          } as React.CSSProperties}
-                          renderItem={(log) => (
-                            <div
-                              key={log.id}
-                              className="flex items-center justify-between text-xs p-2 rounded-xl bg-zinc-500/5 border border-zinc-800/10"
-                            >
-                              {(() => {
-                                const rawDate = log.date || "";
-                                let datePart = rawDate;
-                                let timePart = "";
-                                if (rawDate.includes("T")) {
-                                  [datePart, timePart] = rawDate.split("T");
-                                } else if (rawDate.includes(" ")) {
-                                  [datePart, timePart] = rawDate.split(" ");
-                                }
-                                timePart = timePart.replace("Z", "").split(":").slice(0, 2).join(":");
-
-                                return (
-                                  <span className="text-zinc-600 dark:text-zinc-400 font-normal text-sm">
-                                    {datePart}
-                                    {timePart && <span className="text-xs italic text-zinc-400 dark:text-zinc-500 ml-1.5">{timePart}</span>}
-                                    {bpTrendFilterPatient === "Todos" && (
-                                      <span className="text-[11px] italic text-zinc-400 ml-1.5">
-                                        ({log.patient || "Hernan"})
-                                      </span>
-                                    )}
-                                  </span>
-                                );
-                              })()}
-                              <span className="font-extrabold font-mono">
-                                {log.systolic}/{log.diastolic} mmHg (Pulso:{" "}
-                                {log.pulse})
-                              </span>
-                              <button
-                                onClick={() => handleDeleteBpLog(log.id)}
-                                className="p-1 text-red-500 hover:bg-red-500/10 rounded-lg transition-all"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </button>
-                            </div>
-                          )}
-                        />
-                        {trendBpLogs.length > itemsPerPage && (
-                          <div className="flex items-center justify-between pt-2 px-1 text-[10px] text-zinc-500 font-medium shrink-0">
-                            <span>
-                              Mostrando {startIndex + 1}-{Math.min(startIndex + itemsPerPage, trendBpLogs.length)} de {trendBpLogs.length} registros
-                            </span>
-                            <div className="flex items-center gap-1">
-                              <button
-                                onClick={() => setBpTrendPage(p => Math.max(p - 1, 1))}
-                                disabled={safePage <= 1}
-                                className="p-1 rounded border border-slate-200 dark:border-zinc-800 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
-                                title="Página Anterior"
-                              >
-                                <ChevronLeft className="w-3.5 h-3.5" />
-                              </button>
-                              <span className="px-1.5 font-mono font-bold text-zinc-700 dark:text-zinc-300">
-                                {safePage} / {totalPages}
-                              </span>
-                              <button
-                                onClick={() => setBpTrendPage(p => Math.min(p + 1, totalPages))}
-                                disabled={safePage >= totalPages}
-                                className="p-1 rounded border border-slate-200 dark:border-zinc-800 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
-                                title="Página Siguiente"
-                              >
-                                <ChevronRight className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })()}
-                </div>
-              </div>
-            </div>
           </div>
 
           {/* SECCIÓN AVANZADA: SALUD METABÓLICA Y NUTRICIÓN */}
@@ -4197,7 +3909,7 @@ export default function HealthView({
 
               {/* 2. Balance Calórico Diario & Macros */}
               <div
-                className={`p-6 rounded-3xl border flex flex-col justify-between lg:col-span-2 ${
+                className={`p-6 rounded-3xl border flex flex-col justify-between lg:col-span-1 ${
                   darkMode
                     ? "bg-zinc-900 border-zinc-800 text-white shadow-lg"
                     : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
@@ -4324,6 +4036,295 @@ export default function HealthView({
                     </div>
                   );
                 })()}
+              </div>
+
+              {/* 3. Tendencia Presión Arterial */}
+              <div
+                className={`p-6 rounded-3xl border flex flex-col gap-4 lg:col-span-1 ${
+                  darkMode
+                    ? "bg-zinc-900/40 border-white/10 backdrop-blur-md"
+                    : "bg-white/40 border-slate-200 backdrop-blur-md"
+                }`}
+              >
+                <div
+                  className={`p-4 sm:p-4 rounded-3xl border flex flex-col shrink-0 ${
+                    darkMode
+                      ? "bg-zinc-950 border-zinc-800 text-white shadow-lg"
+                      : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
+                  }`}
+                >
+                  {/* Title */}
+                  <div className="flex items-center gap-2 mb-3 shrink-0">
+                    <Activity className="w-5 h-5 text-primary" />
+                    <h3 className="font-bold text-md">
+                      Tendencia Presión Arterial
+                    </h3>
+                  </div>
+
+                  {/* Button first, then Filter, using full width */}
+                  <div className="flex items-center gap-2.5 w-full mb-3 shrink-0">
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.96 }}
+                      onClick={() => {
+                        setShowAddBp(!showAddBp);
+                      }}
+                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-primary hover:bg-primary-hover text-white dark:text-blue-950 text-xs font-bold cursor-pointer transition-all shadow-xs"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Registrar</span>
+                    </motion.button>
+
+                    <CustomSelect
+                      value={bpTrendFilterPatient}
+                      onChange={(val) => setBpTrendFilterPatient(val)}
+                      size="sm"
+                      darkMode={darkMode}
+                      className="flex-1 w-full"
+                      options={[
+                        { value: "Todos", label: "Todos" },
+                        { value: "Hernan", label: "Hernan" },
+                        { value: "Modesto", label: "Modesto" },
+                        { value: "Jessica", label: "Jessica" },
+                        { value: "Gladys", label: "Gladys" },
+                      ]}
+                    />
+                  </div>
+
+                  {/* Custom SVG Line graph for Blood Pressure */}
+                  <div className="flex justify-center my-2 relative">
+                    {(() => {
+                      const trendBpLogs = (bpLogs || []).filter((log) => {
+                        const patientName = log.patient || "Hernan";
+                        return (
+                          bpTrendFilterPatient === "Todos" ||
+                          patientName === bpTrendFilterPatient
+                        );
+                      });
+
+                      if (trendBpLogs.length < 2) {
+                        return (
+                          <div className="w-full h-32 flex items-center justify-center border border-dashed border-zinc-500/20 rounded-2xl text-xs text-zinc-500 px-4 text-center">
+                            Registra al menos 2 mediciones{" "}
+                            {bpTrendFilterPatient !== "Todos"
+                              ? `para ${bpTrendFilterPatient}`
+                              : ""}{" "}
+                            para ver el gráfico de tendencia.
+                          </div>
+                        );
+                      }
+
+                      const reversedLogs = trendBpLogs.slice().reverse().map((log) => {
+                        const fechaLimpia = (log.date || "").split("T")[0].split(" ")[0] || "Hoy";
+                        return {
+                          ...log,
+                          fechaLimpia,
+                        };
+                      });
+
+                      return (
+                        <div className="w-full space-y-1.5 mt-1 shrink-0">
+                          <div className="h-[150px] min-h-[150px] w-full text-xs shrink-0">
+                            <ResponsiveContainer width="100%" height={150}>
+                              <LineChart
+                                data={reversedLogs}
+                                margin={{ top: 5, right: 10, bottom: 0, left: -20 }}
+                              >
+                                <CartesianGrid
+                                  strokeDasharray="3 3"
+                                  stroke={darkMode ? "#27272a" : "#f1f5f9"}
+                                  vertical={false}
+                                />
+                                <XAxis
+                                  dataKey="fechaLimpia"
+                                  stroke={darkMode ? "#71717a" : "#94a3b8"}
+                                  fontSize={9}
+                                  tickLine={false}
+                                  axisLine={false}
+                                  tickFormatter={(val) =>
+                                    typeof val === "string" ? val.split("T")[0] : val
+                                  }
+                                />
+                                <YAxis
+                                  stroke={darkMode ? "#71717a" : "#94a3b8"}
+                                  fontSize={9}
+                                  tickLine={false}
+                                  axisLine={false}
+                                />
+                                <Tooltip
+                                  contentStyle={{
+                                    backgroundColor: darkMode ? "#18181b" : "#fff",
+                                    border: darkMode ? "1px solid #27272a" : "1px solid #e2e8f0",
+                                    borderRadius: "12px",
+                                  }}
+                                  itemStyle={{
+                                    color: darkMode ? "#f4f4f5" : "#18181b",
+                                  }}
+                                />
+                                <Line
+                                  type="monotone"
+                                  dataKey="systolic"
+                                  name="Sistólica (MAX)"
+                                  stroke="var(--color-primary)"
+                                  strokeWidth={3}
+                                  dot={{ r: 4, fill: "var(--color-primary)", stroke: darkMode ? "#18181b" : "#ffffff", strokeWidth: 2 }}
+                                  activeDot={{ r: 6 }}
+                                />
+                                <Line
+                                  type="monotone"
+                                  dataKey="diastolic"
+                                  name="Diastólica (MIN)"
+                                  stroke="color-mix(in srgb, var(--color-primary) 50%, #a1a1aa 50%)"
+                                  strokeWidth={3}
+                                  dot={{ r: 4, fill: "color-mix(in srgb, var(--color-primary) 50%, #a1a1aa 50%)", stroke: darkMode ? "#18181b" : "#ffffff", strokeWidth: 2 }}
+                                  activeDot={{ r: 6 }}
+                                />
+                              </LineChart>
+                            </ResponsiveContainer>
+                          </div>
+                          <div className="flex items-center justify-center gap-4 text-[10px] font-bold text-zinc-500 uppercase mt-1">
+                            <span className="flex items-center gap-1">
+                              <span
+                                className="w-2.5 h-2.5 rounded-full inline-block"
+                                style={{ backgroundColor: "var(--color-primary)" }}
+                              ></span>
+                              Sistólica (MAX)
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <span
+                                className="w-2.5 h-2.5 rounded-full inline-block"
+                                style={{ backgroundColor: "color-mix(in srgb, var(--color-primary) 50%, #a1a1aa 50%)" }}
+                              ></span>
+                              Diastólica (MIN)
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                </div>
+
+                {/* List of past logs */}
+                <div
+                  className={`p-4 sm:p-4 rounded-3xl border flex flex-col min-h-[220px] max-h-[360px] overflow-hidden ${
+                    darkMode
+                      ? "bg-zinc-950 border-zinc-800 text-white shadow-lg"
+                      : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
+                  }`}
+                >
+                  <div className="flex-1 flex flex-col h-full min-h-0">
+                    {(() => {
+                      const trendBpLogs = (bpLogs || []).filter((log) => {
+                        const patientName = log.patient || "Hernan";
+                        return (
+                          bpTrendFilterPatient === "Todos" ||
+                          patientName === bpTrendFilterPatient
+                        );
+                      });
+
+                      if (trendBpLogs.length === 0) {
+                        return (
+                          <p className="text-zinc-500 text-xs text-center py-2">
+                            Sin registros para{" "}
+                            {bpTrendFilterPatient === "Todos"
+                              ? "ningún paciente"
+                              : bpTrendFilterPatient}
+                            .
+                          </p>
+                        );
+                      }
+
+                      const itemsPerPage = 4;
+                      const totalPages = Math.ceil(trendBpLogs.length / itemsPerPage);
+                      const safePage = Math.min(bpTrendPage, Math.max(totalPages, 1));
+                      const startIndex = (safePage - 1) * itemsPerPage;
+                      const paginatedLogs = trendBpLogs.slice(startIndex, startIndex + itemsPerPage);
+
+                      return (
+                        <div className="flex flex-col h-full min-h-0">
+                          <AnimatedList<BloodPressureLog>
+                            items={paginatedLogs}
+                            showGradients={true}
+                            enableArrowNavigation={true}
+                            className="flex-1 min-h-0 pr-1"
+                            style={{
+                              '--gradient-color': darkMode ? '#18181b' : '#ffffff',
+                            } as React.CSSProperties}
+                            renderItem={(log) => (
+                              <div
+                                key={log.id}
+                                className="flex items-center justify-between text-xs p-2 rounded-xl bg-zinc-500/5 border border-zinc-800/10"
+                              >
+                                {(() => {
+                                  const rawDate = log.date || "";
+                                  let datePart = rawDate;
+                                  let timePart = "";
+                                  if (rawDate.includes("T")) {
+                                    [datePart, timePart] = rawDate.split("T");
+                                  } else if (rawDate.includes(" ")) {
+                                    [datePart, timePart] = rawDate.split(" ");
+                                  }
+                                  timePart = timePart.replace("Z", "").split(":").slice(0, 2).join(":");
+
+                                  return (
+                                    <span className="text-zinc-600 dark:text-zinc-400 font-normal text-sm">
+                                      {datePart}
+                                      {timePart && <span className="text-xs italic text-zinc-400 dark:text-zinc-500 ml-1.5">{timePart}</span>}
+                                      {bpTrendFilterPatient === "Todos" && (
+                                        <span className="text-[11px] italic text-zinc-400 ml-1.5">
+                                          ({log.patient || "Hernan"})
+                                        </span>
+                                      )}
+                                    </span>
+                                  );
+                                })()}
+                                <span className="font-extrabold font-mono">
+                                  {log.systolic}/{log.diastolic} mmHg (Pulso:{" "}
+                                  {log.pulse})
+                                </span>
+                                <button
+                                  onClick={() => handleDeleteBpLog(log.id)}
+                                  className="p-1 text-red-500 hover:bg-red-500/10 rounded-lg transition-all"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </div>
+                            )}
+                          />
+                          {trendBpLogs.length > itemsPerPage && (
+                            <div className="flex items-center justify-between pt-2 px-1 text-[10px] text-zinc-500 font-medium shrink-0">
+                              <span>
+                                Mostrando {startIndex + 1}-{Math.min(startIndex + itemsPerPage, trendBpLogs.length)} de {trendBpLogs.length} registros
+                              </span>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => setBpTrendPage(p => Math.max(p - 1, 1))}
+                                  disabled={safePage <= 1}
+                                  className="p-1 rounded border border-slate-200 dark:border-zinc-800 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+                                  title="Página Anterior"
+                                >
+                                  <ChevronLeft className="w-3.5 h-3.5" />
+                                </button>
+                                <span className="px-1.5 font-mono font-bold text-zinc-700 dark:text-zinc-300">
+                                  {safePage} / {totalPages}
+                                </span>
+                                <button
+                                  onClick={() => setBpTrendPage(p => Math.min(p + 1, totalPages))}
+                                  disabled={safePage >= totalPages}
+                                  className="p-1 rounded border border-slate-200 dark:border-zinc-800 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+                                  title="Página Siguiente"
+                                >
+                                  <ChevronRight className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
               </div>
             </div>
 
