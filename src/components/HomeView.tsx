@@ -2193,7 +2193,7 @@ export default function HomeView({
                               <div className="p-2 bg-primary/10 text-primary rounded-xl shrink-0 mt-0.5">
                                 <Calendar className="w-4 h-4" />
                               </div>
-                              <div className="min-w-0">
+                              <div className="min-w-0 flex-1">
                                 <div className="flex items-center justify-between gap-2">
                                   <div className="flex flex-wrap items-center gap-1.5 min-w-0">
                                     <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-primary/10 text-primary">
@@ -2928,7 +2928,7 @@ export default function HomeView({
                             <div className="p-2 bg-primary/10 text-primary rounded-xl shrink-0 mt-0.5">
                               <Stethoscope className="w-4 h-4" />
                             </div>
-                            <div className="min-w-0">
+                            <div className="min-w-0 flex-1">
                               <div className="flex items-center justify-between gap-2">
                                 <div className="flex flex-wrap items-center gap-1.5 min-w-0">
                                   <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-primary/10 text-primary">
@@ -3050,7 +3050,7 @@ export default function HomeView({
                             <div className="p-2 bg-primary/10 text-primary rounded-xl shrink-0 mt-0.5">
                               <UtensilsCrossed className="w-4 h-4" />
                             </div>
-                            <div className="min-w-0">
+                            <div className="min-w-0 flex-1">
                               <div className="flex items-center justify-between gap-2">
                                 <div className="flex flex-wrap items-center gap-1.5 min-w-0">
                                   <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-primary/10 text-primary">
@@ -3156,7 +3156,7 @@ export default function HomeView({
                               <div className="p-2 bg-primary/10 text-primary rounded-xl shrink-0 mt-0.5">
                                 <GraduationCap className="w-4 h-4" />
                               </div>
-                              <div className="min-w-0">
+                              <div className="min-w-0 flex-1">
                                 <div className="flex items-center justify-between gap-2">
                                   <div className="flex flex-wrap items-center gap-1.5 min-w-0">
                                     <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-primary/10 text-primary">
@@ -3271,7 +3271,7 @@ export default function HomeView({
                               <div className="p-2 bg-primary/10 text-primary rounded-xl shrink-0 mt-0.5">
                                 <BookOpen className="w-4 h-4" />
                               </div>
-                              <div className="min-w-0">
+                              <div className="min-w-0 flex-1">
                                 <div className="flex items-center justify-between gap-2">
                                   <div className="flex flex-wrap items-center gap-1.5 min-w-0">
                                     <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-primary/10 text-primary">
@@ -3413,7 +3413,7 @@ export default function HomeView({
                               >
                                 <FileText className="w-4 h-4" />
                               </div>
-                              <div className="min-w-0">
+                              <div className="min-w-0 flex-1">
                                 <div className="flex items-center justify-between gap-2">
                                   <div className="flex flex-wrap items-center gap-1.5 min-w-0">
                                     <span

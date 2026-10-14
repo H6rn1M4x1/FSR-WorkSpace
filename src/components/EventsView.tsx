@@ -23,7 +23,6 @@ import {
 import { useToast } from "../context/ToastContext";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import { NbaLogo } from "./icons/NbaLogo";
-import { SanJuanIcon } from "./icons/SanJuanIcon";
 import { DetailModal } from "./DetailModal";
 import { PillFilterBar } from "./PillFilterBar";
 import { SPORTS_CATALOG } from "../lib/sportsCatalog";
@@ -760,6 +759,16 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
     ) : (
       <Trophy className={className} />
     );
+  // NbaLogo es fill="currentColor": sin esto heredaría el color de acento (naranja) de la caja
+  // del ícono igual que cualquier otro ícono de Lucide — acá se lo fuerza a blanco/negro según
+  // el tema en vez de acento, como el resto de los logos deportivos (F1/FIFA ya son blanco/negro
+  // por el filtro brightness-0 dark:invert de la imagen).
+  const NbaIcon = ({ className }: { className?: string }) => (
+    <NbaLogo className={`text-black dark:text-white ${className || ""}`} />
+  );
+  const SanJuanLogoIcon = ({ className }: { className?: string }) => (
+    <img src="/san-juan-silhouette.png" alt="" className={`object-contain brightness-0 dark:invert ${className || ""}`} />
+  );
 
   // Escudo de cada competencia (Libertadores, Premier League, etc.), al lado de su nombre en
   // "Eventos deportivos" — mismo mecanismo que sportLogos de arriba (thumbnail de Wikipedia por
@@ -1091,11 +1100,11 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
                   {selectedDayPageEvents.map((ev, i) => {
                     const CatIcon =
                       ev.kind === "sanjuan"
-                        ? SanJuanIcon
+                        ? SanJuanLogoIcon
                         : ev.sportId === "f1"
                         ? F1Icon
                         : ev.sportId === "nba"
-                        ? NbaLogo
+                        ? NbaIcon
                         : ev.sportId === "futbol"
                         ? FutbolIcon
                         : Trophy;
@@ -1149,7 +1158,7 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
                             <img
                               src={ev.imageUrl}
                               alt={ev.label}
-                              className="w-full h-32 object-cover rounded-xl"
+                              className="w-full max-h-72 object-contain rounded-xl bg-black/5 dark:bg-white/5"
                               referrerPolicy="no-referrer"
                             />
                           )}
