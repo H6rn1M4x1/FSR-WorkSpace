@@ -2189,7 +2189,7 @@ export default function HomeView({
                           title="Click para ver más info desplegada"
                         >
                           <div className="flex items-start justify-between gap-3 min-w-0">
-                            <div className="flex items-start gap-3 min-w-0">
+                            <div className="flex items-start gap-3 min-w-0 flex-1">
                               <div className="p-2 bg-primary/10 text-primary rounded-xl shrink-0 mt-0.5">
                                 <Calendar className="w-4 h-4" />
                               </div>
@@ -2924,7 +2924,7 @@ export default function HomeView({
                           }`}
                           title="Click para ver más info desplegada"
                         >
-                          <div className="flex items-start gap-3 min-w-0">
+                          <div className="flex items-start gap-3 min-w-0 flex-1">
                             <div className="p-2 bg-primary/10 text-primary rounded-xl shrink-0 mt-0.5">
                               <Stethoscope className="w-4 h-4" />
                             </div>
@@ -3046,7 +3046,7 @@ export default function HomeView({
                           }`}
                           title="Click para ver más info desplegada"
                         >
-                          <div className="flex items-start gap-3 min-w-0">
+                          <div className="flex items-start gap-3 min-w-0 flex-1">
                             <div className="p-2 bg-primary/10 text-primary rounded-xl shrink-0 mt-0.5">
                               <UtensilsCrossed className="w-4 h-4" />
                             </div>
@@ -3152,7 +3152,7 @@ export default function HomeView({
                           title="Click para ver más detalles de la clase"
                         >
                           <div className="flex items-start justify-between gap-3 min-w-0">
-                            <div className="flex items-start gap-3 min-w-0">
+                            <div className="flex items-start gap-3 min-w-0 flex-1">
                               <div className="p-2 bg-primary/10 text-primary rounded-xl shrink-0 mt-0.5">
                                 <GraduationCap className="w-4 h-4" />
                               </div>
@@ -3267,7 +3267,7 @@ export default function HomeView({
                           title="Click para ver más detalles del examen"
                         >
                           <div className="flex items-start justify-between gap-3 min-w-0">
-                            <div className="flex items-start gap-3 min-w-0">
+                            <div className="flex items-start gap-3 min-w-0 flex-1">
                               <div className="p-2 bg-primary/10 text-primary rounded-xl shrink-0 mt-0.5">
                                 <BookOpen className="w-4 h-4" />
                               </div>
@@ -3403,7 +3403,7 @@ export default function HomeView({
                           title="Click para ver más detalles del trabajo"
                         >
                           <div className="flex items-start justify-between gap-3 min-w-0">
-                            <div className="flex items-start gap-3 min-w-0">
+                            <div className="flex items-start gap-3 min-w-0 flex-1">
                               <div
                                 className={`p-2 rounded-xl shrink-0 mt-0.5 transition-colors ${
                                   t.completed

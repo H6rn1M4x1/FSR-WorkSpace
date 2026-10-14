@@ -1845,8 +1845,6 @@ export default function AcademicView({
               title: string;
               subjectName?: string;
               badge: string;
-              timeInfo: string;
-              detailsInfo?: string;
               completed?: boolean;
               aulas?: string;
               profesores?: string;
@@ -1872,8 +1870,6 @@ export default function AcademicView({
                   type: "clase",
                   title: h.materia,
                   badge: "Clase",
-                  timeInfo: `${h.horaInicio || "--:--"} - ${h.horaFin || "--:--"} hs`,
-                  detailsInfo: [h.aulas && `Aula: ${h.aulas}`, h.profesores && `Prof: ${h.profesores}`].filter(Boolean).join(" • "),
                   aulas: h.aulas,
                   profesores: h.profesores,
                   dia: h.dia,
@@ -1891,8 +1887,6 @@ export default function AcademicView({
                   type: "examen",
                   title: e.materia,
                   badge: e.estado || "Examen",
-                  timeInfo: e.instancia ? `Instancia: ${e.instancia}` : "Fecha de Examen",
-                  detailsInfo: e.aula ? `Aula: ${e.aula}` : undefined,
                   estado: e.estado,
                   instancia: e.instancia,
                   aula: e.aula,
@@ -1911,8 +1905,6 @@ export default function AcademicView({
                   title: t.title,
                   subjectName: getSubjectName(t.subjectId),
                   badge: t.type || "Trabajo",
-                  timeInfo: t.dueDate ? `Entrega: ${t.dueDate}` : "Sin fecha",
-                  detailsInfo: t.completed ? "Completado" : "Pendiente de entrega",
                   completed: t.completed,
                   rawTask: t,
                 });
@@ -2238,11 +2230,51 @@ export default function AcademicView({
                                         {item.title}
                                       </p>
                                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-zinc-400 mt-1 font-medium">
-                                        {item.subjectName && <span>{item.subjectName}</span>}
-                                        <span className="font-mono font-bold text-slate-700 dark:text-zinc-300">
-                                          {item.timeInfo}
-                                        </span>
-                                        {!isExpanded && item.detailsInfo && <span>{item.detailsInfo}</span>}
+                                        {item.type === "clase" && item.rawHorario && (
+                                          <>
+                                            {(item.rawHorario.horaInicio || item.rawHorario.horaFin) && (
+                                              <span className="flex items-center gap-1 font-semibold text-primary">
+                                                <Clock className="w-3 h-3 text-primary" />
+                                                <span>{item.rawHorario.horaInicio || "--:--"} - {item.rawHorario.horaFin || "--:--"} hs</span>
+                                              </span>
+                                            )}
+                                            {item.rawHorario.aulas && <span>Aula: {item.rawHorario.aulas}</span>}
+                                            {item.rawHorario.profesores && <span>Prof: {item.rawHorario.profesores}</span>}
+                                          </>
+                                        )}
+                                        {item.type === "examen" && item.rawExamen && (
+                                          <>
+                                            {item.rawExamen.instancia && (
+                                              <span className="font-semibold text-primary">Instancia: {item.rawExamen.instancia}</span>
+                                            )}
+                                            {item.rawExamen.hora && (
+                                              <span className="flex items-center gap-1">
+                                                <Clock className="w-3 h-3 text-primary" />
+                                                <span>{item.rawExamen.hora} hs</span>
+                                              </span>
+                                            )}
+                                            {item.rawExamen.aula && <span>Aula: {item.rawExamen.aula}</span>}
+                                            {item.rawExamen.nota !== undefined && item.rawExamen.nota !== null && (
+                                              <span className="font-bold text-primary">Nota: {item.rawExamen.nota}</span>
+                                            )}
+                                          </>
+                                        )}
+                                        {item.type === "trabajo" && item.rawTask && (
+                                          <>
+                                            {item.subjectName && (
+                                              <span className="font-semibold text-zinc-600 dark:text-zinc-300">{item.subjectName}</span>
+                                            )}
+                                            {item.rawTask.dueDate && (
+                                              <span className="flex items-center gap-1 text-primary">
+                                                <Clock className="w-3 h-3 text-primary" />
+                                                <span>Entrega: {item.rawTask.dueDate}</span>
+                                              </span>
+                                            )}
+                                            <span className={`font-bold ${item.completed ? "text-emerald-500" : "text-amber-500"}`}>
+                                              {item.completed ? "Completado" : "Pendiente"}
+                                            </span>
+                                          </>
+                                        )}
                                       </div>
                                     </div>
                                   </div>

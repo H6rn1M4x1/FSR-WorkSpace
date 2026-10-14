@@ -19,6 +19,7 @@ import {
   BellOff,
   Clock,
   Maximize2,
+  Search,
 } from "lucide-react";
 import { useToast } from "../context/ToastContext";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
@@ -1123,9 +1124,19 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
                           )}
                         </div>
                         <div className="min-w-0 flex-1 space-y-1">
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-primary/10 text-primary">
-                            {ev.categoryLabel}
-                          </span>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-primary/10 text-primary">
+                              {ev.categoryLabel}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); setExpandedDayEventId(i); }}
+                              className="p-1 rounded-lg hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
+                              title="Ver detalles"
+                            >
+                              <Search className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                           <p className="text-xs font-extrabold text-zinc-900 dark:text-zinc-100 truncate">{ev.label}</p>
                           {(ev.time || ev.location || ev.homeTeamBadge || ev.awayTeamBadge) && (
                             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-zinc-500 dark:text-zinc-400 font-bold">
