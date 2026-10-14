@@ -3092,18 +3092,18 @@ export default function HealthView({
         >
           {activeSubTab === "resumen" && (
             <>
-          {/* Top Grid: Calendario Médico & Control de Medicamentos (2 Columnas) */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+          {/* Top Grid: Calendario Médico & Control de Medicamentos (mismas proporciones 5/7 que Calendario Unificado y Agenda Central Integrada en Inicio) */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* Columna 1: Calendario Médico */}
             <div
-              className={`p-4 sm:p-5 rounded-3xl border flex flex-col h-full overflow-hidden min-h-0 max-h-[600px] ${
+              className={`p-6 rounded-3xl border flex flex-col lg:col-span-5 justify-between shadow-xs app-calendar-container ${
                 darkMode
                   ? "bg-zinc-900 border-zinc-800 text-white shadow-lg"
                   : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
               }`}
             >
-              <div className="flex flex-col h-full min-h-0 justify-between gap-3">
-                <div className="flex flex-col flex-1 min-h-0 gap-3">
+              <div className="flex flex-col justify-between gap-3">
+                <div className="flex flex-col gap-3">
                   {/* Header */}
                   <div className="flex items-center justify-between shrink-0">
                     <div className="flex items-center gap-2">
@@ -3293,13 +3293,13 @@ export default function HealthView({
 
             {/* Columna 2: Control de Medicamentos */}
             <div
-              className={`p-4 sm:p-5 rounded-3xl border flex flex-col h-full overflow-hidden min-h-0 max-h-[600px] ${
+              className={`p-6 rounded-3xl border flex flex-col lg:col-span-7 justify-between shadow-xs ${
                 darkMode
                   ? "bg-zinc-900 border-zinc-800 text-white shadow-lg"
                   : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
               }`}
             >
-              <div className="flex flex-col h-full min-h-0">
+              <div className="flex flex-col">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <Pill className="w-5 h-5 text-primary" />
@@ -3353,7 +3353,7 @@ export default function HealthView({
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -6 }}
                     transition={{ duration: 0.2 }}
-                    className="space-y-2.5 flex-1 flex flex-col min-h-0"
+                    className="space-y-2.5 max-h-[440px] pr-1"
                   >
                   {(() => {
                     type ControlItem =
@@ -3469,7 +3469,7 @@ export default function HealthView({
                         items={combinedItems}
                         showGradients={false}
                         enableArrowNavigation={true}
-                        className="flex-1 min-h-0 pr-1"
+                        className="max-h-[390px]"
                         renderItem={(item, itemIdx) => {
                           if (item.itemType === "medication") {
                             const { disp, details } = item;
@@ -3907,9 +3907,11 @@ export default function HealthView({
                 </div>
               </div>
 
+              {/* Columna derecha: Balance Calórico arriba + Tendencia Presión Arterial abajo, apiladas */}
+              <div className="lg:col-span-2 flex flex-col gap-6">
               {/* 2. Balance Calórico Diario & Macros */}
               <div
-                className={`p-6 rounded-3xl border flex flex-col justify-between lg:col-span-1 ${
+                className={`p-6 rounded-3xl border flex flex-col justify-between ${
                   darkMode
                     ? "bg-zinc-900 border-zinc-800 text-white shadow-lg"
                     : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
@@ -4040,7 +4042,7 @@ export default function HealthView({
 
               {/* 3. Tendencia Presión Arterial */}
               <div
-                className={`p-6 rounded-3xl border flex flex-col gap-4 lg:col-span-1 ${
+                className={`p-6 rounded-3xl border flex flex-col gap-4 ${
                   darkMode
                     ? "bg-zinc-900/40 border-white/10 backdrop-blur-md"
                     : "bg-white/40 border-slate-200 backdrop-blur-md"
@@ -4325,6 +4327,7 @@ export default function HealthView({
                     })()}
                   </div>
                 </div>
+              </div>
               </div>
             </div>
 
