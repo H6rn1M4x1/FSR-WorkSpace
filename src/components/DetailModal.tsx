@@ -40,6 +40,12 @@ export function DetailModal({
           transition={{ duration: 0.18 }}
           className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/60"
           onClick={onClose}
+          onContextMenu={(e) => {
+            // El clic derecho afuera también debe cerrar el modal, en vez de abrir el menú
+            // contextual nativo del navegador sobre el fondo oscuro.
+            e.preventDefault();
+            onClose();
+          }}
         >
           <motion.div
             initial={{ opacity: 0, scale: 0.96, y: 12 }}
@@ -47,6 +53,7 @@ export function DetailModal({
             exit={{ opacity: 0, scale: 0.96, y: 12 }}
             transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
             onClick={(e) => e.stopPropagation()}
+            onContextMenu={(e) => e.stopPropagation()}
             className="w-full max-w-lg max-h-[85vh] overflow-y-auto no-scrollbar rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 force-solid-bg shadow-2xl p-5 space-y-2 text-xs"
           >
             <div className="flex items-center justify-between gap-2 pb-2 mb-1 border-b border-slate-200 dark:border-zinc-800">

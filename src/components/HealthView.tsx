@@ -3161,27 +3161,21 @@ export default function HealthView({
                   </div>
 
                   {/* Calendar Grid Box */}
-                  <div
-                    className={`p-3 rounded-2xl flex-1 flex flex-col justify-between min-h-0 ${
-                      darkMode
-                        ? "bg-zinc-950/60 border border-zinc-800/60"
-                        : "bg-slate-50 border border-slate-200/80"
-                    }`}
-                  >
+                  <div className={`p-4 rounded-3xl ${darkMode ? "bg-zinc-950 shadow-sm" : "bg-white shadow-sm border border-slate-100"}`}>
                     {/* Weekday headers */}
-                    <div className="grid grid-cols-7 gap-1 text-center font-extrabold text-[10px] text-zinc-400 dark:text-zinc-500 uppercase tracking-wider mb-2 shrink-0">
+                    <div className="grid grid-cols-7 gap-1 text-center font-bold text-[10px] text-zinc-400 dark:text-zinc-500 uppercase tracking-widest mb-2">
                       {WEEKDAYS_ES.map((wd) => (
-                        <div key={wd} className="py-0.5">
+                        <div key={wd} className="py-1">
                           {wd}
                         </div>
                       ))}
                     </div>
 
                     {/* Day cells */}
-                    <div className="grid grid-cols-7 gap-1 flex-1 min-h-0 items-stretch">
+                    <div className="grid grid-cols-7 gap-1">
                       {getDaysInMonth(medicalCalendarDate).map((day, idx) => {
                         if (day === null) {
-                          return <div key={`empty-${idx}`} className="p-1 h-full min-h-[2.25rem]" />;
+                          return <div key={`empty-${idx}`} className="p-1" />;
                         }
 
                         const dateStr = `${medicalCalendarDate.getFullYear()}-${String(
@@ -3211,6 +3205,8 @@ export default function HealthView({
                         const isSelected = selectedMedicalDate === dateStr;
                         const isToday = getLocalDateString() === dateStr;
 
+                        const hasAny = hasMeds || hasHernan || hasModesto;
+
                         return (
                           <button
                             key={`day-${day}`}
@@ -3219,36 +3215,22 @@ export default function HealthView({
                                 selectedMedicalDate === dateStr ? null : dateStr
                               );
                             }}
-                            className={`p-1 rounded-xl flex flex-col items-center justify-center relative cursor-pointer transition-all h-full min-h-[2.25rem] w-full font-bold text-xs ${
+                            className={`p-1.5 rounded-full flex flex-col items-center justify-center relative cursor-pointer transition-all h-9 w-full font-bold text-xs ${
                               isSelected
-                                ? "border-2 border-primary text-primary dark:text-primary bg-primary/15 scale-105 shadow-xs"
+                                ? "border-2 border-primary text-primary dark:text-primary bg-primary/10 scale-105 shadow-sm"
                                 : isToday
-                                ? "bg-primary text-white dark:text-blue-950 shadow-md font-extrabold"
+                                ? "bg-primary text-white dark:text-blue-950 shadow-md font-bold"
                                 : "hover:bg-primary/10 text-slate-700 dark:text-zinc-300"
                             }`}
                           >
                             <span>{day}</span>
-                            {(hasMeds || hasHernan || hasModesto) && (
-                              <div className="flex items-center justify-center gap-0.5 absolute bottom-1">
-                                {hasMeds && (
-                                  <span
-                                    className="w-1.5 h-1.5 rounded-full bg-primary"
-                                    title="Medicamento"
-                                  />
-                                )}
-                                {hasHernan && (
-                                  <span
-                                    className="w-1.5 h-1.5 rounded-full bg-primary/75 ring-1 ring-primary/40"
-                                    title="Turno - Hernan"
-                                  />
-                                )}
-                                {hasModesto && (
-                                  <span
-                                    className="w-1.5 h-1.5 rounded-full bg-primary/45"
-                                    title="Turno - Modesto"
-                                  />
-                                )}
-                              </div>
+                            {hasAny && (
+                              <span
+                                className={`absolute bottom-1 w-1 h-1 rounded-full ${
+                                  isSelected ? "bg-primary" : "bg-primary animate-pulse"
+                                }`}
+                                title="Evento médico"
+                              />
                             )}
                           </button>
                         );
@@ -3518,7 +3500,7 @@ export default function HealthView({
                                       <button
                                         type="button"
                                         onClick={(e) => { e.stopPropagation(); handleOpenEditDisp(disp); }}
-                                        className="p-0.5 rounded hover:bg-primary/10 text-primary cursor-pointer shrink-0"
+                                        className="p-0.5 rounded hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
                                         title="Editar"
                                       >
                                         <Pencil className="w-3.5 h-3.5" />
@@ -3526,7 +3508,7 @@ export default function HealthView({
                                       <button
                                         type="button"
                                         onClick={(e) => { e.stopPropagation(); setExpandedDispId(isExpanded ? null : disp.id); }}
-                                        className="p-0.5 rounded hover:bg-primary/10 text-primary cursor-pointer shrink-0"
+                                        className="p-0.5 rounded hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
                                         title="Ver detalles"
                                       >
                                         <Search className="w-3.5 h-3.5" />
@@ -3635,7 +3617,7 @@ export default function HealthView({
                                       <button
                                         type="button"
                                         onClick={(e) => { e.stopPropagation(); onQuickEdit("turno", turno.id); }}
-                                        className="p-0.5 rounded hover:bg-primary/10 text-primary cursor-pointer shrink-0"
+                                        className="p-0.5 rounded hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
                                         title="Editar"
                                       >
                                         <Pencil className="w-3.5 h-3.5" />
@@ -3644,7 +3626,7 @@ export default function HealthView({
                                     <button
                                       type="button"
                                       onClick={(e) => { e.stopPropagation(); setExpandedDispId(isExpanded ? null : turno.id); }}
-                                      className="p-0.5 rounded hover:bg-primary/10 text-primary cursor-pointer shrink-0"
+                                      className="p-0.5 rounded hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
                                       title="Ver detalles"
                                     >
                                       <Search className="w-3.5 h-3.5" />
