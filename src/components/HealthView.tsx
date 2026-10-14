@@ -671,7 +671,9 @@ export default function HealthView({
 
   // --- ESTADOS Y HELPERS PARA CALENDARIO MÉDICO Y MEDICAMENTOS ---
   const [medicalCalendarDate, setMedicalCalendarDate] = useState<Date>(new Date());
-  const [selectedMedicalDate, setSelectedMedicalDate] = useState<string | null>(null);
+  // Por defecto filtra por el día de hoy; "Ver Todos" lo limpia a null y elegir otro día en el
+  // calendario lo vuelve a fijar a esa fecha.
+  const [selectedMedicalDate, setSelectedMedicalDate] = useState<string | null>(() => getLocalDateString());
   const [medControlFilter, setMedControlFilter] = useState<"todos" | "comprar" | "receta" | "turnos">("todos");
 
   const MONTHS_ES = [
@@ -3096,7 +3098,7 @@ export default function HealthView({
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* Columna 1: Calendario Médico */}
             <div
-              className={`p-6 rounded-3xl border flex flex-col lg:col-span-5 justify-between shadow-xs app-calendar-container ${
+              className={`p-6 rounded-3xl border flex flex-col lg:col-span-5 justify-between shadow-xs app-calendar-container self-start ${
                 darkMode
                   ? "bg-zinc-900 border-zinc-800 text-white shadow-lg"
                   : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
@@ -3293,7 +3295,7 @@ export default function HealthView({
 
             {/* Columna 2: Control de Medicamentos */}
             <div
-              className={`p-6 rounded-3xl border flex flex-col lg:col-span-7 justify-between shadow-xs ${
+              className={`p-6 rounded-3xl border flex flex-col lg:col-span-7 justify-between shadow-xs self-start max-h-[500px] overflow-hidden ${
                 darkMode
                   ? "bg-zinc-900 border-zinc-800 text-white shadow-lg"
                   : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
@@ -4092,121 +4094,10 @@ export default function HealthView({
                       ]}
                     />
                   </div>
-
-                  {/* Custom SVG Line graph for Blood Pressure */}
-                  <div className="flex justify-center my-2 relative">
-                    {(() => {
-                      const trendBpLogs = (bpLogs || []).filter((log) => {
-                        const patientName = log.patient || "Hernan";
-                        return (
-                          bpTrendFilterPatient === "Todos" ||
-                          patientName === bpTrendFilterPatient
-                        );
-                      });
-
-                      if (trendBpLogs.length < 2) {
-                        return (
-                          <div className="w-full h-32 flex items-center justify-center border border-dashed border-zinc-500/20 rounded-2xl text-xs text-zinc-500 px-4 text-center">
-                            Registra al menos 2 mediciones{" "}
-                            {bpTrendFilterPatient !== "Todos"
-                              ? `para ${bpTrendFilterPatient}`
-                              : ""}{" "}
-                            para ver el gráfico de tendencia.
-                          </div>
-                        );
-                      }
-
-                      const reversedLogs = trendBpLogs.slice().reverse().map((log) => {
-                        const fechaLimpia = (log.date || "").split("T")[0].split(" ")[0] || "Hoy";
-                        return {
-                          ...log,
-                          fechaLimpia,
-                        };
-                      });
-
-                      return (
-                        <div className="w-full space-y-1.5 mt-1 shrink-0">
-                          <div className="h-[150px] min-h-[150px] w-full text-xs shrink-0">
-                            <ResponsiveContainer width="100%" height={150}>
-                              <LineChart
-                                data={reversedLogs}
-                                margin={{ top: 5, right: 10, bottom: 0, left: -20 }}
-                              >
-                                <CartesianGrid
-                                  strokeDasharray="3 3"
-                                  stroke={darkMode ? "#27272a" : "#f1f5f9"}
-                                  vertical={false}
-                                />
-                                <XAxis
-                                  dataKey="fechaLimpia"
-                                  stroke={darkMode ? "#71717a" : "#94a3b8"}
-                                  fontSize={9}
-                                  tickLine={false}
-                                  axisLine={false}
-                                  tickFormatter={(val) =>
-                                    typeof val === "string" ? val.split("T")[0] : val
-                                  }
-                                />
-                                <YAxis
-                                  stroke={darkMode ? "#71717a" : "#94a3b8"}
-                                  fontSize={9}
-                                  tickLine={false}
-                                  axisLine={false}
-                                />
-                                <Tooltip
-                                  contentStyle={{
-                                    backgroundColor: darkMode ? "#18181b" : "#fff",
-                                    border: darkMode ? "1px solid #27272a" : "1px solid #e2e8f0",
-                                    borderRadius: "12px",
-                                  }}
-                                  itemStyle={{
-                                    color: darkMode ? "#f4f4f5" : "#18181b",
-                                  }}
-                                />
-                                <Line
-                                  type="monotone"
-                                  dataKey="systolic"
-                                  name="Sistólica (MAX)"
-                                  stroke="var(--color-primary)"
-                                  strokeWidth={3}
-                                  dot={{ r: 4, fill: "var(--color-primary)", stroke: darkMode ? "#18181b" : "#ffffff", strokeWidth: 2 }}
-                                  activeDot={{ r: 6 }}
-                                />
-                                <Line
-                                  type="monotone"
-                                  dataKey="diastolic"
-                                  name="Diastólica (MIN)"
-                                  stroke="color-mix(in srgb, var(--color-primary) 50%, #a1a1aa 50%)"
-                                  strokeWidth={3}
-                                  dot={{ r: 4, fill: "color-mix(in srgb, var(--color-primary) 50%, #a1a1aa 50%)", stroke: darkMode ? "#18181b" : "#ffffff", strokeWidth: 2 }}
-                                  activeDot={{ r: 6 }}
-                                />
-                              </LineChart>
-                            </ResponsiveContainer>
-                          </div>
-                          <div className="flex items-center justify-center gap-4 text-[10px] font-bold text-zinc-500 uppercase mt-1">
-                            <span className="flex items-center gap-1">
-                              <span
-                                className="w-2.5 h-2.5 rounded-full inline-block"
-                                style={{ backgroundColor: "var(--color-primary)" }}
-                              ></span>
-                              Sistólica (MAX)
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <span
-                                className="w-2.5 h-2.5 rounded-full inline-block"
-                                style={{ backgroundColor: "color-mix(in srgb, var(--color-primary) 50%, #a1a1aa 50%)" }}
-                              ></span>
-                              Diastólica (MIN)
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  </div>
-
                 </div>
 
+                {/* Lista de registros (izquierda) + gráfico de tendencia (derecha), lado a lado */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {/* List of past logs */}
                 <div
                   className={`p-4 sm:p-4 rounded-3xl border flex flex-col min-h-[220px] max-h-[360px] overflow-hidden ${
@@ -4326,6 +4217,129 @@ export default function HealthView({
                       );
                     })()}
                   </div>
+                </div>
+
+                {/* Gráfico de tendencia */}
+                <div
+                  className={`p-4 sm:p-4 rounded-3xl border flex flex-col justify-center ${
+                    darkMode
+                      ? "bg-zinc-950 border-zinc-800 text-white shadow-lg"
+                      : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
+                  }`}
+                >
+                  {/* Custom SVG Line graph for Blood Pressure */}
+                  <div className="flex justify-center my-2 relative">
+                    {(() => {
+                      const trendBpLogs = (bpLogs || []).filter((log) => {
+                        const patientName = log.patient || "Hernan";
+                        return (
+                          bpTrendFilterPatient === "Todos" ||
+                          patientName === bpTrendFilterPatient
+                        );
+                      });
+
+                      if (trendBpLogs.length < 2) {
+                        return (
+                          <div className="w-full h-32 flex items-center justify-center border border-dashed border-zinc-500/20 rounded-2xl text-xs text-zinc-500 px-4 text-center">
+                            Registra al menos 2 mediciones{" "}
+                            {bpTrendFilterPatient !== "Todos"
+                              ? `para ${bpTrendFilterPatient}`
+                              : ""}{" "}
+                            para ver el gráfico de tendencia.
+                          </div>
+                        );
+                      }
+
+                      const reversedLogs = trendBpLogs.slice().reverse().map((log) => {
+                        const fechaLimpia = (log.date || "").split("T")[0].split(" ")[0] || "Hoy";
+                        return {
+                          ...log,
+                          fechaLimpia,
+                        };
+                      });
+
+                      return (
+                        <div className="w-full space-y-1.5 mt-1 shrink-0">
+                          <div className="h-[150px] min-h-[150px] w-full text-xs shrink-0">
+                            <ResponsiveContainer width="100%" height={150}>
+                              <LineChart
+                                data={reversedLogs}
+                                margin={{ top: 5, right: 10, bottom: 0, left: -20 }}
+                              >
+                                <CartesianGrid
+                                  strokeDasharray="3 3"
+                                  stroke={darkMode ? "#27272a" : "#f1f5f9"}
+                                  vertical={false}
+                                />
+                                <XAxis
+                                  dataKey="fechaLimpia"
+                                  stroke={darkMode ? "#71717a" : "#94a3b8"}
+                                  fontSize={9}
+                                  tickLine={false}
+                                  axisLine={false}
+                                  tickFormatter={(val) =>
+                                    typeof val === "string" ? val.split("T")[0] : val
+                                  }
+                                />
+                                <YAxis
+                                  stroke={darkMode ? "#71717a" : "#94a3b8"}
+                                  fontSize={9}
+                                  tickLine={false}
+                                  axisLine={false}
+                                />
+                                <Tooltip
+                                  contentStyle={{
+                                    backgroundColor: darkMode ? "#18181b" : "#fff",
+                                    border: darkMode ? "1px solid #27272a" : "1px solid #e2e8f0",
+                                    borderRadius: "12px",
+                                  }}
+                                  itemStyle={{
+                                    color: darkMode ? "#f4f4f5" : "#18181b",
+                                  }}
+                                />
+                                <Line
+                                  type="monotone"
+                                  dataKey="systolic"
+                                  name="Sistólica (MAX)"
+                                  stroke="var(--color-primary)"
+                                  strokeWidth={3}
+                                  dot={{ r: 4, fill: "var(--color-primary)", stroke: darkMode ? "#18181b" : "#ffffff", strokeWidth: 2 }}
+                                  activeDot={{ r: 6 }}
+                                />
+                                <Line
+                                  type="monotone"
+                                  dataKey="diastolic"
+                                  name="Diastólica (MIN)"
+                                  stroke="color-mix(in srgb, var(--color-primary) 50%, #a1a1aa 50%)"
+                                  strokeWidth={3}
+                                  dot={{ r: 4, fill: "color-mix(in srgb, var(--color-primary) 50%, #a1a1aa 50%)", stroke: darkMode ? "#18181b" : "#ffffff", strokeWidth: 2 }}
+                                  activeDot={{ r: 6 }}
+                                />
+                              </LineChart>
+                            </ResponsiveContainer>
+                          </div>
+                          <div className="flex items-center justify-center gap-4 text-[10px] font-bold text-zinc-500 uppercase mt-1">
+                            <span className="flex items-center gap-1">
+                              <span
+                                className="w-2.5 h-2.5 rounded-full inline-block"
+                                style={{ backgroundColor: "var(--color-primary)" }}
+                              ></span>
+                              Sistólica (MAX)
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <span
+                                className="w-2.5 h-2.5 rounded-full inline-block"
+                                style={{ backgroundColor: "color-mix(in srgb, var(--color-primary) 50%, #a1a1aa 50%)" }}
+                              ></span>
+                              Diastólica (MIN)
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                </div>
                 </div>
               </div>
               </div>
