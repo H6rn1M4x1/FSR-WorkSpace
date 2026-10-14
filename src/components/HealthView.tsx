@@ -3295,7 +3295,7 @@ export default function HealthView({
 
             {/* Columna 2: Control de Medicamentos */}
             <div
-              className={`p-6 rounded-3xl border flex flex-col lg:col-span-7 justify-between shadow-xs self-start max-h-[500px] overflow-hidden ${
+              className={`p-6 rounded-3xl border flex flex-col lg:col-span-7 justify-between shadow-xs self-start max-h-[460px] overflow-hidden ${
                 darkMode
                   ? "bg-zinc-900 border-zinc-800 text-white shadow-lg"
                   : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
@@ -3355,7 +3355,7 @@ export default function HealthView({
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -6 }}
                     transition={{ duration: 0.2 }}
-                    className="space-y-2.5 max-h-[440px] pr-1"
+                    className="space-y-2.5 max-h-[300px] pr-1"
                   >
                   {(() => {
                     type ControlItem =
@@ -3471,7 +3471,7 @@ export default function HealthView({
                         items={combinedItems}
                         showGradients={false}
                         enableArrowNavigation={true}
-                        className="max-h-[390px]"
+                        className="max-h-[260px]"
                         renderItem={(item, itemIdx) => {
                           if (item.itemType === "medication") {
                             const { disp, details } = item;
