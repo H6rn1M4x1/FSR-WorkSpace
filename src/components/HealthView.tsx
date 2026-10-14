@@ -675,6 +675,21 @@ export default function HealthView({
   // calendario lo vuelve a fijar a esa fecha.
   const [selectedMedicalDate, setSelectedMedicalDate] = useState<string | null>(() => getLocalDateString());
   const [medControlFilter, setMedControlFilter] = useState<"todos" | "comprar" | "receta" | "turnos">("todos");
+  // Mide la altura real de la tarjeta de Calendario Médico para que "Control de Medicamentos y
+  // Turnos" quede acotado exactamente a esa misma altura (en vez de adivinar un valor fijo en
+  // px, que se desincroniza apenas cambia el contenido o el tamaño de fuente del navegador).
+  const medicalCalendarCardRef = useRef<HTMLDivElement>(null);
+  const [medicalCalendarCardHeight, setMedicalCalendarCardHeight] = useState<number | null>(null);
+  useEffect(() => {
+    const el = medicalCalendarCardRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver((entries) => {
+      const h = entries[0]?.contentRect?.height;
+      if (h) setMedicalCalendarCardHeight(Math.round(h));
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   const MONTHS_ES = [
     "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -3098,6 +3113,7 @@ export default function HealthView({
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* Columna 1: Calendario Médico */}
             <div
+              ref={medicalCalendarCardRef}
               className={`p-6 rounded-3xl border flex flex-col lg:col-span-5 justify-between shadow-xs app-calendar-container self-start ${
                 darkMode
                   ? "bg-zinc-900 border-zinc-800 text-white shadow-lg"
@@ -3295,7 +3311,8 @@ export default function HealthView({
 
             {/* Columna 2: Control de Medicamentos */}
             <div
-              className={`p-6 rounded-3xl border flex flex-col lg:col-span-7 justify-between shadow-xs self-start max-h-[460px] overflow-hidden ${
+              style={medicalCalendarCardHeight ? { maxHeight: medicalCalendarCardHeight } : undefined}
+              className={`p-6 rounded-3xl border flex flex-col lg:col-span-7 justify-between shadow-xs self-start overflow-hidden ${
                 darkMode
                   ? "bg-zinc-900 border-zinc-800 text-white shadow-lg"
                   : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
@@ -3355,7 +3372,7 @@ export default function HealthView({
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -6 }}
                     transition={{ duration: 0.2 }}
-                    className="space-y-2.5 max-h-[300px] pr-1"
+                    className="space-y-2.5 max-h-[520px] pr-1"
                   >
                   {(() => {
                     type ControlItem =
@@ -3471,7 +3488,7 @@ export default function HealthView({
                         items={combinedItems}
                         showGradients={false}
                         enableArrowNavigation={true}
-                        className="max-h-[260px]"
+                        className="max-h-[440px]"
                         renderItem={(item, itemIdx) => {
                           if (item.itemType === "medication") {
                             const { disp, details } = item;
