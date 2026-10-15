@@ -3489,9 +3489,12 @@ export default function HealthView({
                     return (
                       <AnimatedList<ControlItem>
                         items={combinedItems}
-                        showGradients={false}
+                        showGradients={true}
                         enableArrowNavigation={true}
                         className="max-h-[440px]"
+                        style={{
+                          '--gradient-color': darkMode ? '#18181b' : '#ffffff',
+                        } as React.CSSProperties}
                         renderItem={(item, itemIdx) => {
                           if (item.itemType === "medication") {
                             const { disp, details } = item;
