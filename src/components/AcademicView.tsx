@@ -29,6 +29,7 @@ import {
   GraduationCap,
   Search,
   Edit2,
+  Pencil,
   Filter,
   Check,
   ChevronDown,
@@ -2169,29 +2170,27 @@ export default function AcademicView({
                                 <div
                                   key={item.id}
                                   onClick={() => setExpandedAgendaItemId(isExpanded ? null : item.id)}
-                                  className={`p-3.5 rounded-2xl border transition-all duration-200 cursor-pointer group flex flex-col gap-2 ${
+                                  className={`p-4 rounded-2xl border transition-all cursor-pointer group flex flex-col gap-2 relative overflow-hidden ${
                                     isExpanded
                                       ? "border-primary/50 bg-white dark:bg-black/85 backdrop-blur-md shadow-md ring-1 ring-primary/20"
-                                      : "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/85 backdrop-blur-md hover:bg-zinc-50 dark:hover:bg-zinc-900/80"
+                                      : "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/85 backdrop-blur-md hover:bg-zinc-50 dark:hover:bg-zinc-900"
                                   }`}
                                 >
                                   {/* COLLAPSED HEADER LINE (mismo estilo que las tarjetas de Inicio) */}
                                   <div className="flex items-start gap-3 min-w-0">
                                     <div className="p-2 bg-primary/10 text-primary rounded-xl shrink-0 mt-0.5">
-                                      <GraduationCap className="w-4 h-4" />
+                                      {item.type === "examen" ? (
+                                        <BookOpen className="w-4 h-4" />
+                                      ) : item.type === "trabajo" ? (
+                                        <FileText className="w-4 h-4" />
+                                      ) : (
+                                        <GraduationCap className="w-4 h-4" />
+                                      )}
                                     </div>
                                     <div className="min-w-0 flex-1">
                                       <div className="flex items-center justify-between gap-2">
                                         <div className="flex flex-wrap items-center gap-1.5 min-w-0">
-                                          <span
-                                            className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-md ${
-                                              item.type === "clase"
-                                                ? "bg-primary/20 text-primary border border-primary/30"
-                                                : item.type === "examen"
-                                                ? "bg-primary/15 text-primary/90 border border-primary/25"
-                                                : "bg-primary/10 text-primary/75 border border-primary/20"
-                                            }`}
-                                          >
+                                          <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-primary/10 text-primary">
                                             {item.badge}
                                           </span>
                                           <SharedBadge
@@ -2208,7 +2207,7 @@ export default function AcademicView({
                                               className="p-1 rounded-lg hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
                                               title="Editar"
                                             >
-                                              <Edit2 className="w-3.5 h-3.5" />
+                                              <Pencil className="w-3 h-3" />
                                             </button>
                                           )}
                                           <button
@@ -2221,9 +2220,9 @@ export default function AcademicView({
                                           </button>
                                         </div>
                                       </div>
-                                      <p className="text-xs font-black truncate text-slate-800 dark:text-zinc-100 mt-1.5">
+                                      <h4 className="font-extrabold text-xs text-black dark:text-white mt-1.5 truncate" style={{ color: darkMode ? undefined : "#000000" }}>
                                         {item.title}
-                                      </p>
+                                      </h4>
                                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-zinc-400 mt-1 font-medium">
                                         {item.type === "clase" && item.rawHorario && (
                                           <>

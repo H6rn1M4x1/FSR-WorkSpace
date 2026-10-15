@@ -3289,25 +3289,6 @@ export default function HealthView({
                       Ir a Hoy
                     </button>
                   </div>
-
-                  <div className="flex items-center justify-between text-xs pt-1">
-                    <div>
-                      <p className="text-[9px] text-zinc-400 font-bold uppercase tracking-widest">
-                        Día Seleccionado
-                      </p>
-                      <p className="font-extrabold text-slate-900 dark:text-white mt-0.5 text-xs">
-                        {formatDateFriendly(selectedMedicalDate || getLocalDateString())}
-                      </p>
-                    </div>
-                    {selectedMedicalDate && (
-                      <button
-                        onClick={() => setSelectedMedicalDate(null)}
-                        className="text-[10px] font-bold text-primary hover:underline cursor-pointer bg-primary/10 px-2.5 py-1 rounded-lg"
-                      >
-                        Ver Todos
-                      </button>
-                    )}
-                  </div>
                 </div>
               </div>
             </div>

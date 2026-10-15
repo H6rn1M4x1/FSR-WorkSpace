@@ -7,7 +7,8 @@ import { getLocalDateString } from "../utils/date";
 import { processAndCreateRecurringPayments } from "../utils/recurringPayments";
 import { CurrencyInput } from "./CurrencyInput";
 import { parseFormattedNumber, formatNumberToDisplay } from "../lib/numberFormat";
-import React, { useState, useEffect } from "react";
+import { WorkspaceService } from "../lib/workspace";
+import React, { useState, useEffect, useRef } from "react";
 import {
   saveItemToFirestore,
   deleteItemFromFirestore,
@@ -724,9 +725,24 @@ export default function FinanceView({
 
   // Calendar State and Helpers
   const [calendarDate, setCalendarDate] = useState<Date>(new Date());
+  // Por defecto filtra "Facturas y Vencimientos" e "Historial de Pagos" por el día de hoy;
+  // "Ver Todas" lo limpia a null y elegir otro día en el calendario lo vuelve a fijar.
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<
     string | null
-  >(null);
+  >(() => getLocalDateString());
+  // Mide la altura real de la tarjeta "Calendario de Pagos" para que "Facturas y Vencimientos"
+  // e "Historial de Pagos" queden acotados exactamente a esa misma altura.
+  const financeCalendarCardRef = useRef<HTMLDivElement>(null);
+  const [financeCalendarCardHeight, setFinanceCalendarCardHeight] = useState<number | null>(null);
+  useEffect(() => {
+    const el = financeCalendarCardRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      setFinanceCalendarCardHeight(el.offsetHeight);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   const MONTHS_ES = [
     "Enero",
@@ -1198,10 +1214,22 @@ export default function FinanceView({
     return !selectedCalendarDate || p.fechaVencimiento?.split("T")[0] === selectedCalendarDate;
   });
 
-  const handlePayDetailedPayment = (id: string) => {
-    setDetailedPayments((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, pago: true } : p)),
-    );
+  const handlePayDetailedPayment = async (id: string) => {
+    const payment = detailedPayments.find((p) => p.id === id);
+    if (!payment) return;
+
+    try {
+      const userId = userEmail || "hernanmaximiliano10@gmail.com";
+      const updatedPayment = { ...payment, pago: true };
+      setDetailedPayments((prev) =>
+        prev.map((p) => (p.id === id ? updatedPayment : p)),
+      );
+      await saveItemToFirestore(userId, "detailed_payments", updatedPayment);
+      showToast("Pago registrado con éxito", "success");
+    } catch (error) {
+      console.error("[FinanceView] Error paying detailed payment:", error);
+      showToast("Error al registrar el pago", "error");
+    }
   };
 
   const handleDeleteDetailedPayment = (id: string) => {
@@ -1210,6 +1238,113 @@ export default function FinanceView({
       "¿Estás seguro de que deseas eliminar este registro de factura/pago de forma permanente? Esta acción no se puede deshacer.",
       () => {
         setDetailedPayments((prev) => prev.filter((p) => p.id !== id));
+      },
+    );
+  };
+
+  // Sube Factura/Comprobante directo desde la tarjeta de Facturas y Vencimientos / Historial de
+  // Pagos (mismo mecanismo que usa PaymentsTable: a Google Drive si hay sesión vinculada, si no
+  // como data URL base64 guardada en el propio registro).
+  const [uploadingDetailedPaymentFile, setUploadingDetailedPaymentFile] = useState<{
+    [key: string]: boolean;
+  }>({});
+
+  const openStoredDetailedPaymentFile = async (url: string, filename: string) => {
+    if (!url.startsWith("data:")) {
+      window.open(url, "_blank", "noopener,noreferrer");
+      return;
+    }
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.download = filename || "archivo";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+    } catch (err) {
+      showToast("No se pudo abrir el archivo.", "error");
+    }
+  };
+
+  const handleUploadDetailedPaymentFile = async (
+    paymentId: string,
+    field: "facturaEmitida" | "comprobantePago",
+    file: File,
+  ) => {
+    const uploadKey = `${paymentId}-${field}`;
+    setUploadingDetailedPaymentFile((prev) => ({ ...prev, [uploadKey]: true }));
+
+    try {
+      const userId = userEmail || "hernanmaximiliano10@gmail.com";
+      const reader = new FileReader();
+      const base64Data = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      let url = base64Data;
+      let viaGoogleDrive = false;
+      if (token) {
+        const result = await WorkspaceService.uploadFileToDrive(
+          file.name,
+          file.type || "application/octet-stream",
+          base64Data,
+          token,
+        );
+        if (result.success && result.webViewLink) {
+          url = result.webViewLink;
+          viaGoogleDrive = true;
+        } else {
+          throw new Error(result.error || "Error desconocido al subir a Google Drive");
+        }
+      }
+
+      const existing = detailedPayments.find((p) => p.id === paymentId);
+      if (existing) {
+        const toSave = { ...existing, [field]: url };
+        setDetailedPayments((prev) =>
+          prev.map((p) => (p.id === paymentId ? toSave : p)),
+        );
+        await saveItemToFirestore(userId, "detailed_payments", toSave);
+      }
+
+      showToast(
+        viaGoogleDrive
+          ? `Archivo "${file.name}" subido y guardado con éxito.`
+          : `Archivo "${file.name}" guardado (iniciá sesión con Google para subirlo también a Drive).`,
+        "success",
+      );
+    } catch (err: any) {
+      console.error("[FinanceView] Error uploading detailed payment file:", err);
+      showToast("Error al procesar el archivo: " + (err?.message || ""), "error");
+    } finally {
+      setUploadingDetailedPaymentFile((prev) => ({ ...prev, [uploadKey]: false }));
+    }
+  };
+
+  const handleUnlinkDetailedPaymentFile = (
+    paymentId: string,
+    field: "facturaEmitida" | "comprobantePago",
+  ) => {
+    askConfirmation(
+      "Desvincular Archivo",
+      `¿Estás seguro de que deseas desvincular este ${field === "facturaEmitida" ? "archivo de factura" : "comprobante de pago"}?`,
+      async () => {
+        const existing = detailedPayments.find((p) => p.id === paymentId);
+        if (!existing) return;
+        const toSave = { ...existing, [field]: undefined };
+        setDetailedPayments((prev) =>
+          prev.map((p) => (p.id === paymentId ? toSave : p)),
+        );
+        const userId = userEmail || "hernanmaximiliano10@gmail.com";
+        await saveItemToFirestore(userId, "detailed_payments", toSave);
       },
     );
   };
@@ -1585,6 +1720,7 @@ export default function FinanceView({
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 {/* Left Column: Compact Calendar Card (col-span-4) */}
                 <div
+                  ref={financeCalendarCardRef}
                   className={`p-6 rounded-3xl border flex flex-col justify-between h-fit lg:col-span-4 app-calendar-container ${
                     darkMode
                       ? "bg-zinc-900 border-zinc-800 text-white shadow-lg"
@@ -1711,7 +1847,8 @@ export default function FinanceView({
 
                 {/* Middle Column: Invoices deadlines (col-span-4) */}
                 <div
-                  className={`p-6 rounded-3xl border flex flex-col justify-between h-fit lg:col-span-4 ${
+                  style={financeCalendarCardHeight ? { maxHeight: financeCalendarCardHeight } : undefined}
+                  className={`p-6 rounded-3xl border flex flex-col justify-between h-fit overflow-hidden lg:col-span-4 ${
                     darkMode
                       ? "bg-zinc-900 border-zinc-800 text-white shadow-lg"
                       : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
@@ -1793,7 +1930,7 @@ export default function FinanceView({
                                     <button
                                       type="button"
                                       onClick={(e) => { e.stopPropagation(); handleEditPaymentCard(p.id); }}
-                                      className="p-0.5 rounded hover:bg-primary/10 text-primary cursor-pointer shrink-0"
+                                      className="p-0.5 rounded hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
                                       title="Editar"
                                     >
                                       <Pencil className="w-3.5 h-3.5" />
@@ -1801,7 +1938,7 @@ export default function FinanceView({
                                     <button
                                       type="button"
                                       onClick={(e) => { e.stopPropagation(); setExpandedPaymentId(isExpanded ? null : p.id); }}
-                                      className="p-0.5 rounded hover:bg-primary/10 text-primary cursor-pointer shrink-0"
+                                      className="p-0.5 rounded hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
                                       title="Ver detalles"
                                     >
                                       <Search className="w-3.5 h-3.5" />
@@ -1891,6 +2028,85 @@ export default function FinanceView({
                                             {p.pagoRecurrente ? "Pago Recurrente" : "Pago Único"} • Pendiente
                                           </span>
                                         </div>
+
+                                        <div>
+                                          <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
+                                            Factura / Comprobante
+                                          </span>
+                                          <div className="flex flex-wrap items-center gap-2 pl-2">
+                                            {uploadingDetailedPaymentFile[`${p.id}-facturaEmitida`] ? (
+                                              <span className="flex items-center gap-1.5 text-[10px] text-primary font-bold">
+                                                <div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                                                Subiendo factura...
+                                              </span>
+                                            ) : p.facturaEmitida ? (
+                                              <div className="flex items-center gap-1">
+                                                <button
+                                                  type="button"
+                                                  onClick={() => openStoredDetailedPaymentFile(p.facturaEmitida!, `factura-${p.descripcion}`)}
+                                                  className="flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-lg text-[10px] font-extrabold hover:underline cursor-pointer"
+                                                >
+                                                  <FileDown className="w-3 h-3" />
+                                                  <span>Ver Factura</span>
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleUnlinkDetailedPaymentFile(p.id, "facturaEmitida")}
+                                                  className="p-1 text-slate-400 hover:text-red-500 rounded-md hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer"
+                                                  title="Quitar factura"
+                                                >
+                                                  <X className="w-3.5 h-3.5" />
+                                                </button>
+                                              </div>
+                                            ) : (
+                                              <label className="flex items-center gap-1 px-2 py-1 bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white rounded-full text-[10px] font-bold cursor-pointer hover:bg-slate-200 dark:hover:bg-zinc-700/80 transition-all">
+                                                <CloudUpload className="w-3 h-3" />
+                                                <span>Subir Factura</span>
+                                                <input
+                                                  type="file"
+                                                  className="hidden"
+                                                  onChange={(e) => { if (e.target.files?.[0]) handleUploadDetailedPaymentFile(p.id, "facturaEmitida", e.target.files[0]); }}
+                                                />
+                                              </label>
+                                            )}
+
+                                            {uploadingDetailedPaymentFile[`${p.id}-comprobantePago`] ? (
+                                              <span className="flex items-center gap-1.5 text-[10px] text-primary font-bold">
+                                                <div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                                                Subiendo comprobante...
+                                              </span>
+                                            ) : p.comprobantePago ? (
+                                              <div className="flex items-center gap-1">
+                                                <button
+                                                  type="button"
+                                                  onClick={() => openStoredDetailedPaymentFile(p.comprobantePago!, `comprobante-${p.descripcion}`)}
+                                                  className="flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-lg text-[10px] font-extrabold hover:underline cursor-pointer"
+                                                >
+                                                  <FileDown className="w-3 h-3" />
+                                                  <span>Ver Comprobante</span>
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleUnlinkDetailedPaymentFile(p.id, "comprobantePago")}
+                                                  className="p-1 text-slate-400 hover:text-red-500 rounded-md hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer"
+                                                  title="Quitar comprobante"
+                                                >
+                                                  <X className="w-3.5 h-3.5" />
+                                                </button>
+                                              </div>
+                                            ) : (
+                                              <label className="flex items-center gap-1 px-2 py-1 bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white rounded-full text-[10px] font-bold cursor-pointer hover:bg-slate-200 dark:hover:bg-zinc-700/80 transition-all">
+                                                <CloudUpload className="w-3 h-3" />
+                                                <span>Subir Comprobante</span>
+                                                <input
+                                                  type="file"
+                                                  className="hidden"
+                                                  onChange={(e) => { if (e.target.files?.[0]) handleUploadDetailedPaymentFile(p.id, "comprobantePago", e.target.files[0]); }}
+                                                />
+                                              </label>
+                                            )}
+                                          </div>
+                                        </div>
                                       </div>
 
                                       {p.observaciones && (
@@ -1915,7 +2131,8 @@ export default function FinanceView({
 
                 {/* Right Column: Payments history (col-span-4) */}
                 <div
-                  className={`p-6 rounded-3xl border flex flex-col justify-between h-fit lg:col-span-4 ${
+                  style={financeCalendarCardHeight ? { maxHeight: financeCalendarCardHeight } : undefined}
+                  className={`p-6 rounded-3xl border flex flex-col justify-between h-fit overflow-hidden lg:col-span-4 ${
                     darkMode
                       ? "bg-zinc-900 border-zinc-800 text-white shadow-lg"
                       : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
@@ -1997,7 +2214,7 @@ export default function FinanceView({
                                     <button
                                       type="button"
                                       onClick={(e) => { e.stopPropagation(); handleEditPaymentCard(p.id); }}
-                                      className="p-0.5 rounded hover:bg-primary/10 text-primary cursor-pointer shrink-0"
+                                      className="p-0.5 rounded hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
                                       title="Editar"
                                     >
                                       <Pencil className="w-3.5 h-3.5" />
@@ -2005,7 +2222,7 @@ export default function FinanceView({
                                     <button
                                       type="button"
                                       onClick={(e) => { e.stopPropagation(); setExpandedPaymentId(isExpanded ? null : p.id); }}
-                                      className="p-0.5 rounded hover:bg-primary/10 text-primary cursor-pointer shrink-0"
+                                      className="p-0.5 rounded hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
                                       title="Ver detalles"
                                     >
                                       <Search className="w-3.5 h-3.5" />
@@ -2084,6 +2301,85 @@ export default function FinanceView({
                                           <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
                                             {p.pagoRecurrente ? "Pago Recurrente" : "Pago Único"} • Pagado
                                           </span>
+                                        </div>
+
+                                        <div>
+                                          <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
+                                            Factura / Comprobante
+                                          </span>
+                                          <div className="flex flex-wrap items-center gap-2 pl-2">
+                                            {uploadingDetailedPaymentFile[`${p.id}-facturaEmitida`] ? (
+                                              <span className="flex items-center gap-1.5 text-[10px] text-primary font-bold">
+                                                <div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                                                Subiendo factura...
+                                              </span>
+                                            ) : p.facturaEmitida ? (
+                                              <div className="flex items-center gap-1">
+                                                <button
+                                                  type="button"
+                                                  onClick={() => openStoredDetailedPaymentFile(p.facturaEmitida!, `factura-${p.descripcion}`)}
+                                                  className="flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-lg text-[10px] font-extrabold hover:underline cursor-pointer"
+                                                >
+                                                  <FileDown className="w-3 h-3" />
+                                                  <span>Ver Factura</span>
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleUnlinkDetailedPaymentFile(p.id, "facturaEmitida")}
+                                                  className="p-1 text-slate-400 hover:text-red-500 rounded-md hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer"
+                                                  title="Quitar factura"
+                                                >
+                                                  <X className="w-3.5 h-3.5" />
+                                                </button>
+                                              </div>
+                                            ) : (
+                                              <label className="flex items-center gap-1 px-2 py-1 bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white rounded-full text-[10px] font-bold cursor-pointer hover:bg-slate-200 dark:hover:bg-zinc-700/80 transition-all">
+                                                <CloudUpload className="w-3 h-3" />
+                                                <span>Subir Factura</span>
+                                                <input
+                                                  type="file"
+                                                  className="hidden"
+                                                  onChange={(e) => { if (e.target.files?.[0]) handleUploadDetailedPaymentFile(p.id, "facturaEmitida", e.target.files[0]); }}
+                                                />
+                                              </label>
+                                            )}
+
+                                            {uploadingDetailedPaymentFile[`${p.id}-comprobantePago`] ? (
+                                              <span className="flex items-center gap-1.5 text-[10px] text-primary font-bold">
+                                                <div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                                                Subiendo comprobante...
+                                              </span>
+                                            ) : p.comprobantePago ? (
+                                              <div className="flex items-center gap-1">
+                                                <button
+                                                  type="button"
+                                                  onClick={() => openStoredDetailedPaymentFile(p.comprobantePago!, `comprobante-${p.descripcion}`)}
+                                                  className="flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-lg text-[10px] font-extrabold hover:underline cursor-pointer"
+                                                >
+                                                  <FileDown className="w-3 h-3" />
+                                                  <span>Ver Comprobante</span>
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleUnlinkDetailedPaymentFile(p.id, "comprobantePago")}
+                                                  className="p-1 text-slate-400 hover:text-red-500 rounded-md hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer"
+                                                  title="Quitar comprobante"
+                                                >
+                                                  <X className="w-3.5 h-3.5" />
+                                                </button>
+                                              </div>
+                                            ) : (
+                                              <label className="flex items-center gap-1 px-2 py-1 bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white rounded-full text-[10px] font-bold cursor-pointer hover:bg-slate-200 dark:hover:bg-zinc-700/80 transition-all">
+                                                <CloudUpload className="w-3 h-3" />
+                                                <span>Subir Comprobante</span>
+                                                <input
+                                                  type="file"
+                                                  className="hidden"
+                                                  onChange={(e) => { if (e.target.files?.[0]) handleUploadDetailedPaymentFile(p.id, "comprobantePago", e.target.files[0]); }}
+                                                />
+                                              </label>
+                                            )}
+                                          </div>
                                         </div>
                                       </div>
 
