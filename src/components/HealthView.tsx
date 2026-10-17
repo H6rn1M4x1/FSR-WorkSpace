@@ -3302,8 +3302,8 @@ export default function HealthView({
                   : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
               }`}
             >
-              <div className="flex flex-col">
-                <div className="flex items-center justify-between mb-3">
+              <div className="flex flex-col h-full min-h-0">
+                <div className="flex items-center justify-between mb-3 shrink-0">
                   <div className="flex items-center gap-2">
                     <Pill className="w-5 h-5 text-primary" />
                     <h3 className="font-bold text-md">
@@ -3356,7 +3356,7 @@ export default function HealthView({
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -6 }}
                     transition={{ duration: 0.2 }}
-                    className="space-y-2.5 max-h-[520px] pr-1"
+                    className="flex-1 min-h-0 flex flex-col pr-1"
                   >
                   {(() => {
                     type ControlItem =
@@ -3472,7 +3472,7 @@ export default function HealthView({
                         items={combinedItems}
                         showGradients={true}
                         enableArrowNavigation={true}
-                        className="max-h-[440px]"
+                        className="flex-1 min-h-0"
                         style={{
                           '--gradient-color': darkMode ? '#18181b' : '#ffffff',
                         } as React.CSSProperties}
