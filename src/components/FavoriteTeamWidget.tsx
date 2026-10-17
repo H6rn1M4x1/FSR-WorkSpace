@@ -4,6 +4,13 @@ import { TEAMS, Team } from "../data/teams";
 import { getStadiumForTeam, getLeagueCodesForTeam, fetchTeamScheduleAllCompetitions } from "../lib/matchScheduler";
 import { FOOTBALL_TEAM_ESPN_IDS } from "../data/espnTeamIds";
 import { getTeamCachedEvents } from "../lib/eventsService";
+import { FOOTBALL_LEAGUES } from "../data/footballLeagues";
+
+// team.league guarda el id corto de la liga (ej. "Liga Profesional", usado para buscar su
+// código de ESPN en otros lados) — para mostrárselo al usuario se expande al nombre completo
+// curado en FOOTBALL_LEAGUES (ej. "Liga Profesional Argentina"), si existe.
+const getLeagueDisplayName = (league?: string): string | undefined =>
+  (league && FOOTBALL_LEAGUES.find((l) => l.id === league)?.name) || league;
 
 interface FavoriteTeamWidgetProps {
   favoriteTeamName?: string;
@@ -117,7 +124,7 @@ export const FavoriteTeamWidget: React.FC<FavoriteTeamWidgetProps> = ({
             venue: comp?.venue?.fullName || comp?.venue?.displayName || getStadiumForTeam(homeName),
             // "ev.league?.name" no se usa acá: confirmado en vivo (ver "Eventos deportivos")
             // que ESPN devuelve ahí el código crudo de la liga (ej. "arg.copa"), no un nombre.
-            competition: teamObj?.league || "Competencia",
+            competition: getLeagueDisplayName(teamObj?.league) || "Competencia",
             homeTeam: { name: homeName, logo: homeLogo, score: homeComp?.score?.displayValue ?? "0" },
             awayTeam: { name: awayName, logo: awayLogo, score: awayComp?.score?.displayValue ?? "0" },
             isFavoriteHome: isFavHome,
@@ -210,7 +217,7 @@ export const FavoriteTeamWidget: React.FC<FavoriteTeamWidgetProps> = ({
               // teamObj?.league primero: el nombre que da ESPN acá (liveData.leagues[0].name)
               // viene mezclado medio en inglés medio en español (ej. "Argentine Liga
               // Profesional de Fútbol"), no es un nombre traducido de verdad.
-              competition: teamObj?.league || liveData?.leagues?.[0]?.name || "Competencia",
+              competition: getLeagueDisplayName(teamObj?.league) || liveData?.leagues?.[0]?.name || "Competencia",
               homeTeam: { name: homeName, logo: homeLogo, score: homeComp?.score ?? "0" },
               awayTeam: { name: awayName, logo: awayLogo, score: awayComp?.score ?? "0" },
               isFavoriteHome: homeName === selectedTeamName,
@@ -270,7 +277,7 @@ export const FavoriteTeamWidget: React.FC<FavoriteTeamWidgetProps> = ({
         clock: `${simulatedMinute}'`,
         dateStr: "Ahora mismo",
         venue: nextMatch?.venue || "Estadio Principal",
-        competition: teamObj?.league || "Liga Oficial",
+        competition: getLeagueDisplayName(teamObj?.league) || "Liga Oficial",
         homeTeam: {
           name: selectedTeamName,
           logo: teamObj?.logo || "",
@@ -315,7 +322,7 @@ export const FavoriteTeamWidget: React.FC<FavoriteTeamWidgetProps> = ({
               {selectedTeamName}
             </h3>
             <span className="text-xs text-zinc-500 dark:text-zinc-400 font-medium truncate block mt-1">
-              {currentLive?.competition || nextMatch?.competition || teamObj?.league || "Mi Equipo Favorito"}
+              {currentLive?.competition || nextMatch?.competition || getLeagueDisplayName(teamObj?.league) || "Mi Equipo Favorito"}
             </span>
           </div>
         </div>
@@ -357,7 +364,7 @@ export const FavoriteTeamWidget: React.FC<FavoriteTeamWidgetProps> = ({
                 <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />
                 <span>{currentLive.statusText || "EN VIVO"}</span>
               </span>
-              <span className="text-xs text-zinc-500 dark:text-zinc-400 font-medium truncate max-w-[140px]">
+              <span className="text-xs text-zinc-500 dark:text-zinc-400 font-medium truncate max-w-[210px]">
                 {currentLive.competition}
               </span>
             </div>
