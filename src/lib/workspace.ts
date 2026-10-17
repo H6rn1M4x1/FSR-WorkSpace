@@ -214,35 +214,77 @@ export class WorkspaceService {
     if (!accessToken) {
       return { success: false, error: "No se proporcionó token de Google Workspace." };
     }
-    try {
-      const res = await fetch("/.netlify/functions/upload-drive-file", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({ filename, mimeType, base64Data }),
-      });
 
-      if (!res.ok) {
-        let errMessage = "Error al subir el archivo a Google Drive.";
-        try {
-          const err = await res.json();
-          errMessage = err.error || errMessage;
-        } catch {
-          // ignore non-json response
+    const attempt = async (
+      token: string
+    ): Promise<{ success: boolean; fileId?: string; webViewLink?: string; error?: string }> => {
+      try {
+        const res = await fetch("/.netlify/functions/upload-drive-file", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`,
+          },
+          body: JSON.stringify({ filename, mimeType, base64Data }),
+        });
+
+        if (!res.ok) {
+          let errMessage = "Error al subir el archivo a Google Drive.";
+          try {
+            const err = await res.json();
+            errMessage = err.error || errMessage;
+          } catch {
+            // ignore non-json response
+          }
+          return { success: false, error: errMessage };
         }
-        return { success: false, error: errMessage };
-      }
 
-      const data = await res.json();
-      if (data && data.success === false) {
-        return { success: false, error: data.error || "Error al subir el archivo a Google Drive." };
+        const data = await res.json();
+        if (data && data.success === false) {
+          return { success: false, error: data.error || "Error al subir el archivo a Google Drive." };
+        }
+        return { success: true, fileId: data.fileId, webViewLink: data.webViewLink };
+      } catch (err: any) {
+        return { success: false, error: err?.message || "Error de conexión al subir a Google Drive." };
       }
-      return { success: true, fileId: data.fileId, webViewLink: data.webViewLink };
+    };
+
+    const firstResult = await attempt(accessToken);
+
+    // Los access tokens de Google duran ~1 hora y esta app no tiene refresh token (el
+    // sign-in es client-side con signInWithPopup), así que después de ese tiempo cualquier
+    // llamada a la API de Google empieza a fallar con 401 UNAUTHENTICATED. En vez de mostrar
+    // directamente el error, pedimos un token nuevo con el mismo popup de Google (como los
+    // permisos ya están otorgados, normalmente se resuelve solo sin pantalla de consentimiento)
+    // y reintentamos una vez antes de darnos por vencidos.
+    const looksExpired =
+      !firstResult.success &&
+      !!firstResult.error &&
+      /UNAUTHENTICATED|invalid authentication credentials|Invalid Credentials/i.test(firstResult.error);
+
+    if (!looksExpired) {
+      if (!firstResult.success) {
+        console.warn("WorkspaceService.uploadFileToDrive:", firstResult.error);
+      }
+      return firstResult;
+    }
+
+    try {
+      const { googleSignIn } = await import("./firebase");
+      const authRes = await googleSignIn();
+      if (!authRes?.accessToken) {
+        return {
+          success: false,
+          error: "Tu sesión de Google expiró. Volvé a conectar tu cuenta de Google e intentá de nuevo.",
+        };
+      }
+      return await attempt(authRes.accessToken);
     } catch (err: any) {
-      console.warn("WorkspaceService.uploadFileToDrive:", err?.message || err);
-      return { success: false, error: err?.message || "Error de conexión al subir a Google Drive." };
+      console.warn("WorkspaceService.uploadFileToDrive (reauth):", err?.message || err);
+      return {
+        success: false,
+        error: "Tu sesión de Google expiró. Volvé a conectar tu cuenta de Google e intentá de nuevo.",
+      };
     }
   }
 

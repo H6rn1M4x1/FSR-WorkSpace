@@ -121,46 +121,22 @@ html.dark, .dark {
   color-scheme: dark;
 }
 
-/* Custom general scrollbars */
+/* Barras de scroll invisibles en toda la app: el scroll sigue funcionando normalmente
+   (rueda, touch, teclado), solo se oculta la barra visual. Las zonas que no deben
+   desplazarse usan overflow:hidden y no dependen de esto. */
 * {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(148, 163, 184, 0.5) transparent;
-}
-.dark *, html.dark * {
-  scrollbar-color: rgba(161, 161, 170, 0.4) transparent;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE y Edge legacy */
 }
 
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: transparent !important;
-}
-.dark ::-webkit-scrollbar-track,
-html.dark ::-webkit-scrollbar-track {
-  background: transparent !important;
-}
-::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 9999px;
-}
-.dark ::-webkit-scrollbar-thumb,
-html.dark ::-webkit-scrollbar-thumb {
-  background: #3f3f46;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-primary);
-}
-::-webkit-scrollbar-corner {
-  background: transparent !important;
-}
-.dark ::-webkit-scrollbar-corner,
-html.dark ::-webkit-scrollbar-corner {
-  background: transparent !important;
+  width: 0;
+  height: 0;
 }
 
-/* Hide scrollbar utility */
+/* Utilidades históricas de ocultar scrollbar: se mantienen por compatibilidad con el
+   código existente que las usa explícitamente, aunque ya quedan cubiertas por la regla
+   general de arriba. */
 .no-scrollbar::-webkit-scrollbar,
 .scrollbar-none::-webkit-scrollbar {
   display: none !important;
@@ -171,25 +147,11 @@ html.dark ::-webkit-scrollbar-corner {
   scrollbar-width: none !important;  /* Firefox */
 }
 
-/* Custom scrollbar-thin utility */
+/* scrollbar-thin: se mantiene el nombre de la clase por compatibilidad, pero ahora
+   también queda invisible como el resto de la app. */
 .scrollbar-thin::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-.scrollbar-thin::-webkit-scrollbar-track {
-  background: transparent !important;
-}
-.dark .scrollbar-thin::-webkit-scrollbar-track,
-html.dark .scrollbar-thin::-webkit-scrollbar-track {
-  background: transparent !important;
-}
-.scrollbar-thin::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 9999px;
-}
-.dark .scrollbar-thin::-webkit-scrollbar-thumb,
-html.dark .scrollbar-thin::-webkit-scrollbar-thumb {
-  background: #3f3f46;
+  width: 0;
+  height: 0;
 }
 
 /* Animations */
