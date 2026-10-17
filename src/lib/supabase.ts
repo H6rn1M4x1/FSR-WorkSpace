@@ -108,13 +108,23 @@ export const silentGoogleReauth = async (): Promise<void> => {
         access_type: "offline",
         prompt: "none",
       },
-      redirectTo: window.location.href,
+      // Mismo redirectTo exacto que usa el login normal (googleSignIn, más abajo): si el
+      // allow-list de Supabase solo tiene registrado el origin (sin barra final ni query),
+      // usar window.location.href acá podía no calzar y hacer que el round-trip fallara en
+      // silencio, sin refrescar nada.
+      redirectTo: window.location.origin,
     },
   });
 };
 
 const TOKEN_MAX_AGE_MS = 50 * 60 * 1000; // refrescar antes de los ~60 min reales de vida
 const REDIRECT_PENDING_KEY = "google_silent_reauth_pending";
+const LAST_ATTEMPT_KEY = "google_silent_reauth_last_attempt";
+// Si Google no puede renovar en silencio (por ejemplo, exige elegir cuenta o volver a dar
+// consentimiento), reintentarlo sin pausa recargaría la página en loop sin arreglar nada. Este
+// enfriamiento evita ese loop: después de un intento, hay que esperar este tiempo antes de
+// volver a probar uno nuevo.
+const REAUTH_COOLDOWN_MS = 2 * 60 * 1000;
 
 const tokenAgeMs = (): number => {
   try {
@@ -128,17 +138,23 @@ const tokenAgeMs = (): number => {
 // Exportada para que quien detecte un 401 de Google en una llamada puntual (por ejemplo,
 // WorkspaceService.uploadFileToDrive) pueda disparar el refresco ahora mismo en vez de
 // esperar al próximo chequeo periódico, aunque la llamada en curso ya no se pueda completar
-// (la pestaña va a navegar y volver).
-export const triggerSilentReauth = () => {
+// (la pestaña va a navegar y volver). Devuelve false si no disparó nada (ya hay uno en curso,
+// o ya se intentó hace poco y no ayudó) — en ese caso el que llama debería ofrecer reconectar
+// a mano en vez de asumir que esto lo va a arreglar solo.
+export const triggerSilentReauth = (): boolean => {
   try {
-    if (sessionStorage.getItem(REDIRECT_PENDING_KEY)) return; // ya hay uno en curso
+    if (sessionStorage.getItem(REDIRECT_PENDING_KEY)) return false; // ya hay uno en curso
+    const lastAttempt = Number(sessionStorage.getItem(LAST_ATTEMPT_KEY) || 0);
+    if (Date.now() - lastAttempt < REAUTH_COOLDOWN_MS) return false; // ya se probó hace poco
     sessionStorage.setItem(REDIRECT_PENDING_KEY, "1");
+    sessionStorage.setItem(LAST_ATTEMPT_KEY, String(Date.now()));
   } catch {}
   silentGoogleReauth().catch(() => {
     try {
       sessionStorage.removeItem(REDIRECT_PENDING_KEY);
     } catch {}
   });
+  return true;
 };
 
 let backgroundRefreshStarted = false;
