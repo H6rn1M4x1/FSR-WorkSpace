@@ -36,7 +36,6 @@ import type { UserProfileData } from "./components/UserSettingsModal";
 import { TwoFactorLoginModal } from "./components/TwoFactorLoginModal";
 import { ConfirmationModal } from "./components/ConfirmationModal";
 import { useScrollReveal } from "./hooks/useScrollReveal";
-import Lenis from "lenis";
 import { DriveBackupService } from "./lib/driveBackupService";
 import { syncMonthlyMatches } from "./lib/matchScheduler";
 import Dither from "./components/Dither";
@@ -101,31 +100,6 @@ export default function App() {
   // Custom hook for smooth scroll reveal animations across sections
   useScrollReveal();
   const mainScrollRef = useRef<HTMLElement>(null);
-  const lenisRef = useRef<Lenis | null>(null);
-
-  // Scroll inercial: al soltar la rueda/trackpad, el scroll frena progresivamente en el lugar en
-  // vez de detenerse de golpe. Respeta prefers-reduced-motion por su cuenta (respectReducedMotion).
-  // `content` es el mismo wrapper (no un hijo suyo): el contenido real de <main> se reemplaza
-  // entero al cambiar de pestaña (PageSkeleton <-> AnimatePresence), así que apuntar a un hijo
-  // puntual dejaba a Lenis con una referencia a un nodo ya desmontado.
-  useEffect(() => {
-    const wrapper = mainScrollRef.current;
-    if (!wrapper) return;
-    const lenis = new Lenis({
-      wrapper,
-      content: wrapper,
-      duration: 1.1,
-      easing: (t: number) => 1 - Math.pow(1 - t, 3),
-      smoothWheel: true,
-      autoRaf: true,
-      respectReducedMotion: true,
-    });
-    lenisRef.current = lenis;
-    return () => {
-      lenisRef.current = null;
-      lenis.destroy();
-    };
-  }, []);
 
   const isLocalMutatingRef = useRef(false);
   const mutationLockTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -150,15 +124,10 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState(() => AestheticStorageService.getCurrentTab());
   const [activeSubTab, setActiveSubTab] = useState(() => AestheticStorageService.getActiveSubTab());
 
-  // Sin esto, al cambiar de pestaña Lenis se quedaba con la posición de scroll de la pestaña
-  // anterior: si esa pestaña era más larga que la nueva, el scroll quedaba más allá del final del
-  // contenido nuevo y la pantalla se veía en blanco (solo el fondo animado, sin ninguna tarjeta
-  // encima) hasta que se scrolleaba manualmente hacia arriba. Se resetea a 0 de entrada, tanto en
-  // el scroll nativo como en el estado interno de Lenis, cada vez que cambia la sección.
+  // Vuelve arriba del todo cada vez que se cambia de sección, en vez de dejar la posición de
+  // scroll de la pestaña anterior (que podía quedar más allá del final de una pestaña más corta).
   useEffect(() => {
     if (mainScrollRef.current) mainScrollRef.current.scrollTop = 0;
-    lenisRef.current?.resize();
-    lenisRef.current?.scrollTo(0, { immediate: true, force: true });
   }, [currentTab, activeSubTab]);
   // Botón "Agendar" de Inicio: navega a la pestaña real de la categoría elegida y le avisa a esa
   // vista (via el prop autoOpenQuickAdd, que cada una consume con su propio useEffect) que abra
@@ -2356,9 +2325,13 @@ export default function App() {
           ) : (
             // Transición entre secciones: la vista saliente se desenfoca y se desvanece, la
             // entrante aparece igual (con blur) desde un poco más abajo — mismo recurso que las
-            // referencias de diseño que pidió el usuario, en vez del salto seco de antes. Con
-            // mode="wait" nunca se ven las dos vistas superpuestas a la vez.
-            <AnimatePresence mode="wait">
+            // referencias de diseño que pidió el usuario, en vez del salto seco de antes.
+            // IMPORTANTE: sin mode="wait" — con mode="wait" la vista entrante (con todo lo que
+            // carga adentro: Suspense de componentes lazy, tablas, gráficos) no se monta hasta
+            // que termina de desvanecerse la saliente, y si por lo que sea esa espera no se
+            // resuelve bien se quedaba sin mostrar nada hasta recargar. Ahora ambas se animan en
+            // paralelo (un ligero cruce de desvanecido) y la entrante siempre se monta de una.
+            <AnimatePresence>
               <motion.div
                 key={currentTab === "notes" ? `notes-${activeSubTab}` : currentTab}
                 initial={{ opacity: 0, filter: "blur(8px)", y: 10 }}
