@@ -127,7 +127,7 @@ export function QuickNotesMiniWidget({
           No tenés notas todavía. Creá la primera.
         </button>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {preview.map((note) => (
             <div
               key={note.id}
@@ -138,17 +138,17 @@ export function QuickNotesMiniWidget({
                 if (e.key === "Enter") openExpanded(note.id);
               }}
               title="Ver en grande"
-              className={`text-left rounded-2xl border p-3 flex flex-col gap-1 h-40 overflow-hidden hover:shadow-md transition-all cursor-pointer ${
+              className={`text-left rounded-2xl border p-4 flex flex-col gap-1.5 h-56 overflow-hidden hover:shadow-md transition-all cursor-pointer ${
                 NOTE_CARD_COLOR[note.color] || NOTE_CARD_COLOR.default
               } ${note.pinned ? "ring-2 ring-primary border-primary" : ""}`}
             >
-              <div className="flex items-center gap-1 min-w-0 pr-5">
-                {note.pinned && <Pin className="w-3 h-3 text-primary fill-primary shrink-0" />}
-                <p className="font-extrabold text-xs text-zinc-900 dark:text-zinc-100 truncate">
+              <div className="flex items-center gap-1.5 min-w-0 pr-5">
+                {note.pinned && <Pin className="w-3.5 h-3.5 text-primary fill-primary shrink-0" />}
+                <p className="font-extrabold text-sm text-zinc-900 dark:text-zinc-100 truncate">
                   {note.title?.trim() || "Sin título"}
                 </p>
               </div>
-              <p className="text-[10px] text-zinc-600 dark:text-zinc-400 line-clamp-6">{stripHtml(note.text) || "Nota vacía"}</p>
+              <p className="text-xs text-zinc-600 dark:text-zinc-400 line-clamp-[9]">{stripHtml(note.text) || "Nota vacía"}</p>
             </div>
           ))}
         </div>
