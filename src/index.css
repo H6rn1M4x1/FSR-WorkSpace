@@ -1300,16 +1300,57 @@ html {
   scroll-behavior: smooth;
 }
 
+/* "Bloques" (cualquier tarjeta/sección con fondo semi-transparente): aparecen con movimiento y
+   un poco de rebote al entrar en pantalla scrolleando, y vuelven a este mismo estado "oculto" al
+   salir de pantalla — no es una animación de una sola vez, se repite cada vez que se cruza el
+   borde del viewport (ver useScrollReveal.ts, que alterna la clase is-visible en los dos
+   sentidos). La curva cubic-bezier con el tercer valor > 1 es lo que da el rebote: el bloque pasa
+   de largo su posición final y vuelve, en vez de frenar seco. */
 .scroll-reveal {
   opacity: 0;
-  transform: translateY(16px);
-  transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1), transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  transform: translateY(26px) scale(0.96);
+  transition: opacity 0.55s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
   will-change: transform, opacity;
 }
 
 .scroll-reveal.is-visible {
   opacity: 1;
-  transform: translateY(0);
+  transform: translateY(0) scale(1);
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .scroll-reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+/* Todos los botones crecen un poco al pasar el mouse y se achican al presionar — salvo que ya
+   traigan su propia escala con una utilidad de Tailwind (hover:scale-*), que por ser una clase
+   pesa más que este selector de elemento y gana sola, sin pisarse. El escape hatch .no-hover-scale
+   es para casos puntuales donde la escala global molesta (switches, píldoras con tamaño ajustado). */
+button:not(:disabled):not(.no-hover-scale) {
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@media (hover: hover) {
+  button:not(:disabled):not(.no-hover-scale):hover {
+    transform: scale(1.035);
+  }
+}
+
+button:not(:disabled):not(.no-hover-scale):active {
+  transform: scale(0.965);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button:not(:disabled):not(.no-hover-scale) {
+    transition: none;
+  }
+  button:not(:disabled):not(.no-hover-scale):hover,
+  button:not(:disabled):not(.no-hover-scale):active {
+    transform: none;
+  }
+}
 

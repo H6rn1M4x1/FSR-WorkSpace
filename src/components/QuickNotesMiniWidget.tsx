@@ -8,7 +8,6 @@ import { InteractiveRichText } from "./InteractiveRichText";
 import { SaveOnIdle, type Draft } from "./NotesView";
 import { useToast } from "../context/ToastContext";
 import { RevealGroup, Reveal } from "./Reveal";
-import { uiSounds } from "../lib/sounds";
 
 // Mismos colores que NotesView.tsx (NOTE_COLORS), en versión compacta — solo la clase de fondo
 // de la tarjeta, sin duplicar el resto de esa paleta (swatch/label) que acá no hace falta.
@@ -135,10 +134,8 @@ export function QuickNotesMiniWidget({
               key={note.id}
               role="button"
               tabIndex={0}
-              onClick={() => {
-                uiSounds.click();
-                openExpanded(note.id);
-              }}
+              data-sound="expand"
+              onClick={() => openExpanded(note.id)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") openExpanded(note.id);
               }}

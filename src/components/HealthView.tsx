@@ -2,6 +2,9 @@ import { SubNav } from "./SubNav";
 import { useSubPanelRows } from "../lib/navPanelContext";
 import { SharedBadge, makeSharedOutHelpers } from "./SharedBadge";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
+import { useBriefLoading } from "../hooks/useBriefLoading";
+import { TableSkeleton } from "./TableSkeleton";
+import { AnimatedNumber } from "./AnimatedNumber";
 import { UserProfileData } from "./UserSettingsModal";
 import { generateUniqueId } from "../utils/id";
 import { getLocalDateString } from "../utils/date";
@@ -2965,6 +2968,13 @@ export default function HealthView({
   };
 
   // Filter detailed medications
+  const medidasTableLoading = useBriefLoading([localActiveSubTab]);
+  const doctorsTableLoading = useBriefLoading([localActiveSubTab]);
+  const medsTableLoading = useBriefLoading([localActiveSubTab]);
+  const dispTableLoading = useBriefLoading([localActiveSubTab]);
+  const bpLogsTableLoading = useBriefLoading([localActiveSubTab]);
+  const recordsTableLoading = useBriefLoading([localActiveSubTab]);
+
   const filteredMeds = (medicamentosDetallados || []).filter((med) => {
     const matchesSearch =
       med.marca.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -3117,7 +3127,7 @@ export default function HealthView({
             {/* Columna 1: Calendario Médico */}
             <div
               ref={medicalCalendarCardRef}
-              className={`p-6 rounded-3xl border flex flex-col lg:col-span-5 justify-between shadow-xs app-calendar-container self-start ${
+              className={`p-6 rounded-3xl border flex flex-col lg:col-span-5 justify-between shadow-xs app-calendar-container self-start scroll-reveal ${
                 darkMode
                   ? "bg-zinc-900 border-zinc-800 text-white shadow-lg"
                   : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
@@ -3231,6 +3241,7 @@ export default function HealthView({
                         return (
                           <button
                             key={`day-${day}`}
+                            data-sound="selectDate"
                             onClick={() => {
                               setSelectedMedicalDate(
                                 selectedMedicalDate === dateStr ? null : dateStr
@@ -3296,7 +3307,7 @@ export default function HealthView({
             {/* Columna 2: Control de Medicamentos */}
             <div
               style={medicalCalendarCardHeight ? { maxHeight: medicalCalendarCardHeight } : undefined}
-              className={`p-6 rounded-3xl border flex flex-col lg:col-span-7 justify-between shadow-xs self-start overflow-hidden ${
+              className={`p-6 rounded-3xl border flex flex-col lg:col-span-7 justify-between shadow-xs self-start overflow-hidden scroll-reveal ${
                 darkMode
                   ? "bg-zinc-900 border-zinc-800 text-white shadow-lg"
                   : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
@@ -3762,7 +3773,7 @@ export default function HealthView({
           </div>
 
           {/* SECCIÓN AVANZADA: SALUD METABÓLICA Y NUTRICIÓN */}
-          <div className={`p-6 rounded-3xl border ${darkMode ? "bg-zinc-900/40 border-white/10 backdrop-blur-md" : "bg-white/40 border-slate-200 backdrop-blur-md"}`}>
+          <div className={`p-6 rounded-3xl border scroll-reveal ${darkMode ? "bg-zinc-900/40 border-white/10 backdrop-blur-md" : "bg-white/40 border-slate-200 backdrop-blur-md"}`}>
             <div className="flex items-center gap-2 mb-6">
               <Sparkles className="w-5 h-5 text-primary animate-pulse" />
               <h2 className="text-xl font-extrabold tracking-tight">
@@ -3775,7 +3786,7 @@ export default function HealthView({
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* 1. Perfil Metabólico & Peso Ideal */}
               <div
-                className={`p-6 rounded-3xl border flex flex-col justify-between lg:col-span-1 ${
+                className={`p-6 rounded-3xl border flex flex-col justify-between lg:col-span-1 scroll-reveal ${
                   darkMode
                     ? "bg-zinc-900 border-zinc-800 text-white shadow-lg"
                     : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
@@ -3917,7 +3928,7 @@ export default function HealthView({
               <div className="lg:col-span-2 flex flex-col gap-6">
               {/* 2. Balance Calórico Diario & Macros */}
               <div
-                className={`p-6 rounded-3xl border flex flex-col justify-between ${
+                className={`p-6 rounded-3xl border flex flex-col justify-between scroll-reveal ${
                   darkMode
                     ? "bg-zinc-900 border-zinc-800 text-white shadow-lg"
                     : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
@@ -4048,7 +4059,7 @@ export default function HealthView({
 
               {/* 3. Tendencia Presión Arterial */}
               <div
-                className={`p-6 rounded-3xl border flex flex-col gap-4 ${
+                className={`p-6 rounded-3xl border flex flex-col gap-4 scroll-reveal ${
                   darkMode
                     ? "bg-zinc-900/40 border-white/10 backdrop-blur-md"
                     : "bg-white/40 border-slate-200 backdrop-blur-md"
@@ -4352,7 +4363,7 @@ export default function HealthView({
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
               {/* 3. Hydration Tracker */}
               <div
-                className={`p-6 rounded-3xl border flex flex-col justify-between lg:col-span-1 ${
+                className={`p-6 rounded-3xl border flex flex-col justify-between lg:col-span-1 scroll-reveal ${
                   darkMode
                     ? "bg-zinc-900 border-zinc-800 text-white shadow-lg"
                     : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
@@ -4400,7 +4411,7 @@ export default function HealthView({
                           <div>
                             <div className="flex items-baseline gap-2">
                               <span className="text-2xl font-black text-primary">
-                                {cantidadHoy} <span className="text-xs font-bold opacity-60">vasos</span>
+                                <AnimatedNumber value={cantidadHoy} /> <span className="text-xs font-bold opacity-60">vasos</span>
                               </span>
                               {isCompleted && (
                                 <span className="text-[10px] font-extrabold bg-emerald-500/15 text-emerald-500 px-2 py-0.5 rounded-full border border-emerald-500/30">
@@ -4566,7 +4577,7 @@ export default function HealthView({
 
               {/* 4. Body Evolution Graph & Body Measurements List */}
               <div
-                className={`p-6 rounded-3xl border flex flex-col justify-between lg:col-span-2 ${
+                className={`p-6 rounded-3xl border flex flex-col justify-between lg:col-span-2 scroll-reveal ${
                   darkMode
                     ? "bg-zinc-900 border-zinc-800 text-white shadow-lg"
                     : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
@@ -4680,7 +4691,9 @@ export default function HealthView({
                                 </tr>
                               </thead>
                               <tbody>
-                                {paginatedMedidas.length > 0 ? (
+                                {medidasTableLoading ? (
+                                  <TableSkeleton rows={5} columns={6} darkMode={darkMode} />
+                                ) : paginatedMedidas.length > 0 ? (
                                   paginatedMedidas.map((m) => (
                                     <tr key={m.id} className="border-b border-slate-100/40 dark:border-zinc-800/20 hover:bg-slate-100/20 dark:hover:bg-zinc-900/30">
                                       <td className="p-2 font-bold whitespace-nowrap">{m.fecha}</td>
@@ -4756,7 +4769,7 @@ export default function HealthView({
             </div>
             {/* Activities Summary Charts */}
             <div
-              className={`p-6 rounded-3xl border w-full space-y-6 ${
+              className={`p-6 rounded-3xl border w-full space-y-6 scroll-reveal ${
                 darkMode
                   ? "bg-zinc-900/60 border-zinc-800/80 text-white shadow-lg backdrop-blur-md"
                   : "bg-white/80 border-slate-200/80 text-slate-800 shadow-sm backdrop-blur-md"
@@ -5676,7 +5689,7 @@ export default function HealthView({
             >
               {clinicoActiveTab === "doctores" && (
                 <div
-                  className={`p-6 rounded-3xl border ${
+                  className={`p-6 rounded-3xl border scroll-reveal ${
                     darkMode
                       ? "bg-zinc-900 border-zinc-800 text-white shadow-lg"
                       : "bg-white border-slate-200/80 text-slate-800 shadow-sm"
@@ -5771,7 +5784,9 @@ export default function HealthView({
                         </tr>
                       </thead>
                       <tbody className="">
-                        {filteredDoctors.length === 0 ? (
+                        {doctorsTableLoading ? (
+                          <TableSkeleton rows={6} columns={5} darkMode={darkMode} />
+                        ) : filteredDoctors.length === 0 ? (
                           <tr>
                             <td
                               colSpan={5}
@@ -5850,7 +5865,7 @@ export default function HealthView({
 
                   {/* Secondary container (card) */}
                   <div
-                    className={`p-6 rounded-3xl border ${
+                    className={`p-6 rounded-3xl border scroll-reveal ${
                       darkMode
                         ? "bg-zinc-900 border-zinc-800 text-zinc-100 shadow-lg"
                         : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
@@ -6013,7 +6028,9 @@ export default function HealthView({
                         </tr>
                       </thead>
                       <tbody className="">
-                        {filteredMeds.length === 0 ? (
+                        {medsTableLoading ? (
+                          <TableSkeleton rows={6} columns={10} darkMode={darkMode} />
+                        ) : filteredMeds.length === 0 ? (
                           <tr>
                             <td
                               colSpan={10}
@@ -6229,7 +6246,9 @@ export default function HealthView({
                         </tr>
                       </thead>
                       <tbody className="">
-                        {filteredDisp.length === 0 ? (
+                        {dispTableLoading ? (
+                          <TableSkeleton rows={6} columns={10} darkMode={darkMode} />
+                        ) : filteredDisp.length === 0 ? (
                           <tr>
                             <td
                               colSpan={10}
@@ -6370,7 +6389,7 @@ export default function HealthView({
 
               {clinicoActiveTab === "presion" && (
                 <div
-                  className={`p-6 rounded-3xl border ${
+                  className={`p-6 rounded-3xl border scroll-reveal ${
                     darkMode
                       ? "bg-zinc-900 border-zinc-800 text-white shadow-lg"
                       : "bg-white border-slate-200/80 text-slate-800 shadow-sm"
@@ -6466,7 +6485,9 @@ export default function HealthView({
                         </tr>
                       </thead>
                       <tbody className="">
-                        {filteredBpLogs.length === 0 ? (
+                        {bpLogsTableLoading ? (
+                          <TableSkeleton rows={6} columns={7} darkMode={darkMode} />
+                        ) : filteredBpLogs.length === 0 ? (
                           <tr>
                             <td
                               colSpan={7}
@@ -6566,7 +6587,7 @@ export default function HealthView({
 
               {clinicoActiveTab === "estudios" && (
                 <div
-                  className={`p-6 rounded-3xl border ${
+                  className={`p-6 rounded-3xl border scroll-reveal ${
                     darkMode
                       ? "bg-zinc-900 border-zinc-800 text-white shadow-lg"
                       : "bg-white border-slate-200/80 text-slate-800 shadow-sm"
@@ -6691,7 +6712,9 @@ export default function HealthView({
                         </tr>
                       </thead>
                       <tbody className="">
-                        {medicalRecords.filter((record) => {
+                        {recordsTableLoading ? (
+                          <TableSkeleton rows={6} columns={10} darkMode={darkMode} />
+                        ) : medicalRecords.filter((record) => {
                           const matchesSearch =
                             record.info
                               .toLowerCase()

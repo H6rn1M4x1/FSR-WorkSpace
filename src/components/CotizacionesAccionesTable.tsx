@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
+import { useBriefLoading } from "../hooks/useBriefLoading";
+import { TableSkeleton } from "./TableSkeleton";
 import { generateUniqueId } from "../utils/id";
 import { saveItemToFirestore, deleteItemFromFirestore } from "../lib/firestoreSyncService";
 import { auth } from "../lib/supabase";
@@ -184,6 +186,7 @@ export default function CotizacionesAccionesTable({
   darkMode,
   onExportSheets,
 }: CotizacionesAccionesTableProps) {
+  const cotizacionesTableLoading = useBriefLoading([cotizaciones]);
   // Search & Filters State
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedPanel, setSelectedPanel] = useState("TODOS");
@@ -741,7 +744,7 @@ export default function CotizacionesAccionesTable({
     <div className="space-y-6">
       {/* Container card matching app design standards */}
       <div
-        className={`p-6 rounded-3xl border ${
+        className={`p-6 rounded-3xl border scroll-reveal ${
           darkMode
             ? "bg-zinc-900 border-zinc-800 text-white shadow-lg"
             : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
@@ -1010,7 +1013,9 @@ export default function CotizacionesAccionesTable({
               </tr>
             </thead>
             <tbody className="">
-              {paginatedData.length === 0 ? (
+              {cotizacionesTableLoading ? (
+                <TableSkeleton rows={6} columns={12} darkMode={darkMode} />
+              ) : paginatedData.length === 0 ? (
                 <tr>
                   <td
                     colSpan={12}

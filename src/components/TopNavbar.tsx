@@ -67,6 +67,7 @@ import {
 import Logo from "./Logo";
 import { NotificationDetailPreview } from "./NotificationDetailPreview";
 import { getMealImage } from "../lib/mealHelpers";
+import { uiSounds } from "../lib/sounds";
 
 const getNotificationCategoryDetails = (notif: AppNotification) => {
   const type = notif.type?.toLowerCase() || "";
@@ -274,10 +275,12 @@ function SubPanelRow({ row, rowIndex, darkMode }: { row: NavPanelRow; rowIndex: 
     const currentIndex = row.tabs.findIndex((t) => t.id === row.activeId);
     if (direction === "left" && currentIndex > 0) {
       const prevTab = row.tabs[currentIndex - 1];
+      uiSounds.navigate();
       row.onChange(prevTab.id);
       scrollToButton(buttonRefs.current[prevTab.id]);
     } else if (direction === "right" && currentIndex < row.tabs.length - 1) {
       const nextTab = row.tabs[currentIndex + 1];
+      uiSounds.navigate();
       row.onChange(nextTab.id);
       scrollToButton(buttonRefs.current[nextTab.id]);
     }
@@ -318,6 +321,7 @@ function SubPanelRow({ row, rowIndex, darkMode }: { row: NavPanelRow; rowIndex: 
                   buttonRefs.current[tab.id] = el;
                 }}
                 onClick={() => {
+                  uiSounds.navigate();
                   row.onChange(tab.id);
                   scrollToButton(buttonRefs.current[tab.id]);
                 }}
@@ -526,10 +530,12 @@ export default function TopNavbar({
       const currentIndex = currentSubMenu.findIndex(item => item.id === activeSubTab);
       if (direction === "left" && currentIndex > 0) {
         const prevTab = currentSubMenu[currentIndex - 1];
+        uiSounds.navigate();
         onSubTabChange(prevTab.id);
         scrollToSubMenuButton(subMenuButtonRefs.current[prevTab.id]);
       } else if (direction === "right" && currentIndex < currentSubMenu.length - 1) {
         const nextTab = currentSubMenu[currentIndex + 1];
+        uiSounds.navigate();
         onSubTabChange(nextTab.id);
         scrollToSubMenuButton(subMenuButtonRefs.current[nextTab.id]);
       }
@@ -556,7 +562,11 @@ export default function TopNavbar({
   ].filter((item) => item.id === "home" || menuVisibility?.[item.id] !== false);
 
   return (
-    <header ref={notificationsRef} className="sticky top-0 sm:top-3 z-50 w-full max-w-7xl mx-auto px-2 sm:px-4">
+    <header
+      ref={notificationsRef}
+      data-no-global-sound
+      className="sticky top-0 sm:top-3 z-50 w-full max-w-7xl mx-auto px-2 sm:px-4"
+    >
       {/* Outer Glass Container with Animated Height/Layout Expansion */}
       <motion.div
         layout
@@ -780,6 +790,7 @@ export default function TopNavbar({
                           subMenuButtonRefs.current[subItem.id] = el;
                         }}
                         onClick={() => {
+                          uiSounds.navigate();
                           if (onSubTabChange) onSubTabChange(subItem.id);
                           scrollToSubMenuButton(subMenuButtonRefs.current[subItem.id]);
                           setShowNotifications(false);

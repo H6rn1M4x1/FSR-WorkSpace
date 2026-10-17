@@ -36,6 +36,7 @@ import type { UserProfileData } from "./components/UserSettingsModal";
 import { TwoFactorLoginModal } from "./components/TwoFactorLoginModal";
 import { ConfirmationModal } from "./components/ConfirmationModal";
 import { useScrollReveal } from "./hooks/useScrollReveal";
+import Lenis from "lenis";
 import { DriveBackupService } from "./lib/driveBackupService";
 import { syncMonthlyMatches } from "./lib/matchScheduler";
 import Dither from "./components/Dither";
@@ -99,6 +100,26 @@ export default function App() {
   
   // Custom hook for smooth scroll reveal animations across sections
   useScrollReveal();
+  const mainScrollRef = useRef<HTMLElement>(null);
+
+  // Scroll inercial: al soltar la rueda/trackpad, el scroll frena progresivamente en el lugar en
+  // vez de detenerse de golpe. Respeta prefers-reduced-motion por su cuenta (respectReducedMotion).
+  useEffect(() => {
+    const wrapper = mainScrollRef.current;
+    if (!wrapper) return;
+    const content = (wrapper.firstElementChild as HTMLElement) || wrapper;
+    const lenis = new Lenis({
+      wrapper,
+      content,
+      duration: 1.1,
+      easing: (t: number) => 1 - Math.pow(1 - t, 3),
+      smoothWheel: true,
+      autoRaf: true,
+      respectReducedMotion: true,
+    });
+    return () => lenis.destroy();
+  }, []);
+
   const isLocalMutatingRef = useRef(false);
   const mutationLockTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -146,6 +167,57 @@ export default function App() {
   useEffect(() => {
     AestheticStorageService.setActiveSubTab(activeSubTab);
   }, [activeSubTab]);
+
+  // Sonido de interfaz centralizado: en vez de agregar uiSounds.x() a mano en cada uno de los
+  // cientos de botones de la app, un solo listener en fase de captura (así se entera ANTES de
+  // que un onClick interno haga e.stopPropagation(), algo muy común en tarjetas con botones de
+  // editar/eliminar adentro) detecta qué botón se tocó y elige el sonido:
+  //  1. Si el botón tiene data-sound="X" explícito, se usa ese (fecha de calendario, abrir en
+  //     grande, etc. — casos donde no hay ningún texto/ícono reconocible para adivinarlo).
+  //  2. Si no, se adivina por el ícono de lucide-react (siempre trae una clase
+  //     "lucide-<nombre>") o por el texto/title del botón: papelera → eliminar, lápiz → editar,
+  //     lupa/"ver detalles" → expandir, "guardar" → guardar.
+  //  3. Si nada matchea, click genérico.
+  // Los botones de navegación (TopNavbar) ya disparan su propio sonido "navigate" en el momento
+  // justo, así que quedan afuera con data-no-global-sound para no sonar dos veces.
+  useEffect(() => {
+    const handleGlobalClickSound = (e: MouseEvent) => {
+      if (e.button !== 0) return;
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      const btn = target.closest("button, [role='button'], [data-sound]") as HTMLElement | null;
+      if (!btn) return;
+      if ((btn as HTMLButtonElement).disabled) return;
+      if (btn.hasAttribute("data-no-global-sound") || btn.closest("[data-no-global-sound]")) return;
+
+      const explicit = btn.getAttribute("data-sound");
+      if (explicit && explicit in uiSounds) {
+        (uiSounds as Record<string, () => void>)[explicit]();
+        return;
+      }
+
+      const svg = btn.querySelector("svg[class*='lucide-']");
+      const svgClass = svg?.getAttribute("class") || "";
+      const title = (btn.getAttribute("title") || "").toLowerCase();
+      const text = (btn.textContent || "").toLowerCase();
+      const has = (needle: string) => svgClass.includes(needle) || title.includes(needle) || text.includes(needle);
+
+      if (has("trash") || has("eliminar") || has("borrar")) {
+        uiSounds.delete();
+      } else if (has("lucide-pencil") || has("editar")) {
+        uiSounds.edit();
+      } else if (has("lucide-search") || has("ver detalles") || has("ver en grande") || has("ver más") || has("expandir")) {
+        uiSounds.expand();
+      } else if (has("guardar") || has("lucide-save")) {
+        uiSounds.save();
+      } else {
+        uiSounds.click();
+      }
+    };
+
+    document.addEventListener("click", handleGlobalClickSound, true);
+    return () => document.removeEventListener("click", handleGlobalClickSound, true);
+  }, []);
 
   useEffect(() => {
     AestheticStorageService.setDarkMode(darkMode);
@@ -2247,7 +2319,7 @@ export default function App() {
           </div>
         )}
 
-        <main className="flex-1 overflow-y-auto">
+        <main ref={mainScrollRef} className="flex-1 overflow-y-auto">
           {driveLoading || !isInitialLoadDone ? (
             <PageSkeleton tab={currentTab} darkMode={darkMode} />
           ) : (

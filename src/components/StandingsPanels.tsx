@@ -21,7 +21,7 @@ import { fetchF1DriverPhoto } from "../lib/eventsService";
 // dos no, así que cada tabla interna usa flex-1 para repartirse el espacio que le queda dentro
 // de esta misma altura total, en vez de que cada tarjeta mida distinto según su contenido.
 const CARD = (darkMode: boolean) =>
-  `p-6 rounded-3xl border flex flex-col shadow-xs lg:col-span-4 h-[440px] ${
+  `p-6 rounded-3xl border flex flex-col shadow-xs lg:col-span-4 h-[440px] scroll-reveal ${
     darkMode ? "bg-zinc-900 border-zinc-800 text-white shadow-lg" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
   }`;
 

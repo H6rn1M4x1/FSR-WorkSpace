@@ -716,6 +716,7 @@ export const SmartDateTimePicker: React.FC<SmartDateTimePickerProps> = ({
                     return (
                       <div
                         key={idx}
+                        data-sound="selectDate"
                         onClick={() =>
                           handleDaySelect(cell.day, cell.month, cell.year)
                         }

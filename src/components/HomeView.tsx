@@ -1753,7 +1753,7 @@ export default function HomeView({
         {/* LEFT COLUMN: The Linked Interactive Calendar */}
         <div
           id="calendar-card"
-          className={`p-6 rounded-3xl border flex flex-col lg:col-span-5 justify-between shadow-xs app-calendar-container ${
+          className={`p-6 rounded-3xl border flex flex-col lg:col-span-5 justify-between shadow-xs app-calendar-container scroll-reveal ${
             darkMode
               ? "bg-zinc-900 border-zinc-800 text-white shadow-lg"
               : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
@@ -1830,6 +1830,7 @@ export default function HomeView({
                 return (
                   <button
                     key={`day-${day}`}
+                    data-sound="selectDate"
                     onClick={() => {
                       setSelectedCalendarDate(isSelected ? null : dateStr);
                     }}
@@ -1991,7 +1992,7 @@ export default function HomeView({
         {/* RIGHT COLUMN: The Unified Interactive Agenda */}
         <div
           id="agenda-card"
-          className={`p-6 rounded-3xl border flex flex-col lg:col-span-7 justify-between shadow-xs ${
+          className={`p-6 rounded-3xl border flex flex-col lg:col-span-7 justify-between shadow-xs scroll-reveal ${
             darkMode
               ? "bg-zinc-900 border-zinc-800 text-white shadow-lg"
               : "bg-white border-zinc-200 text-zinc-800 shadow-sm"

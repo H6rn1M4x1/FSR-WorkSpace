@@ -119,7 +119,7 @@ function guessIsoDate(raw?: string): string | null {
 // único contenedor traslúcido (bg-zinc-900/60), lo que las hacía perderse contra el fondo
 // texturado de la app en vez de leerse como bloques separados.
 const SECTION_CARD = (darkMode: boolean) =>
-  `p-6 rounded-3xl border flex flex-col shadow-xs ${
+  `p-6 rounded-3xl border flex flex-col shadow-xs scroll-reveal ${
     darkMode ? "bg-zinc-900 border-zinc-800 text-white shadow-lg" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
   }`;
 const INNER_BOX = (darkMode: boolean) =>
@@ -1032,6 +1032,7 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
                 <button
                   key={i}
                   type="button"
+                  data-sound="selectDate"
                   onClick={() => setSelectedDay(iso)}
                   className={`h-9 w-full rounded-full text-xs font-bold flex flex-col items-center justify-center relative cursor-pointer transition-all ${
                     isSelected ? "border-2 border-primary text-primary bg-primary/10 scale-105 shadow-sm" : isToday ? "bg-primary text-white shadow-md" : "hover:bg-primary/10 text-zinc-700 dark:text-zinc-300"

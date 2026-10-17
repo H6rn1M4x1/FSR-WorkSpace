@@ -1,5 +1,7 @@
 import { generateUniqueId } from "../utils/id";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
+import { useBriefLoading } from "../hooks/useBriefLoading";
+import { TableSkeleton } from "./TableSkeleton";
 import { saveItemToFirestore, deleteItemFromFirestore } from "../lib/firestoreSyncService";
 import { auth } from "../lib/supabase";
 import React, { useState, useMemo, useEffect } from "react";
@@ -70,6 +72,7 @@ export default function CotizacionesCriptoTable({
   darkMode,
   onExportSheets,
 }: CotizacionesCriptoTableProps) {
+  const criptoTableLoading = useBriefLoading([cotizaciones]);
   const [searchQuery, setSearchQuery] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -386,7 +389,7 @@ export default function CotizacionesCriptoTable({
     <div className="space-y-6">
       {/* Container card matching app design standards */}
       <div
-        className={`p-6 rounded-3xl border ${
+        className={`p-6 rounded-3xl border scroll-reveal ${
           darkMode
             ? "bg-zinc-900 border-zinc-800 text-white shadow-lg"
             : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
@@ -579,7 +582,9 @@ export default function CotizacionesCriptoTable({
               </tr>
             </thead>
             <tbody className="">
-              {paginatedData.length === 0 ? (
+              {criptoTableLoading ? (
+                <TableSkeleton rows={6} columns={11} darkMode={darkMode} />
+              ) : paginatedData.length === 0 ? (
                 <tr>
                   <td
                     colSpan={11}

@@ -76,7 +76,7 @@ import {
   verify2FAToken,
 } from "../lib/totp";
 import { DriveBackupService, BackupLog } from "../lib/driveBackupService";
-import { isUiSoundEnabled, setUiSoundEnabled, uiSounds } from "../lib/sounds";
+import { isUiSoundEnabled, setUiSoundEnabled } from "../lib/sounds";
 import { sendVerificationEmail, auth } from "../lib/supabase";
 import { SharedSectionsManager } from "./SharedSectionsManager";
 import { AgendaSharingManager } from "./AgendaSharingManager";
@@ -1681,10 +1681,10 @@ export function UserSettingsModal({
                 <div className="flex items-center gap-1.5 bg-white dark:bg-zinc-800/80 p-1 rounded-full border border-zinc-300/50 dark:border-white/10 shrink-0">
                   <button
                     type="button"
+                    data-sound="toggle"
                     onClick={() => {
                       setUiSoundEnabled(true);
                       setSoundEnabled(true);
-                      uiSounds.success();
                     }}
                     className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
                       soundEnabled
@@ -1697,6 +1697,7 @@ export function UserSettingsModal({
                   </button>
                   <button
                     type="button"
+                    data-no-global-sound
                     onClick={() => {
                       setUiSoundEnabled(false);
                       setSoundEnabled(false);

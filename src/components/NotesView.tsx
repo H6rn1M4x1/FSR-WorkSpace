@@ -738,7 +738,7 @@ export function NotesView({
             />
           ) : (
       <div
-        className={`rounded-3xl border p-4 sm:p-6 space-y-6 ${
+        className={`rounded-3xl border p-4 sm:p-6 space-y-6 scroll-reveal ${
           darkMode ? "bg-zinc-900/60 border-zinc-800" : "bg-white/80 border-slate-200"
         }`}
       >
