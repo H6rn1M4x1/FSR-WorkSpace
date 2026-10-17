@@ -215,7 +215,7 @@ export class WorkspaceService {
       return { success: false, error: "No se proporcionó token de Google Workspace." };
     }
     try {
-      const res = await fetch("/api/workspace/upload-file", {
+      const res = await fetch("/.netlify/functions/upload-drive-file", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
