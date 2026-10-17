@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useCallback } from "react";
 import { CheckCircle2, AlertCircle, X, Info } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
+import { uiSounds } from "../lib/sounds";
 
 export interface ToastMessage {
   id: string;
@@ -24,6 +25,8 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const showToast = useCallback((message: string, type: "success" | "error" | "info" = "success") => {
     const id = Date.now().toString() + Math.random().toString(36).substring(2, 5);
     setToasts((prev) => [...prev, { id, type, message }]);
+    if (type === "error") uiSounds.error();
+    else uiSounds.success();
 
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));

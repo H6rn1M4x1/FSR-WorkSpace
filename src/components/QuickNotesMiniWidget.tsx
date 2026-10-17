@@ -7,6 +7,8 @@ import { RichTextEditor } from "./RichTextEditor";
 import { InteractiveRichText } from "./InteractiveRichText";
 import { SaveOnIdle, type Draft } from "./NotesView";
 import { useToast } from "../context/ToastContext";
+import { RevealGroup, Reveal } from "./Reveal";
+import { uiSounds } from "../lib/sounds";
 
 // Mismos colores que NotesView.tsx (NOTE_COLORS), en versión compacta — solo la clase de fondo
 // de la tarjeta, sin duplicar el resto de esa paleta (swatch/label) que acá no hace falta.
@@ -127,13 +129,16 @@ export function QuickNotesMiniWidget({
           No tenés notas todavía. Creá la primera.
         </button>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+        <RevealGroup className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {preview.map((note) => (
-            <div
+            <Reveal
               key={note.id}
               role="button"
               tabIndex={0}
-              onClick={() => openExpanded(note.id)}
+              onClick={() => {
+                uiSounds.click();
+                openExpanded(note.id);
+              }}
               onKeyDown={(e) => {
                 if (e.key === "Enter") openExpanded(note.id);
               }}
@@ -162,9 +167,9 @@ export function QuickNotesMiniWidget({
               ) : (
                 <p className="text-xs text-zinc-400 italic">Nota vacía</p>
               )}
-            </div>
+            </Reveal>
           ))}
-        </div>
+        </RevealGroup>
       )}
 
       {/* Modal "ver en grande" — por portal, igual que en NotesView.tsx. */}

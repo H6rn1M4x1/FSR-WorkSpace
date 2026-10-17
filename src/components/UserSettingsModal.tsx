@@ -67,6 +67,8 @@ import {
   Search,
   Share2,
   Users,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import {
   generate2FAQRCode,
@@ -74,6 +76,7 @@ import {
   verify2FAToken,
 } from "../lib/totp";
 import { DriveBackupService, BackupLog } from "../lib/driveBackupService";
+import { isUiSoundEnabled, setUiSoundEnabled, uiSounds } from "../lib/sounds";
 import { sendVerificationEmail, auth } from "../lib/supabase";
 import { SharedSectionsManager } from "./SharedSectionsManager";
 import { AgendaSharingManager } from "./AgendaSharingManager";
@@ -414,6 +417,7 @@ export function UserSettingsModal({
     "profile" | "health" | "sharing" | "appearance" | "security" | "backup" | "notifications"
   >("profile");
   const [showColorPopover, setShowColorPopover] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(() => isUiSoundEnabled());
 
   // Drive Backup States
   const [isAutoBackupEnabled, setIsAutoBackupEnabled] = useState<boolean>(
@@ -1659,6 +1663,52 @@ export function UserSettingsModal({
                   >
                     <Moon className="w-3.5 h-3.5 text-primary" />
                     <span>Modo Oscuro</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Sound Toggle Option Card */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+                <div>
+                  <h4 className="text-xs font-extrabold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                    {soundEnabled ? <Volume2 className="w-4 h-4 text-primary" /> : <VolumeX className="w-4 h-4 text-primary" />}
+                    <span>Sonidos de Interfaz</span>
+                  </h4>
+                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5 font-medium">
+                    Sonidos sutiles al cambiar de sección, confirmar una acción o tildar algo.
+                  </p>
+                </div>
+                <div className="flex items-center gap-1.5 bg-white dark:bg-zinc-800/80 p-1 rounded-full border border-zinc-300/50 dark:border-white/10 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUiSoundEnabled(true);
+                      setSoundEnabled(true);
+                      uiSounds.success();
+                    }}
+                    className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                      soundEnabled
+                        ? "bg-white dark:bg-zinc-950 text-zinc-900 dark:text-white shadow-md border border-slate-200 dark:border-transparent"
+                        : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
+                    }`}
+                  >
+                    <Volume2 className="w-3.5 h-3.5 text-primary" />
+                    <span>Con sonido</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUiSoundEnabled(false);
+                      setSoundEnabled(false);
+                    }}
+                    className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                      !soundEnabled
+                        ? "bg-zinc-950 text-white shadow-sm"
+                        : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
+                    }`}
+                  >
+                    <VolumeX className="w-3.5 h-3.5 text-primary" />
+                    <span>Silencio</span>
                   </button>
                 </div>
               </div>
