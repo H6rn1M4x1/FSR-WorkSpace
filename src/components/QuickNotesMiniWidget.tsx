@@ -138,7 +138,7 @@ export function QuickNotesMiniWidget({
                 if (e.key === "Enter") openExpanded(note.id);
               }}
               title="Ver en grande"
-              className={`text-left rounded-2xl border p-4 flex flex-col gap-1.5 h-56 overflow-hidden hover:shadow-md transition-all cursor-pointer ${
+              className={`text-left rounded-2xl border p-4 flex flex-col gap-1.5 h-80 overflow-hidden hover:shadow-md transition-all cursor-pointer ${
                 NOTE_CARD_COLOR[note.color] || NOTE_CARD_COLOR.default
               } ${note.pinned ? "ring-2 ring-primary border-primary" : ""}`}
             >
@@ -149,9 +149,12 @@ export function QuickNotesMiniWidget({
                 </p>
               </div>
               {stripHtml(note.text) ? (
-                <div className="flex-1 min-h-0 overflow-hidden">
+                // overflow-y-auto en vez de hidden: si el contenido no entra, se puede hacer
+                // scroll dentro de la tarjeta (con la barra invisible global de toda la app)
+                // en vez de recortarlo sin forma de verlo.
+                <div className="flex-1 min-h-0 overflow-y-auto">
                   <InteractiveRichText
-                    className="rich-text-content prose prose-sm dark:prose-invert max-w-none text-xs text-zinc-600 dark:text-zinc-400 [&_*]:text-xs [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0 [&_ol_ol]:list-[lower-alpha]"
+                    className="rich-text-content prose prose-sm dark:prose-invert max-w-none text-xs text-zinc-600 dark:text-zinc-400 [&_*]:text-xs [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0 [&_ol_ol]:list-[lower-alpha] [&_div:has(input[type=checkbox])]:flex [&_div:has(input[type=checkbox])]:items-start [&_div:has(input[type=checkbox])]:gap-1.5 [&_div:has(input[type=checkbox])]:my-1.5 [&_div:has(input[type=checkbox])]:leading-snug"
                     html={note.text}
                     onToggleCheckbox={(newHtml) => handleToggleCheckbox(note.id, newHtml)}
                   />
