@@ -207,7 +207,10 @@ export const FavoriteTeamWidget: React.FC<FavoriteTeamWidgetProps> = ({
               clock: comp?.status?.displayClock || `${comp?.status?.clock || 0}'`,
               dateStr: new Date(ev.date).toLocaleDateString("es-AR", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }),
               venue: comp?.venue?.fullName || comp?.venue?.displayName || getStadiumForTeam(homeName),
-              competition: liveData?.leagues?.[0]?.name || teamObj?.league || "Competencia",
+              // teamObj?.league primero: el nombre que da ESPN acá (liveData.leagues[0].name)
+              // viene mezclado medio en inglés medio en español (ej. "Argentine Liga
+              // Profesional de Fútbol"), no es un nombre traducido de verdad.
+              competition: teamObj?.league || liveData?.leagues?.[0]?.name || "Competencia",
               homeTeam: { name: homeName, logo: homeLogo, score: homeComp?.score ?? "0" },
               awayTeam: { name: awayName, logo: awayLogo, score: awayComp?.score ?? "0" },
               isFavoriteHome: homeName === selectedTeamName,
