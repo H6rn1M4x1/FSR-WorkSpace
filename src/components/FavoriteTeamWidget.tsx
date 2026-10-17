@@ -294,7 +294,7 @@ export const FavoriteTeamWidget: React.FC<FavoriteTeamWidgetProps> = ({
 
   return (
     <div
-      className={`rounded-3xl p-5 border flex flex-col justify-between shadow-xs transition-all duration-300 h-full ${
+      className={`rounded-3xl p-5 border flex flex-col justify-between shadow-xs transition-all duration-300 h-full scroll-reveal ${
         darkMode
           ? "bg-zinc-900 border-zinc-800 text-white shadow-lg"
           : "bg-white border-zinc-200 text-zinc-800 shadow-sm"

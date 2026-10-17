@@ -12,7 +12,7 @@ import {
 import { reconcileCollection, sanitizeSyncPayload, saveStateToServer } from "./utils/sync";
 import { getLocalDateString } from "./utils/date";
 import { useToast } from "./context/ToastContext";
-import { initAuth, logout, auth } from "./lib/supabase";
+import { initAuth, logout, auth, consumeGoogleReauthNotice } from "./lib/supabase";
 import { WorkspaceService } from "./lib/workspace";
 import { Eye, EyeOff, Settings, Folder, RefreshCw } from "lucide-react";
 import LoginScreen from "./components/LoginScreen";
@@ -1289,6 +1289,19 @@ export default function App() {
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [driveSyncing, syncing, syncingNotes, driveStatusMessage]);
+
+  // Si el refresco silencioso de Google volvió con "interaction_required" (necesita elegir
+  // cuenta o volver a dar consentimiento a mano), supabase.ts ya limpió la URL rota y bloqueó
+  // los reintentos automáticos — acá solo se avisa una vez, en vez de que Drive deje de andar
+  // sin ninguna explicación.
+  useEffect(() => {
+    if (consumeGoogleReauthNotice()) {
+      showToast(
+        "Tu acceso a Google Drive expiró. Reconectá tu cuenta desde Configuración para seguir sincronizando.",
+        "error"
+      );
+    }
+  }, []);
 
   // Firebase auth state hook and proactive connection check
   useEffect(() => {
