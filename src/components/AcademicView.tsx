@@ -2,6 +2,9 @@ import { SubNav } from "./SubNav";
 import { useSubPanelRows } from "../lib/navPanelContext";
 import { SharedBadge, makeSharedOutHelpers } from "./SharedBadge";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
+import { useBriefLoading } from "../hooks/useBriefLoading";
+import { TableSkeleton } from "./TableSkeleton";
+import { AnimatedNumber } from "./AnimatedNumber";
 import { generateUniqueId } from "../utils/id";
 import React, { useState, useEffect } from "react";
 import { saveItemToFirestore, deleteItemFromFirestore } from "../lib/firestoreSyncService";
@@ -875,6 +878,10 @@ export default function AcademicView({
   // Sub-tabs internal states
   const [planEstudioSubTab, setPlanEstudioSubTab] = useState<"plan_estudio" | "historia_academica">("plan_estudio");
   const [horarioSubTab, setHorarioSubTab] = useState<"horario" | "examenes">("horario");
+  const materiasTableLoading = useBriefLoading([planEstudioSubTab]);
+  const planMateriasTableLoading = useBriefLoading([planEstudioSubTab]);
+  const horariosTableLoading = useBriefLoading([horarioSubTab]);
+  const examenesTableLoading = useBriefLoading([horarioSubTab]);
 
   // Normalized active parent tab: mapping "plan_estudio" to "informacion_materias" and "examenes" to "horario"
   let normalizedParentTab = activeSubTab;
@@ -1928,7 +1935,7 @@ export default function AcademicView({
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                   {/* LEFT COLUMN: Academic Calendar (5 cols) */}
                   <div
-                    className={`p-6 rounded-3xl border flex flex-col justify-between lg:col-span-5 shadow-xs ${
+                    className={`p-6 rounded-3xl border flex flex-col justify-between lg:col-span-5 shadow-xs scroll-reveal ${
                       darkMode
                         ? "bg-zinc-900 border-zinc-800 text-white shadow-lg"
                         : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
@@ -2002,6 +2009,7 @@ export default function AcademicView({
                             return (
                               <button
                                 key={`day-${day}`}
+                                data-sound="selectDate"
                                 onClick={() => setResumenSelectedDateStr(dateStr)}
                                 className={`p-1.5 rounded-full flex flex-col items-center justify-center relative cursor-pointer transition-all h-9 w-full font-bold text-xs ${
                                   isSelected
@@ -2062,7 +2070,7 @@ export default function AcademicView({
 
                   {/* RIGHT COLUMN: Academic Agenda (7 cols) */}
                   <div
-                    className={`p-6 rounded-3xl border flex flex-col justify-between lg:col-span-7 shadow-xs ${
+                    className={`p-6 rounded-3xl border flex flex-col justify-between lg:col-span-7 shadow-xs scroll-reveal ${
                       darkMode
                         ? "bg-zinc-900 border-zinc-800 text-white shadow-lg"
                         : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
@@ -2468,7 +2476,7 @@ export default function AcademicView({
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Academic summary bento */}
             <div
-              className={`p-6 rounded-3xl border ${
+              className={`p-6 rounded-3xl border scroll-reveal ${
                 darkMode
                   ? "bg-zinc-900 border-zinc-800 text-zinc-100 shadow-lg"
                   : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
@@ -2860,7 +2868,7 @@ export default function AcademicView({
 
       {/* Informacion de Materias Submenu Tab */}
       {normalizedParentTab === "informacion_materias" && planEstudioSubTab === "plan_estudio" && (
-        <div className={`p-6 rounded-3xl border ${darkMode ? "bg-zinc-900 border-zinc-800 text-white shadow-lg" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"}`}>
+        <div className={`p-6 rounded-3xl border scroll-reveal ${darkMode ? "bg-zinc-900 border-zinc-800 text-white shadow-lg" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"}`}>
           {/* Header Controls */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
             <div>
@@ -2992,7 +3000,10 @@ export default function AcademicView({
                 </tr>
               </thead>
               <tbody className="">
-                {materiasInfo
+                {materiasTableLoading ? (
+                  <TableSkeleton rows={6} columns={11} darkMode={darkMode} />
+                ) : (
+                materiasInfo
                   .filter((item) => {
                     const matchesSearch =
                       item.materia
@@ -3098,7 +3109,8 @@ export default function AcademicView({
                         </div>
                       </td>
                     </tr>
-                  ))}
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -3201,7 +3213,7 @@ export default function AcademicView({
           });
 
           return (
-            <div className={`p-6 rounded-3xl border ${darkMode ? "bg-zinc-900 border-zinc-800 text-white shadow-lg" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"}`}>
+            <div className={`p-6 rounded-3xl border scroll-reveal ${darkMode ? "bg-zinc-900 border-zinc-800 text-white shadow-lg" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"}`}>
               {/* Header Controls */}
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
                 <div>
@@ -3230,7 +3242,7 @@ export default function AcademicView({
                   </div>
                   <div className="flex items-baseline gap-1.5 mb-2">
                     <span className="text-2xl font-extrabold tracking-tight">
-                      {peAprobadas}{" "}
+                      <AnimatedNumber value={peAprobadas} />{" "}
                       <span className="text-sm font-medium text-slate-400 dark:text-zinc-500">
                         / {peTotal}
                       </span>
@@ -3262,7 +3274,7 @@ export default function AcademicView({
                     </div>
                   </div>
                   <div className="text-2xl font-extrabold tracking-tight mb-1">
-                    {peRegularizadas}
+                    <AnimatedNumber value={peRegularizadas} />
                   </div>
                   <span className="block text-[10px] text-slate-400 dark:text-zinc-500">
                     Listo para rendir examen final
@@ -3285,7 +3297,7 @@ export default function AcademicView({
                     </div>
                   </div>
                   <div className="text-2xl font-extrabold tracking-tight mb-1">
-                    {peSinEmpezar}
+                    <AnimatedNumber value={peSinEmpezar} />
                   </div>
                   <span className="block text-[10px] text-slate-400 dark:text-zinc-500">
                     Planificación de cursado necesaria
@@ -3386,7 +3398,9 @@ export default function AcademicView({
                       </tr>
                     </thead>
                     <tbody className="">
-                      {filteredPlanMaterias.length === 0 ? (
+                      {planMateriasTableLoading ? (
+                        <TableSkeleton rows={6} columns={6} darkMode={darkMode} />
+                      ) : filteredPlanMaterias.length === 0 ? (
                         <tr>
                           <td
                             colSpan={6}
@@ -3506,7 +3520,7 @@ export default function AcademicView({
           });
 
           return (
-            <div className={`p-6 rounded-3xl border ${darkMode ? "bg-zinc-900 border-zinc-800 text-white shadow-lg" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"}`}>
+            <div className={`p-6 rounded-3xl border scroll-reveal ${darkMode ? "bg-zinc-900 border-zinc-800 text-white shadow-lg" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"}`}>
               {/* Header Controls */}
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
                 <div>
@@ -3622,7 +3636,9 @@ export default function AcademicView({
                     </tr>
                   </thead>
                   <tbody className="">
-                    {filteredHorarios.length === 0 ? (
+                    {horariosTableLoading ? (
+                      <TableSkeleton rows={6} columns={6} darkMode={darkMode} />
+                    ) : filteredHorarios.length === 0 ? (
                       <tr>
                         <td
                           colSpan={6}
@@ -3732,7 +3748,7 @@ export default function AcademicView({
           });
 
           return (
-            <div className={`p-6 rounded-3xl border ${darkMode ? "bg-zinc-900 border-zinc-800 text-white shadow-lg" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"}`}>
+            <div className={`p-6 rounded-3xl border scroll-reveal ${darkMode ? "bg-zinc-900 border-zinc-800 text-white shadow-lg" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"}`}>
               {/* Header Controls */}
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
                 <div>
@@ -3842,7 +3858,9 @@ export default function AcademicView({
                     </tr>
                   </thead>
                   <tbody className="">
-                    {filteredExamenes.length === 0 ? (
+                    {examenesTableLoading ? (
+                      <TableSkeleton rows={6} columns={5} darkMode={darkMode} />
+                    ) : filteredExamenes.length === 0 ? (
                       <tr>
                         <td
                           colSpan={5}

@@ -1919,7 +1919,7 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
 
       {/* 2. CONTENEDOR PRINCIPAL DEL CUERPO (TARJETA INDEPENDIENTE) */}
       <div
-        className={`p-4 sm:p-6 rounded-3xl border backdrop-blur-xl shadow-2xl space-y-6 ${
+        className={`p-4 sm:p-6 rounded-3xl border backdrop-blur-xl shadow-2xl space-y-6 scroll-reveal ${
           darkMode
             ? "bg-zinc-900/60 border-zinc-800/80 text-white"
             : "bg-white/80 border-slate-200/80 text-slate-800"
@@ -2315,7 +2315,7 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
 
       {/* --- VISTA 3: REGISTRO DE ENTRENAMIENTO ACTIVO (LOGGER) --- */}
       {activeTab === "logger" && (
-        <div className={`p-6 rounded-3xl border ${darkMode ? "bg-zinc-900/40 border-zinc-800/60 text-white" : "bg-slate-50/60 border-slate-200/60 text-slate-800"} space-y-6 shadow-sm`}>
+        <div className={`p-6 rounded-3xl border scroll-reveal ${darkMode ? "bg-zinc-900/40 border-zinc-800/60 text-white" : "bg-slate-50/60 border-slate-200/60 text-slate-800"} space-y-6 shadow-sm`}>
           <div className="flex flex-col gap-4 border-b border-zinc-200/60 dark:border-zinc-800/60 pb-5">
             {/* CABECERA CON TÍTULO Y BOTONES DE ACCIÓN */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -2711,7 +2711,7 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
             </div>
           </div>
 
-          <div className={`p-4 sm:p-5 rounded-3xl border ${darkMode ? "bg-zinc-950 border-zinc-800" : "bg-white border-zinc-200 shadow-sm"}`}>
+          <div className={`p-4 sm:p-5 rounded-3xl border scroll-reveal ${darkMode ? "bg-zinc-950 border-zinc-800" : "bg-white border-zinc-200 shadow-sm"}`}>
           {/* TÍTULO DINÁMICO DE LA GRÁFICA */}
           <div className="flex items-center justify-between pt-2">
             <div className="flex items-center gap-2">
@@ -2924,7 +2924,7 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
           </div>
 
           {/* Mini Calendario Semanal y Contador de Racha */}
-          <div className={`p-4 sm:p-6 rounded-3xl border ${darkMode ? "bg-zinc-950 border-zinc-800 text-zinc-100" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"} space-y-3`}>
+          <div className={`p-4 sm:p-6 rounded-3xl border scroll-reveal ${darkMode ? "bg-zinc-950 border-zinc-800 text-zinc-100" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"} space-y-3`}>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <span className="text-xs font-extrabold text-slate-400 dark:text-zinc-500 uppercase tracking-wider">
                 Resumen de Actividad Semanal

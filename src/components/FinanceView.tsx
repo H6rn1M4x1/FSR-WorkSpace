@@ -9,6 +9,7 @@ import { CurrencyInput } from "./CurrencyInput";
 import { parseFormattedNumber, formatNumberToDisplay } from "../lib/numberFormat";
 import { WorkspaceService } from "../lib/workspace";
 import React, { useState, useEffect, useRef } from "react";
+import { AnimatedNumber } from "./AnimatedNumber";
 import {
   saveItemToFirestore,
   deleteItemFromFirestore,
@@ -1721,7 +1722,7 @@ export default function FinanceView({
                 {/* Left Column: Compact Calendar Card (col-span-4) */}
                 <div
                   ref={financeCalendarCardRef}
-                  className={`p-6 rounded-3xl border flex flex-col justify-between h-fit lg:col-span-4 app-calendar-container ${
+                  className={`p-6 rounded-3xl border flex flex-col justify-between h-fit lg:col-span-4 app-calendar-container scroll-reveal ${
                     darkMode
                       ? "bg-zinc-900 border-zinc-800 text-white shadow-lg"
                       : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
@@ -1794,6 +1795,7 @@ export default function FinanceView({
                         return (
                           <button
                             key={`day-${day}`}
+                            data-sound="selectDate"
                             onClick={() => {
                               setSelectedCalendarDate(
                                 selectedCalendarDate === dateStr
@@ -1848,7 +1850,7 @@ export default function FinanceView({
                 {/* Middle Column: Invoices deadlines (col-span-4) */}
                 <div
                   style={financeCalendarCardHeight ? { maxHeight: financeCalendarCardHeight } : undefined}
-                  className={`p-6 rounded-3xl border flex flex-col justify-between h-fit overflow-hidden lg:col-span-4 ${
+                  className={`p-6 rounded-3xl border flex flex-col justify-between h-fit overflow-hidden lg:col-span-4 scroll-reveal ${
                     darkMode
                       ? "bg-zinc-900 border-zinc-800 text-white shadow-lg"
                       : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
@@ -2132,7 +2134,7 @@ export default function FinanceView({
                 {/* Right Column: Payments history (col-span-4) */}
                 <div
                   style={financeCalendarCardHeight ? { maxHeight: financeCalendarCardHeight } : undefined}
-                  className={`p-6 rounded-3xl border flex flex-col justify-between h-fit overflow-hidden lg:col-span-4 ${
+                  className={`p-6 rounded-3xl border flex flex-col justify-between h-fit overflow-hidden lg:col-span-4 scroll-reveal ${
                     darkMode
                       ? "bg-zinc-900 border-zinc-800 text-white shadow-lg"
                       : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
@@ -2406,7 +2408,7 @@ export default function FinanceView({
 
               {/* Sección de Tasas de Rendimiento (tasas.ar) */}
               <div
-                className={`p-6 rounded-3xl border space-y-6 ${
+                className={`p-6 rounded-3xl border space-y-6 scroll-reveal ${
                   darkMode
                     ? "bg-zinc-900 border-zinc-800 text-white shadow-lg"
                     : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
@@ -2739,7 +2741,7 @@ export default function FinanceView({
               </div>
               {/* Sección de Inversiones: Ganancias/Pérdidas, Acción Abierta con Mayor Crecimiento y Recomendaciones 6M */}
               <div
-                className={`p-6 rounded-3xl border space-y-6 ${
+                className={`p-6 rounded-3xl border space-y-6 scroll-reveal ${
                   darkMode
                     ? "bg-zinc-900 border-zinc-800 text-white shadow-lg"
                     : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
@@ -2817,7 +2819,7 @@ export default function FinanceView({
                               : "text-red-600 dark:text-red-400"
                           }`}
                         >
-                          {formatARS(investmentMetrics.netGainARS)}
+                          <AnimatedNumber value={investmentMetrics.netGainARS} format={formatARS} />
                         </h4>
                         <p
                           className="text-xs font-bold font-mono dark:text-zinc-400 mt-0.5"
@@ -3074,7 +3076,7 @@ export default function FinanceView({
 
               {/* Sección de Criptomonedas: Ganancias/Pérdidas, Criptomoneda Abierta con Mayor Crecimiento y Recomendaciones 6M */}
               <div
-                className={`p-6 rounded-3xl border space-y-6 ${
+                className={`p-6 rounded-3xl border space-y-6 scroll-reveal ${
                   darkMode
                     ? "bg-zinc-900 border-zinc-800 text-white shadow-lg"
                     : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
@@ -3152,7 +3154,7 @@ export default function FinanceView({
                               : "text-red-600 dark:text-red-400"
                           }`}
                         >
-                          {formatARS(criptoMetrics.netGainARS)}
+                          <AnimatedNumber value={criptoMetrics.netGainARS} format={formatARS} />
                         </h4>
                         <p
                           className="text-xs font-bold font-mono dark:text-zinc-400 mt-0.5"
@@ -3406,7 +3408,7 @@ export default function FinanceView({
 
               {/* Unificado: Bloque Principal de Finanzas */}
               <div
-                className={`p-6 rounded-3xl border shadow-xl flex flex-col gap-6 w-full ${
+                className={`p-6 rounded-3xl border shadow-xl flex flex-col gap-6 w-full scroll-reveal ${
                   darkMode
                     ? "bg-zinc-900 border-zinc-800 text-white"
                     : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
@@ -3420,7 +3422,7 @@ export default function FinanceView({
                       Total Gastado
                     </span>
                     <h3 className="text-2xl font-black mt-1 text-primary">
-                      {formatCurrency(totalSpent)}
+                      <AnimatedNumber value={totalSpent} format={formatCurrency} />
                     </h3>
                   </div>
 

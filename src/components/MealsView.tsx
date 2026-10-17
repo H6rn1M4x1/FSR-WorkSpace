@@ -2,6 +2,9 @@ import { SubNav } from "./SubNav";
 import { useSubPanelRows } from "../lib/navPanelContext";
 import { SharedBadge, makeSharedOutHelpers } from "./SharedBadge";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
+import { useBriefLoading } from "../hooks/useBriefLoading";
+import { TableSkeleton } from "./TableSkeleton";
+import { AnimatedNumber } from "./AnimatedNumber";
 import { generateUniqueId } from "../utils/id";
 import { getLocalDateString } from "../utils/date";
 import React, { useState, useEffect } from "react";
@@ -457,6 +460,9 @@ export default function MealsView({
   const [creacionComidasActiveTab, setCreacionComidasActiveTab] = useState<
     "mercaderia" | "alimentos" | "platos"
   >("mercaderia");
+  const mercaderiaTableLoading = useBriefLoading([creacionComidasActiveTab]);
+  const alimentosTableLoading = useBriefLoading([creacionComidasActiveTab]);
+  const platosTableLoading = useBriefLoading([creacionComidasActiveTab]);
 
   const userId = (userEmail || "hernanmaximiliano10@gmail.com").toLowerCase().trim();
   const [isSaving, setIsSaving] = useState(false);
@@ -492,6 +498,8 @@ export default function MealsView({
   }, [rawActiveSubTab]);
 
   const activeSubTab = normalizedActiveSubTab;
+  const organizacionTableLoading = useBriefLoading([activeSubTab]);
+  const shoppingListTableLoading = useBriefLoading([activeSubTab]);
 
   const { showToast } = useToast();
   const setActiveSubTab = (tab: any) => {
@@ -2353,7 +2361,7 @@ export default function MealsView({
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-fade-in">
               {/* Left Column: Compact Calendar Card (col-span-4) */}
               <div
-                className={`p-6 rounded-3xl border flex flex-col lg:col-span-4 justify-between h-fit app-calendar-container ${
+                className={`p-6 rounded-3xl border flex flex-col lg:col-span-4 justify-between h-fit app-calendar-container scroll-reveal ${
                   darkMode
                     ? "bg-zinc-900 border-zinc-800 text-white shadow-lg"
                     : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
@@ -2426,6 +2434,7 @@ export default function MealsView({
                       return (
                         <button
                           key={`day-${day}`}
+                          data-sound="selectDate"
                           onClick={() => {
                             setSelectedCalendarDate(
                               selectedCalendarDate === dateStr ? null : dateStr,
@@ -2477,7 +2486,7 @@ export default function MealsView({
 
               {/* Middle Column: Organización Semanal Card (col-span-4) */}
               <div
-                className={`p-6 rounded-3xl border flex flex-col lg:col-span-4 justify-between h-fit ${
+                className={`p-6 rounded-3xl border flex flex-col lg:col-span-4 justify-between h-fit scroll-reveal ${
                   darkMode
                     ? "bg-zinc-900 border-zinc-800 text-white shadow-lg"
                     : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
@@ -2662,7 +2671,7 @@ export default function MealsView({
               {/* Right Column: Checklist de Compras Card (col-span-4) */}
               <div
                 id="shopping-notes-card"
-                className={`p-6 rounded-3xl border lg:col-span-4 self-start space-y-6 ${
+                className={`p-6 rounded-3xl border lg:col-span-4 self-start space-y-6 scroll-reveal ${
                   darkMode
                     ? "bg-zinc-900 border-zinc-800 text-zinc-100 shadow-lg"
                     : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
@@ -2877,7 +2886,7 @@ export default function MealsView({
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -15 }}
                 transition={{ duration: 0.2 }}
-                className={`p-6 rounded-3xl border ${
+                className={`p-6 rounded-3xl border scroll-reveal ${
                   darkMode
                     ? "bg-zinc-900 border-zinc-800 text-zinc-100 shadow-lg"
                     : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
@@ -2989,7 +2998,9 @@ export default function MealsView({
                 </tr>
               </thead>
               <tbody className="">
-                {filteredMercaderia.length === 0 ? (
+                {mercaderiaTableLoading ? (
+                  <TableSkeleton rows={6} columns={9} darkMode={darkMode} />
+                ) : filteredMercaderia.length === 0 ? (
                   <tr>
                     <td
                       colSpan={9}
@@ -3140,7 +3151,7 @@ export default function MealsView({
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -15 }}
                 transition={{ duration: 0.2 }}
-                className={`p-6 rounded-3xl border ${
+                className={`p-6 rounded-3xl border scroll-reveal ${
                   darkMode
                     ? "bg-zinc-900 border-zinc-800 text-zinc-100 shadow-lg"
                     : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
@@ -3298,7 +3309,9 @@ export default function MealsView({
                 </tr>
               </thead>
               <tbody className="">
-                {filteredAlimentos.length === 0 ? (
+                {alimentosTableLoading ? (
+                  <TableSkeleton rows={6} columns={12} darkMode={darkMode} />
+                ) : filteredAlimentos.length === 0 ? (
                   <tr>
                     <td
                       colSpan={12}
@@ -3475,7 +3488,7 @@ export default function MealsView({
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -15 }}
                 transition={{ duration: 0.2 }}
-                className={`p-6 rounded-3xl border ${
+                className={`p-6 rounded-3xl border scroll-reveal ${
                   darkMode
                     ? "bg-zinc-900 border-zinc-800 text-zinc-100 shadow-lg"
                     : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
@@ -3608,7 +3621,9 @@ export default function MealsView({
                 </tr>
               </thead>
               <tbody className="">
-                {filteredPlatos.length === 0 ? (
+                {platosTableLoading ? (
+                  <TableSkeleton rows={6} columns={11} darkMode={darkMode} />
+                ) : filteredPlatos.length === 0 ? (
                   <tr>
                     <td
                       colSpan={11}
@@ -3758,7 +3773,7 @@ export default function MealsView({
 
       {/* RENDER ORGANIZACION SEMANAL TAB */}
       {activeSubTab === "organizacion_semanal" && (
-        <div id="organizacion-semanal-section" className={`p-6 rounded-3xl border ${darkMode ? "bg-zinc-900 border-zinc-800 text-white shadow-lg" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"}`}>
+        <div id="organizacion-semanal-section" className={`p-6 rounded-3xl border scroll-reveal ${darkMode ? "bg-zinc-900 border-zinc-800 text-white shadow-lg" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"}`}>
           {/* Header Controls */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
             <div>
@@ -3832,7 +3847,9 @@ export default function MealsView({
                   </tr>
                 </thead>
                 <tbody className="">
-                  {filteredOrganizacion.length === 0 ? (
+                  {organizacionTableLoading ? (
+                    <TableSkeleton rows={6} columns={5} darkMode={darkMode} />
+                  ) : filteredOrganizacion.length === 0 ? (
                     <tr>
                       <td
                         colSpan={5}
@@ -3927,7 +3944,7 @@ export default function MealsView({
 
       {/* RENDER LISTA DE COMPRAS TAB */}
       {activeSubTab === "lista_compras" && (
-        <div id="lista-compras-section" className={`p-6 rounded-3xl border ${darkMode ? "bg-zinc-900 border-zinc-800 text-white shadow-lg" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"}`}>
+        <div id="lista-compras-section" className={`p-6 rounded-3xl border scroll-reveal ${darkMode ? "bg-zinc-900 border-zinc-800 text-white shadow-lg" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"}`}>
           {/* Header Controls */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
             <div>
@@ -4024,7 +4041,9 @@ export default function MealsView({
                   </tr>
                 </thead>
                 <tbody className="">
-                  {filteredShoppingList.length === 0 ? (
+                  {shoppingListTableLoading ? (
+                    <TableSkeleton rows={6} columns={8} darkMode={darkMode} />
+                  ) : filteredShoppingList.length === 0 ? (
                     <tr>
                       <td
                         colSpan={8}

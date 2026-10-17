@@ -1,5 +1,7 @@
 import React, { useState, useRef } from "react";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
+import { useBriefLoading } from "../hooks/useBriefLoading";
+import { TableSkeleton } from "./TableSkeleton";
 import { saveItemToFirestore, deleteItemFromFirestore } from "../lib/firestoreSyncService";
 import { generateUniqueId } from "../utils/id";
 import { motion, AnimatePresence } from "motion/react";
@@ -290,6 +292,7 @@ export default function GastosVariosTable({
   userEmail,
 }: GastosVariosTableProps) {
   const { showToast } = useToast();
+  const gastosTableLoading = useBriefLoading([gastosVarios]);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   // State
@@ -628,7 +631,7 @@ export default function GastosVariosTable({
     <div className="space-y-6">
       {/* Container header matching PaymentsTable */}
       <div
-        className={`p-6 rounded-3xl border ${darkMode ? "bg-zinc-900 border-zinc-800 text-white shadow-lg" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"}`}
+        className={`p-6 rounded-3xl border scroll-reveal ${darkMode ? "bg-zinc-900 border-zinc-800 text-white shadow-lg" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"}`}
       >
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
           <div className="flex items-center gap-3">
@@ -781,7 +784,9 @@ export default function GastosVariosTable({
               </tr>
             </thead>
             <tbody className="">
-              {filteredGastos.length === 0 ? (
+              {gastosTableLoading ? (
+                <TableSkeleton rows={6} columns={6} darkMode={darkMode} />
+              ) : filteredGastos.length === 0 ? (
                 <tr>
                   <td
                     colSpan={6}

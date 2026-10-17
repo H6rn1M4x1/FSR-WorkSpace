@@ -355,6 +355,39 @@ export const PageSkeleton: React.FC<PageSkeletonProps> = ({ tab, darkMode }) => 
     );
   };
 
+  const renderNotesSkeleton = () => {
+    return (
+      <div className="space-y-6 max-w-7xl mx-auto px-4 py-4 md:py-6">
+        {/* Sub-tab bar mock: Eventos / Notas Rápidas / Caja Fuerte */}
+        <div className="flex gap-2 border-b border-zinc-200/55 dark:border-zinc-800/50 pb-px overflow-x-auto scrollbar-none">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={`notes-tab-${i}`} className={`h-8 w-28 rounded-t-xl ${i === 0 ? skeletonBright : skeletonMuted} shrink-0`} />
+          ))}
+        </div>
+
+        {/* Grid of note cards with checklist-style lines */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={`note-${i}`} className={`p-5 rounded-2xl border ${cardBg} space-y-3 min-h-[160px]`}>
+              <div className="flex justify-between items-start">
+                <div className={`h-4 w-2/3 rounded-lg ${skeletonBright}`} />
+                <div className={`w-6 h-6 rounded-lg ${skeletonMuted}`} />
+              </div>
+              <div className="space-y-2 pt-1">
+                {Array.from({ length: 3 }).map((_, j) => (
+                  <div key={`note-line-${i}-${j}`} className="flex items-center gap-2">
+                    <div className={`w-3.5 h-3.5 rounded ${skeletonMuted} shrink-0`} />
+                    {renderLines(1, [j % 2 === 0 ? "85%" : "60%"])}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   const renderAISkeleton = () => {
     return (
       <div className="max-w-4xl mx-auto p-4 md:p-6 space-y-6 h-[calc(100vh-140px)] flex flex-col justify-between">
@@ -426,6 +459,8 @@ export const PageSkeleton: React.FC<PageSkeletonProps> = ({ tab, darkMode }) => 
         return renderAppointmentsSkeleton();
       case "health":
         return renderHealthSkeleton();
+      case "notes":
+        return renderNotesSkeleton();
       case "ai":
         return renderAISkeleton();
       default:

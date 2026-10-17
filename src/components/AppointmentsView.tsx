@@ -1,6 +1,8 @@
 import { SubNav } from "./SubNav";
 import { SharedBadge, makeSharedOutHelpers } from "./SharedBadge";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
+import { useBriefLoading } from "../hooks/useBriefLoading";
+import { TableSkeleton } from "./TableSkeleton";
 import { generateUniqueId } from "../utils/id";
 import { getLocalDateString } from "../utils/date";
 import { StorageService } from "../lib/storage";
@@ -2351,6 +2353,8 @@ export default function AppointmentsView({
     });
   }, [uniqueTurnosCompromisos]);
 
+  const turnosTableLoading = useBriefLoading([sortedTurnosCompromisos]);
+
   const monthNames = [
     "Enero",
     "Febrero",
@@ -2472,7 +2476,7 @@ export default function AppointmentsView({
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* Left Column: Calendar Card */}
             <div
-              className={`p-6 rounded-3xl border flex flex-col lg:col-span-5 justify-between app-calendar-container ${
+              className={`p-6 rounded-3xl border flex flex-col lg:col-span-5 justify-between app-calendar-container scroll-reveal ${
                 darkMode ? "bg-black/85 backdrop-blur-md border-zinc-800 text-white shadow-lg"
                   : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
               }`}
@@ -2544,6 +2548,7 @@ export default function AppointmentsView({
                     return (
                       <button
                         key={`day-${day}`}
+                        data-sound="selectDate"
                         onClick={() => {
                           setSelectedCalendarDate(
                             selectedCalendarDate === dateStr ? null : dateStr,
@@ -2595,7 +2600,7 @@ export default function AppointmentsView({
 
             {/* Right Column: Agenda List Card */}
             <div
-              className={`p-6 rounded-3xl border flex flex-col lg:col-span-7 justify-between ${
+              className={`p-6 rounded-3xl border flex flex-col lg:col-span-7 justify-between scroll-reveal ${
                 darkMode ? "bg-black/85 backdrop-blur-md border-zinc-800 text-white shadow-lg"
                   : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
               }`}
@@ -3100,7 +3105,7 @@ export default function AppointmentsView({
 
           {/* Bottom Row: Map Component displaying all marked locations */}
           <div
-            className={`p-6 rounded-3xl border ${
+            className={`p-6 rounded-3xl border scroll-reveal ${
               darkMode ? "bg-black/85 backdrop-blur-md border-zinc-800 text-white shadow-lg"
                 : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
             }`}
@@ -3142,7 +3147,7 @@ export default function AppointmentsView({
       ) : (
         /* Registro de Turnos y Compromisos Submenu View */
         <div
-          className={`p-6 rounded-3xl border ${
+          className={`p-6 rounded-3xl border scroll-reveal ${
             darkMode ? "bg-black/85 backdrop-blur-md border-zinc-800 text-white shadow-lg"
               : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
           }`}
@@ -3246,7 +3251,9 @@ export default function AppointmentsView({
                 </tr>
               </thead>
               <tbody className="">
-                {sortedTurnosCompromisos.filter((tc) => {
+                {turnosTableLoading ? (
+                  <TableSkeleton rows={6} columns={10} darkMode={darkMode} />
+                ) : sortedTurnosCompromisos.filter((tc) => {
                   const estado = getEstadoLabel(tc.estatus, tc.fecha);
                   const matchesStatus =
                     statusFilter === "Todos" ||
