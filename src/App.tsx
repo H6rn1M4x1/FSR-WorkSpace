@@ -101,23 +101,30 @@ export default function App() {
   // Custom hook for smooth scroll reveal animations across sections
   useScrollReveal();
   const mainScrollRef = useRef<HTMLElement>(null);
+  const lenisRef = useRef<Lenis | null>(null);
 
   // Scroll inercial: al soltar la rueda/trackpad, el scroll frena progresivamente en el lugar en
   // vez de detenerse de golpe. Respeta prefers-reduced-motion por su cuenta (respectReducedMotion).
+  // `content` es el mismo wrapper (no un hijo suyo): el contenido real de <main> se reemplaza
+  // entero al cambiar de pestaña (PageSkeleton <-> AnimatePresence), así que apuntar a un hijo
+  // puntual dejaba a Lenis con una referencia a un nodo ya desmontado.
   useEffect(() => {
     const wrapper = mainScrollRef.current;
     if (!wrapper) return;
-    const content = (wrapper.firstElementChild as HTMLElement) || wrapper;
     const lenis = new Lenis({
       wrapper,
-      content,
+      content: wrapper,
       duration: 1.1,
       easing: (t: number) => 1 - Math.pow(1 - t, 3),
       smoothWheel: true,
       autoRaf: true,
       respectReducedMotion: true,
     });
-    return () => lenis.destroy();
+    lenisRef.current = lenis;
+    return () => {
+      lenisRef.current = null;
+      lenis.destroy();
+    };
   }, []);
 
   const isLocalMutatingRef = useRef(false);
@@ -142,6 +149,17 @@ export default function App() {
   // Layout State & Aesthetic Preferences (LocalStorage EXCLUSIVE per device)
   const [currentTab, setCurrentTab] = useState(() => AestheticStorageService.getCurrentTab());
   const [activeSubTab, setActiveSubTab] = useState(() => AestheticStorageService.getActiveSubTab());
+
+  // Sin esto, al cambiar de pestaña Lenis se quedaba con la posición de scroll de la pestaña
+  // anterior: si esa pestaña era más larga que la nueva, el scroll quedaba más allá del final del
+  // contenido nuevo y la pantalla se veía en blanco (solo el fondo animado, sin ninguna tarjeta
+  // encima) hasta que se scrolleaba manualmente hacia arriba. Se resetea a 0 de entrada, tanto en
+  // el scroll nativo como en el estado interno de Lenis, cada vez que cambia la sección.
+  useEffect(() => {
+    if (mainScrollRef.current) mainScrollRef.current.scrollTop = 0;
+    lenisRef.current?.resize();
+    lenisRef.current?.scrollTo(0, { immediate: true, force: true });
+  }, [currentTab, activeSubTab]);
   // Botón "Agendar" de Inicio: navega a la pestaña real de la categoría elegida y le avisa a esa
   // vista (via el prop autoOpenQuickAdd, que cada una consume con su propio useEffect) que abra
   // directo su formulario real de "nuevo" — en vez de reconstruir 5 formularios aparte solo para
