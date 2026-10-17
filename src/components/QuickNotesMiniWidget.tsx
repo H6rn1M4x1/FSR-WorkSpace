@@ -81,7 +81,7 @@ export function QuickNotesMiniWidget({
 
   return (
     <div
-      className={`rounded-3xl p-5 border shadow-xs transition-all duration-300 ${
+      className={`rounded-3xl p-5 border shadow-xs transition-all duration-300 scroll-reveal ${
         darkMode ? "bg-zinc-900 border-zinc-800 text-white shadow-lg" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
       }`}
     >

@@ -78,6 +78,10 @@ const cacheProviderToken = (token: string | null | undefined) => {
     if (token) {
       localStorage.setItem(GOOGLE_TOKEN_CACHE_KEY, token);
       localStorage.setItem(GOOGLE_TOKEN_FETCHED_AT_KEY, String(Date.now()));
+      // Un token fresco significa que Google volvió a confiar en nosotros (ya sea por un
+      // refresco silencioso que sí funcionó, o porque el usuario reconectó la cuenta a mano) —
+      // se levanta el bloqueo de reintentos silenciosos si había uno puesto.
+      localStorage.removeItem(REAUTH_BLOCKED_KEY);
     }
   } catch (_) {}
 };
@@ -125,6 +129,44 @@ const LAST_ATTEMPT_KEY = "google_silent_reauth_last_attempt";
 // enfriamiento evita ese loop: después de un intento, hay que esperar este tiempo antes de
 // volver a probar uno nuevo.
 const REAUTH_COOLDOWN_MS = 2 * 60 * 1000;
+// Si Google ya contestó una vez con "interaction_required" (el usuario tiene que elegir cuenta o
+// volver a dar consentimiento a mano), reintentar con prompt=none está condenado a fallar de
+// nuevo — sin esto, cada 2 minutos (o apenas se detecta un 401 de Drive) la pestaña entera se
+// navegaba sola hacia Google y volvía con un error en la URL, interrumpiendo al usuario sin
+// arreglar nada. Con este flag, en vez de reintentar en loop, se corta ahí y se deja el cartel
+// normal de "Iniciar sesión con Google" para que lo resuelva con un clic cuando quiera.
+const REAUTH_BLOCKED_KEY = "google_silent_reauth_blocked";
+const REAUTH_NOTICE_PENDING_KEY = "google_silent_reauth_notice_pending";
+
+// Google puede devolver el refresco silencioso con un error en la URL (?error=interaction_required
+// y/o #error=interaction_required) en vez de un token. Si eso queda sin consumir, el usuario ve
+// una URL rota y, peor, cada intento posterior repite el mismo ida-y-vuelta fallido. Se corre una
+// sola vez, al cargar este módulo (antes de que React pinte nada), para limpiar la URL y cortar
+// los reintentos silenciosos hasta que el usuario reconecte la cuenta a mano.
+const consumeOAuthErrorFromUrl = () => {
+  if (typeof window === "undefined") return;
+  try {
+    const hasError = /[?&#]error=/.test(window.location.search) || /[?&#]error=/.test(window.location.hash);
+    if (!hasError) return;
+    localStorage.setItem(REAUTH_BLOCKED_KEY, "1");
+    localStorage.setItem(REAUTH_NOTICE_PENDING_KEY, "1");
+    sessionStorage.removeItem(REDIRECT_PENDING_KEY);
+    window.history.replaceState(null, "", window.location.pathname);
+  } catch (_) {}
+};
+consumeOAuthErrorFromUrl();
+
+// Para que la UI (App.tsx) avise una sola vez que hace falta reconectar Google, en vez de que el
+// usuario note que Drive dejó de funcionar sin ninguna explicación.
+export const consumeGoogleReauthNotice = (): boolean => {
+  try {
+    if (localStorage.getItem(REAUTH_NOTICE_PENDING_KEY)) {
+      localStorage.removeItem(REAUTH_NOTICE_PENDING_KEY);
+      return true;
+    }
+  } catch (_) {}
+  return false;
+};
 
 const tokenAgeMs = (): number => {
   try {
@@ -143,6 +185,7 @@ const tokenAgeMs = (): number => {
 // a mano en vez de asumir que esto lo va a arreglar solo.
 export const triggerSilentReauth = (): boolean => {
   try {
+    if (localStorage.getItem(REAUTH_BLOCKED_KEY)) return false; // Google ya pidió interacción manual
     if (sessionStorage.getItem(REDIRECT_PENDING_KEY)) return false; // ya hay uno en curso
     const lastAttempt = Number(sessionStorage.getItem(LAST_ATTEMPT_KEY) || 0);
     if (Date.now() - lastAttempt < REAUTH_COOLDOWN_MS) return false; // ya se probó hace poco
