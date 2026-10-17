@@ -117,8 +117,8 @@ export default function App() {
   const [guestMode, setGuestMode] = useState(false);
 
   // Layout State & Aesthetic Preferences (LocalStorage EXCLUSIVE per device)
-  const [currentTab, setCurrentTab] = useState("home");
-  const [activeSubTab, setActiveSubTab] = useState("");
+  const [currentTab, setCurrentTab] = useState(() => AestheticStorageService.getCurrentTab());
+  const [activeSubTab, setActiveSubTab] = useState(() => AestheticStorageService.getActiveSubTab());
   // Botón "Agendar" de Inicio: navega a la pestaña real de la categoría elegida y le avisa a esa
   // vista (via el prop autoOpenQuickAdd, que cada una consume con su propio useEffect) que abra
   // directo su formulario real de "nuevo" — en vez de reconstruir 5 formularios aparte solo para
@@ -136,6 +136,14 @@ export default function App() {
   useEffect(() => {
     AestheticStorageService.setMenuVisibility(menuVisibility);
   }, [menuVisibility]);
+
+  useEffect(() => {
+    AestheticStorageService.setCurrentTab(currentTab);
+  }, [currentTab]);
+
+  useEffect(() => {
+    AestheticStorageService.setActiveSubTab(activeSubTab);
+  }, [activeSubTab]);
 
   useEffect(() => {
     AestheticStorageService.setDarkMode(darkMode);

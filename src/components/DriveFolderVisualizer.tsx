@@ -1278,13 +1278,19 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
 
       if (!response.ok) {
         if (response.status === 401) {
-          // El token de Google quedó vencido (dura ~1 hora). En vez de cerrar la sesión y
-          // obligar a tocar "Iniciar sesión con Google" de nuevo, disparamos el mismo
-          // refresco silencioso que corre en segundo plano (recarga la pestaña actual y
-          // vuelve sin pedir nada, si la sesión de Google sigue activa).
-          triggerSilentReauth();
+          // El token de Google quedó vencido (dura ~1 hora). Primero probamos el refresco
+          // silencioso en segundo plano (recarga la pestaña y vuelve sin pedir nada, si la
+          // sesión de Google sigue activa); si ya se intentó hace poco y no alcanzó, en vez
+          // de reintentarlo en loop mostramos el cartel normal de "Iniciar sesión con Google"
+          // para que lo resuelva con un clic.
+          if (triggerSilentReauth()) {
+            throw new Error(
+              "Tu sesión de Google se está renovando sola. La página se va a actualizar en un instante.",
+            );
+          }
+          handleDisconnect();
           throw new Error(
-            "Tu sesión de Google se está renovando sola. La página se va a actualizar en un instante.",
+            "Tu sesión de Google expiró. Por favor inicia sesión de nuevo.",
           );
         }
         throw new Error(

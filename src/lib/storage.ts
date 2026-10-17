@@ -237,6 +237,41 @@ export class AestheticStorageService {
       console.error("Error setting app_menu_visibility in localStorage:", e);
     }
   }
+
+  // Recuerda la pestaña/sub-pestaña activa para que cualquier recarga de la página (manual,
+  // o la que dispara reconectar la sesión de Google) vuelva a la sección donde estaba el
+  // usuario, en vez de mandarlo siempre a Inicio.
+  static getCurrentTab(): string {
+    try {
+      return localStorage.getItem("app_current_tab") || "home";
+    } catch {
+      return "home";
+    }
+  }
+
+  static setCurrentTab(tab: string): void {
+    try {
+      localStorage.setItem("app_current_tab", tab);
+    } catch (e) {
+      console.error("Error setting app_current_tab in localStorage:", e);
+    }
+  }
+
+  static getActiveSubTab(): string {
+    try {
+      return localStorage.getItem("app_active_sub_tab") || "";
+    } catch {
+      return "";
+    }
+  }
+
+  static setActiveSubTab(subTab: string): void {
+    try {
+      localStorage.setItem("app_active_sub_tab", subTab);
+    } catch (e) {
+      console.error("Error setting app_active_sub_tab in localStorage:", e);
+    }
+  }
 }
 
 // Complete Storage Interface for App State

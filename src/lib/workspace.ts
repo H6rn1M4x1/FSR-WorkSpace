@@ -271,16 +271,29 @@ export class WorkspaceService {
     }
 
     try {
-      const { triggerSilentReauth } = await import("./supabase");
-      triggerSilentReauth();
+      const { triggerSilentReauth, googleSignIn } = await import("./supabase");
+      if (triggerSilentReauth()) {
+        return {
+          success: false,
+          error: "Tu sesión de Google se está renovando sola. Esperá un instante y volvé a intentar subir el archivo.",
+        };
+      }
+      // El refresco silencioso ya se probó hace poco y no alcanzó (Google puede exigir elegir
+      // cuenta o confirmar permisos en algunos casos, aunque se pida sin mostrar pantalla). En
+      // vez de quedar en un error sin salida, pedimos el login normal: funciona siempre porque
+      // es el mismo flujo con el que ya inició sesión, aunque esta vez sí recarga la página.
+      await googleSignIn();
+      return {
+        success: false,
+        error: "Tu sesión de Google necesitaba reconectarse. La página se va a actualizar en un instante; volvé a intentar subir el archivo después.",
+      };
     } catch (err: any) {
       console.warn("WorkspaceService.uploadFileToDrive (reauth):", err?.message || err);
+      return {
+        success: false,
+        error: "Tu sesión de Google expiró. Volvé a conectar tu cuenta de Google e intentá de nuevo.",
+      };
     }
-
-    return {
-      success: false,
-      error: "Tu sesión de Google se está renovando sola. Esperá un instante y volvé a intentar subir el archivo.",
-    };
   }
 
   // Sync events to Google Calendar
