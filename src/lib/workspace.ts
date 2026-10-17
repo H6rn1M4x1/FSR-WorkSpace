@@ -251,12 +251,13 @@ export class WorkspaceService {
 
     const firstResult = await attempt(accessToken);
 
-    // Los access tokens de Google duran ~1 hora y esta app no tiene refresh token (el
-    // sign-in es client-side con signInWithPopup), así que después de ese tiempo cualquier
-    // llamada a la API de Google empieza a fallar con 401 UNAUTHENTICATED. En vez de mostrar
-    // directamente el error, pedimos un token nuevo con el mismo popup de Google (como los
-    // permisos ya están otorgados, normalmente se resuelve solo sin pantalla de consentimiento)
-    // y reintentamos una vez antes de darnos por vencidos.
+    // El access token de Google (provider_token de Supabase) dura ~1 hora y no se renueva
+    // solo de este lado, así que después de ese tiempo cualquier llamada a la API de Google
+    // empieza a fallar con 401 UNAUTHENTICATED. Un refresco silencioso (ver
+    // ensureBackgroundTokenRefresh en lib/supabase.ts) recarga la página para pedir uno nuevo
+    // sin mostrar pantalla de consentimiento, así que no podemos "esperarlo" ni reintentar
+    // dentro de esta misma llamada. Lo disparamos ahora para que la cuenta quede reconectada
+    // sola de acá a un instante, y avisamos para que reintente la subida después de eso.
     const looksExpired =
       !firstResult.success &&
       !!firstResult.error &&
@@ -270,22 +271,16 @@ export class WorkspaceService {
     }
 
     try {
-      const { googleSignIn } = await import("./firebase");
-      const authRes = await googleSignIn();
-      if (!authRes?.accessToken) {
-        return {
-          success: false,
-          error: "Tu sesión de Google expiró. Volvé a conectar tu cuenta de Google e intentá de nuevo.",
-        };
-      }
-      return await attempt(authRes.accessToken);
+      const { triggerSilentReauth } = await import("./supabase");
+      triggerSilentReauth();
     } catch (err: any) {
       console.warn("WorkspaceService.uploadFileToDrive (reauth):", err?.message || err);
-      return {
-        success: false,
-        error: "Tu sesión de Google expiró. Volvé a conectar tu cuenta de Google e intentá de nuevo.",
-      };
     }
+
+    return {
+      success: false,
+      error: "Tu sesión de Google se está renovando sola. Esperá un instante y volvé a intentar subir el archivo.",
+    };
   }
 
   // Sync events to Google Calendar

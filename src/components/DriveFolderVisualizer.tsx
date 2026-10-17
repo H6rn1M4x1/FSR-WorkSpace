@@ -58,6 +58,7 @@ import {
   logout as firebaseLogout,
   initAuth,
   auth,
+  triggerSilentReauth,
 } from "../lib/supabase";
 import { generateUniqueId } from "../utils/id";
 import {
@@ -1277,10 +1278,13 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
 
       if (!response.ok) {
         if (response.status === 401) {
-          // Token expired
-          handleDisconnect();
+          // El token de Google quedó vencido (dura ~1 hora). En vez de cerrar la sesión y
+          // obligar a tocar "Iniciar sesión con Google" de nuevo, disparamos el mismo
+          // refresco silencioso que corre en segundo plano (recarga la pestaña actual y
+          // vuelve sin pedir nada, si la sesión de Google sigue activa).
+          triggerSilentReauth();
           throw new Error(
-            "La sesión de Google Drive ha expirado. Por favor inicia sesión de nuevo.",
+            "Tu sesión de Google se está renovando sola. La página se va a actualizar en un instante.",
           );
         }
         throw new Error(

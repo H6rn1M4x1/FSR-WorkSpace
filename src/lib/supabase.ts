@@ -71,10 +71,14 @@ export const logout = async () => {
 // is technically still valid. We cache it in localStorage so it survives reloads for the
 // rest of its natural lifetime, instead of silently disappearing on every refresh.
 const GOOGLE_TOKEN_CACHE_KEY = "liquid_google_access_token";
+const GOOGLE_TOKEN_FETCHED_AT_KEY = "liquid_google_access_token_fetched_at";
 
 const cacheProviderToken = (token: string | null | undefined) => {
   try {
-    if (token) localStorage.setItem(GOOGLE_TOKEN_CACHE_KEY, token);
+    if (token) {
+      localStorage.setItem(GOOGLE_TOKEN_CACHE_KEY, token);
+      localStorage.setItem(GOOGLE_TOKEN_FETCHED_AT_KEY, String(Date.now()));
+    }
   } catch (_) {}
 };
 
@@ -109,6 +113,65 @@ export const silentGoogleReauth = async (): Promise<void> => {
   });
 };
 
+const TOKEN_MAX_AGE_MS = 50 * 60 * 1000; // refrescar antes de los ~60 min reales de vida
+const REDIRECT_PENDING_KEY = "google_silent_reauth_pending";
+
+const tokenAgeMs = (): number => {
+  try {
+    const fetchedAt = Number(localStorage.getItem(GOOGLE_TOKEN_FETCHED_AT_KEY) || 0);
+    return fetchedAt ? Date.now() - fetchedAt : Infinity;
+  } catch {
+    return Infinity;
+  }
+};
+
+// Exportada para que quien detecte un 401 de Google en una llamada puntual (por ejemplo,
+// WorkspaceService.uploadFileToDrive) pueda disparar el refresco ahora mismo en vez de
+// esperar al próximo chequeo periódico, aunque la llamada en curso ya no se pueda completar
+// (la pestaña va a navegar y volver).
+export const triggerSilentReauth = () => {
+  try {
+    if (sessionStorage.getItem(REDIRECT_PENDING_KEY)) return; // ya hay uno en curso
+    sessionStorage.setItem(REDIRECT_PENDING_KEY, "1");
+  } catch {}
+  silentGoogleReauth().catch(() => {
+    try {
+      sessionStorage.removeItem(REDIRECT_PENDING_KEY);
+    } catch {}
+  });
+};
+
+let backgroundRefreshStarted = false;
+// El access token de Google (provider_token) dura ~1 hora y Supabase no lo renueva solo, así
+// que sin esto cualquier llamada a Drive después de esa hora fallaba con 401 y obligaba a
+// reconectar la cuenta a mano. Esto arranca (una sola vez) un chequeo periódico que lo refresca
+// en segundo plano antes de que venza. Como silentGoogleReauth navega la misma pestaña (no
+// abre pop-up, así que nunca lo bloquea el navegador), se prioriza hacerlo mientras la pestaña
+// está oculta para que el usuario ni note el ida y vuelta de la recarga.
+const ensureBackgroundTokenRefresh = () => {
+  if (backgroundRefreshStarted || typeof window === "undefined") return;
+  backgroundRefreshStarted = true;
+
+  const maybeRefresh = (onlyIfHidden: boolean) => {
+    if (!readCachedProviderToken()) return;
+    if (onlyIfHidden && document.visibilityState !== "hidden") return;
+    if (tokenAgeMs() > TOKEN_MAX_AGE_MS) {
+      triggerSilentReauth();
+    }
+  };
+
+  document.addEventListener("visibilitychange", () => maybeRefresh(true));
+  // Respaldo: si la pestaña nunca pasa a segundo plano durante una sesión muy larga, refresca
+  // de todos modos pasados ~55 min para no dejar que el token llegue a expirar de verdad.
+  setInterval(() => {
+    if (tokenAgeMs() > TOKEN_MAX_AGE_MS + 5 * 60 * 1000) {
+      maybeRefresh(false);
+    } else {
+      maybeRefresh(true);
+    }
+  }, 5 * 60 * 1000);
+};
+
 // Firebase's `User` object exposes uid/displayName/photoURL. The app has ~70 call sites
 // relying on that exact shape, so instead of touching every file we adapt the Supabase
 // user into the same shape. `FirebaseLikeUser` is what the rest of the app should keep using.
@@ -134,11 +197,19 @@ export const initAuth = (
   onAuthSuccess?: (user: FirebaseLikeUser, token: string | null) => void,
   onAuthFailure?: () => void
 ) => {
+  // Se llega hasta acá después de cualquier redirect (incluido el del refresco silencioso), así
+  // que esta primera resolución de la sesión siempre libera el flag de "hay uno en curso",
+  // haya salido bien o mal, para no dejar el refresco bloqueado el resto de la pestaña.
+  try {
+    sessionStorage.removeItem(REDIRECT_PENDING_KEY);
+  } catch {}
+
   supabase.auth.getSession().then(({ data }) => {
     if (data.session?.user) {
       const u = toFirebaseLikeUser(data.session.user);
       auth.currentUser = u;
       cacheProviderToken(data.session.provider_token);
+      ensureBackgroundTokenRefresh();
       onAuthSuccess?.(u, data.session.provider_token ?? readCachedProviderToken());
     } else {
       auth.currentUser = null;
@@ -151,6 +222,7 @@ export const initAuth = (
       const u = toFirebaseLikeUser(session.user);
       auth.currentUser = u;
       cacheProviderToken(session.provider_token);
+      ensureBackgroundTokenRefresh();
       onAuthSuccess?.(u, session.provider_token ?? readCachedProviderToken());
     } else {
       auth.currentUser = null;
