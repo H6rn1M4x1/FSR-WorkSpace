@@ -1082,10 +1082,14 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
             />
           </div>
           <div className="space-y-2">
-            {/* Alto mínimo fijo (una página completa de 3 tarjetas) para que la caja no se
-                achique cuando el día tiene menos eventos — así la paginación de abajo queda
-                siempre en el mismo lugar en vez de saltar hacia arriba. */}
-            <div className="min-h-[280px]">
+            {/* Mismo criterio que "Qué hacer en San Juan" más abajo: en vez de un alto mínimo
+                adivinado en píxeles (que igual se achicaba cuando la última página tenía menos
+                de CAL_DAY_PAGE_SIZE eventos), siempre se renderizan CAL_DAY_PAGE_SIZE "espacios"
+                por página — los que faltan son tarjetas invisibles del mismo tamaño — así la
+                caja mide exactamente lo mismo en cualquier página y no mueve el contenido de
+                abajo (ni la tarjeta de "Calendario de Eventos" vecina, que se estira a esta
+                altura). */}
+            <div className="overflow-hidden">
             {selectedDayEvents.length === 0 ? (
               <p className="text-xs text-zinc-500 py-4 text-center">Sin eventos este día.</p>
             ) : (
@@ -1098,7 +1102,26 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
                   transition={{ duration: 0.35, ease: "easeInOut" }}
                   className="space-y-2.5"
                 >
-                  {selectedDayPageEvents.map((ev, i) => {
+                  {Array.from({ length: CAL_DAY_PAGE_SIZE }).map((_, i) => {
+                    const ev = selectedDayPageEvents[i];
+                    if (!ev) {
+                      return (
+                        <div key={`day-placeholder-${i}`} className="invisible" aria-hidden="true">
+                          <div className="p-3.5 rounded-2xl border border-transparent flex items-start gap-3">
+                            <div className="p-2 rounded-xl shrink-0 mt-0.5">
+                              <div className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0 flex-1 space-y-1">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold">&nbsp;</span>
+                              </div>
+                              <p className="text-xs font-extrabold min-h-[1rem]">&nbsp;</p>
+                              <p className="text-[10px] min-h-[1rem]">&nbsp;</p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
                     const CatIcon =
                       ev.kind === "sanjuan"
                         ? SanJuanLogoIcon

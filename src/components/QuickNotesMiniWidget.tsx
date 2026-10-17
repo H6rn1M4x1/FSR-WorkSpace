@@ -148,7 +148,17 @@ export function QuickNotesMiniWidget({
                   {note.title?.trim() || "Sin título"}
                 </p>
               </div>
-              <p className="text-xs text-zinc-600 dark:text-zinc-400 line-clamp-[9]">{stripHtml(note.text) || "Nota vacía"}</p>
+              {stripHtml(note.text) ? (
+                <div className="flex-1 min-h-0 overflow-hidden">
+                  <InteractiveRichText
+                    className="rich-text-content prose prose-sm dark:prose-invert max-w-none text-xs text-zinc-600 dark:text-zinc-400 [&_*]:text-xs [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0 [&_ol_ol]:list-[lower-alpha]"
+                    html={note.text}
+                    onToggleCheckbox={(newHtml) => handleToggleCheckbox(note.id, newHtml)}
+                  />
+                </div>
+              ) : (
+                <p className="text-xs text-zinc-400 italic">Nota vacía</p>
+              )}
             </div>
           ))}
         </div>
