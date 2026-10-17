@@ -5,9 +5,14 @@ import { useEffect } from "react";
  * Aplica la animación de entrada/salida (ver .scroll-reveal / .is-visible en index.css) a cada
  * "bloque" de la app — cualquier tarjeta marcada con la clase scroll-reveal, más las secciones y
  * tarjetas genéricas (<section>, .glass-card, .bg-surface-card) que ya traían su propio fondo.
- * A diferencia de una revelación de una sola vez, acá se alterna la clase is-visible en los DOS
- * sentidos (entra y sale de pantalla), así el bloque reaparece cada vez que se vuelve a cruzar el
- * borde del viewport en vez de quedarse fijo después de la primera vez.
+ *
+ * El efecto es intencionalmente asimétrico, no una revelación de una sola vez ni un toggle
+ * simétrico en los dos sentidos:
+ * - Al BAJAR: el bloque aparece con la animación apenas entra en pantalla desde abajo.
+ * - Al SUBIR: el bloque que ya se mostró (porque se bajó más allá de él) queda cargado, no se
+ *   vuelve a ocultar — solo se oculta un bloque cuando vuelve a quedar por DEBAJO del viewport
+ *   (es decir, cuando se sube lo suficiente como para "perderlo de vista hacia abajo"), así la
+ *   próxima vez que se baje hasta él se repite la animación.
  */
 export function useScrollReveal(activeTab?: string, activeSubTab?: string) {
   useEffect(() => {
@@ -26,13 +31,21 @@ export function useScrollReveal(activeTab?: string, activeSubTab?: string) {
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
-          entry.target.classList.toggle("is-visible", entry.isIntersecting);
+          if (entry.isIntersecting) {
+            entry.target.classList.add("is-visible");
+          } else if (entry.boundingClientRect.top > 0) {
+            // Salió por ABAJO del viewport -> se oculta, para que al volver a bajar hasta acá
+            // se repita la animación.
+            entry.target.classList.remove("is-visible");
+          }
+          // Si salió por ARRIBA (ya se pasó de largo bajando) se deja tal cual: queda visible,
+          // así al subir ya está cargado y no "parpadea".
         });
       },
       {
         root: null,
-        rootMargin: "0px 0px -60px 0px",
-        threshold: 0.08,
+        rootMargin: "0px 0px -40px 0px",
+        threshold: [0, 0.08],
       }
     );
 
@@ -48,6 +61,19 @@ export function useScrollReveal(activeTab?: string, activeSubTab?: string) {
         el.classList.add("scroll-reveal");
         if (!observed.has(el)) {
           observed.add(el);
+          // Red de seguridad: si el elemento ya está dentro del viewport en el momento en que se
+          // empieza a observar (carga inicial, cambio de pestaña), se marca visible de entrada en
+          // vez de esperar el callback asíncrono del IntersectionObserver — evita bloques que
+          // quedan pegados en opacity:0 por una carrera entre el mount de React y el observer.
+          const rect = el.getBoundingClientRect();
+          const alreadyInViewport =
+            rect.width > 0 &&
+            rect.height > 0 &&
+            rect.top < window.innerHeight &&
+            rect.bottom > 0;
+          if (alreadyInViewport) {
+            el.classList.add("is-visible");
+          }
           observer.observe(el);
         }
       });
