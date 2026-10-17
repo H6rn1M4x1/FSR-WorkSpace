@@ -2323,9 +2323,12 @@ export default function App() {
           {driveLoading || !isInitialLoadDone ? (
             <PageSkeleton tab={currentTab} darkMode={darkMode} />
           ) : (
-            // Transición entre secciones: la vista saliente se desenfoca y se desvanece, la
-            // entrante aparece igual (con blur) desde un poco más abajo — mismo recurso que las
-            // referencias de diseño que pidió el usuario, en vez del salto seco de antes.
+            // Transición entre secciones: la vista saliente se desvanece, la entrante aparece
+            // desde un poco más abajo. SIN filter:blur — un elemento con filter (aunque sea
+            // blur(0px)) crea una capa de composición nueva en el navegador, y combinado con el
+            // fondo animado por WebGL (que en algunos navegadores/GPUs cae a renderizado por
+            // software) causaba que el contenido quedara en el DOM, con opacity:1 y tamaño real,
+            // pero sin pintarse en pantalla — se veía todo en blanco hasta recargar la página.
             // IMPORTANTE: sin mode="wait" — con mode="wait" la vista entrante (con todo lo que
             // carga adentro: Suspense de componentes lazy, tablas, gráficos) no se monta hasta
             // que termina de desvanecerse la saliente, y si por lo que sea esa espera no se
@@ -2334,9 +2337,9 @@ export default function App() {
             <AnimatePresence>
               <motion.div
                 key={currentTab === "notes" ? `notes-${activeSubTab}` : currentTab}
-                initial={{ opacity: 0, filter: "blur(8px)", y: 10 }}
-                animate={{ opacity: 1, filter: "blur(0px)", y: 0 }}
-                exit={{ opacity: 0, filter: "blur(8px)", y: -10 }}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
               >
             <Suspense fallback={<PageSkeleton tab={currentTab} darkMode={darkMode} />}>
