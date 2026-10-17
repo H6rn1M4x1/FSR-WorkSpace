@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, Suspense, lazy } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { StorageService, AestheticStorageService, setStoredDataSilent, setSyncUserId } from "./lib/storage";
+import { uiSounds } from "./lib/sounds";
 import { subscribeToCategory, saveItemToFirestore, refetchCategory } from "./lib/firestoreSyncService";
 import { clearPersistedVaultUnlock } from "./lib/vaultCrypto";
 import {
@@ -266,6 +268,7 @@ export default function App() {
   };
 
   const handleTabChange = (newTab: string) => {
+    if (newTab !== currentTab) uiSounds.navigate();
     setCurrentTab(newTab);
     const subMenu = SUBMENUS_BY_TAB[newTab];
     if (subMenu && subMenu.length > 0) {
@@ -2248,6 +2251,18 @@ export default function App() {
           {driveLoading || !isInitialLoadDone ? (
             <PageSkeleton tab={currentTab} darkMode={darkMode} />
           ) : (
+            // Transición entre secciones: la vista saliente se desenfoca y se desvanece, la
+            // entrante aparece igual (con blur) desde un poco más abajo — mismo recurso que las
+            // referencias de diseño que pidió el usuario, en vez del salto seco de antes. Con
+            // mode="wait" nunca se ven las dos vistas superpuestas a la vez.
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={currentTab === "notes" ? `notes-${activeSubTab}` : currentTab}
+                initial={{ opacity: 0, filter: "blur(8px)", y: 10 }}
+                animate={{ opacity: 1, filter: "blur(0px)", y: 0 }}
+                exit={{ opacity: 0, filter: "blur(8px)", y: -10 }}
+                transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+              >
             <Suspense fallback={<PageSkeleton tab={currentTab} darkMode={darkMode} />}>
             <>
               {currentTab === "home" && (
@@ -2483,6 +2498,8 @@ export default function App() {
               )}
             </>
             </Suspense>
+              </motion.div>
+            </AnimatePresence>
           )}
         </main>
 
