@@ -126,6 +126,18 @@ export interface Inversion {
   resultado?: string;
 }
 
+// Un registro por día (fecha YYYY-MM-DD, único) con la ganancia/pérdida neta acumulada de ese
+// momento en cripto y en acciones — se escribe una vez por día (si ya existe el de hoy no se
+// vuelve a escribir) para poder graficar la progresión real día/semana/quincena/mes, en vez de
+// una aproximación: ver FinanceView.tsx (useEffect que llama a upsertTodaySnapshot).
+export interface InvestmentSnapshot {
+  id: string; // igual a `date` — así el motor de sync usa la fecha como clave y upsertea en vez
+  // de duplicar si por lo que sea se llega a escribir el snapshot de un mismo día dos veces.
+  date: string; // YYYY-MM-DD
+  cryptoGainARS: number;
+  accionesGainARS: number;
+}
+
 export interface CotizacionAccion {
   id: string;
   simbolo: string;

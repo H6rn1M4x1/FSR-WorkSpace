@@ -54,6 +54,7 @@ import {
   DetailedPayment,
   GastoVario,
   Inversion,
+  InvestmentSnapshot,
   CotizacionAccion,
   CotizacionCripto,
   MonthlyBudget,
@@ -425,6 +426,7 @@ export default function App() {
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [detailedPayments, setDetailedPayments] = useState<DetailedPayment[]>([]);
   const [gastosVarios, setGastosVarios] = useState<GastoVario[]>([]);
+  const [investmentSnapshots, setInvestmentSnapshots] = useState<InvestmentSnapshot[]>([]);
   const [inversiones, setInversiones] = useState<Inversion[]>([]);
   const [cotizacionesAcciones, setCotizacionesAcciones] = useState<CotizacionAccion[]>([]);
   const [cotizacionesCripto, setCotizacionesCripto] = useState<CotizacionCripto[]>([]);
@@ -812,6 +814,7 @@ export default function App() {
       { key: "payments", targetUserId: currentUserId, setState: setPayments },
       { key: "detailed_payments", targetUserId: currentUserId, setState: setDetailedPayments },
       { key: "gastos_varios", targetUserId: currentUserId, setState: setGastosVarios },
+      { key: "investment_snapshots", targetUserId: currentUserId, setState: setInvestmentSnapshots },
       { key: "inversiones", targetUserId: currentUserId, setState: setInversiones },
       { key: "cotizaciones_acciones", targetUserId: currentUserId, setState: setCotizacionesAcciones },
       { key: "cotizaciones_cripto", targetUserId: currentUserId, setState: setCotizacionesCripto },
@@ -892,6 +895,7 @@ export default function App() {
       { key: "payments", targetUserId: currentUserId },
       { key: "detailed_payments", targetUserId: currentUserId },
       { key: "gastos_varios", targetUserId: currentUserId },
+      { key: "investment_snapshots", targetUserId: currentUserId },
       { key: "inversiones", targetUserId: currentUserId },
       { key: "cotizaciones_acciones", targetUserId: currentUserId },
       { key: "cotizaciones_cripto", targetUserId: currentUserId },
@@ -985,6 +989,7 @@ export default function App() {
         payments,
         detailedPayments,
         gastosVarios,
+        investmentSnapshots,
         inversiones,
         cotizacionesAcciones,
         cotizacionesCripto,
@@ -1065,6 +1070,7 @@ export default function App() {
             if (Array.isArray(backup.payments)) { setPayments(deepReplaceColors(backup.payments, themeColor)); StorageService.setPayments(backup.payments); }
             if (Array.isArray(backup.detailedPayments)) { setDetailedPayments(deepReplaceColors(backup.detailedPayments, themeColor)); StorageService.setDetailedPayments(backup.detailedPayments); }
             if (Array.isArray(backup.gastosVarios)) { setGastosVarios(deepReplaceColors(backup.gastosVarios, themeColor)); StorageService.setGastosVarios(backup.gastosVarios); }
+            if (Array.isArray(backup.investmentSnapshots)) { setInvestmentSnapshots(backup.investmentSnapshots); StorageService.setInvestmentSnapshots(backup.investmentSnapshots); }
             if (Array.isArray(backup.inversiones)) { setInversiones(deepReplaceColors(backup.inversiones, themeColor)); StorageService.setInversiones(backup.inversiones); }
             if (Array.isArray(backup.cotizacionesAcciones)) { setCotizacionesAcciones(deepReplaceColors(backup.cotizacionesAcciones, themeColor)); StorageService.setCotizacionesAcciones(backup.cotizacionesAcciones); }
             if (Array.isArray(backup.cotizacionesCripto)) { setCotizacionesCripto(deepReplaceColors(backup.cotizacionesCripto, themeColor)); StorageService.setCotizacionesCripto(backup.cotizacionesCripto); }
@@ -1336,6 +1342,16 @@ export default function App() {
       }
     }
   }, [gastosVarios, isInitialLoadDone]);
+
+  useEffect(() => {
+    if (isInitialLoadDone) {
+      if (!isRemoteUpdateRef.current) {
+        StorageService.setInvestmentSnapshots(investmentSnapshots);
+      } else {
+        setStoredDataSilent("investment_snapshots", investmentSnapshots);
+      }
+    }
+  }, [investmentSnapshots, isInitialLoadDone]);
 
   useEffect(() => {
     if (isInitialLoadDone) {
@@ -2455,6 +2471,8 @@ export default function App() {
                   setDetailedPayments={setDetailedPayments}
                   gastosVarios={gastosVariosWithShared}
                   setGastosVarios={setGastosVarios}
+                  investmentSnapshots={investmentSnapshots}
+                  setInvestmentSnapshots={setInvestmentSnapshots}
                   inversiones={inversionesWithShared}
                   setInversiones={setInversiones}
                   cotizacionesAcciones={cotizacionesAcciones}
