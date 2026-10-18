@@ -125,10 +125,14 @@ export function PolarAreaCenterChart({
         backgroundColor: hasData ? palette : [darkMode ? "#18181b" : "#e2e8f0"],
         borderColor: darkMode ? "#09090b" : "#f8fafc",
         borderWidth: 2,
+        hoverOffset: hasData ? 14 : 0,
       },
     ],
   };
 
+  // Sin point labels fijos (se mostraba siempre el nombre de cada categoría alrededor del
+  // círculo, ocupando espacio): ahora el nombre aparece solo al pasar el mouse, vía el título
+  // del tooltip nativo de Chart.js — y la cuña bajo el cursor "crece" con hoverOffset arriba.
   const options: ChartOptions<"polarArea"> = {
     responsive: true,
     maintainAspectRatio: false,
@@ -139,14 +143,7 @@ export function PolarAreaCenterChart({
         ticks: { display: false },
         grid: { color: gridColor },
         angleLines: { color: gridColor },
-        pointLabels: hasData
-          ? {
-              display: true,
-              centerPointLabels: true,
-              font: { size: 9, weight: "bold" },
-              color: darkMode ? "#f4f4f5" : "#1e293b",
-            }
-          : { display: false },
+        pointLabels: { display: false },
       },
     },
     plugins: {
@@ -154,6 +151,7 @@ export function PolarAreaCenterChart({
       tooltip: {
         enabled: hasData,
         callbacks: {
+          title: (items: TooltipItem<"polarArea">[]) => items[0]?.label ?? "",
           label: (ctx: TooltipItem<"polarArea">) => formatValue(ctx.raw as number),
         },
       },
@@ -167,20 +165,11 @@ export function PolarAreaCenterChart({
   };
 
   return (
-    <div className="flex-1 flex flex-col">
-      <div className="h-60 w-full relative">
+    <div className="flex-1 flex flex-col items-center justify-center">
+      <div className="h-72 w-full max-w-[280px] relative">
         <PolarArea data={chartData} options={options} plugins={[centerLabelPlugin]} />
       </div>
-      {hasData ? (
-        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2 mt-2 px-2 overflow-y-auto max-h-32">
-          {data.map((entry, index) => (
-            <div key={index} className="flex items-center gap-1.5">
-              <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: palette[index % palette.length] }} />
-              <span className="text-xs font-semibold text-slate-700 dark:text-zinc-300">{entry.name}</span>
-            </div>
-          ))}
-        </div>
-      ) : (
+      {!hasData && (
         <div className="text-center text-xs text-zinc-500 font-medium italic mt-2">Sin datos</div>
       )}
     </div>
@@ -307,6 +296,88 @@ export function CategoryComparisonBarChart({
       <div className="flex-1 min-h-[160px]">
         <Bar data={data} options={options} />
       </div>
+    </div>
+  );
+}
+
+// Ranking de tasas de interés por banco: igual estilo de barra redondeada que
+// CategoryComparisonBarChart (border-radius.html), pero sin apilar — una barra por banco. El
+// top 3 se destaca en una escala del color de acento (el top 1 con el acento puro); el resto
+// queda en gris oscuro para no competir visualmente con los mejores.
+export function BankRatesBarChart({
+  banks,
+  darkMode,
+}: {
+  banks: { name: string; tna: number }[];
+  darkMode: boolean;
+}) {
+  const accentHex = useAccentHex();
+  const gridColor = darkMode ? "rgba(255,255,255,0.06)" : "rgba(15,23,42,0.06)";
+  const textColor = darkMode ? "#a1a1aa" : "#64748b";
+  const dimGray = darkMode ? "#3f3f46" : "#94a3b8";
+
+  const sorted = [...banks].sort((a, b) => b.tna - a.tna);
+
+  if (sorted.length === 0) {
+    return (
+      <div className="flex-1 flex items-center justify-center text-xs text-zinc-500 italic">
+        Sin datos
+      </div>
+    );
+  }
+
+  const topScale = buildPalette(accentHex, 3, darkMode);
+  const barColors = sorted.map((_, index) => (index < 3 ? topScale[index] : dimGray));
+
+  const truncateLabel = (label: string) => (label.length > 9 ? `${label.slice(0, 8)}…` : label);
+
+  const data = {
+    labels: sorted.map((b) => b.name),
+    datasets: [
+      {
+        data: sorted.map((b) => b.tna),
+        backgroundColor: barColors,
+        borderRadius: 8,
+        borderSkipped: false,
+      },
+    ],
+  };
+
+  const options: ChartOptions<"bar"> = {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: { duration: 600, easing: "easeOutQuart" },
+    scales: {
+      x: {
+        grid: { display: false },
+        ticks: {
+          color: textColor,
+          font: { size: 9, weight: "bold" },
+          maxRotation: 50,
+          minRotation: 50,
+          autoSkip: false,
+          callback: (_value, index) => truncateLabel(sorted[index].name),
+        },
+      },
+      y: {
+        grid: { color: gridColor },
+        ticks: { color: textColor, font: { size: 9 }, callback: (v) => `${v}%` },
+      },
+    },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          title: (items: TooltipItem<"bar">[]) => sorted[items[0].dataIndex].name,
+          label: (ctx: TooltipItem<"bar">) => `TNA: ${ctx.raw}%`,
+        },
+      },
+    },
+  };
+
+  return (
+    <div className="flex-1 min-h-[160px]">
+      <Bar data={data} options={options} />
     </div>
   );
 }
