@@ -10,9 +10,15 @@ import { useEffect } from "react";
  * simétrico en los dos sentidos:
  * - Al BAJAR: el bloque aparece con la animación apenas entra en pantalla desde abajo.
  * - Al SUBIR: el bloque que ya se mostró (porque se bajó más allá de él) queda cargado, no se
- *   vuelve a ocultar — solo se oculta un bloque cuando vuelve a quedar por DEBAJO del viewport
- *   (es decir, cuando se sube lo suficiente como para "perderlo de vista hacia abajo"), así la
- *   próxima vez que se baje hasta él se repite la animación.
+ *   vuelve a ocultar — solo se oculta un bloque cuando vuelve a quedar por DEBAJO del viewport,
+ *   así la próxima vez que se baje hasta él se repite la animación.
+ *
+ * El IntersectionObserver es la fuente principal, pero su callback es asíncrono y puede perderse
+ * o llegar con el layout todavía sin asentar justo después de cambiar de pestaña (el bloque queda
+ * pegado en opacity:0 para siempre, porque antes solo lo chequeábamos una vez). Por eso cada
+ * pasada de applyObserver() vuelve a verificar la visibilidad real de TODOS los bloques ya
+ * conocidos, no solo de los nuevos — así cualquiera que haya quedado mal marcado se corrige solo
+ * en la siguiente pasada en vez de quedar invisible para siempre.
  */
 export function useScrollReveal(activeTab?: string, activeSubTab?: string) {
   useEffect(() => {
@@ -49,9 +55,21 @@ export function useScrollReveal(activeTab?: string, activeSubTab?: string) {
       }
     );
 
-    // Elementos ya observados — evita volver a llamar observer.observe() sobre el mismo nodo del
-    // DOM en cada re-escaneo (el WeakSet no retiene nada una vez que el nodo se desmonta).
+    // Elementos ya suscriptos al observer — evita volver a llamar observer.observe() sobre el
+    // mismo nodo del DOM en cada re-escaneo (el WeakSet no retiene nada una vez que el nodo se
+    // desmonta). NO controla si se re-chequea la visibilidad: eso se hace siempre, para todos.
     const observed = new WeakSet<Element>();
+
+    const syncVisibility = (el: Element) => {
+      const rect = el.getBoundingClientRect();
+      const inViewport =
+        rect.width > 0 && rect.height > 0 && rect.top < window.innerHeight && rect.bottom > 0;
+      if (inViewport) {
+        el.classList.add("is-visible");
+      } else if (rect.top > 0) {
+        el.classList.remove("is-visible");
+      }
+    };
 
     const applyObserver = () => {
       const targets = document.querySelectorAll(
@@ -61,34 +79,22 @@ export function useScrollReveal(activeTab?: string, activeSubTab?: string) {
         el.classList.add("scroll-reveal");
         if (!observed.has(el)) {
           observed.add(el);
-          // Red de seguridad: si el elemento ya está dentro del viewport en el momento en que se
-          // empieza a observar (carga inicial, cambio de pestaña), se marca visible de entrada en
-          // vez de esperar el callback asíncrono del IntersectionObserver — evita bloques que
-          // quedan pegados en opacity:0 por una carrera entre el mount de React y el observer.
-          const rect = el.getBoundingClientRect();
-          const alreadyInViewport =
-            rect.width > 0 &&
-            rect.height > 0 &&
-            rect.top < window.innerHeight &&
-            rect.bottom > 0;
-          if (alreadyInViewport) {
-            el.classList.add("is-visible");
-          }
           observer.observe(el);
         }
+        syncVisibility(el);
       });
     };
 
     // Primera pasada
     applyObserver();
 
-    // Reintentos cortos para agarrar contenido que llega después (fetch de datos, cambio de
-    // pestaña) sin depender solo del MutationObserver.
-    const timer1 = setTimeout(applyObserver, 150);
-    const timer2 = setTimeout(applyObserver, 500);
+    // Reintentos periódicos durante toda la vida del hook (no solo al montar la app): cubren
+    // tanto la carga inicial como cada cambio de pestaña/sub-pestaña posterior, y contenido que
+    // tarda en llegar (datos async de Firestore). El costo es despreciable.
+    const interval = setInterval(applyObserver, 250);
 
     // Nuevos nodos que React monta después (cambiar de pestaña, abrir un acordeón, etc.) se
-    // detectan acá en vez de perderse sin observar.
+    // detectan acá en vez de esperar al próximo tick del interval.
     const mutationObserver = new MutationObserver(() => {
       applyObserver();
     });
@@ -102,8 +108,7 @@ export function useScrollReveal(activeTab?: string, activeSubTab?: string) {
     }
 
     return () => {
-      clearTimeout(timer1);
-      clearTimeout(timer2);
+      clearInterval(interval);
       observer.disconnect();
       mutationObserver.disconnect();
     };
