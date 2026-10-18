@@ -44,7 +44,12 @@ export function AnimatedNumber({
 
     const tick = (now: number) => {
       const elapsed = now - start;
-      const t = Math.min(1, elapsed / durationMs);
+      // El timestamp que entrega requestAnimationFrame puede, por un frame, quedar levemente
+      // por detrás del performance.now() tomado al armar el efecto (desfasaje de reloj del
+      // propio navegador) — sin el Math.max, ese primer "elapsed" negativo hace que t (y luego
+      // eased) también se vuelvan negativos, y el número arranca de golpe por debajo de cero
+      // antes de empezar a contar para arriba.
+      const t = Math.min(1, Math.max(0, elapsed / durationMs));
       // easeOutExpo: arranca rápido y frena suave, no es un conteo lineal mecánico.
       const eased = t === 1 ? 1 : 1 - Math.pow(2, -10 * t);
       const current = from + (value - from) * eased;

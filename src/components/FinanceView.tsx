@@ -378,8 +378,9 @@ function BankRatesSlider({
   darkMode: boolean;
   onSelectBanco: (key: string) => void;
 }) {
-  const PAGE_SIZE = 4;
+  const PAGE_SIZE = 6;
   const [page, setPage] = useState(1);
+  const [paused, setPaused] = useState(false);
   const totalPages = Math.max(1, Math.ceil(banks.length / PAGE_SIZE));
 
   useEffect(() => {
@@ -387,12 +388,12 @@ function BankRatesSlider({
   }, [banks.length]);
 
   useEffect(() => {
-    if (totalPages <= 1) return;
+    if (totalPages <= 1 || paused) return;
     const id = setInterval(() => {
       setPage((p) => (p >= totalPages ? 1 : p + 1));
     }, 4500);
     return () => clearInterval(id);
-  }, [totalPages]);
+  }, [totalPages, paused]);
 
   if (banks.length === 0) {
     return (
@@ -405,7 +406,11 @@ function BankRatesSlider({
   const pageBanks = banks.slice((page - 1) * PAGE_SIZE, (page - 1) * PAGE_SIZE + PAGE_SIZE);
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div
+      className="flex-1 flex flex-col overflow-hidden"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+    >
       <AnimatePresence mode="wait">
         <motion.div
           key={page}
@@ -413,7 +418,7 @@ function BankRatesSlider({
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: -16 }}
           transition={{ duration: 0.3 }}
-          className="grid grid-cols-2 gap-1.5 flex-1"
+          className="grid grid-cols-3 gap-1.5 flex-1"
         >
           {pageBanks.map((t) => (
             <div
@@ -1233,6 +1238,16 @@ export default function FinanceView({
       maximumFractionDigits: 2,
     });
     return `${isNegative ? "-" : ""}US$ ${formatted}`;
+  };
+
+  // Extrae el número de un precio ya formateado (p.ej. "$14.850,00" o "US$ 64.500,00") para poder
+  // animarlo con AnimatedNumber — las tarjetas de "Cotización Actual" reciben ese string ya
+  // armado (desde el array local o desde la cotización en vivo), nunca el número crudo.
+  const parseEsArMoney = (s: string): number => {
+    const cleaned = s.replace(/[^0-9.,-]/g, "");
+    const normalized = cleaned.replace(/\./g, "").replace(",", ".");
+    const n = parseFloat(normalized);
+    return isNaN(n) ? 0 : n;
   };
 
   const categoriesList = [
@@ -2657,15 +2672,15 @@ export default function FinanceView({
                         </span>
                       </div>
 
-                      <div className="flex-1 flex flex-col sm:flex-row gap-3 min-h-[180px]">
-                        <div className="sm:w-1/2 flex flex-col">
+                      <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3 min-h-[200px]">
+                        <div className="p-2.5 rounded-2xl bg-white dark:bg-zinc-950/60 border border-slate-200/70 dark:border-zinc-800/60 flex flex-col">
                           <BankRatesSlider
                             banks={tasasData.filter((t) => t.currency === "ARS")}
                             darkMode={darkMode}
                             onSelectBanco={setCalcBanco}
                           />
                         </div>
-                        <div className="sm:w-1/2 flex flex-col">
+                        <div className="p-2.5 rounded-2xl bg-white dark:bg-zinc-950/60 border border-slate-200/70 dark:border-zinc-800/60 flex flex-col">
                           <BankRatesBarChart
                             banks={tasasData
                               .filter((t) => t.currency === "ARS")
@@ -2696,15 +2711,15 @@ export default function FinanceView({
                         </span>
                       </div>
 
-                      <div className="flex flex-col sm:flex-row gap-3 min-h-[180px]">
-                        <div className="sm:w-1/2 flex flex-col">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 min-h-[200px]">
+                        <div className="p-2.5 rounded-2xl bg-white dark:bg-zinc-950/60 border border-slate-200/70 dark:border-zinc-800/60 flex flex-col">
                           <BankRatesSlider
                             banks={tasasData.filter((t) => t.currency === "USD")}
                             darkMode={darkMode}
                             onSelectBanco={setCalcBanco}
                           />
                         </div>
-                        <div className="sm:w-1/2 flex flex-col">
+                        <div className="p-2.5 rounded-2xl bg-white dark:bg-zinc-950/60 border border-slate-200/70 dark:border-zinc-800/60 flex flex-col">
                           <BankRatesBarChart
                             banks={tasasData
                               .filter((t) => t.currency === "USD")
@@ -2996,7 +3011,7 @@ export default function FinanceView({
                           className="text-xs font-bold font-mono dark:text-zinc-400 mt-0.5"
                           style={{ color: darkMode ? undefined : "#1e293b" }}
                         >
-                          {formatUSD(investmentMetrics.netGainUSD)}
+                          <AnimatedNumber value={investmentMetrics.netGainUSD} format={formatUSD} duration={0.6} />
                         </p>
                       </div>
                     </div>
@@ -3011,13 +3026,13 @@ export default function FinanceView({
                           className="dark:text-zinc-200"
                           style={{ color: darkMode ? undefined : "#0f172a" }}
                         >
-                          {formatARS(investmentMetrics.totalInvertidoARS)}
+                          <AnimatedNumber value={investmentMetrics.totalInvertidoARS} format={formatARS} duration={0.6} />
                         </strong>
                       </span>
                       <span>
                         Posiciones Abiertas:{" "}
                         <strong className="text-primary">
-                          {investmentMetrics.openPositionsCount}
+                          <AnimatedNumber value={investmentMetrics.openPositionsCount} duration={0.6} />
                         </strong>
                       </span>
                     </div>
@@ -3070,9 +3085,11 @@ export default function FinanceView({
                                     color: darkMode ? undefined : "#0f172a",
                                   }}
                                 >
-                                  {formatARS(
-                                    investmentMetrics.bestOpenStock.unitCostARS,
-                                  )}
+                                  <AnimatedNumber
+                                    value={investmentMetrics.bestOpenStock.unitCostARS}
+                                    format={formatARS}
+                                    duration={0.6}
+                                  />
                                 </strong>
                               </span>
                               <span>•</span>
@@ -3084,10 +3101,11 @@ export default function FinanceView({
                                     color: darkMode ? undefined : "#0f172a",
                                   }}
                                 >
-                                  {formatARS(
-                                    investmentMetrics.bestOpenStock
-                                      .currentPriceARS,
-                                  )}
+                                  <AnimatedNumber
+                                    value={investmentMetrics.bestOpenStock.currentPriceARS}
+                                    format={formatARS}
+                                    duration={0.6}
+                                  />
                                 </strong>
                               </span>
                             </div>
@@ -3096,19 +3114,18 @@ export default function FinanceView({
                           <div className="text-right">
                             <div className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-black text-lg">
                               <ArrowUpRight className="w-5 h-5" />
-                              <span>
-                                +
-                                {investmentMetrics.bestOpenStock.percentGrowth.toFixed(
-                                  2,
-                                )}
-                                %
-                              </span>
+                              <AnimatedNumber
+                                value={investmentMetrics.bestOpenStock.percentGrowth}
+                                format={(n) => `+${n.toFixed(2)}%`}
+                                duration={0.6}
+                              />
                             </div>
                             <div className="text-xs font-bold text-emerald-600 dark:text-emerald-400 font-mono">
-                              +
-                              {formatARS(
-                                investmentMetrics.bestOpenStock.gainARS,
-                              )}
+                              <AnimatedNumber
+                                value={investmentMetrics.bestOpenStock.gainARS}
+                                format={(n) => `+${formatARS(n)}`}
+                                duration={0.6}
+                              />
                             </div>
                           </div>
                         </div>
@@ -3219,7 +3236,11 @@ export default function FinanceView({
                                   color: darkMode ? undefined : "#0f172a",
                                 }}
                               >
-                                {displayPrice}
+                                <AnimatedNumber
+                                  value={parseEsArMoney(displayPrice)}
+                                  format={formatARS}
+                                  duration={0.6}
+                                />
                               </span>
                             </div>
                             <button
@@ -3331,7 +3352,7 @@ export default function FinanceView({
                           className="text-xs font-bold font-mono dark:text-zinc-400 mt-0.5"
                           style={{ color: darkMode ? undefined : "#1e293b" }}
                         >
-                          {formatUSD(criptoMetrics.netGainUSD)}
+                          <AnimatedNumber value={criptoMetrics.netGainUSD} format={formatUSD} duration={0.6} />
                         </p>
                       </div>
                     </div>
@@ -3346,13 +3367,13 @@ export default function FinanceView({
                           className="dark:text-zinc-200"
                           style={{ color: darkMode ? undefined : "#0f172a" }}
                         >
-                          {formatARS(criptoMetrics.totalInvertidoARS)}
+                          <AnimatedNumber value={criptoMetrics.totalInvertidoARS} format={formatARS} duration={0.6} />
                         </strong>
                       </span>
                       <span>
                         Posiciones Abiertas:{" "}
                         <strong className="text-primary">
-                          {criptoMetrics.openPositionsCount}
+                          <AnimatedNumber value={criptoMetrics.openPositionsCount} duration={0.6} />
                         </strong>
                       </span>
                     </div>
@@ -3405,9 +3426,11 @@ export default function FinanceView({
                                     color: darkMode ? undefined : "#0f172a",
                                   }}
                                 >
-                                  {formatUSD(
-                                    criptoMetrics.bestOpenCripto.unitCostUSD,
-                                  )}
+                                  <AnimatedNumber
+                                    value={criptoMetrics.bestOpenCripto.unitCostUSD}
+                                    format={formatUSD}
+                                    duration={0.6}
+                                  />
                                 </strong>
                               </span>
                               <span>•</span>
@@ -3419,10 +3442,11 @@ export default function FinanceView({
                                     color: darkMode ? undefined : "#0f172a",
                                   }}
                                 >
-                                  {formatUSD(
-                                    criptoMetrics.bestOpenCripto
-                                      .currentPriceUSD,
-                                  )}
+                                  <AnimatedNumber
+                                    value={criptoMetrics.bestOpenCripto.currentPriceUSD}
+                                    format={formatUSD}
+                                    duration={0.6}
+                                  />
                                 </strong>
                               </span>
                             </div>
@@ -3431,16 +3455,18 @@ export default function FinanceView({
                           <div className="text-right">
                             <div className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-black text-lg">
                               <ArrowUpRight className="w-5 h-5" />
-                              <span>
-                                +
-                                {criptoMetrics.bestOpenCripto.percentGrowth.toFixed(
-                                  2,
-                                )}
-                                %
-                              </span>
+                              <AnimatedNumber
+                                value={criptoMetrics.bestOpenCripto.percentGrowth}
+                                format={(n) => `+${n.toFixed(2)}%`}
+                                duration={0.6}
+                              />
                             </div>
                             <div className="text-xs font-bold text-emerald-600 dark:text-emerald-400 font-mono">
-                              +{formatARS(criptoMetrics.bestOpenCripto.gainARS)}
+                              <AnimatedNumber
+                                value={criptoMetrics.bestOpenCripto.gainARS}
+                                format={(n) => `+${formatARS(n)}`}
+                                duration={0.6}
+                              />
                             </div>
                           </div>
                         </div>
@@ -3551,7 +3577,11 @@ export default function FinanceView({
                                   color: darkMode ? undefined : "#0f172a",
                                 }}
                               >
-                                {displayPrice}
+                                <AnimatedNumber
+                                  value={parseEsArMoney(displayPrice)}
+                                  format={formatUSD}
+                                  duration={0.6}
+                                />
                               </span>
                             </div>
                             <button

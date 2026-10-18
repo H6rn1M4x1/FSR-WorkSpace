@@ -15,6 +15,7 @@ import {
   type TooltipItem,
 } from "chart.js";
 import { PolarArea, Bar, Line } from "react-chartjs-2";
+import { AnimatedNumber } from "./AnimatedNumber";
 
 ChartJS.register(
   RadialLinearScale,
@@ -65,37 +66,20 @@ function buildPalette(accentHex: string, count: number, darkMode: boolean): stri
 const GREEN = "#22c55e";
 const RED = "#ef4444";
 
-// Dibuja el total en el centro exacto del gráfico — polar area no tiene un "agujero" central
-// como un donut, así que el texto se superpone sobre el centro de las cuñas (mismo recurso
-// visual que ya tenía el donut de Recharts, adaptado a un plugin de Chart.js).
-// Dibuja el texto central leyendo SIEMPRE chart.options.plugins.centerLabel en el momento del
-// draw (no un closure capturado al construir el plugin): react-chartjs-2 reutiliza la misma
-// instancia de Chart.js entre renders y solo reasigna `options`, así que si el texto quedara
-// capturado por closure en la creación del plugin podría quedar desactualizado tras un cambio de
-// props sin remount del canvas.
-const centerLabelPlugin: Plugin<"polarArea"> = {
-  id: "centerLabel",
-  afterDraw(chart) {
-    const cfg = (chart.options.plugins as any)?.centerLabel as
-      | { topLine: string; bottomLine: string; darkMode: boolean; accentHex: string }
-      | undefined;
-    if (!cfg) return;
-    const { ctx, chartArea } = chart;
-    if (!chartArea) return;
-    const cx = (chartArea.left + chartArea.right) / 2;
-    const cy = (chartArea.top + chartArea.bottom) / 2;
-    ctx.save();
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.font = "700 9px system-ui, sans-serif";
-    ctx.fillStyle = cfg.darkMode ? "#a1a1aa" : "#64748b";
-    ctx.fillText(cfg.topLine, cx, cy - 7);
-    ctx.font = "800 12px system-ui, sans-serif";
-    ctx.fillStyle = cfg.accentHex;
-    ctx.fillText(cfg.bottomLine, cx, cy + 7);
-    ctx.restore();
-  },
-};
+// Compacta un monto grande a notación corta (1,2mill / 500mil) para que no abrume los ejes de
+// los gráficos — los valores de Finanzas suelen andar en cientos de miles/millones y el número
+// completo con separadores de miles ocupa demasiado espacio horizontal en el eje.
+function formatCompactNumber(n: number): string {
+  const abs = Math.abs(n);
+  const sign = n < 0 ? "-" : "";
+  const trim = (v: number) => {
+    const rounded = Math.round(v * 10) / 10;
+    return rounded % 1 === 0 ? String(rounded) : String(rounded).replace(".", ",");
+  };
+  if (abs >= 1_000_000) return `${sign}${trim(abs / 1_000_000)}mill`;
+  if (abs >= 1_000) return `${sign}${trim(abs / 1_000)}mil`;
+  return `${sign}${Math.round(abs)}`;
+}
 
 export function PolarAreaCenterChart({
   data,
@@ -114,14 +98,19 @@ export function PolarAreaCenterChart({
 
   const hasData = data.length > 0;
   const labels = hasData ? data.map((d) => d.name) : ["Sin datos"];
-  const values = hasData ? data.map((d) => d.value) : [1];
+  const rawValues = hasData ? data.map((d) => d.value) : [1];
+  // Polar area usa el VALOR directo como radio, así que el área (lo que el ojo percibe) crece
+  // con el cuadrado del valor — una categoría grande termina tapando visualmente al resto. Se
+  // aplica raíz cuadrada al radio para que el área vuelva a ser proporcional al valor real (como
+  // en un donut normal), sin dejar de notarse cuál pondera más.
+  const chartValues = rawValues.map((v) => Math.sqrt(Math.max(v, 0)));
   const palette = buildPalette(accentHex, labels.length, darkMode);
 
   const chartData = {
     labels,
     datasets: [
       {
-        data: values,
+        data: chartValues,
         backgroundColor: hasData ? palette : [darkMode ? "#18181b" : "#e2e8f0"],
         borderColor: darkMode ? "#09090b" : "#f8fafc",
         borderWidth: 2,
@@ -152,26 +141,32 @@ export function PolarAreaCenterChart({
         enabled: hasData,
         callbacks: {
           title: (items: TooltipItem<"polarArea">[]) => items[0]?.label ?? "",
-          label: (ctx: TooltipItem<"polarArea">) => formatValue(ctx.raw as number),
+          // El tooltip siempre muestra el valor REAL, no el valor comprimido con sqrt que
+          // solo se usa para dibujar el radio de cada cuña.
+          label: (ctx: TooltipItem<"polarArea">) => formatValue(rawValues[ctx.dataIndex]),
         },
       },
-      centerLabel: {
-        topLine: "TOTAL",
-        bottomLine: hasData ? formatValue(total) : formatValue(0),
-        darkMode,
-        accentHex: hasData ? accentHex : textColor,
-      },
-    } as ChartOptions<"polarArea">["plugins"],
+    },
   };
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center">
-      <div className="h-72 w-full max-w-[280px] relative">
-        <PolarArea data={chartData} options={options} plugins={[centerLabelPlugin]} />
+    <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex items-center justify-center">
+        <div className="h-64 w-full max-w-[260px] relative">
+          <PolarArea data={chartData} options={options} />
+        </div>
       </div>
       {!hasData && (
-        <div className="text-center text-xs text-zinc-500 font-medium italic mt-2">Sin datos</div>
+        <div className="text-center text-xs text-zinc-500 font-medium italic">Sin datos</div>
       )}
+      <div className="mt-3 pt-3 border-t border-slate-200/60 dark:border-zinc-800/60 flex items-center justify-center gap-1.5">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+          Total
+        </span>
+        <span className="text-sm font-black" style={{ color: hasData ? accentHex : textColor }}>
+          <AnimatedNumber value={hasData ? total : 0} format={formatValue} duration={0.6} />
+        </span>
+      </div>
     </div>
   );
 }
@@ -259,7 +254,7 @@ export function CategoryComparisonBarChart({
       y: {
         stacked: true,
         grid: { color: gridColor },
-        ticks: { color: textColor, font: { size: 9 }, callback: (v) => formatValue(Number(v)).replace("AR$ ", "") },
+        ticks: { color: textColor, font: { size: 9 }, callback: (v) => formatCompactNumber(Number(v)) },
       },
     },
     plugins: {
@@ -316,9 +311,7 @@ export function BankRatesBarChart({
   const textColor = darkMode ? "#a1a1aa" : "#64748b";
   const dimGray = darkMode ? "#3f3f46" : "#94a3b8";
 
-  const sorted = [...banks].sort((a, b) => b.tna - a.tna);
-
-  if (sorted.length === 0) {
+  if (banks.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center text-xs text-zinc-500 italic">
         Sin datos
@@ -326,8 +319,17 @@ export function BankRatesBarChart({
     );
   }
 
+  // El color (top 3 en escala de acento, resto en gris) sigue el RANKING real por TNA, pero el
+  // eje se muestra en orden alfabético — son dos cosas independientes.
+  const rankedByTna = [...banks].sort((a, b) => b.tna - a.tna);
+  const rankByName = new Map(rankedByTna.map((b, index) => [b.name, index]));
+  const sorted = [...banks].sort((a, b) => a.name.localeCompare(b.name, "es"));
+
   const topScale = buildPalette(accentHex, 3, darkMode);
-  const barColors = sorted.map((_, index) => (index < 3 ? topScale[index] : dimGray));
+  const barColors = sorted.map((b) => {
+    const rank = rankByName.get(b.name) ?? 99;
+    return rank < 3 ? topScale[rank] : dimGray;
+  });
 
   const truncateLabel = (label: string) => (label.length > 9 ? `${label.slice(0, 8)}…` : label);
 
@@ -476,7 +478,7 @@ export function MonthlyTrendChart({
       x: { grid: { display: false }, ticks: { color: textColor, font: { size: 9 } } },
       y: {
         grid: { color: gridColor },
-        ticks: { color: textColor, font: { size: 9 }, callback: (v) => formatValue(Number(v)).replace("AR$ ", "") },
+        ticks: { color: textColor, font: { size: 9 }, callback: (v) => formatCompactNumber(Number(v)) },
       },
     },
     plugins: {
@@ -647,7 +649,7 @@ export function InvestmentProgressionChart({
       x: { grid: { display: false }, ticks: { color: textColor, font: { size: 8 }, maxTicksLimit: 8 } },
       y: {
         grid: { color: gridColor },
-        ticks: { color: textColor, font: { size: 9 }, callback: (v) => formatValue(Number(v)).replace("AR$ ", "") },
+        ticks: { color: textColor, font: { size: 9 }, callback: (v) => formatCompactNumber(Number(v)) },
       },
     },
     plugins: {
