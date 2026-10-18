@@ -2522,7 +2522,7 @@ export default function AcademicView({
 
             {/* Pomodoro Timer widget */}
             <div
-              className={`p-6 rounded-3xl border flex flex-col justify-between ${
+              className={`p-6 rounded-3xl border flex flex-col justify-between scroll-reveal ${
                 darkMode
                   ? "bg-zinc-900 border-zinc-800 text-zinc-100 shadow-lg"
                   : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
@@ -2570,7 +2570,7 @@ export default function AcademicView({
 
             {/* Subjects list */}
             <div
-              className={`p-6 rounded-3xl border overflow-hidden ${
+              className={`p-6 rounded-3xl border overflow-hidden scroll-reveal ${
                 darkMode
                   ? "bg-zinc-900 border-zinc-800 text-zinc-100 shadow-lg"
                   : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
@@ -2757,7 +2757,7 @@ export default function AcademicView({
           <div className="grid grid-cols-1 gap-6">
             {/* Tasks, Homeworks & Exams Planner */}
             <div
-              className={`p-6 rounded-3xl border flex flex-col justify-between ${
+              className={`p-6 rounded-3xl border flex flex-col justify-between scroll-reveal ${
                 darkMode
                   ? "bg-zinc-900 border-zinc-800 text-zinc-100 shadow-lg"
                   : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
