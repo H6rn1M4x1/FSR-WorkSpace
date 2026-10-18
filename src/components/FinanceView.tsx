@@ -63,22 +63,22 @@ import {
   Inversion,
   CotizacionAccion,
   CotizacionCripto,
+  InvestmentSnapshot,
 } from "../types";
 import { SmartDateTimePicker } from "./SmartDateTimePicker";
 import PaymentsTable from "./PaymentsTable";
 import GastosVariosTable from "./GastosVariosTable";
-import {
-  PieChart as RechartsPieChart,
-  Pie,
-  Cell,
-  Tooltip as RechartsTooltip,
-  ResponsiveContainer,
-  Legend,
-  Label,
-} from "recharts";
 import InversionesTable from "./InversionesTable";
 import CotizacionesAccionesTable from "./CotizacionesAccionesTable";
 import CotizacionesCriptoTable from "./CotizacionesCriptoTable";
+import {
+  PolarAreaCenterChart,
+  CategoryComparisonBarChart,
+  MonthlyTrendChart,
+  InvestmentProgressionChart,
+  GranularitySelector,
+  type InvestmentGranularity,
+} from "./FinanceCharts";
 
 export interface TasaData { id: string; name: string; currency: string; tna: string; logo: string; }
 
@@ -93,6 +93,8 @@ interface FinanceViewProps {
   setDetailedPayments: React.Dispatch<React.SetStateAction<DetailedPayment[]>>;
   gastosVarios: GastoVario[];
   setGastosVarios: React.Dispatch<React.SetStateAction<GastoVario[]>>;
+  investmentSnapshots?: InvestmentSnapshot[];
+  setInvestmentSnapshots?: React.Dispatch<React.SetStateAction<InvestmentSnapshot[]>>;
   inversiones?: Inversion[];
   setInversiones?: React.Dispatch<React.SetStateAction<Inversion[]>>;
   cotizacionesAcciones?: CotizacionAccion[];
@@ -371,6 +373,8 @@ export default function FinanceView({
   setDetailedPayments,
   gastosVarios,
   setGastosVarios,
+  investmentSnapshots: propInvestmentSnapshots,
+  setInvestmentSnapshots: propSetInvestmentSnapshots,
   inversiones: propInversiones,
   setInversiones: propSetInversiones,
   cotizacionesAcciones: propCotizacionesAcciones,
@@ -547,6 +551,17 @@ export default function FinanceView({
     setLocalInversiones(action);
   };
 
+  const [localInvestmentSnapshots, setLocalInvestmentSnapshots] = useState<
+    InvestmentSnapshot[]
+  >(propInvestmentSnapshots || []);
+  const investmentSnapshots = propInvestmentSnapshots || localInvestmentSnapshots;
+  const setInvestmentSnapshots: React.Dispatch<
+    React.SetStateAction<InvestmentSnapshot[]>
+  > = (action) => {
+    if (propSetInvestmentSnapshots) propSetInvestmentSnapshots(action);
+    setLocalInvestmentSnapshots(action);
+  };
+
   const [localCotizaciones, setLocalCotizaciones] = useState<
     CotizacionAccion[]
   >(propCotizacionesAcciones || []);
@@ -604,6 +619,9 @@ export default function FinanceView({
   const [inversionesActiveTable, setInversionesActiveTable] = useState<
     "Tradicional" | "Cripto"
   >("Tradicional");
+  const [investmentChartGranularity, setInvestmentChartGranularity] = useState<
+    InvestmentGranularity
+  >("dia");
 
   const [localActiveTab, setLocalActiveTab] = useState<
     | "resumen"
@@ -1156,6 +1174,59 @@ export default function FinanceView({
     (cat) => (categoryDetailedTotals[cat] || 0) > 0,
   );
 
+  // Mismo parseo que isCurrentMonth pero contra el mes calendario anterior (con rollover de año
+  // para enero) — para poder comparar el gasto de cada categoría contra el mes pasado.
+  const isPreviousMonth = (dateStr?: string) => {
+    if (!dateStr) return false;
+    const clean = dateStr.split("T")[0].split(" ")[0];
+    const now = new Date();
+    let targetYear = now.getFullYear();
+    let targetMonth = now.getMonth() - 1;
+    if (targetMonth < 0) {
+      targetMonth = 11;
+      targetYear -= 1;
+    }
+    const parts = clean.includes("-") ? clean.split("-") : clean.includes("/") ? clean.split("/").reverse() : null;
+    if (!parts || parts.length < 2) return false;
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10) - 1;
+    return y === targetYear && m === targetMonth;
+  };
+
+  const previousMonthDetailedPayments = detailedPayments.filter((p) =>
+    isPreviousMonth(p.fechaVencimiento),
+  );
+  const previousMonthCategoryTotals = allDetailedCategories.reduce(
+    (acc, cat) => {
+      acc[cat] = previousMonthDetailedPayments
+        .filter((p) => p.categoria === cat)
+        .reduce((sum, p) => sum + p.montoAPagar, 0);
+      return acc;
+    },
+    {} as Record<string, number>,
+  );
+
+  // Historial de gasto total por mes (todos los meses con al menos un pago, no solo el actual),
+  // para el gráfico de tendencia + proyección futura. Se limita a los últimos 12 meses con datos
+  // para que el gráfico no se vuelva ilegible con años de historial.
+  const monthlyHistory = React.useMemo(() => {
+    const totals = new Map<string, number>();
+    detailedPayments.forEach((p) => {
+      const clean = (p.fechaVencimiento || "").split("T")[0].split(" ")[0];
+      const parts = clean.includes("-") ? clean.split("-") : clean.includes("/") ? clean.split("/").reverse() : null;
+      if (!parts || parts.length < 2) return;
+      const y = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10);
+      if (!y || !m) return;
+      const key = `${y}-${String(m).padStart(2, "0")}`;
+      totals.set(key, (totals.get(key) || 0) + p.montoAPagar);
+    });
+    return Array.from(totals.entries())
+      .map(([month, total]) => ({ month, total }))
+      .sort((a, b) => a.month.localeCompare(b.month))
+      .slice(-12);
+  }, [detailedPayments]);
+
   // Gastos Varios category calculations for ALL TIME (per user request)
   const currentMonthGastosVarios = gastosVarios; // Removido el filtro de mes actual a pedido del usuario
 
@@ -1636,6 +1707,38 @@ export default function FinanceView({
       bestOpenCripto,
     };
   }, [effectiveInversiones, cotizacionesCripto]);
+
+  // Guarda (upsert) la ganancia/pérdida neta de hoy en cripto y acciones — un registro por día,
+  // identificado por la fecha — para poder graficar la progresión real con el tiempo en vez de
+  // una aproximación. Se reescribe cada vez que cambian los montos (nuevas cotizaciones durante
+  // el día), pero nunca crea un segundo registro para el mismo día.
+  useEffect(() => {
+    if (!effectiveInversiones || effectiveInversiones.length === 0) return;
+    const today = getLocalDateString(new Date());
+    const existing = investmentSnapshots.find((s) => s.date === today);
+    const cryptoGainARS = Math.round(criptoMetrics.netGainARS);
+    const accionesGainARS = Math.round(investmentMetrics.netGainARS);
+    if (
+      existing &&
+      existing.cryptoGainARS === cryptoGainARS &&
+      existing.accionesGainARS === accionesGainARS
+    ) {
+      return; // sin cambios, no reescribe
+    }
+    const snapshot: InvestmentSnapshot = {
+      id: today,
+      date: today,
+      cryptoGainARS,
+      accionesGainARS,
+    };
+    setInvestmentSnapshots((prev) => {
+      const rest = prev.filter((s) => s.date !== today);
+      return [...rest, snapshot].sort((a, b) => a.date.localeCompare(b.date));
+    });
+    const userId = userEmail || "hernanmaximiliano10@gmail.com";
+    saveItemToFirestore(userId, "investment_snapshots", snapshot).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [criptoMetrics.netGainARS, investmentMetrics.netGainARS, effectiveInversiones.length]);
 
   // Registra las sub-pestañas de Pagos Mensuales / Cotizaciones en el navbar superior, para que
   // crezcan dentro de la misma cápsula en vez de un menú flotante aparte.
@@ -3490,245 +3593,79 @@ export default function FinanceView({
                         Distribución de Gastos Varios
                       </h3>
                     </div>
-                    {(() => {
-                      const pieDataGastosVarios = activeGastosVariosCategories
-                        .map((cat) => ({
-                          name: cat,
-                          value: gastosVariosCategoryTotals[cat] || 0,
-                        }))
-                        .filter((item) => item.value > 0);
-
-                      const totalPieEntriesGV = Math.max(
-                        pieDataGastosVarios.length,
-                        1,
-                      );
-                      const primaryPaletteGV = pieDataGastosVarios.map(
-                        (_, index) => {
-                          const opacityPercent = Math.max(
-                            30,
-                            Math.round(
-                              100 -
-                                (index * 65) /
-                                  Math.max(totalPieEntriesGV - 1, 1),
-                            ),
-                          );
-                          return `color-mix(in srgb, var(--color-primary) ${opacityPercent}%, ${darkMode ? "#27272a" : "#cbd5e1"})`;
-                        },
-                      );
-
-                      return pieDataGastosVarios.length > 0 ? (
-                        <div className="flex-1 flex flex-col">
-                          <div className="h-60 w-full relative">
-                            <ResponsiveContainer width="100%" height="100%">
-                              <RechartsPieChart>
-                                <Pie
-                                  data={pieDataGastosVarios}
-                                  cx="50%"
-                                  cy="50%"
-                                  innerRadius={45}
-                                  outerRadius={65}
-                                  paddingAngle={4}
-                                  cornerRadius={8}
-                                  dataKey="value"
-                                >
-                                  <Label
-                                    content={({ viewBox }) => {
-                                      const { cx, cy } = viewBox as any;
-                                      return (
-                                        <text
-                                          x={cx}
-                                          y={cy}
-                                          textAnchor="middle"
-                                          dominantBaseline="central"
-                                        >
-                                          <tspan
-                                            x={cx}
-                                            dy="-0.5em"
-                                            fontSize="7"
-                                            fontWeight="bold"
-                                            fill={
-                                              darkMode ? "#a1a1aa" : "#64748b"
-                                            }
-                                            letterSpacing="0.05em"
-                                          >
-                                            TOTAL
-                                          </tspan>
-                                          <tspan
-                                            x={cx}
-                                            dy="1.2em"
-                                            fontSize="9"
-                                            fontWeight="800"
-                                            fill="var(--color-primary)"
-                                          >
-                                            {formatCurrency(totalGastosVarios)}
-                                          </tspan>
-                                        </text>
-                                      );
-                                    }}
-                                  />
-                                  {pieDataGastosVarios.map((entry, index) => (
-                                    <Cell
-                                      key={`cell-${index}`}
-                                      fill={
-                                        primaryPaletteGV[
-                                          index % primaryPaletteGV.length
-                                        ]
-                                      }
-                                      stroke={darkMode ? "#09090b" : "#f8fafc"}
-                                      strokeWidth={
-                                        pieDataGastosVarios.length === 1 ? 0 : 2
-                                      }
-                                    />
-                                  ))}
-                                </Pie>
-                                <RechartsTooltip
-                                  contentStyle={{
-                                    backgroundColor: darkMode
-                                      ? "#18181b"
-                                      : "#ffffff",
-                                    border: "1px solid var(--color-primary)",
-                                    borderRadius: "14px",
-                                    boxShadow:
-                                      "0 10px 25px -5px rgba(0, 0, 0, 0.1)",
-                                    fontSize: "12px",
-                                    fontWeight: "bold",
-                                  }}
-                                  itemStyle={{
-                                    color: "var(--color-primary)",
-                                  }}
-                                  formatter={(value) =>
-                                    formatCurrency(value as number)
-                                  }
-                                />
-                              </RechartsPieChart>
-                            </ResponsiveContainer>
-                          </div>
-
-                          <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2 mt-2 px-2 overflow-y-auto max-h-32">
-                            {pieDataGastosVarios.map((entry, index) => (
-                              <div
-                                key={index}
-                                className="flex items-center gap-1.5"
-                              >
-                                <div
-                                  className="w-2.5 h-2.5 rounded-full"
-                                  style={{
-                                    backgroundColor:
-                                      primaryPaletteGV[
-                                        index % primaryPaletteGV.length
-                                      ],
-                                  }}
-                                />
-                                <span className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
-                                  {entry.name}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex-1 flex flex-col">
-                          <div className="h-60 w-full relative">
-                            <ResponsiveContainer width="100%" height="100%">
-                              <RechartsPieChart>
-                                <Pie
-                                  data={[{ name: "Sin datos", value: 1 }]}
-                                  cx="50%"
-                                  cy="50%"
-                                  innerRadius={45}
-                                  outerRadius={65}
-                                  dataKey="value"
-                                  stroke="none"
-                                >
-                                  <Label
-                                    content={({ viewBox }) => {
-                                      const { cx, cy } = viewBox as any;
-                                      return (
-                                        <text
-                                          x={cx}
-                                          y={cy}
-                                          textAnchor="middle"
-                                          dominantBaseline="central"
-                                        >
-                                          <tspan
-                                            x={cx}
-                                            dy="-0.5em"
-                                            fontSize="7"
-                                            fontWeight="bold"
-                                            fill={
-                                              darkMode ? "#a1a1aa" : "#64748b"
-                                            }
-                                            letterSpacing="0.05em"
-                                          >
-                                            TOTAL
-                                          </tspan>
-                                          <tspan
-                                            x={cx}
-                                            dy="1.2em"
-                                            fontSize="9"
-                                            fontWeight="800"
-                                            fill={
-                                              darkMode ? "#a1a1aa" : "#64748b"
-                                            }
-                                          >
-                                            $0,00
-                                          </tspan>
-                                        </text>
-                                      );
-                                    }}
-                                  />
-                                  <Cell
-                                    fill={darkMode ? "#18181b" : "#e2e8f0"}
-                                  />
-                                </Pie>
-                              </RechartsPieChart>
-                            </ResponsiveContainer>
-                          </div>
-                          <div className="text-center text-xs text-zinc-500 font-medium italic mt-2">
-                            Sin datos
-                          </div>
-                        </div>
-                      );
-                    })()}
+                    <PolarAreaCenterChart
+                      data={activeGastosVariosCategories
+                        .map((cat) => ({ name: cat, value: gastosVariosCategoryTotals[cat] || 0 }))
+                        .filter((item) => item.value > 0)}
+                      total={totalGastosVarios}
+                      darkMode={darkMode}
+                      formatValue={formatCurrency}
+                    />
                   </div>
 
-                  {/* budgets progress */}
-                  <div className="lg:col-span-2 p-5 rounded-2xl bg-slate-50 dark:bg-black border border-slate-200/80 dark:border-zinc-800/80 flex flex-col h-full text-zinc-900 dark:text-white shadow-xs">
-                    <div className="flex items-center justify-between mb-4 shrink-0">
-                      <div className="flex items-center gap-2">
-                        <TrendingUp className="w-5 h-5 text-primary" />
-                        <h3 className="font-bold text-md font-sans dark:text-white">
-                          Categorías
-                        </h3>
+                  {/* Grilla 2x2: Categorías / Tendencia mensual + proyección / Progresión cripto / Progresión acciones */}
+                  <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="p-5 rounded-2xl bg-slate-50 dark:bg-black border border-slate-200/80 dark:border-zinc-800/80 flex flex-col text-zinc-900 dark:text-white shadow-xs min-h-[260px]">
+                      <div className="flex items-center gap-2 mb-3 shrink-0">
+                        <TrendingUp className="w-4 h-4 text-primary" />
+                        <h3 className="font-bold text-sm dark:text-white">Categorías</h3>
                       </div>
+                      <CategoryComparisonBarChart
+                        categories={activeCategories}
+                        currentTotals={categoryDetailedTotals}
+                        previousTotals={previousMonthCategoryTotals}
+                        darkMode={darkMode}
+                        formatValue={formatCurrency}
+                      />
                     </div>
-                    <div className="space-y-4 flex-1 overflow-y-auto pr-1">
-                      {allDetailedCategories.map((cat, idx) => {
-                        const amt = categoryDetailedTotals[cat] || 0;
-                        const percent =
-                          totalSpent > 0 ? (amt / totalSpent) * 100 : 0;
-                        return (
-                          <div key={cat} className="space-y-1.5">
-                            <div className="flex items-center justify-between text-xs">
-                              <span className="font-bold text-zinc-700 dark:text-zinc-200">
-                                {cat}
-                              </span>
-                              <span className="text-zinc-500 dark:text-zinc-400 font-medium">
-                                {formatCurrency(amt)} ({percent.toFixed(0)}%)
-                              </span>
-                            </div>
-                            <div className="w-full h-2 rounded-full bg-slate-200 dark:bg-black/60 border border-slate-300/30 dark:border-zinc-800/50 overflow-hidden">
-                              <div
-                                className="h-full rounded-full transition-all duration-500 bg-primary"
-                                style={{ width: `${percent}%` }}
-                              ></div>
-                            </div>
-                          </div>
-                        );
-                      })}
+
+                    <div className="p-5 rounded-2xl bg-slate-50 dark:bg-black border border-slate-200/80 dark:border-zinc-800/80 flex flex-col text-zinc-900 dark:text-white shadow-xs min-h-[260px]">
+                      <div className="flex items-center gap-2 mb-3 shrink-0">
+                        <LineChart className="w-4 h-4 text-primary" />
+                        <h3 className="font-bold text-sm dark:text-white">Gasto Mensual</h3>
+                      </div>
+                      <MonthlyTrendChart
+                        history={monthlyHistory}
+                        darkMode={darkMode}
+                        formatValue={formatCurrency}
+                      />
+                    </div>
+
+                    <div className="p-5 rounded-2xl bg-slate-50 dark:bg-black border border-slate-200/80 dark:border-zinc-800/80 flex flex-col text-zinc-900 dark:text-white shadow-xs min-h-[260px]">
+                      <div className="flex items-center justify-between gap-2 mb-3 shrink-0">
+                        <div className="flex items-center gap-2">
+                          <Bitcoin className="w-4 h-4 text-primary" />
+                          <h3 className="font-bold text-sm dark:text-white">Cripto</h3>
+                        </div>
+                        <GranularitySelector
+                          value={investmentChartGranularity}
+                          onChange={setInvestmentChartGranularity}
+                        />
+                      </div>
+                      <InvestmentProgressionChart
+                        snapshots={investmentSnapshots}
+                        valueKey="cryptoGainARS"
+                        granularity={investmentChartGranularity}
+                        darkMode={darkMode}
+                        formatValue={formatARS}
+                      />
+                    </div>
+
+                    <div className="p-5 rounded-2xl bg-slate-50 dark:bg-black border border-slate-200/80 dark:border-zinc-800/80 flex flex-col text-zinc-900 dark:text-white shadow-xs min-h-[260px]">
+                      <div className="flex items-center gap-2 mb-3 shrink-0">
+                        <BarChart3 className="w-4 h-4 text-primary" />
+                        <h3 className="font-bold text-sm dark:text-white">Acciones</h3>
+                      </div>
+                      <InvestmentProgressionChart
+                        snapshots={investmentSnapshots}
+                        valueKey="accionesGainARS"
+                        granularity={investmentChartGranularity}
+                        darkMode={darkMode}
+                        formatValue={formatARS}
+                      />
                     </div>
                   </div>
-                  {/* Custom Visual SVG Donut/Pie Chart */}
+                  {/* PolarArea Donut con etiquetas centradas */}
                   <div className="p-5 rounded-2xl bg-slate-50 dark:bg-black border border-slate-200/80 dark:border-zinc-800/80 flex flex-col justify-between h-full text-zinc-900 dark:text-white shadow-xs">
                     <div className="flex items-center gap-2 mb-4">
                       <PieChart className="w-5 h-5 text-primary" />
@@ -3736,148 +3673,17 @@ export default function FinanceView({
                         Distribución por Categoria
                       </h3>
                     </div>
-                    {(() => {
-                      const pieDataCategorias = activeCategories
+                    <PolarAreaCenterChart
+                      data={activeCategories
                         .map((cat) => ({
                           name: cat,
                           value: categoryDetailedTotals[cat] || 0,
                         }))
-                        .filter((item) => item.value > 0);
-
-                      const totalPieEntriesCat = Math.max(
-                        pieDataCategorias.length,
-                        1,
-                      );
-                      const primaryPaletteCat = pieDataCategorias.map(
-                        (_, index) => {
-                          const opacityPercent = Math.max(
-                            30,
-                            Math.round(
-                              100 -
-                                (index * 65) /
-                                  Math.max(totalPieEntriesCat - 1, 1),
-                            ),
-                          );
-                          return `color-mix(in srgb, var(--color-primary) ${opacityPercent}%, ${darkMode ? "#27272a" : "#cbd5e1"})`;
-                        },
-                      );
-
-                      return pieDataCategorias.length > 0 ? (
-                        <div className="flex-1 flex flex-col">
-                          <div className="h-60 w-full relative">
-                            <ResponsiveContainer width="100%" height="100%">
-                              <RechartsPieChart>
-                                <Pie
-                                  data={pieDataCategorias}
-                                  cx="50%"
-                                  cy="50%"
-                                  innerRadius={45}
-                                  outerRadius={65}
-                                  paddingAngle={4}
-                                  cornerRadius={8}
-                                  dataKey="value"
-                                >
-                                  <Label
-                                    content={({ viewBox }) => {
-                                      const { cx, cy } = viewBox as any;
-                                      return (
-                                        <text
-                                          x={cx}
-                                          y={cy}
-                                          textAnchor="middle"
-                                          dominantBaseline="central"
-                                        >
-                                          <tspan
-                                            x={cx}
-                                            dy="-0.5em"
-                                            fontSize="7"
-                                            fontWeight="bold"
-                                            fill={
-                                              darkMode ? "#a1a1aa" : "#64748b"
-                                            }
-                                            letterSpacing="0.05em"
-                                          >
-                                            TOTAL
-                                          </tspan>
-                                          <tspan
-                                            x={cx}
-                                            dy="1.2em"
-                                            fontSize="9"
-                                            fontWeight="800"
-                                            fill="var(--color-primary)"
-                                          >
-                                            {formatCurrency(totalSpent)}
-                                          </tspan>
-                                        </text>
-                                      );
-                                    }}
-                                  />
-                                  {pieDataCategorias.map((entry, index) => (
-                                    <Cell
-                                      key={`cell-${index}`}
-                                      fill={
-                                        primaryPaletteCat[
-                                          index % primaryPaletteCat.length
-                                        ]
-                                      }
-                                      stroke={darkMode ? "#09090b" : "#f8fafc"}
-                                      strokeWidth={
-                                        pieDataCategorias.length === 1 ? 0 : 2
-                                      }
-                                    />
-                                  ))}
-                                </Pie>
-                                <RechartsTooltip
-                                  contentStyle={{
-                                    backgroundColor: darkMode
-                                      ? "#18181b"
-                                      : "#ffffff",
-                                    border: "1px solid var(--color-primary)",
-                                    borderRadius: "14px",
-                                    boxShadow:
-                                      "0 10px 25px -5px rgba(0, 0, 0, 0.1)",
-                                    fontSize: "12px",
-                                    fontWeight: "bold",
-                                  }}
-                                  itemStyle={{
-                                    color: "var(--color-primary)",
-                                  }}
-                                  formatter={(value) =>
-                                    formatCurrency(value as number)
-                                  }
-                                />
-                              </RechartsPieChart>
-                            </ResponsiveContainer>
-                          </div>
-
-                          <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2 mt-2 px-2 overflow-y-auto max-h-32">
-                            {pieDataCategorias.map((entry, index) => (
-                              <div
-                                key={index}
-                                className="flex items-center gap-1.5"
-                              >
-                                <div
-                                  className="w-2.5 h-2.5 rounded-full"
-                                  style={{
-                                    backgroundColor:
-                                      primaryPaletteCat[
-                                        index % primaryPaletteCat.length
-                                      ],
-                                  }}
-                                />
-                                <span className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
-                                  {entry.name}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex-1 flex items-center justify-center text-xs text-zinc-500 font-medium italic min-h-[160px]">
-                          Sin datos
-                        </div>
-                      );
-                    })()}
+                        .filter((item) => item.value > 0)}
+                      total={totalSpent}
+                      darkMode={darkMode}
+                      formatValue={formatCurrency}
+                    />
                   </div>
                 </div>
               </div>

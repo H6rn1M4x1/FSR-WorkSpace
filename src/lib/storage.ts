@@ -10,6 +10,7 @@ import {
   DetailedPayment,
   GastoVario,
   Inversion,
+  InvestmentSnapshot,
   CotizacionAccion,
   MonthlyBudget,
   Appointment,
@@ -318,6 +319,9 @@ export class StorageService {
 
   static getInversiones() { return getStoredData("inversiones", initialInversiones); }
   static setInversiones(data: Inversion[]) { setStoredData("inversiones", data); }
+
+  static getInvestmentSnapshots() { return getStoredData("investment_snapshots", [] as InvestmentSnapshot[]); }
+  static setInvestmentSnapshots(data: InvestmentSnapshot[]) { setStoredData("investment_snapshots", data); }
 
   static getCotizacionesAcciones() {
     return getStoredData("cotizaciones_acciones", []);
