@@ -2014,12 +2014,12 @@ export default function HomeView({
                   <button
                     type="button"
                     onClick={() => setQuickAddMenuOpen((v) => !v)}
-                    className="w-52 flex items-center justify-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-extrabold bg-primary text-white dark:text-zinc-950 hover:bg-primary/90 transition-all cursor-pointer active:scale-95 shadow-xs"
+                    className="w-64 flex items-center justify-center gap-1.5 px-4 py-2 rounded-full text-xs font-extrabold bg-primary text-white dark:text-zinc-950 hover:bg-primary/90 transition-all cursor-pointer active:scale-95 shadow-xs"
                     title="Agendar un turno, pago, examen, medicamento o comida planificada"
                   >
-                    <CalendarPlus className="w-3.5 h-3.5 shrink-0" />
+                    <CalendarPlus className="w-4 h-4 shrink-0" />
                     <span>Agendar</span>
-                    <ChevronDown className={`w-3 h-3 shrink-0 transition-transform ${quickAddMenuOpen ? "rotate-180" : ""}`} />
+                    <ChevronDown className={`w-3.5 h-3.5 shrink-0 transition-transform ${quickAddMenuOpen ? "rotate-180" : ""}`} />
                   </button>
                   <AnimatePresence>
                     {quickAddMenuOpen && (
@@ -2028,7 +2028,7 @@ export default function HomeView({
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -6, scale: 0.96 }}
                         transition={{ duration: 0.15 }}
-                        className={`absolute right-0 top-full mt-1.5 z-30 w-52 rounded-xl border shadow-lg overflow-hidden ${
+                        className={`absolute right-0 top-full mt-1.5 z-30 w-64 rounded-xl border shadow-lg overflow-hidden ${
                           darkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-zinc-200"
                         }`}
                       >
@@ -2079,10 +2079,6 @@ export default function HomeView({
                     <span>Activar Push</span>
                   </button>
                 )}
-
-                <span className="text-[10px] bg-primary/10 text-primary font-bold px-2.5 py-1 rounded-lg">
-                  {totalSelectedEvents} Eventos / Notas
-                </span>
               </div>
             </div>
 

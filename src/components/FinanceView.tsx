@@ -77,6 +77,7 @@ import {
   MonthlyTrendChart,
   InvestmentProgressionChart,
   GranularitySelector,
+  BankRatesBarChart,
   type InvestmentGranularity,
 } from "./FinanceCharts";
 
@@ -363,6 +364,97 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
     </div>
   );
 };
+
+// Carrusel paginado con avance automático para la lista de bancos — mismo patrón ya usado en
+// "Eventos del Día"/"Qué hacer en San Juan" de EventsView (página + setInterval + AnimatePresence),
+// adaptado acá para no mostrar todos los bancos de una sola tabla estática y darle lugar al bar
+// chart de intereses al lado.
+function BankRatesSlider({
+  banks,
+  darkMode,
+  onSelectBanco,
+}: {
+  banks: TasaData[];
+  darkMode: boolean;
+  onSelectBanco: (key: string) => void;
+}) {
+  const PAGE_SIZE = 4;
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(banks.length / PAGE_SIZE));
+
+  useEffect(() => {
+    setPage(1);
+  }, [banks.length]);
+
+  useEffect(() => {
+    if (totalPages <= 1) return;
+    const id = setInterval(() => {
+      setPage((p) => (p >= totalPages ? 1 : p + 1));
+    }, 4500);
+    return () => clearInterval(id);
+  }, [totalPages]);
+
+  if (banks.length === 0) {
+    return (
+      <div className="flex-1 flex items-center justify-center text-xs text-zinc-500 italic min-h-[140px]">
+        Sin datos
+      </div>
+    );
+  }
+
+  const pageBanks = banks.slice((page - 1) * PAGE_SIZE, (page - 1) * PAGE_SIZE + PAGE_SIZE);
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={page}
+          initial={{ opacity: 0, x: 16 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -16 }}
+          transition={{ duration: 0.3 }}
+          className="grid grid-cols-2 gap-1.5 flex-1"
+        >
+          {pageBanks.map((t) => (
+            <div
+              key={`${t.id}-${t.currency}`}
+              onClick={() => onSelectBanco(`${t.id}-${t.currency}`)}
+              className="p-1.5 rounded-xl bg-white dark:bg-black/80 border border-slate-200/80 dark:border-zinc-800/80 flex flex-col items-center justify-center text-center hover:border-primary/80 transition-all cursor-pointer group shadow-2xs hover:scale-102"
+            >
+              <img
+                src={t.logo}
+                alt={t.name}
+                className="w-6 h-6 sm:w-7 sm:h-7 rounded-full object-cover bg-white p-[1px] border border-slate-200 dark:border-zinc-800 shadow-2xs mb-0.5 shrink-0"
+              />
+              <p className="text-[9px] sm:text-[10px] font-bold text-slate-700 dark:text-zinc-300 group-hover:text-primary transition-colors line-clamp-1 leading-tight w-full px-0.5">
+                {t.name}
+              </p>
+              <p className="text-[10px] sm:text-[11px] font-black text-primary font-mono mt-0.5">
+                {t.tna}%
+              </p>
+            </div>
+          ))}
+        </motion.div>
+      </AnimatePresence>
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-1.5 mt-2">
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => setPage(p)}
+              className={`h-1.5 rounded-full transition-all cursor-pointer ${
+                p === page ? "w-4 bg-primary" : `w-1.5 ${darkMode ? "bg-zinc-700" : "bg-slate-300"}`
+              }`}
+              aria-label={`Página ${p}`}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function FinanceView({
   darkMode,
   invoices,
@@ -2565,29 +2657,21 @@ export default function FinanceView({
                         </span>
                       </div>
 
-                      <div className="flex-1 flex flex-col justify-center">
-                        <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-7 xl:grid-cols-8 gap-1.5">
-                          {tasasData
-                            .filter((t) => t.currency === "ARS")
-                            .map((t) => (
-                              <div
-                                key={`${t.id}-${t.currency}`}
-                                onClick={() => setCalcBanco(`${t.id}-${t.currency}`)}
-                                className="p-1.5 rounded-xl bg-white dark:bg-black/80 border border-slate-200/80 dark:border-zinc-800/80 flex flex-col items-center justify-center text-center hover:border-primary/80 transition-all cursor-pointer group shadow-2xs hover:scale-102"
-                              >
-                                <img
-                                  src={t.logo}
-                                  alt={t.name}
-                                  className="w-6 h-6 sm:w-7 sm:h-7 rounded-full object-cover bg-white p-[1px] border border-slate-200 dark:border-zinc-800 shadow-2xs mb-0.5 shrink-0"
-                                />
-                                <p className="text-[9px] sm:text-[10px] font-bold text-slate-700 dark:text-zinc-300 group-hover:text-primary transition-colors line-clamp-1 leading-tight w-full px-0.5">
-                                  {t.name}
-                                </p>
-                                <p className="text-[10px] sm:text-[11px] font-black text-primary font-mono mt-0.5">
-                                  {t.tna}%
-                                </p>
-                              </div>
-                            ))}
+                      <div className="flex-1 flex flex-col sm:flex-row gap-3 min-h-[180px]">
+                        <div className="sm:w-1/2 flex flex-col">
+                          <BankRatesSlider
+                            banks={tasasData.filter((t) => t.currency === "ARS")}
+                            darkMode={darkMode}
+                            onSelectBanco={setCalcBanco}
+                          />
+                        </div>
+                        <div className="sm:w-1/2 flex flex-col">
+                          <BankRatesBarChart
+                            banks={tasasData
+                              .filter((t) => t.currency === "ARS")
+                              .map((t) => ({ name: t.name, tna: parseFloat(t.tna) || 0 }))}
+                            darkMode={darkMode}
+                          />
                         </div>
                       </div>
                     </motion.div>
@@ -2612,29 +2696,21 @@ export default function FinanceView({
                         </span>
                       </div>
 
-                      <div>
-                        <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-7 xl:grid-cols-8 gap-1.5">
-                          {tasasData
-                            .filter((t) => t.currency === "USD")
-                            .map((t) => (
-                              <div
-                                key={`${t.id}-${t.currency}`}
-                                onClick={() => setCalcBanco(`${t.id}-${t.currency}`)}
-                                className="p-1.5 rounded-xl bg-white dark:bg-black/80 border border-slate-200/80 dark:border-zinc-800/80 flex flex-col items-center justify-center text-center hover:border-primary/80 transition-all cursor-pointer group shadow-2xs hover:scale-102"
-                              >
-                                <img
-                                  src={t.logo}
-                                  alt={t.name}
-                                  className="w-6 h-6 sm:w-7 sm:h-7 rounded-full object-cover bg-white p-[1px] border border-slate-200 dark:border-zinc-800 shadow-2xs mb-0.5 shrink-0"
-                                />
-                                <p className="text-[9px] sm:text-[10px] font-bold text-slate-700 dark:text-zinc-300 group-hover:text-primary transition-colors line-clamp-1 leading-tight w-full px-0.5">
-                                  {t.name}
-                                </p>
-                                <p className="text-[10px] sm:text-[11px] font-black text-primary font-mono mt-0.5">
-                                  {t.tna}%
-                                </p>
-                              </div>
-                            ))}
+                      <div className="flex flex-col sm:flex-row gap-3 min-h-[180px]">
+                        <div className="sm:w-1/2 flex flex-col">
+                          <BankRatesSlider
+                            banks={tasasData.filter((t) => t.currency === "USD")}
+                            darkMode={darkMode}
+                            onSelectBanco={setCalcBanco}
+                          />
+                        </div>
+                        <div className="sm:w-1/2 flex flex-col">
+                          <BankRatesBarChart
+                            banks={tasasData
+                              .filter((t) => t.currency === "USD")
+                              .map((t) => ({ name: t.name, tna: parseFloat(t.tna) || 0 }))}
+                            darkMode={darkMode}
+                          />
                         </div>
                       </div>
                     </motion.div>
@@ -2742,31 +2818,23 @@ export default function FinanceView({
                                       <p className="text-xs font-bold text-slate-500 dark:text-zinc-400 mb-0.5 shrink-0">
                                         Ganancia
                                       </p>
-                                      <motion.p
-                                        key={gananciaStr}
-                                        initial={{ opacity: 0, y: -4 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        transition={{ duration: 0.2 }}
+                                      <AnimatedNumber
+                                        value={ganancia}
+                                        duration={0.6}
+                                        format={(n) => `+${isUsd ? "U$D " : "$"}${n.toLocaleString("es-AR", { maximumFractionDigits: 2 })}`}
                                         className={`font-black text-primary font-mono leading-tight truncate w-full ${getFontSize(gananciaStr, false)}`}
-                                        title={gananciaStr}
-                                      >
-                                        {gananciaStr}
-                                      </motion.p>
+                                      />
                                     </div>
                                     <div className="min-w-0 flex flex-col items-end text-right overflow-hidden">
                                       <p className="text-xs font-bold text-slate-500 dark:text-zinc-400 mb-0.5 shrink-0">
                                         Total
                                       </p>
-                                      <motion.p
-                                        key={totalStr}
-                                        initial={{ opacity: 0, y: -4 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        transition={{ duration: 0.2 }}
+                                      <AnimatedNumber
+                                        value={total}
+                                        duration={0.6}
+                                        format={(n) => `${isUsd ? "U$D " : "$"}${n.toLocaleString("es-AR", { maximumFractionDigits: 2 })}`}
                                         className={`font-black text-slate-800 dark:text-zinc-100 font-mono leading-tight truncate w-full ${getFontSize(totalStr, true)}`}
-                                        title={totalStr}
-                                      >
-                                        {totalStr}
-                                      </motion.p>
+                                      />
                                     </div>
                                   </div>
                                 </motion.div>
