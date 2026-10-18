@@ -1990,7 +1990,7 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
 
       {/* --- VISTA 1: MIS RUTINAS --- */}
       {activeTab === "rutinas" && (
-        <div className="space-y-4">
+        <div className="space-y-4 scroll-reveal">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {listRutinas.map(rutina => {
               const mainConf = MUSCLE_COLORS[rutina.grupoMuscularPrincipal] || MUSCLE_COLORS.Pecho;
@@ -2100,7 +2100,7 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
 
       {/* --- VISTA 2: BIBLIOTECA DE EJERCICIOS Y TÉCNICA (CON GIFS ANIMADOS INTERACTIVOS) --- */}
       {activeTab === "tecnica" && (
-        <div className="space-y-4">
+        <div className="space-y-4 scroll-reveal">
           {/* BARRA INTEGRADA DE FILTROS POR GRUPO MUSCULAR Y BÚSQUEDA */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pb-3 border-b border-zinc-200/40 dark:border-zinc-800/60 w-full">
             {/* Búsqueda (Izquierda) */}
@@ -2568,7 +2568,7 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
 
       {/* --- VISTA 4: GRÁFICO DE PROGRESO Y MÉTRICAS POR EJERCICIO (RECHARTS) --- */}
       {activeTab === "progreso" && (
-        <div className="space-y-6 text-slate-800 dark:text-zinc-100">
+        <div className="space-y-6 text-slate-800 dark:text-zinc-100 scroll-reveal">
           {/* CONTROL Y FILTROS DE EJERCICIO */}
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-zinc-200/60 dark:border-zinc-800/60 pb-5">
             <div>
@@ -2776,7 +2776,7 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
 
       {/* --- VISTA 5: HISTORIAL DE SESIONES --- */}
       {activeTab === "historial" && (
-        <div className="space-y-4">
+        <div className="space-y-4 scroll-reveal">
           {/* Header de Historial de Sesiones */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-200/40 dark:border-zinc-800/50 pb-3">
             <h3 className="text-sm font-extrabold flex items-center gap-2 text-slate-900 dark:text-white shrink-0">
