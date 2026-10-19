@@ -5,7 +5,7 @@ import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import { useBriefLoading } from "../hooks/useBriefLoading";
 import { TableSkeleton } from "./TableSkeleton";
 import { AnimatedNumber } from "./AnimatedNumber";
-import { AcademicPerformanceSlider, StudyProgressBarChart } from "./AcademicCharts";
+import { AcademicRadarChart, AcademicGaugeChart, StudyProgressBarChart } from "./AcademicCharts";
 import { generateUniqueId } from "../utils/id";
 import React, { useState, useEffect } from "react";
 import { saveItemToFirestore, deleteItemFromFirestore } from "../lib/firestoreSyncService";
@@ -2559,8 +2559,13 @@ export default function AcademicView({
                 <TrendingUp className="w-5 h-5 text-primary" />
                 <h3 className="font-bold text-md">Desempeño Académico</h3>
               </div>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-center">
-                <div className="space-y-4">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
+                {/* Sub-bloque 1: cantidad de materias por estado */}
+                <div
+                  className={`p-4 rounded-2xl border space-y-4 flex flex-col justify-center ${
+                    darkMode ? "bg-black/40 border-zinc-800/70" : "bg-slate-50 border-zinc-150"
+                  }`}
+                >
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-zinc-500 font-medium">
                       Aprobadas
@@ -2598,11 +2603,28 @@ export default function AcademicView({
                     </span>
                   </div>
                 </div>
-                <AcademicPerformanceSlider
-                  yearStats={academicYearStats}
-                  overallPercent={academicOverallPercent}
-                  darkMode={darkMode}
-                />
+
+                {/* Sub-bloque 2 (centro): gauge de avance de la carrera */}
+                <div
+                  className={`p-4 rounded-2xl border flex flex-col items-center justify-center ${
+                    darkMode ? "bg-black/40 border-zinc-800/70" : "bg-slate-50 border-zinc-150"
+                  }`}
+                >
+                  <AcademicGaugeChart
+                    percent={academicOverallPercent}
+                    subtitle="de la carrera aprobado"
+                    darkMode={darkMode}
+                  />
+                </div>
+
+                {/* Sub-bloque 3 (derecha): radar de avance por año */}
+                <div
+                  className={`p-4 rounded-2xl border flex flex-col items-center justify-center ${
+                    darkMode ? "bg-black/40 border-zinc-800/70" : "bg-slate-50 border-zinc-150"
+                  }`}
+                >
+                  <AcademicRadarChart yearStats={academicYearStats} darkMode={darkMode} />
+                </div>
               </div>
             </div>
 

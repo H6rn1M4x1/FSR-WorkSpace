@@ -11,7 +11,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import AnimatedFolder from "./AnimatedFolder";
-import { googleSignIn } from "../lib/firebase";
+import { googleSignIn, getAccessToken, initAuth } from "../lib/firebase";
 import { PinnedStudyFolder, CompletedStudyFile } from "../types";
 import { StudyProgressBarChart } from "./AcademicCharts";
 import { AnimatedNumber } from "./AnimatedNumber";
@@ -195,6 +195,25 @@ export function StudyMaterialBlock({
   const [filesByFolder, setFilesByFolder] = useState<Record<string, DriveFileLite[]>>({});
   const [loadingFilesFor, setLoadingFilesFor] = useState<Set<string>>(new Set());
   const autoPinDoneRef = useRef(false);
+
+  // Auto-conecta con la misma sesión de Drive que "Facultad" (DriveFolderVisualizer): si ya hay
+  // un token guardado (localStorage/Firebase), lo toma directo en vez de pedir "Conectar" de nuevo.
+  useEffect(() => {
+    getAccessToken().then((token) => {
+      if (token) setAccessToken(token);
+    });
+    const unsubscribe = initAuth(
+      (_user, token) => {
+        if (token) setAccessToken(token);
+      },
+      () => {
+        getAccessToken().then((token) => {
+          if (token) setAccessToken(token);
+        });
+      },
+    );
+    return () => unsubscribe();
+  }, []);
 
   const connectDrive = async () => {
     setConnecting(true);

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useMemo } from "react";
 import {
   Chart as ChartJS,
   RadialLinearScale,
@@ -277,71 +277,6 @@ export function StudyProgressBarChart({
   return (
     <div className="flex-1 min-h-[220px]">
       <Bar data={chartConfig.data} options={chartConfig.options} />
-    </div>
-  );
-}
-
-/**
- * Slider que alterna el radar de años y el gauge de carrera: auto-avanza cada 12s y se pausa
- * recién si el mouse se queda quieto 3s seguidos sobre el bloque (mismo patrón que el slider de
- * Acciones/Criptomonedas en Finanzas) — un paso de mouse breve no lo interrumpe.
- */
-export function AcademicPerformanceSlider({
-  yearStats,
-  overallPercent,
-  darkMode,
-}: {
-  yearStats: { year: string; percent: number }[];
-  overallPercent: number;
-  darkMode: boolean;
-}) {
-  const [page, setPage] = React.useState<0 | 1>(0);
-  const [paused, setPaused] = React.useState(false);
-  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    if (paused) return;
-    const id = setInterval(() => setPage((p) => (p === 0 ? 1 : 0)), 12000);
-    return () => clearInterval(id);
-  }, [paused]);
-
-  return (
-    <div
-      onMouseEnter={() => {
-        hoverTimeoutRef.current = setTimeout(() => setPaused(true), 3000);
-      }}
-      onMouseLeave={() => {
-        if (hoverTimeoutRef.current) {
-          clearTimeout(hoverTimeoutRef.current);
-          hoverTimeoutRef.current = null;
-        }
-        setPaused(false);
-      }}
-      className="flex-1 flex flex-col"
-    >
-      {page === 0 ? (
-        <AcademicRadarChart yearStats={yearStats} darkMode={darkMode} />
-      ) : (
-        <AcademicGaugeChart percent={overallPercent} subtitle="de la carrera aprobado" darkMode={darkMode} />
-      )}
-      <div className="flex items-center justify-center gap-2 mt-2">
-        <button
-          type="button"
-          onClick={() => setPage(0)}
-          className={`h-1.5 rounded-full transition-all cursor-pointer ${
-            page === 0 ? "w-5 bg-primary" : `w-1.5 ${darkMode ? "bg-zinc-700" : "bg-slate-300"}`
-          }`}
-          aria-label="Avance por año"
-        />
-        <button
-          type="button"
-          onClick={() => setPage(1)}
-          className={`h-1.5 rounded-full transition-all cursor-pointer ${
-            page === 1 ? "w-5 bg-primary" : `w-1.5 ${darkMode ? "bg-zinc-700" : "bg-slate-300"}`
-          }`}
-          aria-label="Avance de la carrera"
-        />
-      </div>
     </div>
   );
 }
