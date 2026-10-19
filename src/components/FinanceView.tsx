@@ -1953,15 +1953,12 @@ export default function FinanceView({
     };
   }, [effectiveInversiones, cotizacionesCripto]);
 
-  // Serie diaria de ganancia/pérdida ACUMULADA, derivada directamente de las operaciones reales
-  // del portafolio (Inversiones), para que el gráfico de progresión tenga datos desde el primer
-  // día en vez de depender solo del snapshot diario (que recién empieza a acumularse "hoy" en
-  // adelante y por eso en una cuenta real puede tardar semanas en mostrar algo). Usa la MISMA
-  // fórmula de "Resultado de Inversiones"/"Resultado de Criptomonedas" (precio actual vs. precio
-  // de la operación), pero por cada operación individual en vez de solo el total de hoy — no es
-  // un histórico real de precios pasados (eso no existe), sino cuánto aportó cada compra a la
-  // ganancia actual, ubicado en la fecha en que se cargó. Si varias operaciones caen el mismo
-  // día, sus ganancias se suman/restan en un único punto para ese día.
+  // Serie diaria del valor total (invertido ± ganancia/pérdida, a precio actual) de las
+  // operaciones del portafolio (Inversiones), agrupado por el día en que se cargó cada
+  // operación. Cada punto es independiente (NO es un acumulado corriendo): el valor de un día es
+  // la suma de (Total ARS invertido ± G/P ARS actual) de todas las operaciones de ESE día. Si una
+  // granularidad más amplia (semana/quincena/mes) agrupa varios días, el punto resultante es la
+  // suma de esos días — eso lo hace aggregateSnapshots() en FinanceCharts.tsx.
   const buildOperationBasedSeries = React.useCallback(
     (isCryptoCalc: boolean): { date: string; value: number }[] => {
       const ccl = 1198;
@@ -1982,12 +1979,13 @@ export default function FinanceView({
         return isOpen && (isCryptoCalc ? isCrypto : !isCrypto);
       });
 
-      const dailyGains = new Map<string, number>();
+      const dailyTotals = new Map<string, number>();
       positions.forEach((inv) => {
         const qty = inv.cantidad || 1;
         const unitCostARS = parseCurrencyVal(inv.valorUnitarioPesos);
         const unitCostUSD = parseCurrencyVal(inv.valorUnitarioDolares);
         let gainARS: number;
+        let investedARS: number;
 
         if (isCryptoCalc) {
           const cQuote = cotizacionesCripto?.find(
@@ -1999,57 +1997,46 @@ export default function FinanceView({
           const implicitExchangeRate =
             unitCostARS > 0 && unitCostUSD > 0 ? unitCostARS / unitCostUSD : ccl;
           const currentPriceARS = currentPriceUSD * implicitExchangeRate;
-          const investedARS = parseCurrencyVal(inv.valorTotalPesos) || unitCostARS * qty;
+          investedARS = parseCurrencyVal(inv.valorTotalPesos) || unitCostARS * qty;
           gainARS = currentPriceARS * qty - investedARS;
         } else {
           const quote = effectiveCotizaciones.find(
             (c) => c.simbolo.toUpperCase() === inv.ticker.trim().toUpperCase(),
           );
           const currentPriceARS = quote ? parseCurrencyVal(quote.ultimoPrecio) : unitCostARS;
-          const investedARS = parseCurrencyVal(inv.valorTotalPesos) || unitCostARS * qty;
+          investedARS = parseCurrencyVal(inv.valorTotalPesos) || unitCostARS * qty;
           gainARS = currentPriceARS * qty - investedARS;
         }
 
+        // Valor total de la operación a precio actual: lo invertido más (o menos) la
+        // ganancia/pérdida actual — no solo la ganancia sola.
+        const totalValueARS = investedARS + gainARS;
         const isoDate = normalizeDateComponents(inv.fecha)!.isoDate;
-        dailyGains.set(isoDate, (dailyGains.get(isoDate) || 0) + gainARS);
+        dailyTotals.set(isoDate, (dailyTotals.get(isoDate) || 0) + totalValueARS);
       });
 
-      let running = 0;
-      return Array.from(dailyGains.keys())
+      return Array.from(dailyTotals.keys())
         .sort()
-        .map((date) => {
-          running += dailyGains.get(date)!;
-          return { date, value: running };
-        });
+        .map((date) => ({ date, value: dailyTotals.get(date)! }));
     },
     [effectiveInversiones, cotizacionesCripto, effectiveCotizaciones],
   );
 
-  // Combina la serie derivada de operaciones (aproximada, pero siempre disponible) con el
-  // snapshot diario real (exacto, capturado día a día) cuando existe: para cualquier fecha que ya
-  // tenga un snapshot real se usa ese valor; el resto se completa con la serie de operaciones.
-  const mergeWithRealSnapshots = React.useCallback(
-    (
-      operationPoints: { date: string; value: number }[],
-      valueKey: "cryptoGainARS" | "accionesGainARS",
-    ): { date: string; value: number }[] => {
-      const realDates = new Set(investmentSnapshots.map((s) => s.date));
-      const backfill = operationPoints.filter((p) => !realDates.has(p.date));
-      const real = investmentSnapshots.map((s) => ({ date: s.date, value: s[valueKey] }));
-      return [...backfill, ...real].sort((a, b) => a.date.localeCompare(b.date));
-    },
-    [investmentSnapshots],
-  );
-
   const criptoProgressionSnapshots = React.useMemo(() => {
-    const merged = mergeWithRealSnapshots(buildOperationBasedSeries(true), "cryptoGainARS");
-    return merged.map((p) => ({ date: p.date, cryptoGainARS: p.value, accionesGainARS: 0 }));
-  }, [buildOperationBasedSeries, mergeWithRealSnapshots]);
+    return buildOperationBasedSeries(true).map((p) => ({
+      date: p.date,
+      cryptoGainARS: p.value,
+      accionesGainARS: 0,
+    }));
+  }, [buildOperationBasedSeries]);
 
   const accionesProgressionSnapshots = React.useMemo(() => {
-    const merged = mergeWithRealSnapshots(buildOperationBasedSeries(false), "accionesGainARS");
-    return merged.map((p) => ({ date: p.date, cryptoGainARS: 0, accionesGainARS: p.value }));
-  }, [buildOperationBasedSeries, mergeWithRealSnapshots]);
+    return buildOperationBasedSeries(false).map((p) => ({
+      date: p.date,
+      cryptoGainARS: 0,
+      accionesGainARS: p.value,
+    }));
+  }, [buildOperationBasedSeries]);
 
   // Guarda (upsert) la ganancia/pérdida neta de hoy en cripto y acciones — un registro por día,
   // identificado por la fecha — para poder graficar la progresión real con el tiempo en vez de

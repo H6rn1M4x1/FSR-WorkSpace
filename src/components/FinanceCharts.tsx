@@ -143,6 +143,12 @@ function formatCompactNumber(n: number): string {
   return `${sign}${Math.round(abs)}`;
 }
 
+// DD-MM-YYYY — regla de formato de fecha de toda la app (nunca MM-DD ni YYYY-MM-DD crudo).
+function formatDDMMYYYY(isoDate: string): string {
+  const [year, month, day] = isoDate.split("-");
+  return `${day}-${month}-${year}`;
+}
+
 // Tooltip HTML propio en vez del que dibuja Chart.js directamente sobre el <canvas>: ese tooltip
 // nativo es parte del mismo bitmap del gráfico, así que nunca puede salirse del rectángulo del
 // canvas por más que el contenedor tenga overflow visible — por eso se veía cortado al pasar el
@@ -738,7 +744,7 @@ function aggregateSnapshots(
         });
 
   if (granularity === "dia") {
-    return windowed.map((p) => ({ label: p.date.slice(5), value: p.value }));
+    return windowed.map((p) => ({ label: formatDDMMYYYY(p.date), value: p.value }));
   }
   const bucketKey = (dateStr: string): string => {
     const d = new Date(dateStr + "T00:00:00");
@@ -756,8 +762,10 @@ function aggregateSnapshots(
   };
   const buckets = new Map<string, number>();
   windowed.forEach((p) => {
-    // Se queda con el último valor conocido de cada balde (no se suman ganancias entre sí).
-    buckets.set(bucketKey(p.date), p.value);
+    // Cada balde suma los valores diarios que caen dentro de su ventana (p.ej. "quincena" suma
+    // los valores de los 15 días que agrupa) — no se queda con el último, todos los días aportan.
+    const key = bucketKey(p.date);
+    buckets.set(key, (buckets.get(key) || 0) + p.value);
   });
   return Array.from(buckets.entries()).map(([label, value]) => ({ label, value }));
 }
