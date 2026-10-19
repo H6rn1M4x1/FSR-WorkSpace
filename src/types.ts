@@ -544,6 +544,22 @@ export interface AgendaShare {
   updatedAt: string;
 }
 
+// Carpeta de Google Drive (dentro de "1 - Facultad") fijada para seguimiento en "Material de
+// Estudio" — manual o automáticamente, si la materia homónima se puede rendir o cursar.
+export interface PinnedStudyFolder {
+  id: string; // = folderId, así el sync hace upsert en vez de duplicar
+  folderId: string;
+  folderName: string;
+  materiaName: string;
+}
+
+// Estado de "estudiado" de un archivo dentro de una carpeta fijada en "Material de Estudio".
+export interface CompletedStudyFile {
+  id: string; // = fileId
+  fileId: string;
+  completed: boolean;
+}
+
 // --- Password Vault (client-side end-to-end encrypted) ---
 // Every field here is either non-sensitive metadata or an opaque ciphertext.
 // The server/Firestore NEVER sees a plaintext site password, master password,

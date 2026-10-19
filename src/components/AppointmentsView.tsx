@@ -80,6 +80,7 @@ import { WorkspaceService } from "../lib/workspace";
 import { SmartDateTimePicker } from "./SmartDateTimePicker";
 import { RichTextEditor } from "./RichTextEditor";
 import { TurnoCategoryManagerModal } from "./TurnoCategoryManagerModal";
+import { QuickNotesMiniWidget } from "./QuickNotesMiniWidget";
 import { TurnoMedicamentosAPedir } from "./TurnoMedicamentosAPedir";
 import {
   DEFAULT_TURNO_CATEGORIAS,
@@ -3102,6 +3103,10 @@ export default function AppointmentsView({
               </div>
             </div>
           </div>
+
+          {/* Preview de Notas Rápidas, igual al que ya está en Inicio — arriba del mapa para
+              poder anotar algo rápido sin salir de la Agenda. */}
+          <QuickNotesMiniWidget userId={activeUserId} darkMode={darkMode} />
 
           {/* Bottom Row: Map Component displaying all marked locations */}
           <div
