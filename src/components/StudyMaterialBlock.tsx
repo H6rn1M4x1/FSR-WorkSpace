@@ -11,7 +11,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import AnimatedFolder from "./AnimatedFolder";
-import { googleSignIn, getAccessToken, getAccessTokenSync, initAuth } from "../lib/firebase";
+import { googleSignIn, getAccessToken, getAccessTokenSync, initAuth } from "../lib/supabase";
 import { PinnedStudyFolder, CompletedStudyFile } from "../types";
 import { StudyProgressBarChart } from "./AcademicCharts";
 import { AnimatedNumber } from "./AnimatedNumber";
@@ -224,11 +224,12 @@ export function StudyMaterialBlock({
     setConnecting(true);
     setConnectError(null);
     try {
-      const result = await googleSignIn();
-      if (result) setAccessToken(result.accessToken);
+      // googleSignIn() es un login por redirect (Supabase OAuth), no un popup con resultado
+      // inmediato: el navegador navega a Google y vuelve a esta misma página. El token real se
+      // toma recién al volver, vía initAuth()/getAccessToken() (igual que en "Facultad").
+      await googleSignIn();
     } catch (err: any) {
       setConnectError(err?.message || "No se pudo conectar con Google Drive.");
-    } finally {
       setConnecting(false);
     }
   };

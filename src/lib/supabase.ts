@@ -99,6 +99,16 @@ export const getAccessToken = async (): Promise<string | null> => {
   return data.session?.provider_token ?? readCachedProviderToken();
 };
 
+// Versión síncrona: solo el valor cacheado (el provider_token "vivo" de la sesión únicamente
+// está disponible justo después del redirect de OAuth, así que para una lectura inmediata sin
+// esperar un round-trip async el caché es la única fuente posible — y es además la fuente que
+// ya usa el resto de la app para sobrevivir recargas, según el comentario de arriba). Pensada
+// para inicializar el estado de un componente (useState(() => getAccessTokenSync())) sin la
+// ventana de carga de esperar la promesa de getAccessToken().
+export const getAccessTokenSync = (): string | null => {
+  return readCachedProviderToken();
+};
+
 // Google access tokens expire (~1 hour) and Supabase doesn't refresh them automatically.
 // This silently re-runs the Google OAuth flow with prompt=none, so if the browser still
 // has an active Google session it comes back with a fresh token without showing any
