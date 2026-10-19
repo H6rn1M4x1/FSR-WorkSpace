@@ -675,19 +675,17 @@ export function MonthlyTrendChart({
   );
 }
 
-export type InvestmentGranularity = "dia" | "semana" | "quincena" | "mes" | "todo";
+export type InvestmentGranularity = "dia" | "semana" | "quincena" | "mes";
 
 const GRANULARITY_OPTIONS: { id: InvestmentGranularity; label: string }[] = [
   { id: "dia", label: "Día" },
   { id: "semana", label: "Sem" },
   { id: "quincena", label: "Quinc" },
   { id: "mes", label: "Mes" },
-  { id: "todo", label: "Todo" },
 ];
 
-// Ventana relativa a HOY (huso de Argentina) que cada granularidad muestra — "todo" es la única
-// que no recorta nada. El resto siempre termina en el día de hoy, nunca en lo que sea que haya
-// sido el último snapshot guardado.
+// Ventana relativa a HOY (huso de Argentina) que cada granularidad muestra — siempre termina en
+// el día de hoy, nunca en lo que sea que haya sido el último snapshot guardado.
 const GRANULARITY_WINDOW_DAYS: Record<"dia" | "semana" | "quincena" | "mes", number> = {
   dia: 30,
   semana: 16 * 7,
@@ -729,19 +727,15 @@ function aggregateSnapshots(
 ): { label: string; value: number }[] {
   if (points.length === 0) return [];
 
-  // Todas las granularidades salvo "todo" muestran una ventana relativa a HOY (huso de
-  // Argentina) — nunca "lo que haya hasta el último snapshot guardado" sino siempre hasta la
-  // fecha real de hoy, recortando lo más viejo que ya no entra en la ventana.
-  const windowed =
-    granularity === "todo"
-      ? points
-      : points.filter((p) => {
-          const days = Math.round(
-            (new Date(todayStr + "T00:00:00").getTime() - new Date(p.date + "T00:00:00").getTime()) /
-              86400000,
-          );
-          return days >= 0 && days <= GRANULARITY_WINDOW_DAYS[granularity];
-        });
+  // Ventana relativa a HOY (huso de Argentina) — nunca "lo que haya hasta el último snapshot
+  // guardado" sino siempre hasta la fecha real de hoy, recortando lo más viejo que ya no entra.
+  const windowed = points.filter((p) => {
+    const days = Math.round(
+      (new Date(todayStr + "T00:00:00").getTime() - new Date(p.date + "T00:00:00").getTime()) /
+        86400000,
+    );
+    return days >= 0 && days <= GRANULARITY_WINDOW_DAYS[granularity];
+  });
 
   if (granularity === "dia") {
     return windowed.map((p) => ({ label: formatDDMMYYYY(p.date), value: p.value }));
@@ -757,7 +751,7 @@ function aggregateSnapshots(
       const half = d.getDate() <= 15 ? "A" : "B";
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${half}`;
     }
-    // mes / todo (todo se agrupa por mes para que un historial largo siga siendo legible)
+    // mes
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   };
   const buckets = new Map<string, number>();
@@ -787,16 +781,107 @@ export function InvestmentProgressionChart({
   const gridColor = darkMode ? "rgba(255,255,255,0.06)" : "rgba(15,23,42,0.06)";
   const textColor = darkMode ? "#a1a1aa" : "#64748b";
   const negativeColor = darkMode ? "#71717a" : "#94a3b8";
-
-  const sorted = [...snapshots].sort((a, b) => a.date.localeCompare(b.date));
-  const points = sorted.map((s) => ({ date: s.date, value: s[valueKey] }));
   const today = getArgentinaDateString();
-  const aggregated = aggregateSnapshots(points, granularity, today);
+
+  // formatValue llega como prop recreada en cada render del padre (no está envuelta en
+  // useCallback) — guardarla en un ref evita que eso invalide el memo de abajo y el gráfico se
+  // reanime solo porque el padre volvió a renderizar, sin que los datos reales cambiaran.
+  const formatValueRef = useRef(formatValue);
+  useEffect(() => {
+    formatValueRef.current = formatValue;
+  }, [formatValue]);
+
+  const aggregated = useMemo(() => {
+    const sorted = [...snapshots].sort((a, b) => a.date.localeCompare(b.date));
+    const points = sorted.map((s) => ({ date: s.date, value: s[valueKey] }));
+    return aggregateSnapshots(points, granularity, today);
+  }, [snapshots, valueKey, granularity, today]);
+
+  // data/options de Chart.js se memorizan: si se recrean como objetos nuevos en cada render del
+  // padre (aunque los datos no hayan cambiado), react-chartjs-2 vuelve a llamar chart.update() y
+  // reinicia la animación de entrada una y otra vez — eso es lo que se veía como el gráfico
+  // "desapareciendo y volviendo a aparecer" en vez de animarse una sola vez al cargar.
+  const chartConfig = useMemo(() => {
+    if (aggregated.length < 2) return null;
+
+    const lastValue = aggregated[aggregated.length - 1].value;
+    // Acento cuando la progresión va positiva, gris cuando va negativa — a diferencia del resto
+    // de los gráficos de Finanzas (que sí usan rojo/verde semántico), esta línea pidió seguir la
+    // paleta de la app en vez de un semáforo.
+    const lineColor = lastValue >= 0 ? accentHex : negativeColor;
+
+    // Animación "progresiva": cada punto se dibuja en orden, no todos juntos — mismo recurso que
+    // la muestra de Chart.js que pidió el usuario (animations/progressive-line), adaptado a la
+    // cantidad real de puntos en vez de 1000.
+    const totalDuration = 1800;
+    const delayBetweenPoints = aggregated.length > 1 ? totalDuration / aggregated.length : 0;
+    const previousY = (ctx: any) =>
+      ctx.index === 0
+        ? ctx.chart.scales.y.getPixelForValue(0)
+        : ctx.chart.getDatasetMeta(ctx.datasetIndex).data[ctx.index - 1]?.getProps(["y"], true).y;
+    const animation = {
+      x: { type: "number" as const, easing: "linear" as const, duration: delayBetweenPoints, from: NaN },
+      y: {
+        type: "number" as const,
+        easing: "linear" as const,
+        duration: delayBetweenPoints,
+        from: previousY,
+        delay(ctx: any) {
+          if (ctx.type !== "data" || ctx.yStarted) return 0;
+          ctx.yStarted = true;
+          return ctx.index * delayBetweenPoints;
+        },
+      },
+    };
+
+    const data = {
+      labels: aggregated.map((p) => p.label),
+      datasets: [
+        {
+          data: aggregated.map((p) => p.value),
+          borderColor: lineColor,
+          backgroundColor: lineColor,
+          pointRadius: aggregated.length > 20 ? 0 : 2.5,
+          pointBackgroundColor: lineColor,
+          borderWidth: 2,
+          tension: 0.3,
+          fill: { target: "origin", above: `${lineColor}1a`, below: `${lineColor}1a` },
+        },
+      ],
+    };
+
+    const options: ChartOptions<"line"> = {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: animation as any,
+      interaction: { intersect: false, mode: "index" },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: textColor, font: { size: 8 }, maxTicksLimit: 8 } },
+        y: {
+          grid: { color: gridColor },
+          ticks: { color: textColor, font: { size: 9 }, callback: (v) => formatCompactNumber(Number(v)) },
+        },
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          // enabled:false es obligatorio junto con external, si no Chart.js sigue dibujando
+          // además su propio tooltip nativo (cuadrado, recortado por el canvas) encima del custom.
+          enabled: false,
+          external: makeExternalTooltipHandler(darkMode),
+          callbacks: { label: (ctx: TooltipItem<"line">) => formatValueRef.current(ctx.raw as number) },
+        },
+      },
+    };
+
+    return { data, options };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aggregated, accentHex, negativeColor, darkMode, gridColor, textColor]);
 
   // Con un solo punto Chart.js no puede dibujar una línea (no hay "progresión" que mostrar
   // todavía) — se deja el mismo mensaje de "se va completando" en vez de un punto suelto que
   // parece un gráfico roto.
-  if (aggregated.length < 2) {
+  if (!chartConfig) {
     return (
       <div className="flex-1 flex items-center justify-center text-center text-xs text-zinc-500 italic px-4">
         Sin historial todavía — se va a ir completando día a día a partir de hoy.
@@ -804,79 +889,9 @@ export function InvestmentProgressionChart({
     );
   }
 
-  const lastValue = aggregated[aggregated.length - 1].value;
-  // Acento cuando la progresión va positiva, gris cuando va negativa — a diferencia del resto de
-  // los gráficos de Finanzas (que sí usan rojo/verde semántico), esta línea pidió seguir la
-  // paleta de la app en vez de un semáforo.
-  const lineColor = lastValue >= 0 ? accentHex : negativeColor;
-
-  // Animación "progresiva": cada punto se dibuja en orden, no todos juntos — mismo recurso que
-  // la muestra de Chart.js que pidió el usuario (animations/progressive-line), adaptado a la
-  // cantidad real de puntos en vez de 1000.
-  const totalDuration = 1800;
-  const delayBetweenPoints = aggregated.length > 1 ? totalDuration / aggregated.length : 0;
-  const previousY = (ctx: any) =>
-    ctx.index === 0
-      ? ctx.chart.scales.y.getPixelForValue(0)
-      : ctx.chart.getDatasetMeta(ctx.datasetIndex).data[ctx.index - 1]?.getProps(["y"], true).y;
-  const animation = {
-    x: { type: "number" as const, easing: "linear" as const, duration: delayBetweenPoints, from: NaN },
-    y: {
-      type: "number" as const,
-      easing: "linear" as const,
-      duration: delayBetweenPoints,
-      from: previousY,
-      delay(ctx: any) {
-        if (ctx.type !== "data" || ctx.yStarted) return 0;
-        ctx.yStarted = true;
-        return ctx.index * delayBetweenPoints;
-      },
-    },
-  };
-
-  const data = {
-    labels: aggregated.map((p) => p.label),
-    datasets: [
-      {
-        data: aggregated.map((p) => p.value),
-        borderColor: lineColor,
-        backgroundColor: lineColor,
-        pointRadius: aggregated.length > 20 ? 0 : 2.5,
-        pointBackgroundColor: lineColor,
-        borderWidth: 2,
-        tension: 0.3,
-        fill: { target: "origin", above: `${lineColor}1a`, below: `${lineColor}1a` },
-      },
-    ],
-  };
-
-  const options: ChartOptions<"line"> = {
-    responsive: true,
-    maintainAspectRatio: false,
-    animation: animation as any,
-    interaction: { intersect: false, mode: "index" },
-    scales: {
-      x: { grid: { display: false }, ticks: { color: textColor, font: { size: 8 }, maxTicksLimit: 8 } },
-      y: {
-        grid: { color: gridColor },
-        ticks: { color: textColor, font: { size: 9 }, callback: (v) => formatCompactNumber(Number(v)) },
-      },
-    },
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        // enabled:false es obligatorio junto con external, si no Chart.js sigue dibujando
-        // además su propio tooltip nativo (cuadrado, recortado por el canvas) encima del custom.
-        enabled: false,
-        external: makeExternalTooltipHandler(darkMode),
-        callbacks: { label: (ctx: TooltipItem<"line">) => formatValue(ctx.raw as number) },
-      },
-    },
-  };
-
   return (
     <div className="flex-1 min-h-[160px]">
-      <Line data={data} options={options} />
+      <Line data={chartConfig.data} options={chartConfig.options} />
     </div>
   );
 }
