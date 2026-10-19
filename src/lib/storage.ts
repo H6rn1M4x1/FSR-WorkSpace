@@ -29,7 +29,9 @@ import {
   DisponibilidadMedicamento,
   MedicalRecord,
   MateriaInfo,
-  HorarioItem
+  HorarioItem,
+  PinnedStudyFolder,
+  CompletedStudyFile
 } from "../types";
 
 // Empty arrays for initial collection state (no mock data)
@@ -398,6 +400,12 @@ export class StorageService {
 
   static getExamenes() { return getStoredData("examenes", []); }
   static setExamenes(data: any[]) { setStoredData("examenes", data); }
+
+  static getPinnedStudyFolders() { return getStoredData("pinned_study_folders", [] as PinnedStudyFolder[]); }
+  static setPinnedStudyFolders(data: PinnedStudyFolder[]) { setStoredData("pinned_study_folders", data); }
+
+  static getCompletedStudyFiles() { return getStoredData("completed_study_files", [] as CompletedStudyFile[]); }
+  static setCompletedStudyFiles(data: CompletedStudyFile[]) { setStoredData("completed_study_files", data); }
 
   // Clear or reset all in-memory database items
   static resetAll() {

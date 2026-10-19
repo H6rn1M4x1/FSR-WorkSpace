@@ -5,6 +5,7 @@ import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import { useBriefLoading } from "../hooks/useBriefLoading";
 import { TableSkeleton } from "./TableSkeleton";
 import { AnimatedNumber } from "./AnimatedNumber";
+import { AcademicPerformanceSlider, StudyProgressBarChart } from "./AcademicCharts";
 import { generateUniqueId } from "../utils/id";
 import React, { useState, useEffect } from "react";
 import { saveItemToFirestore, deleteItemFromFirestore } from "../lib/firestoreSyncService";
@@ -41,6 +42,13 @@ import {
   Edit3,
   Settings,
   Loader2,
+  Folder,
+  Pin,
+  PinOff,
+  CirclePlus,
+  CircleCheckBig,
+  Gauge,
+  Radar as RadarIcon,
 } from "lucide-react";
 import AnimatedList from "./AnimatedList";
 import { ConfirmationModal } from "./ConfirmationModal";
@@ -52,9 +60,12 @@ import {
   MateriaInfo,
   HorarioItem,
   ExamenItem,
+  PinnedStudyFolder,
+  CompletedStudyFile,
 } from "../types";
 import { SmartDateTimePicker } from "./SmartDateTimePicker";
 import DriveFolderVisualizer from "./DriveFolderVisualizer";
+import { StudyMaterialBlock } from "./StudyMaterialBlock";
 
 interface SelectPopoverPosition {
   top?: number;
@@ -805,6 +816,10 @@ interface AcademicViewProps {
   setHorarios: React.Dispatch<React.SetStateAction<HorarioItem[]>>;
   examenes: ExamenItem[];
   setExamenes: React.Dispatch<React.SetStateAction<ExamenItem[]>>;
+  pinnedStudyFolders: PinnedStudyFolder[];
+  setPinnedStudyFolders: React.Dispatch<React.SetStateAction<PinnedStudyFolder[]>>;
+  completedStudyFiles: CompletedStudyFile[];
+  setCompletedStudyFiles: React.Dispatch<React.SetStateAction<CompletedStudyFile[]>>;
   activeSubTab?: string;
   onSubTabChange?: (tab: string) => void;
   /** Cambia (a cualquier valor distinto del anterior) para abrir automáticamente el formulario
@@ -834,6 +849,10 @@ export default function AcademicView({
   setHorarios,
   examenes,
   setExamenes,
+  pinnedStudyFolders,
+  setPinnedStudyFolders,
+  completedStudyFiles,
+  setCompletedStudyFiles,
   activeSubTab: propActiveSubTab,
   onSubTabChange,
   itemsIShared = [],
@@ -1110,6 +1129,28 @@ export default function AcademicView({
   const [mFechaVencimiento, setMFechaVencimiento] = useState("");
   const [mFechaAprobado, setMFechaAprobado] = useState("");
 
+  // % de materias aprobadas por año de carrera (ejes del radar de Desempeño Académico) y % total
+  // de la carrera aprobada (gauge) — memorizado para que el slider de gráficos no se reanime
+  // en cada render ajeno a materiasInfo.
+  const ACADEMIC_YEARS = ["Primer Año", "Segundo Año", "Tercer Año", "Cuarto Año", "Quinto Año"];
+  const academicYearStats = React.useMemo(
+    () =>
+      ACADEMIC_YEARS.map((year) => {
+        const subjectsInYear = materiasInfo.filter((m) => m.anoCursado === year);
+        const approved = subjectsInYear.filter((m) => m.estado === "Aprobado").length;
+        return {
+          year,
+          percent: subjectsInYear.length > 0 ? (approved / subjectsInYear.length) * 100 : 0,
+        };
+      }),
+    [materiasInfo],
+  );
+  const academicOverallPercent = React.useMemo(() => {
+    if (materiasInfo.length === 0) return 0;
+    const approved = materiasInfo.filter((m) => m.estado === "Aprobado").length;
+    return (approved / materiasInfo.length) * 100;
+  }, [materiasInfo]);
+
   const availableMateriaOptions = [
     { value: "Sin correlativas", label: "Sin correlativas" },
     ...Array.from(new Set(materiasInfo.map((m) => m.materia)))
@@ -1229,6 +1270,26 @@ export default function AcademicView({
       color: "bg-primary/10 text-primary border-primary/30",
     };
   };
+
+  // Nombre de materia (en minúscula) -> nombre "lindo", para resolver a qué materia corresponde
+  // una carpeta de Drive homónima en "Material de Estudio". "eligibleMaterias" son además las
+  // que se pueden rendir o cursar ya mismo, usadas para el auto-fijado de carpetas.
+  const allMateriaNames = React.useMemo(() => {
+    const map = new Map<string, string>();
+    materiasInfo.forEach((m) => map.set(m.materia.trim().toLowerCase(), m.materia));
+    return map;
+  }, [materiasInfo]);
+  const eligibleMateriaNames = React.useMemo(() => {
+    const map = new Map<string, string>();
+    materiasInfo.forEach((m) => {
+      const status = getAcademicStatus(m).type;
+      if (status === "puede_rendir" || status === "puede_cursar") {
+        map.set(m.materia.trim().toLowerCase(), m.materia);
+      }
+    });
+    return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [materiasInfo]);
 
   const calculateVencimiento = (
     fechaRegStr?: string,
@@ -2086,7 +2147,7 @@ export default function AcademicView({
                           </h3>
                         </div>
                         <span className="text-[10px] bg-primary/10 text-primary font-bold px-2.5 py-1 rounded-lg">
-                          {agendaItemsList.length} Actividades
+                          <AnimatedNumber value={agendaItemsList.length} format={(n) => `${Math.round(n)} Actividades`} />
                         </span>
                       </div>
 
@@ -2472,9 +2533,21 @@ export default function AcademicView({
                   </div>
                 </div>
 
+                {/* Material de Estudio: carpetas de Drive fijadas con seguimiento de avance */}
+                <StudyMaterialBlock
+                  darkMode={darkMode}
+                  eligibleMaterias={eligibleMateriaNames}
+                  allMateriaNames={allMateriaNames}
+                  pinnedFolders={pinnedStudyFolders}
+                  setPinnedFolders={setPinnedStudyFolders}
+                  completedFiles={completedStudyFiles}
+                  setCompletedFiles={setCompletedStudyFiles}
+                />
+
                 {/* Overview stats & Study timer */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Academic summary bento */}
+                <div className="space-y-6">
+            {/* Academic summary bento — ahora full-width: stats a la izquierda, slider con el
+                radar de avance por año / gauge de carrera a la derecha. */}
             <div
               className={`p-6 rounded-3xl border scroll-reveal ${
                 darkMode
@@ -2486,40 +2559,54 @@ export default function AcademicView({
                 <TrendingUp className="w-5 h-5 text-primary" />
                 <h3 className="font-bold text-md">Desempeño Académico</h3>
               </div>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-zinc-500 font-medium">
-                    Aprobadas
-                  </span>
-                  <span className="text-xl font-bold">
-                    {materiasInfo.filter((m) => m.estado === "Aprobado").length}
-                  </span>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-center">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-zinc-500 font-medium">
+                      Aprobadas
+                    </span>
+                    <span className="text-xl font-bold">
+                      <AnimatedNumber
+                        value={materiasInfo.filter((m) => m.estado === "Aprobado").length}
+                      />
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-zinc-500 font-medium">
+                      Regularizadas
+                    </span>
+                    <span className="text-xl font-bold">
+                      <AnimatedNumber
+                        value={
+                          materiasInfo.filter((m) => m.estado === "Regularizado")
+                            .length
+                        }
+                      />
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-zinc-500 font-medium">
+                      Sin empezar
+                    </span>
+                    <span className="text-xl font-bold">
+                      <AnimatedNumber
+                        value={
+                          materiasInfo.filter((m) => m.estado === "Sin empezar")
+                            .length
+                        }
+                      />
+                    </span>
+                  </div>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-zinc-500 font-medium">
-                    Regularizadas
-                  </span>
-                  <span className="text-xl font-bold">
-                    {
-                      materiasInfo.filter((m) => m.estado === "Regularizado")
-                        .length
-                    }
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-zinc-500 font-medium">
-                    Sin empezar
-                  </span>
-                  <span className="text-xl font-bold">
-                    {
-                      materiasInfo.filter((m) => m.estado === "Sin empezar")
-                        .length
-                    }
-                  </span>
-                </div>
+                <AcademicPerformanceSlider
+                  yearStats={academicYearStats}
+                  overallPercent={academicOverallPercent}
+                  darkMode={darkMode}
+                />
               </div>
             </div>
 
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Pomodoro Timer widget */}
             <div
               className={`p-6 rounded-3xl border flex flex-col justify-between scroll-reveal ${
@@ -2606,20 +2693,31 @@ export default function AcademicView({
                         key={sub.id}
                         className="flex items-center justify-between p-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/85 backdrop-blur-md hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-all duration-200 cursor-pointer group relative overflow-hidden"
                       >
-                        <div className="flex items-center gap-3">
-                          <div className="w-3 h-3 rounded-full bg-primary"></div>
-                          <div>
-                            <p className="text-xs font-bold">{sub.materia}</p>
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-3 h-3 rounded-full bg-primary shrink-0"></div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold truncate">{sub.materia}</p>
                             <p className="text-[10px] text-zinc-500 font-medium">
                               Vencimiento: {sub.fechaVencimiento || "N/A"}
                             </p>
                           </div>
                         </div>
+                        <a
+                          href={`https://drive.google.com/drive/search?q=${encodeURIComponent(sub.materia)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          title={`Abrir carpeta de "${sub.materia}" en Drive`}
+                          className="p-2 rounded-full bg-primary/10 hover:bg-primary text-primary hover:text-white dark:hover:text-blue-950 transition-all cursor-pointer shrink-0"
+                        >
+                          <Folder className="w-4 h-4" />
+                        </a>
                       </div>
                     )}
                   />
                 )}
               </div>
+            </div>
             </div>
           </div>
 
@@ -2831,7 +2929,13 @@ export default function AcademicView({
                               <div className="min-w-0 flex-1">
                                 <p className="text-xs font-bold text-slate-800 dark:text-zinc-100">{ex.materia}</p>
                                 <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2 mt-1.5 sm:mt-0.5 items-start">
-                                  <span className="text-[9px] px-2 py-0.5 rounded-md text-white dark:text-blue-950 font-bold bg-primary shrink-0 self-start sm:self-auto">
+                                  <span
+                                    className={`text-[9px] px-2 py-0.5 rounded-md font-bold shrink-0 self-start sm:self-auto ${
+                                      ex.estado === "Examen Final"
+                                        ? "bg-black text-white dark:bg-white dark:text-black"
+                                        : "text-white dark:text-blue-950 bg-primary"
+                                    }`}
+                                  >
                                     {ex.estado}{" "}
                                     {ex.instancia ? `(${ex.instancia})` : ""}
                                   </span>

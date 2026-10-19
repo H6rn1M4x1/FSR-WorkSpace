@@ -39,7 +39,7 @@ ChartJS.register(
  * (fillStyle no tiene contexto de elemento/cascada), y ese color literal sí se puede seguir
  * combinando con color-mix() para el degradé de la paleta.
  */
-function useAccentHex(): string {
+export function useAccentHex(): string {
   const [hex, setHex] = useState("#2563eb");
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -133,7 +133,7 @@ const RED = "#ef4444";
 // Compacta un monto grande a notación corta (1,2mill / 500mil) para que no abrume los ejes de
 // los gráficos — los valores de Finanzas suelen andar en cientos de miles/millones y el número
 // completo con separadores de miles ocupa demasiado espacio horizontal en el eje.
-function formatCompactNumber(n: number): string {
+export function formatCompactNumber(n: number): string {
   const abs = Math.abs(n);
   const sign = n < 0 ? "-" : "";
   const trim = (v: number) => {
@@ -157,7 +157,7 @@ function formatDDMMYYYY(isoDate: string): string {
 // mouse cerca del borde de la tarjeta. Este, al ser un <div> aparte con position:fixed anclado a
 // document.body, queda siempre por encima y nunca se recorta. Las muestras de color de cada fila
 // se dibujan redondas (border-radius:9999px) en vez del cuadrado que usa Chart.js por default.
-function makeExternalTooltipHandler(darkMode: boolean) {
+export function makeExternalTooltipHandler(darkMode: boolean) {
   return (ctx: { chart: any; tooltip: any }) => {
     const { chart, tooltip } = ctx;
     let el = document.getElementById("finance-chart-tooltip") as HTMLDivElement | null;

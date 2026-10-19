@@ -79,7 +79,9 @@ import {
   MateriaInfo,
   HorarioItem,
   ExamenItem,
-  AgendaShare
+  AgendaShare,
+  PinnedStudyFolder,
+  CompletedStudyFile
 } from "./types";
 import {
   subscribeOutgoingShares,
@@ -452,6 +454,8 @@ export default function App() {
   const [alimentacionLogs, setAlimentacionLogs] = useState<AlimentacionLog[]>([]);
   const [horarios, setHorarios] = useState<HorarioItem[]>([]);
   const [examenes, setExamenes] = useState<ExamenItem[]>([]);
+  const [pinnedStudyFolders, setPinnedStudyFolders] = useState<PinnedStudyFolder[]>([]);
+  const [completedStudyFiles, setCompletedStudyFiles] = useState<CompletedStudyFile[]>([]);
 
   // User Settings State
   const [isUserSettingsOpen, setIsUserSettingsOpen] = useState(false);
@@ -839,7 +843,9 @@ export default function App() {
       { key: "medical_records", targetUserId: effectiveControlClinicoUserId, setState: setMedicalRecords },
       { key: "alimentacion_logs", targetUserId: currentUserId, setState: setAlimentacionLogs },
       { key: "horarios", targetUserId: currentUserId, setState: setHorarios },
-      { key: "examenes", targetUserId: currentUserId, setState: setExamenes }
+      { key: "examenes", targetUserId: currentUserId, setState: setExamenes },
+      { key: "pinned_study_folders", targetUserId: currentUserId, setState: setPinnedStudyFolders },
+      { key: "completed_study_files", targetUserId: currentUserId, setState: setCompletedStudyFiles }
     ];
 
     const unsubs = collections.map((col) => {
@@ -920,6 +926,8 @@ export default function App() {
       { key: "alimentacion_logs", targetUserId: currentUserId },
       { key: "horarios", targetUserId: currentUserId },
       { key: "examenes", targetUserId: currentUserId },
+      { key: "pinned_study_folders", targetUserId: currentUserId },
+      { key: "completed_study_files", targetUserId: currentUserId },
     ];
 
     const runPollNow = () => {
@@ -1012,6 +1020,8 @@ export default function App() {
         alimentacionLogs,
         horarios,
         examenes,
+        pinnedStudyFolders,
+        completedStudyFiles,
         backupDate: new Date().toISOString()
       };
 
@@ -1085,6 +1095,8 @@ export default function App() {
             if (Array.isArray(backup.mercaderia)) { setMercaderia(deepReplaceColors(backup.mercaderia, themeColor)); StorageService.setMercaderia(backup.mercaderia); }
             if (Array.isArray(backup.horarios)) { setHorarios(deepReplaceColors(backup.horarios, themeColor)); StorageService.setHorarios(backup.horarios); }
             if (Array.isArray(backup.examenes)) { setExamenes(deepReplaceColors(backup.examenes, themeColor)); StorageService.setExamenes(backup.examenes); }
+            if (Array.isArray(backup.pinnedStudyFolders)) { setPinnedStudyFolders(deepReplaceColors(backup.pinnedStudyFolders, themeColor)); StorageService.setPinnedStudyFolders(backup.pinnedStudyFolders); }
+            if (Array.isArray(backup.completedStudyFiles)) { setCompletedStudyFiles(deepReplaceColors(backup.completedStudyFiles, themeColor)); StorageService.setCompletedStudyFiles(backup.completedStudyFiles); }
             if (Array.isArray(backup.alimentacionLogs)) { setAlimentacionLogs(deepReplaceColors(backup.alimentacionLogs, themeColor)); StorageService.setAlimentacionLogs(backup.alimentacionLogs); }
             if (Array.isArray(backup.disponibilidadMedicamentos)) { setDisponibilidadMedicamentos(deepReplaceColors(backup.disponibilidadMedicamentos, themeColor)); StorageService.setDisponibilidadMedicamentos(backup.disponibilidadMedicamentos); }
             if (Array.isArray(backup.medicamentosDetallados)) { setMedicamentosDetallados(deepReplaceColors(backup.medicamentosDetallados, themeColor)); StorageService.setMedicamentosDetallados(backup.medicamentosDetallados); }
@@ -1238,7 +1250,9 @@ export default function App() {
             if (Array.isArray(backup.medicalRecords)) { setMedicalRecords(backup.medicalRecords); StorageService.setMedicalRecords(backup.medicalRecords); }
             if (Array.isArray(backup.horarios)) { setHorarios(backup.horarios); }
             if (Array.isArray(backup.examenes)) { setExamenes(backup.examenes); }
-            
+            if (Array.isArray(backup.pinnedStudyFolders)) { setPinnedStudyFolders(backup.pinnedStudyFolders); }
+            if (Array.isArray(backup.completedStudyFiles)) { setCompletedStudyFiles(backup.completedStudyFiles); }
+
             setDriveStatusMessage("Datos sincronizados automáticamente desde Google Drive.");
             console.log("Cargado automático desde Google Drive completado.");
           } else if (result.notFound) {
@@ -1394,6 +1408,26 @@ export default function App() {
       }
     }
   }, [examenes, isInitialLoadDone]);
+
+  useEffect(() => {
+    if (isInitialLoadDone) {
+      if (!isRemoteUpdateRef.current) {
+        StorageService.setPinnedStudyFolders(pinnedStudyFolders);
+      } else {
+        setStoredDataSilent("pinned_study_folders", pinnedStudyFolders);
+      }
+    }
+  }, [pinnedStudyFolders, isInitialLoadDone]);
+
+  useEffect(() => {
+    if (isInitialLoadDone) {
+      if (!isRemoteUpdateRef.current) {
+        StorageService.setCompletedStudyFiles(completedStudyFiles);
+      } else {
+        setStoredDataSilent("completed_study_files", completedStudyFiles);
+      }
+    }
+  }, [completedStudyFiles, isInitialLoadDone]);
 
   // Helper to construct all current active events across the workspace for calendar syncing
   const getAllEventsForSync = () => {
@@ -2420,6 +2454,10 @@ export default function App() {
                   setHorarios={setHorarios}
                   examenes={examenesWithShared}
                   setExamenes={setExamenes}
+                  pinnedStudyFolders={pinnedStudyFolders}
+                  setPinnedStudyFolders={setPinnedStudyFolders}
+                  completedStudyFiles={completedStudyFiles}
+                  setCompletedStudyFiles={setCompletedStudyFiles}
                   activeSubTab={activeSubTab}
                   onSubTabChange={setActiveSubTab}
                   autoOpenQuickAdd={quickAddNonce}
