@@ -11,7 +11,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import AnimatedFolder from "./AnimatedFolder";
-import { googleSignIn, getAccessToken, initAuth } from "../lib/firebase";
+import { googleSignIn, getAccessToken, getAccessTokenSync, initAuth } from "../lib/firebase";
 import { PinnedStudyFolder, CompletedStudyFile } from "../types";
 import { StudyProgressBarChart } from "./AcademicCharts";
 import { AnimatedNumber } from "./AnimatedNumber";
@@ -186,7 +186,11 @@ export function StudyMaterialBlock({
   completedFiles,
   setCompletedFiles,
 }: StudyMaterialBlockProps) {
-  const [accessToken, setAccessToken] = useState<string | null>(null);
+  // Arranca con el token ya leído de forma SÍNCRONA (localStorage/caché en memoria de
+  // firebase.ts) en vez de null — así, si ya hay sesión de Drive conectada en otra parte de la
+  // app (p.ej. "Facultad"), este bloque aparece conectado desde el primer render, sin el delay
+  // de esperar un round-trip async (ni una ventana donde se ve "Conectar con Drive" de más).
+  const [accessToken, setAccessToken] = useState<string | null>(() => getAccessTokenSync());
   const [connecting, setConnecting] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
   const [rootFolders, setRootFolders] = useState<DriveFolderLite[] | null>(null);
@@ -196,8 +200,9 @@ export function StudyMaterialBlock({
   const [loadingFilesFor, setLoadingFilesFor] = useState<Set<string>>(new Set());
   const autoPinDoneRef = useRef(false);
 
-  // Auto-conecta con la misma sesión de Drive que "Facultad" (DriveFolderVisualizer): si ya hay
-  // un token guardado (localStorage/Firebase), lo toma directo en vez de pedir "Conectar" de nuevo.
+  // Respaldo: si el token todavía no estaba disponible al montar (o cambia mientras el bloque
+  // sigue montado, p.ej. el usuario conecta desde el selector de carpetas más abajo), lo capta
+  // igual vía el mecanismo async/estado de Firebase que ya usa "Facultad".
   useEffect(() => {
     getAccessToken().then((token) => {
       if (token) setAccessToken(token);
