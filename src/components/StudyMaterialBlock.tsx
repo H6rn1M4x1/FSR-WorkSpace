@@ -43,6 +43,72 @@ async function driveFetch(url: string, accessToken: string) {
   return res.json();
 }
 
+async function findFacultadRootId(token: string): Promise<string | null> {
+  const rootQuery = "name = '1 - Facultad' and mimeType = 'application/vnd.google-apps.folder' and trashed = false";
+  const rootData = await driveFetch(
+    `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(rootQuery)}&fields=files(id,name)&pageSize=10`,
+    token,
+  );
+  return rootData.files?.[0]?.id || null;
+}
+
+async function listChildFolders(parentId: string, token: string): Promise<DriveFolderLite[]> {
+  const query = `'${parentId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
+  const data = await driveFetch(
+    `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name)&pageSize=200&orderBy=name`,
+    token,
+  );
+  return data.files || [];
+}
+
+// Recorre TODO el árbol de carpetas dentro de "1 - Facultad" (no solo las de primer nivel, donde
+// viven las categorías como "3 - Cursando" o "5 - Años de Cursado") buscando, a cualquier
+// profundidad, carpetas homónimas a materias que ya se pueden rendir o cursar — así el usuario no
+// tiene que ir a buscarlas él mismo. Recorre nivel por nivel (en paralelo dentro de cada nivel) y
+// deja de bajar por una rama apenas encuentra una materia ahí (no hace falta mirar adentro de la
+// carpeta de la materia para esto). Acotado por profundidad y cantidad total de carpetas visitadas
+// como salvaguarda ante árboles de carpetas inusualmente grandes.
+const MAX_SCAN_DEPTH = 8;
+const MAX_SCAN_FOLDERS = 400;
+
+async function scanForEligibleSubjectFolders(
+  token: string,
+  eligibleMaterias: Map<string, string>,
+  alreadyPinnedIds: Set<string>,
+): Promise<PinnedStudyFolder[]> {
+  const rootId = await findFacultadRootId(token);
+  if (!rootId) return [];
+
+  const found: PinnedStudyFolder[] = [];
+  const matchedIds = new Set<string>();
+  let queue: string[] = [rootId];
+  let visitedCount = 0;
+
+  for (let depth = 0; depth < MAX_SCAN_DEPTH && queue.length > 0 && visitedCount < MAX_SCAN_FOLDERS; depth++) {
+    const levelResults = await Promise.all(
+      queue.map((id) => listChildFolders(id, token).catch(() => [] as DriveFolderLite[])),
+    );
+    visitedCount += queue.length;
+
+    const nextQueue: string[] = [];
+    levelResults.forEach((children) => {
+      children.forEach((child) => {
+        const materiaName = eligibleMaterias.get(child.name.trim().toLowerCase());
+        if (materiaName && !alreadyPinnedIds.has(child.id) && !matchedIds.has(child.id)) {
+          matchedIds.add(child.id);
+          found.push({ id: child.id, folderId: child.id, folderName: child.name, materiaName });
+        } else {
+          nextQueue.push(child.id);
+        }
+      });
+    });
+
+    queue = nextQueue.slice(0, Math.max(0, MAX_SCAN_FOLDERS - visitedCount));
+  }
+
+  return found;
+}
+
 function PinnedFolderCard({
   folder,
   files,
@@ -195,6 +261,7 @@ export function StudyMaterialBlock({
   const [connectError, setConnectError] = useState<string | null>(null);
   const [rootFolders, setRootFolders] = useState<DriveFolderLite[] | null>(null);
   const [loadingFolders, setLoadingFolders] = useState(false);
+  const [autoPinning, setAutoPinning] = useState(false);
   const [browserOpen, setBrowserOpen] = useState(false);
   const [filesByFolder, setFilesByFolder] = useState<Record<string, DriveFileLite[]>>({});
   const [loadingFilesFor, setLoadingFilesFor] = useState<Set<string>>(new Set());
@@ -234,27 +301,17 @@ export function StudyMaterialBlock({
     }
   };
 
-  // Carga las subcarpetas de "1 - Facultad" una vez conectado.
+  // Carga las subcarpetas de primer nivel de "1 - Facultad" (categorías como "3 - Cursando"),
+  // usadas solo para el selector manual de "Fijar carpetas" más abajo.
   const loadRootFolders = async (token: string) => {
     setLoadingFolders(true);
     try {
-      const rootQuery =
-        "name = '1 - Facultad' and mimeType = 'application/vnd.google-apps.folder' and trashed = false";
-      const rootData = await driveFetch(
-        `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(rootQuery)}&fields=files(id,name)&pageSize=10`,
-        token,
-      );
-      const rootId = rootData.files?.[0]?.id;
+      const rootId = await findFacultadRootId(token);
       if (!rootId) {
         setRootFolders([]);
         return;
       }
-      const childQuery = `'${rootId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
-      const childData = await driveFetch(
-        `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(childQuery)}&fields=files(id,name)&pageSize=100&orderBy=name`,
-        token,
-      );
-      setRootFolders(childData.files || []);
+      setRootFolders(await listChildFolders(rootId, token));
     } catch {
       setRootFolders([]);
     } finally {
@@ -262,26 +319,36 @@ export function StudyMaterialBlock({
     }
   };
 
+  // Recorre TODO el árbol de "1 - Facultad" (no solo las categorías de primer nivel) buscando
+  // carpetas de materias que ya se pueden rendir o cursar, y las fija automáticamente — el
+  // usuario no tiene que ir a buscarlas él mismo, salvo que quiera fijar alguna más a mano.
+  const runAutoScan = async (token: string) => {
+    setAutoPinning(true);
+    try {
+      const alreadyPinned = new Set(pinnedFolders.map((p) => p.folderId));
+      const matches = await scanForEligibleSubjectFolders(token, eligibleMaterias, alreadyPinned);
+      if (matches.length > 0) {
+        setPinnedFolders((prev) => {
+          const existingIds = new Set(prev.map((p) => p.folderId));
+          return [...prev, ...matches.filter((m) => !existingIds.has(m.folderId))];
+        });
+      }
+    } catch {
+      // Silencioso: si falla el escaneo automático, el usuario siempre puede fijar a mano.
+    } finally {
+      setAutoPinning(false);
+    }
+  };
+
   useEffect(() => {
-    if (accessToken) loadRootFolders(accessToken);
+    if (!accessToken) return;
+    loadRootFolders(accessToken);
+    if (!autoPinDoneRef.current) {
+      autoPinDoneRef.current = true;
+      runAutoScan(accessToken);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accessToken]);
-
-  // Auto-fija, una sola vez por carga de carpetas, las carpetas homónimas a materias que ya se
-  // pueden rendir o cursar.
-  useEffect(() => {
-    if (!rootFolders || autoPinDoneRef.current) return;
-    autoPinDoneRef.current = true;
-    const alreadyPinned = new Set(pinnedFolders.map((p) => p.folderId));
-    const toAdd: PinnedStudyFolder[] = [];
-    rootFolders.forEach((folder) => {
-      if (alreadyPinned.has(folder.id)) return;
-      const materiaName = eligibleMaterias.get(folder.name.trim().toLowerCase());
-      if (!materiaName) return;
-      toAdd.push({ id: folder.id, folderId: folder.id, folderName: folder.name, materiaName });
-    });
-    if (toAdd.length > 0) setPinnedFolders((prev) => [...prev, ...toAdd]);
-  }, [rootFolders, eligibleMaterias, pinnedFolders, setPinnedFolders]);
 
   const togglePin = (folder: DriveFolderLite) => {
     const isPinned = pinnedFolders.some((p) => p.folderId === folder.id);
@@ -368,11 +435,15 @@ export function StudyMaterialBlock({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => loadRootFolders(accessToken)}
-              title="Actualizar carpetas de Facultad"
-              className="p-1.5 rounded-full text-zinc-400 hover:bg-primary/10 hover:text-primary transition-all cursor-pointer"
+              onClick={() => {
+                loadRootFolders(accessToken);
+                runAutoScan(accessToken);
+              }}
+              disabled={autoPinning}
+              title="Volver a buscar materias en Drive"
+              className="p-1.5 rounded-full text-zinc-400 hover:bg-primary/10 hover:text-primary transition-all cursor-pointer disabled:opacity-50"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${loadingFolders ? "animate-spin" : ""}`} />
+              <RefreshCw className={`w-3.5 h-3.5 ${loadingFolders || autoPinning ? "animate-spin" : ""}`} />
             </button>
             <button
               type="button"
@@ -445,13 +516,21 @@ export function StudyMaterialBlock({
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         <div className="lg:col-span-3 space-y-3">
+          {autoPinning && (
+            <div className="flex items-center gap-2 text-[10px] text-zinc-500 font-medium px-1 pb-1">
+              <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+              <span>Buscando materias que se pueden rendir o cursar en tus carpetas de Drive…</span>
+            </div>
+          )}
           {pinnedFolders.length === 0 ? (
             <div className="flex flex-col items-center justify-center text-center py-10 gap-2">
               <AnimatedFolder size={36} className="text-zinc-400" />
               <p className="text-xs text-zinc-500 italic max-w-xs">
-                {accessToken
-                  ? 'Fijá carpetas desde "1 - Facultad" para hacer seguimiento de tu avance de estudio acá.'
-                  : "Conectá tu Google Drive para fijar las carpetas de las materias que estás cursando."}
+                {!accessToken
+                  ? "Conectá tu Google Drive para fijar las carpetas de las materias que estás cursando."
+                  : autoPinning
+                    ? "Buscando materias en tus carpetas de Drive…"
+                    : 'No se encontró ninguna carpeta con el nombre de una materia que se pueda rendir o cursar. Fijá alguna a mano desde "1 - Facultad" si hace falta.'}
               </p>
             </div>
           ) : (
