@@ -829,14 +829,15 @@ export default function FinanceView({
   const [inversionesActiveTable, setInversionesActiveTable] = useState<
     "Tradicional" | "Cripto"
   >("Tradicional");
-  const [criptoChartGranularity, setCriptoChartGranularity] = useState<InvestmentGranularity>("todo");
-  const [accionesChartGranularity, setAccionesChartGranularity] = useState<InvestmentGranularity>("todo");
+  const [criptoChartGranularity, setCriptoChartGranularity] = useState<InvestmentGranularity>("dia");
+  const [accionesChartGranularity, setAccionesChartGranularity] = useState<InvestmentGranularity>("dia");
 
   // Slider que combina "Información y Análisis de Acciones" y "...de Criptomonedas": auto-avanza
-  // cada 12s, pero se pausa apenas el mouse entra en el área (ver onMouseEnter/Leave más abajo)
-  // para dar tiempo real a leer antes de que cambie solo.
+  // cada 12s, pero se pausa si el mouse se queda 3s seguidos sobre el bloque (ver
+  // onMouseEnter/Leave más abajo) — un paso de mouse breve no interrumpe el avance.
   const [acctCryptoPage, setAcctCryptoPage] = useState<0 | 1>(0);
   const [acctCryptoPaused, setAcctCryptoPaused] = useState(false);
+  const acctCryptoHoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const goToAcctCryptoPage = (page: 0 | 1) => setAcctCryptoPage(page);
   useEffect(() => {
     if (acctCryptoPaused) return;
@@ -3332,8 +3333,18 @@ export default function FinanceView({
                   vez de apilarlas, se muestran una por vez y el slider se pausa apenas el mouse
                   entra encima, para dar tiempo a leer, y retoma solo al sacarlo. */}
               <div
-                onMouseEnter={() => setAcctCryptoPaused(true)}
-                onMouseLeave={() => setAcctCryptoPaused(false)}
+                onMouseEnter={() => {
+                  acctCryptoHoverTimeoutRef.current = setTimeout(() => {
+                    setAcctCryptoPaused(true);
+                  }, 3000);
+                }}
+                onMouseLeave={() => {
+                  if (acctCryptoHoverTimeoutRef.current) {
+                    clearTimeout(acctCryptoHoverTimeoutRef.current);
+                    acctCryptoHoverTimeoutRef.current = null;
+                  }
+                  setAcctCryptoPaused(false);
+                }}
               >
                 <AnimatePresence mode="wait">
                   {acctCryptoPage === 0 ? (
@@ -3699,6 +3710,20 @@ export default function FinanceView({
                       );
                     })}
                   </div>
+                </div>
+                <div className="flex items-center justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => goToAcctCryptoPage(0)}
+                    className="h-1.5 rounded-full transition-all cursor-pointer w-5 bg-primary"
+                    aria-label="Acciones"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => goToAcctCryptoPage(1)}
+                    className={`h-1.5 rounded-full transition-all cursor-pointer w-1.5 ${darkMode ? "bg-zinc-700" : "bg-slate-300"}`}
+                    aria-label="Criptomonedas"
+                  />
                 </div>
               </div>
                     </motion.div>
@@ -4066,28 +4091,24 @@ export default function FinanceView({
                     })}
                   </div>
                 </div>
-              </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-                <div className="flex items-center justify-center gap-2 mt-4">
+                <div className="flex items-center justify-center gap-2">
                   <button
                     type="button"
                     onClick={() => goToAcctCryptoPage(0)}
-                    className={`h-1.5 rounded-full transition-all cursor-pointer ${
-                      acctCryptoPage === 0 ? "w-5 bg-primary" : `w-1.5 ${darkMode ? "bg-zinc-700" : "bg-slate-300"}`
-                    }`}
+                    className={`h-1.5 rounded-full transition-all cursor-pointer w-1.5 ${darkMode ? "bg-zinc-700" : "bg-slate-300"}`}
                     aria-label="Acciones"
                   />
                   <button
                     type="button"
                     onClick={() => goToAcctCryptoPage(1)}
-                    className={`h-1.5 rounded-full transition-all cursor-pointer ${
-                      acctCryptoPage === 1 ? "w-5 bg-primary" : `w-1.5 ${darkMode ? "bg-zinc-700" : "bg-slate-300"}`
-                    }`}
+                    className="h-1.5 rounded-full transition-all cursor-pointer w-5 bg-primary"
                     aria-label="Criptomonedas"
                   />
                 </div>
+              </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </div>
           ) : activeTab === "pagos_mensuales" ? (
