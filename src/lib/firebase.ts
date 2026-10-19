@@ -143,14 +143,6 @@ export const getAccessToken = async (): Promise<string | null> => {
   return cachedAccessToken || (typeof window !== "undefined" ? localStorage.getItem("google_access_token") : null);
 };
 
-// Versión síncrona de getAccessToken, pensada para inicializar el estado de un componente (p.ej.
-// vía useState(() => getAccessTokenSync())) sin esperar un round-trip async — así una sesión de
-// Drive ya conectada en otra parte de la app (p.ej. "Facultad") aparece conectada al instante, en
-// vez de recién reflejarse un segundo o más después del montaje.
-export const getAccessTokenSync = (): string | null => {
-  return cachedAccessToken || (typeof window !== "undefined" ? localStorage.getItem("google_access_token") : null);
-};
-
 export const logout = async () => {
   await signOut(auth);
   setAccessToken(null);
