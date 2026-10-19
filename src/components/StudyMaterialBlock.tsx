@@ -37,6 +37,37 @@ interface StudyMaterialBlockProps {
   setCompletedFiles: React.Dispatch<React.SetStateAction<CompletedStudyFile[]>>;
 }
 
+// Normaliza un nombre de materia/carpeta para comparar: sin acentos/diacríticos, sin mayúsculas,
+// sin espacios de más al principio/final ni duplicados en el medio. Así "Análisis Matemático ",
+// "analisis   matematico" y "ANÁLISIS MATEMÁTICO" calzan entre sí aunque el nombre de la carpeta
+// en Drive no esté escrito exactamente igual que el campo "materia" de la app.
+export function normalizeMateriaName(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+// Una carpeta real en Drive suele llevar texto de más después del nombre de la materia (cátedra,
+// año, turno: "Análisis Matemático - Cátedra Pérez"), así que además del match exacto se acepta que
+// el nombre de la carpeta EMPIECE con el nombre de la materia seguido de un separador. Se exige que
+// el separador no sea una letra/número para no confundir, p.ej., "Análisis I" con "Análisis II".
+const NAME_SEPARATOR_RE = /^[\s\-_–—.,:;()[\]|/]/;
+
+function matchEligibleMateria(folderName: string, eligibleMaterias: Map<string, string>): string | undefined {
+  const normalized = normalizeMateriaName(folderName);
+  const exact = eligibleMaterias.get(normalized);
+  if (exact) return exact;
+  for (const [key, label] of eligibleMaterias) {
+    if (normalized.length > key.length && normalized.startsWith(key) && NAME_SEPARATOR_RE.test(normalized.slice(key.length))) {
+      return label;
+    }
+  }
+  return undefined;
+}
+
 async function driveFetch(url: string, accessToken: string) {
   const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
   if (!res.ok) throw new Error(`Drive API ${res.status}`);
@@ -71,29 +102,49 @@ async function listChildFolders(parentId: string, token: string): Promise<DriveF
 const MAX_SCAN_DEPTH = 8;
 const MAX_SCAN_FOLDERS = 400;
 
+interface ScanResult {
+  matches: PinnedStudyFolder[];
+  // Nombres de TODAS las carpetas que se revisaron (para poder mostrar, si no se encontró nada,
+  // qué hay realmente en Drive y así detectar a simple vista un desfasaje de nombres contra las
+  // materias de la app — p.ej. "Análisis Matemático I" en Drive vs "Análisis Matemático" en la app).
+  visitedFolderNames: string[];
+  rootFound: boolean;
+  // Si alguna subcarpeta no se pudo leer (error puntual de red/permisos) — el escaneo sigue
+  // igual, pero conviene avisar que el resultado puede estar incompleto.
+  hadErrors: boolean;
+}
+
 async function scanForEligibleSubjectFolders(
   token: string,
   eligibleMaterias: Map<string, string>,
   alreadyPinnedIds: Set<string>,
-): Promise<PinnedStudyFolder[]> {
+): Promise<ScanResult> {
   const rootId = await findFacultadRootId(token);
-  if (!rootId) return [];
+  if (!rootId) return { matches: [], visitedFolderNames: [], rootFound: false, hadErrors: false };
 
   const found: PinnedStudyFolder[] = [];
   const matchedIds = new Set<string>();
+  const visitedFolderNames: string[] = [];
+  let hadErrors = false;
   let queue: string[] = [rootId];
   let visitedCount = 0;
 
   for (let depth = 0; depth < MAX_SCAN_DEPTH && queue.length > 0 && visitedCount < MAX_SCAN_FOLDERS; depth++) {
     const levelResults = await Promise.all(
-      queue.map((id) => listChildFolders(id, token).catch(() => [] as DriveFolderLite[])),
+      queue.map((id) =>
+        listChildFolders(id, token).catch(() => {
+          hadErrors = true;
+          return [] as DriveFolderLite[];
+        }),
+      ),
     );
     visitedCount += queue.length;
 
     const nextQueue: string[] = [];
     levelResults.forEach((children) => {
       children.forEach((child) => {
-        const materiaName = eligibleMaterias.get(child.name.trim().toLowerCase());
+        visitedFolderNames.push(child.name);
+        const materiaName = matchEligibleMateria(child.name, eligibleMaterias);
         if (materiaName && !alreadyPinnedIds.has(child.id) && !matchedIds.has(child.id)) {
           matchedIds.add(child.id);
           found.push({ id: child.id, folderId: child.id, folderName: child.name, materiaName });
@@ -106,7 +157,7 @@ async function scanForEligibleSubjectFolders(
     queue = nextQueue.slice(0, Math.max(0, MAX_SCAN_FOLDERS - visitedCount));
   }
 
-  return found;
+  return { matches: found, visitedFolderNames, rootFound: true, hadErrors };
 }
 
 function PinnedFolderCard({
@@ -262,6 +313,8 @@ export function StudyMaterialBlock({
   const [rootFolders, setRootFolders] = useState<DriveFolderLite[] | null>(null);
   const [loadingFolders, setLoadingFolders] = useState(false);
   const [autoPinning, setAutoPinning] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const [scanMeta, setScanMeta] = useState<{ rootFound: boolean; visitedCount: number; hadErrors: boolean } | null>(null);
   const [browserOpen, setBrowserOpen] = useState(false);
   const [filesByFolder, setFilesByFolder] = useState<Record<string, DriveFileLite[]>>({});
   const [loadingFilesFor, setLoadingFilesFor] = useState<Set<string>>(new Set());
@@ -324,17 +377,26 @@ export function StudyMaterialBlock({
   // usuario no tiene que ir a buscarlas él mismo, salvo que quiera fijar alguna más a mano.
   const runAutoScan = async (token: string) => {
     setAutoPinning(true);
+    setScanError(null);
     try {
       const alreadyPinned = new Set(pinnedFolders.map((p) => p.folderId));
-      const matches = await scanForEligibleSubjectFolders(token, eligibleMaterias, alreadyPinned);
+      const { matches, visitedFolderNames, rootFound, hadErrors } = await scanForEligibleSubjectFolders(
+        token,
+        eligibleMaterias,
+        alreadyPinned,
+      );
+      setScanMeta({ rootFound, visitedCount: visitedFolderNames.length, hadErrors });
       if (matches.length > 0) {
         setPinnedFolders((prev) => {
           const existingIds = new Set(prev.map((p) => p.folderId));
           return [...prev, ...matches.filter((m) => !existingIds.has(m.folderId))];
         });
       }
-    } catch {
-      // Silencioso: si falla el escaneo automático, el usuario siempre puede fijar a mano.
+    } catch (err: any) {
+      // A diferencia de antes, el error ya no se traga en silencio: si el escaneo automático
+      // falla de verdad (token vencido, permisos, etc.) se muestra para poder diagnosticarlo, en
+      // vez de que parezca que "se buscó bien y no había nada".
+      setScanError(err?.message || "No se pudo buscar materias en Drive.");
     } finally {
       setAutoPinning(false);
     }
@@ -356,7 +418,7 @@ export function StudyMaterialBlock({
       setPinnedFolders((prev) => prev.filter((p) => p.folderId !== folder.id));
       return;
     }
-    const materiaName = allMateriaNames.get(folder.name.trim().toLowerCase()) || folder.name;
+    const materiaName = allMateriaNames.get(normalizeMateriaName(folder.name)) || folder.name;
     setPinnedFolders((prev) => [
       ...prev,
       { id: folder.id, folderId: folder.id, folderName: folder.name, materiaName },
@@ -408,6 +470,22 @@ export function StudyMaterialBlock({
   };
 
   const barRows = pinnedFolders.map((f) => ({ materia: f.materiaName, donePercent: progressFor(f.folderId) }));
+
+  const emptyStateMessage = (() => {
+    if (!accessToken) return 'Conectá tu Google Drive para fijar las carpetas de las materias que estás cursando.';
+    if (autoPinning) return "Buscando materias en tus carpetas de Drive…";
+    if (scanError) return `No se pudo buscar en Drive: ${scanError}`;
+    if (scanMeta && !scanMeta.rootFound) {
+      return 'No se encontró la carpeta "1 - Facultad" en tu Drive. Fijá alguna a mano desde el selector si el nombre es distinto.';
+    }
+    if (scanMeta && scanMeta.visitedCount > 0) {
+      const warning = scanMeta.hadErrors
+        ? " (ojo: algunas subcarpetas no se pudieron leer, puede que falten resultados)"
+        : "";
+      return `Se revisaron ${scanMeta.visitedCount} carpetas dentro de "1 - Facultad" y ninguna coincide con una materia que se pueda rendir o cursar.${warning} Fijá alguna a mano si hace falta.`;
+    }
+    return 'No se encontró ninguna carpeta con el nombre de una materia que se pueda rendir o cursar. Fijá alguna a mano desde "1 - Facultad" si hace falta.';
+  })();
 
   return (
     <div
@@ -525,12 +603,8 @@ export function StudyMaterialBlock({
           {pinnedFolders.length === 0 ? (
             <div className="flex flex-col items-center justify-center text-center py-10 gap-2">
               <AnimatedFolder size={36} className="text-zinc-400" />
-              <p className="text-xs text-zinc-500 italic max-w-xs">
-                {!accessToken
-                  ? "Conectá tu Google Drive para fijar las carpetas de las materias que estás cursando."
-                  : autoPinning
-                    ? "Buscando materias en tus carpetas de Drive…"
-                    : 'No se encontró ninguna carpeta con el nombre de una materia que se pueda rendir o cursar. Fijá alguna a mano desde "1 - Facultad" si hace falta.'}
+              <p className={`text-xs italic max-w-sm ${scanError ? "text-red-500 font-semibold" : "text-zinc-500"}`}>
+                {emptyStateMessage}
               </p>
             </div>
           ) : (
