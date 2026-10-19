@@ -65,7 +65,7 @@ import {
 } from "../types";
 import { SmartDateTimePicker } from "./SmartDateTimePicker";
 import DriveFolderVisualizer from "./DriveFolderVisualizer";
-import { StudyMaterialBlock } from "./StudyMaterialBlock";
+import { StudyMaterialBlock, normalizeMateriaName } from "./StudyMaterialBlock";
 
 interface SelectPopoverPosition {
   top?: number;
@@ -1276,7 +1276,7 @@ export default function AcademicView({
   // que se pueden rendir o cursar ya mismo, usadas para el auto-fijado de carpetas.
   const allMateriaNames = React.useMemo(() => {
     const map = new Map<string, string>();
-    materiasInfo.forEach((m) => map.set(m.materia.trim().toLowerCase(), m.materia));
+    materiasInfo.forEach((m) => map.set(normalizeMateriaName(m.materia), m.materia));
     return map;
   }, [materiasInfo]);
   const eligibleMateriaNames = React.useMemo(() => {
@@ -1284,7 +1284,7 @@ export default function AcademicView({
     materiasInfo.forEach((m) => {
       const status = getAcademicStatus(m).type;
       if (status === "puede_rendir" || status === "puede_cursar") {
-        map.set(m.materia.trim().toLowerCase(), m.materia);
+        map.set(normalizeMateriaName(m.materia), m.materia);
       }
     });
     return map;
