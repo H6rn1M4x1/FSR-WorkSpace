@@ -16,6 +16,7 @@ import {
 } from "chart.js";
 import { PolarArea, Bar, Line } from "react-chartjs-2";
 import { AnimatedNumber } from "./AnimatedNumber";
+import { getArgentinaDateString } from "../utils/date";
 
 ChartJS.register(
   RadialLinearScale,
@@ -81,6 +82,68 @@ function formatCompactNumber(n: number): string {
   return `${sign}${Math.round(abs)}`;
 }
 
+// Tooltip HTML propio en vez del que dibuja Chart.js directamente sobre el <canvas>: ese tooltip
+// nativo es parte del mismo bitmap del gráfico, así que nunca puede salirse del rectángulo del
+// canvas por más que el contenedor tenga overflow visible — por eso se veía cortado al pasar el
+// mouse cerca del borde de la tarjeta. Este, al ser un <div> aparte con position:fixed anclado a
+// document.body, queda siempre por encima y nunca se recorta. Las muestras de color de cada fila
+// se dibujan redondas (border-radius:9999px) en vez del cuadrado que usa Chart.js por default.
+function makeExternalTooltipHandler(darkMode: boolean) {
+  return (ctx: { chart: any; tooltip: any }) => {
+    const { chart, tooltip } = ctx;
+    let el = document.getElementById("finance-chart-tooltip") as HTMLDivElement | null;
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "finance-chart-tooltip";
+      el.style.position = "fixed";
+      el.style.pointerEvents = "none";
+      el.style.zIndex = "9999";
+      el.style.transition = "opacity 0.1s ease";
+      el.style.borderRadius = "12px";
+      el.style.padding = "8px 10px";
+      el.style.boxShadow = "0 10px 25px -5px rgba(0,0,0,0.25)";
+      document.body.appendChild(el);
+    }
+
+    if (!tooltip || tooltip.opacity === 0) {
+      el.style.opacity = "0";
+      return;
+    }
+
+    el.style.background = darkMode ? "#18181b" : "#ffffff";
+    el.style.border = `1px solid ${darkMode ? "#27272a" : "#e2e8f0"}`;
+    el.style.color = darkMode ? "#f4f4f5" : "#0f172a";
+
+    const titleLines: string[] = tooltip.title || [];
+    const bodyLines: string[][] = tooltip.body ? tooltip.body.map((b: any) => b.lines) : [];
+
+    let html = "";
+    if (titleLines.length) {
+      html += `<div style="font-weight:800;font-size:11px;margin-bottom:4px;white-space:nowrap;">${titleLines.join("<br>")}</div>`;
+    }
+    bodyLines.forEach((lines, i) => {
+      const color = tooltip.labelColors?.[i]?.backgroundColor || "#64748b";
+      lines.forEach((line: string) => {
+        html += `<div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;white-space:nowrap;">
+          <span style="width:8px;height:8px;min-width:8px;border-radius:9999px;background:${color};display:inline-block;"></span>
+          <span>${line}</span>
+        </div>`;
+      });
+    });
+    el.innerHTML = html;
+
+    const canvasRect = chart.canvas.getBoundingClientRect();
+    el.style.opacity = "1";
+    const x = canvasRect.left + tooltip.caretX;
+    const y = canvasRect.top + tooltip.caretY;
+    // Clampea horizontalmente para que tampoco se corte contra los bordes de la ventana.
+    const margin = 8;
+    el.style.left = `${Math.min(Math.max(x, margin), window.innerWidth - margin)}px`;
+    el.style.top = `${Math.max(y, margin)}px`;
+    el.style.transform = "translate(-50%, -115%)";
+  };
+}
+
 export function PolarAreaCenterChart({
   data,
   total,
@@ -138,7 +201,12 @@ export function PolarAreaCenterChart({
     plugins: {
       legend: { display: false },
       tooltip: {
-        enabled: hasData,
+        // enabled:false es obligatorio junto con external — si no, Chart.js sigue dibujando
+        // además su propio tooltip nativo (cuadrado, recortado por el canvas) encima del
+        // custom. hasData sigue controlando si se muestra algo: sin external, no hay nada que
+        // dibujar.
+        enabled: false,
+        external: hasData ? makeExternalTooltipHandler(darkMode) : undefined,
         callbacks: {
           title: (items: TooltipItem<"polarArea">[]) => items[0]?.label ?? "",
           // El tooltip siempre muestra el valor REAL, no el valor comprimido con sqrt que
@@ -152,19 +220,19 @@ export function PolarAreaCenterChart({
   return (
     <div className="flex-1 flex flex-col">
       <div className="flex-1 flex items-center justify-center">
-        <div className="h-64 w-full max-w-[260px] relative">
+        <div className="h-72 w-full max-w-[320px] relative">
           <PolarArea data={chartData} options={options} />
         </div>
       </div>
       {!hasData && (
         <div className="text-center text-xs text-zinc-500 font-medium italic">Sin datos</div>
       )}
-      <div className="mt-3 pt-3 border-t border-slate-200/60 dark:border-zinc-800/60 flex items-center justify-center gap-1.5">
+      <div className="mt-1 pt-2 border-t border-slate-200/60 dark:border-zinc-800/60 flex items-center justify-center gap-1.5">
         <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
           Total
         </span>
         <span className="text-sm font-black" style={{ color: hasData ? accentHex : textColor }}>
-          <AnimatedNumber value={hasData ? total : 0} format={formatValue} duration={0.6} />
+          <AnimatedNumber value={hasData ? total : 0} format={formatValue} />
         </span>
       </div>
     </div>
@@ -260,6 +328,10 @@ export function CategoryComparisonBarChart({
     plugins: {
       legend: { display: false },
       tooltip: {
+        // enabled:false es obligatorio junto con external, si no Chart.js sigue dibujando
+        // además su propio tooltip nativo (cuadrado, recortado por el canvas) encima del custom.
+        enabled: false,
+        external: makeExternalTooltipHandler(darkMode),
         callbacks: {
           title: (items: TooltipItem<"bar">[]) => rows[items[0].dataIndex].cat,
           label: (ctx: TooltipItem<"bar">) => {
@@ -369,6 +441,10 @@ export function BankRatesBarChart({
     plugins: {
       legend: { display: false },
       tooltip: {
+        // enabled:false es obligatorio junto con external, si no Chart.js sigue dibujando
+        // además su propio tooltip nativo (cuadrado, recortado por el canvas) encima del custom.
+        enabled: false,
+        external: makeExternalTooltipHandler(darkMode),
         callbacks: {
           title: (items: TooltipItem<"bar">[]) => sorted[items[0].dataIndex].name,
           label: (ctx: TooltipItem<"bar">) => `TNA: ${ctx.raw}%`,
@@ -484,6 +560,10 @@ export function MonthlyTrendChart({
     plugins: {
       legend: { display: false },
       tooltip: {
+        // enabled:false es obligatorio junto con external, si no Chart.js sigue dibujando
+        // además su propio tooltip nativo (cuadrado, recortado por el canvas) encima del custom.
+        enabled: false,
+        external: makeExternalTooltipHandler(darkMode),
         callbacks: {
           label: (ctx: TooltipItem<"line">) => {
             const isProjection = ctx.datasetIndex === 1 && (ctx.dataIndex ?? 0) >= history.length - 1;
@@ -503,14 +583,25 @@ export function MonthlyTrendChart({
   );
 }
 
-export type InvestmentGranularity = "dia" | "semana" | "quincena" | "mes";
+export type InvestmentGranularity = "dia" | "semana" | "quincena" | "mes" | "todo";
 
 const GRANULARITY_OPTIONS: { id: InvestmentGranularity; label: string }[] = [
   { id: "dia", label: "Día" },
   { id: "semana", label: "Sem" },
   { id: "quincena", label: "Quinc" },
   { id: "mes", label: "Mes" },
+  { id: "todo", label: "Todo" },
 ];
+
+// Ventana relativa a HOY (huso de Argentina) que cada granularidad muestra — "todo" es la única
+// que no recorta nada. El resto siempre termina en el día de hoy, nunca en lo que sea que haya
+// sido el último snapshot guardado.
+const GRANULARITY_WINDOW_DAYS: Record<"dia" | "semana" | "quincena" | "mes", number> = {
+  dia: 30,
+  semana: 16 * 7,
+  quincena: 12 * 15,
+  mes: 365,
+};
 
 export function GranularitySelector({
   value,
@@ -542,10 +633,26 @@ export function GranularitySelector({
 function aggregateSnapshots(
   points: { date: string; value: number }[],
   granularity: InvestmentGranularity,
+  todayStr: string,
 ): { label: string; value: number }[] {
   if (points.length === 0) return [];
+
+  // Todas las granularidades salvo "todo" muestran una ventana relativa a HOY (huso de
+  // Argentina) — nunca "lo que haya hasta el último snapshot guardado" sino siempre hasta la
+  // fecha real de hoy, recortando lo más viejo que ya no entra en la ventana.
+  const windowed =
+    granularity === "todo"
+      ? points
+      : points.filter((p) => {
+          const days = Math.round(
+            (new Date(todayStr + "T00:00:00").getTime() - new Date(p.date + "T00:00:00").getTime()) /
+              86400000,
+          );
+          return days >= 0 && days <= GRANULARITY_WINDOW_DAYS[granularity];
+        });
+
   if (granularity === "dia") {
-    return points.map((p) => ({ label: p.date.slice(5), value: p.value }));
+    return windowed.map((p) => ({ label: p.date.slice(5), value: p.value }));
   }
   const bucketKey = (dateStr: string): string => {
     const d = new Date(dateStr + "T00:00:00");
@@ -558,11 +665,11 @@ function aggregateSnapshots(
       const half = d.getDate() <= 15 ? "A" : "B";
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${half}`;
     }
-    // mes
+    // mes / todo (todo se agrupa por mes para que un historial largo siga siendo legible)
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   };
   const buckets = new Map<string, number>();
-  points.forEach((p) => {
+  windowed.forEach((p) => {
     // Se queda con el último valor conocido de cada balde (no se suman ganancias entre sí).
     buckets.set(bucketKey(p.date), p.value);
   });
@@ -587,9 +694,13 @@ export function InvestmentProgressionChart({
 
   const sorted = [...snapshots].sort((a, b) => a.date.localeCompare(b.date));
   const points = sorted.map((s) => ({ date: s.date, value: s[valueKey] }));
-  const aggregated = aggregateSnapshots(points, granularity);
+  const today = getArgentinaDateString();
+  const aggregated = aggregateSnapshots(points, granularity, today);
 
-  if (aggregated.length === 0) {
+  // Con un solo punto Chart.js no puede dibujar una línea (no hay "progresión" que mostrar
+  // todavía) — se deja el mismo mensaje de "se va completando" en vez de un punto suelto que
+  // parece un gráfico roto.
+  if (aggregated.length < 2) {
     return (
       <div className="flex-1 flex items-center justify-center text-center text-xs text-zinc-500 italic px-4">
         Sin historial todavía — se va a ir completando día a día a partir de hoy.
@@ -654,7 +765,13 @@ export function InvestmentProgressionChart({
     },
     plugins: {
       legend: { display: false },
-      tooltip: { callbacks: { label: (ctx: TooltipItem<"line">) => formatValue(ctx.raw as number) } },
+      tooltip: {
+        // enabled:false es obligatorio junto con external, si no Chart.js sigue dibujando
+        // además su propio tooltip nativo (cuadrado, recortado por el canvas) encima del custom.
+        enabled: false,
+        external: makeExternalTooltipHandler(darkMode),
+        callbacks: { label: (ctx: TooltipItem<"line">) => formatValue(ctx.raw as number) },
+      },
     },
   };
 

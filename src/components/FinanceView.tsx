@@ -3,7 +3,7 @@ import { useSubPanelRows } from "../lib/navPanelContext";
 import { SharedBadge, makeSharedOutHelpers } from "./SharedBadge";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import { generateUniqueId } from "../utils/id";
-import { getLocalDateString } from "../utils/date";
+import { getLocalDateString, getArgentinaDateParts, getArgentinaDateString } from "../utils/date";
 import { processAndCreateRecurringPayments } from "../utils/recurringPayments";
 import { CurrencyInput } from "./CurrencyInput";
 import { parseFormattedNumber, formatNumberToDisplay } from "../lib/numberFormat";
@@ -460,6 +460,81 @@ function BankRatesSlider({
   );
 }
 
+// Fusiona "Distribución de Gastos Varios" y "Distribución por Categoria" en un único bloque con
+// slider (mismo patrón de auto-avance + pausa en hover que BankRatesSlider) — ocupan el espacio
+// combinado de ambos paneles originales en vez de competir por la mitad cada uno.
+function DonutSlider({
+  slides,
+  darkMode,
+}: {
+  slides: {
+    icon: React.ReactNode;
+    title: string;
+    data: { name: string; value: number }[];
+    total: number;
+    formatValue: (n: number) => string;
+  }[];
+  darkMode: boolean;
+}) {
+  const [page, setPage] = useState(0);
+  const [paused, setPaused] = useState(false);
+
+  useEffect(() => {
+    if (slides.length <= 1 || paused) return;
+    const id = setInterval(() => {
+      setPage((p) => (p + 1) % slides.length);
+    }, 6000);
+    return () => clearInterval(id);
+  }, [slides.length, paused]);
+
+  const slide = slides[page];
+
+  return (
+    <div
+      className="p-5 rounded-2xl bg-slate-50 dark:bg-black border border-slate-200/80 dark:border-zinc-800/80 flex flex-col h-full text-zinc-900 dark:text-white shadow-xs"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+    >
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={page}
+          initial={{ opacity: 0, x: 16 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -16 }}
+          transition={{ duration: 0.3 }}
+          className="flex-1 flex flex-col"
+        >
+          <div className="flex items-center gap-2 mb-2 shrink-0">
+            {slide.icon}
+            <h3 className="font-bold text-md dark:text-white">{slide.title}</h3>
+          </div>
+          <PolarAreaCenterChart
+            data={slide.data}
+            total={slide.total}
+            darkMode={darkMode}
+            formatValue={slide.formatValue}
+          />
+        </motion.div>
+      </AnimatePresence>
+      {slides.length > 1 && (
+        <div className="flex items-center justify-center gap-1.5 mt-2 shrink-0">
+          {slides.map((_, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => setPage(i)}
+              className={`h-1.5 rounded-full transition-all cursor-pointer ${
+                i === page ? "w-4 bg-primary" : `w-1.5 ${darkMode ? "bg-zinc-700" : "bg-slate-300"}`
+              }`}
+              aria-label={`Página ${i + 1}`}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function FinanceView({
   darkMode,
   invoices,
@@ -716,9 +791,8 @@ export default function FinanceView({
   const [inversionesActiveTable, setInversionesActiveTable] = useState<
     "Tradicional" | "Cripto"
   >("Tradicional");
-  const [investmentChartGranularity, setInvestmentChartGranularity] = useState<
-    InvestmentGranularity
-  >("dia");
+  const [criptoChartGranularity, setCriptoChartGranularity] = useState<InvestmentGranularity>("dia");
+  const [accionesChartGranularity, setAccionesChartGranularity] = useState<InvestmentGranularity>("dia");
 
   const [localActiveTab, setLocalActiveTab] = useState<
     | "resumen"
@@ -1177,9 +1251,7 @@ export default function FinanceView({
   const isCurrentMonth = (dateStr?: string) => {
     if (!dateStr) return false;
     const clean = dateStr.split("T")[0].split(" ")[0];
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth();
+    const { year: currentYear, month: currentMonth } = getArgentinaDateParts();
 
     if (clean.includes("-")) {
       const parts = clean.split("-");
@@ -1240,12 +1312,26 @@ export default function FinanceView({
     return `${isNegative ? "-" : ""}US$ ${formatted}`;
   };
 
-  // Extrae el número de un precio ya formateado (p.ej. "$14.850,00" o "US$ 64.500,00") para poder
-  // animarlo con AnimatedNumber — las tarjetas de "Cotización Actual" reciben ese string ya
-  // armado (desde el array local o desde la cotización en vivo), nunca el número crudo.
+  // Extrae el número de un precio ya formateado para poder animarlo con AnimatedNumber — las
+  // tarjetas de "Cotización Actual" reciben ese string ya armado, que según la fuente puede venir
+  // en formato es-AR ("US$ 64.500,00", punto de miles / coma decimal, desde el array local de
+  // recomendaciones) o en formato estadounidense ("$62,789.00", coma de miles / punto decimal,
+  // desde la cotización en vivo de cripto) — asumir siempre uno de los dos achicaba o agrandaba
+  // el precio real por un factor de 1000. Se detecta el formato mirando cuál separador aparece
+  // más a la derecha: ese es el decimal, el otro (si existe) son los miles.
   const parseEsArMoney = (s: string): number => {
     const cleaned = s.replace(/[^0-9.,-]/g, "");
-    const normalized = cleaned.replace(/\./g, "").replace(",", ".");
+    const lastComma = cleaned.lastIndexOf(",");
+    const lastDot = cleaned.lastIndexOf(".");
+    let normalized = cleaned;
+    if (lastComma > -1 && lastDot > -1) {
+      normalized =
+        lastComma > lastDot
+          ? cleaned.replace(/\./g, "").replace(",", ".")
+          : cleaned.replace(/,/g, "");
+    } else if (lastComma > -1) {
+      normalized = cleaned.replace(",", ".");
+    }
     const n = parseFloat(normalized);
     return isNaN(n) ? 0 : n;
   };
@@ -1286,9 +1372,9 @@ export default function FinanceView({
   const isPreviousMonth = (dateStr?: string) => {
     if (!dateStr) return false;
     const clean = dateStr.split("T")[0].split(" ")[0];
-    const now = new Date();
-    let targetYear = now.getFullYear();
-    let targetMonth = now.getMonth() - 1;
+    const { year: thisYear, month: thisMonth } = getArgentinaDateParts();
+    let targetYear = thisYear;
+    let targetMonth = thisMonth - 1;
     if (targetMonth < 0) {
       targetMonth = 11;
       targetYear -= 1;
@@ -1821,7 +1907,7 @@ export default function FinanceView({
   // el día), pero nunca crea un segundo registro para el mismo día.
   useEffect(() => {
     if (!effectiveInversiones || effectiveInversiones.length === 0) return;
-    const today = getLocalDateString(new Date());
+    const today = getArgentinaDateString();
     const existing = investmentSnapshots.find((s) => s.date === today);
     const cryptoGainARS = Math.round(criptoMetrics.netGainARS);
     const accionesGainARS = Math.round(investmentMetrics.netGainARS);
@@ -2835,7 +2921,6 @@ export default function FinanceView({
                                       </p>
                                       <AnimatedNumber
                                         value={ganancia}
-                                        duration={0.6}
                                         format={(n) => `+${isUsd ? "U$D " : "$"}${n.toLocaleString("es-AR", { maximumFractionDigits: 2 })}`}
                                         className={`font-black text-primary font-mono leading-tight truncate w-full ${getFontSize(gananciaStr, false)}`}
                                       />
@@ -2846,7 +2931,6 @@ export default function FinanceView({
                                       </p>
                                       <AnimatedNumber
                                         value={total}
-                                        duration={0.6}
                                         format={(n) => `${isUsd ? "U$D " : "$"}${n.toLocaleString("es-AR", { maximumFractionDigits: 2 })}`}
                                         className={`font-black text-slate-800 dark:text-zinc-100 font-mono leading-tight truncate w-full ${getFontSize(totalStr, true)}`}
                                       />
@@ -3011,7 +3095,7 @@ export default function FinanceView({
                           className="text-xs font-bold font-mono dark:text-zinc-400 mt-0.5"
                           style={{ color: darkMode ? undefined : "#1e293b" }}
                         >
-                          <AnimatedNumber value={investmentMetrics.netGainUSD} format={formatUSD} duration={0.6} />
+                          <AnimatedNumber value={investmentMetrics.netGainUSD} format={formatUSD} />
                         </p>
                       </div>
                     </div>
@@ -3026,13 +3110,13 @@ export default function FinanceView({
                           className="dark:text-zinc-200"
                           style={{ color: darkMode ? undefined : "#0f172a" }}
                         >
-                          <AnimatedNumber value={investmentMetrics.totalInvertidoARS} format={formatARS} duration={0.6} />
+                          <AnimatedNumber value={investmentMetrics.totalInvertidoARS} format={formatARS} />
                         </strong>
                       </span>
                       <span>
                         Posiciones Abiertas:{" "}
                         <strong className="text-primary">
-                          <AnimatedNumber value={investmentMetrics.openPositionsCount} duration={0.6} />
+                          <AnimatedNumber value={investmentMetrics.openPositionsCount} />
                         </strong>
                       </span>
                     </div>
@@ -3088,7 +3172,6 @@ export default function FinanceView({
                                   <AnimatedNumber
                                     value={investmentMetrics.bestOpenStock.unitCostARS}
                                     format={formatARS}
-                                    duration={0.6}
                                   />
                                 </strong>
                               </span>
@@ -3104,7 +3187,6 @@ export default function FinanceView({
                                   <AnimatedNumber
                                     value={investmentMetrics.bestOpenStock.currentPriceARS}
                                     format={formatARS}
-                                    duration={0.6}
                                   />
                                 </strong>
                               </span>
@@ -3117,14 +3199,12 @@ export default function FinanceView({
                               <AnimatedNumber
                                 value={investmentMetrics.bestOpenStock.percentGrowth}
                                 format={(n) => `+${n.toFixed(2)}%`}
-                                duration={0.6}
                               />
                             </div>
                             <div className="text-xs font-bold text-emerald-600 dark:text-emerald-400 font-mono">
                               <AnimatedNumber
                                 value={investmentMetrics.bestOpenStock.gainARS}
                                 format={(n) => `+${formatARS(n)}`}
-                                duration={0.6}
                               />
                             </div>
                           </div>
@@ -3239,7 +3319,6 @@ export default function FinanceView({
                                 <AnimatedNumber
                                   value={parseEsArMoney(displayPrice)}
                                   format={formatARS}
-                                  duration={0.6}
                                 />
                               </span>
                             </div>
@@ -3352,7 +3431,7 @@ export default function FinanceView({
                           className="text-xs font-bold font-mono dark:text-zinc-400 mt-0.5"
                           style={{ color: darkMode ? undefined : "#1e293b" }}
                         >
-                          <AnimatedNumber value={criptoMetrics.netGainUSD} format={formatUSD} duration={0.6} />
+                          <AnimatedNumber value={criptoMetrics.netGainUSD} format={formatUSD} />
                         </p>
                       </div>
                     </div>
@@ -3367,13 +3446,13 @@ export default function FinanceView({
                           className="dark:text-zinc-200"
                           style={{ color: darkMode ? undefined : "#0f172a" }}
                         >
-                          <AnimatedNumber value={criptoMetrics.totalInvertidoARS} format={formatARS} duration={0.6} />
+                          <AnimatedNumber value={criptoMetrics.totalInvertidoARS} format={formatARS} />
                         </strong>
                       </span>
                       <span>
                         Posiciones Abiertas:{" "}
                         <strong className="text-primary">
-                          <AnimatedNumber value={criptoMetrics.openPositionsCount} duration={0.6} />
+                          <AnimatedNumber value={criptoMetrics.openPositionsCount} />
                         </strong>
                       </span>
                     </div>
@@ -3429,7 +3508,6 @@ export default function FinanceView({
                                   <AnimatedNumber
                                     value={criptoMetrics.bestOpenCripto.unitCostUSD}
                                     format={formatUSD}
-                                    duration={0.6}
                                   />
                                 </strong>
                               </span>
@@ -3445,7 +3523,6 @@ export default function FinanceView({
                                   <AnimatedNumber
                                     value={criptoMetrics.bestOpenCripto.currentPriceUSD}
                                     format={formatUSD}
-                                    duration={0.6}
                                   />
                                 </strong>
                               </span>
@@ -3458,14 +3535,12 @@ export default function FinanceView({
                               <AnimatedNumber
                                 value={criptoMetrics.bestOpenCripto.percentGrowth}
                                 format={(n) => `+${n.toFixed(2)}%`}
-                                duration={0.6}
                               />
                             </div>
                             <div className="text-xs font-bold text-emerald-600 dark:text-emerald-400 font-mono">
                               <AnimatedNumber
                                 value={criptoMetrics.bestOpenCripto.gainARS}
                                 format={(n) => `+${formatARS(n)}`}
-                                duration={0.6}
                               />
                             </div>
                           </div>
@@ -3580,7 +3655,6 @@ export default function FinanceView({
                                 <AnimatedNumber
                                   value={parseEsArMoney(displayPrice)}
                                   format={formatUSD}
-                                  duration={0.6}
                                 />
                               </span>
                             </div>
@@ -3622,7 +3696,7 @@ export default function FinanceView({
                     <span className="text-xs text-zinc-400 font-bold uppercase tracking-wider">
                       Total Gastado
                     </span>
-                    <h3 className="text-2xl font-black mt-1 text-primary">
+                    <h3 className="text-2xl font-black font-mono mt-1 text-primary">
                       <AnimatedNumber value={totalSpent} format={formatCurrency} />
                     </h3>
                   </div>
@@ -3632,7 +3706,7 @@ export default function FinanceView({
                     <span className="text-xs text-zinc-400 font-bold uppercase tracking-wider">
                       Pendientes de Pago
                     </span>
-                    <h3 className="text-2xl font-black mt-1 text-red-500">
+                    <h3 className="text-2xl font-black font-mono mt-1 text-red-500">
                       {currentMonthDetailedPayments.filter((p) => !p.pago).length}/{currentMonthDetailedPayments.length}
                     </h3>
                   </div>
@@ -3683,27 +3757,9 @@ export default function FinanceView({
 
                 {/* Bottom Visualizations Row */}
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                  {/* Ring Chart: Distribución de Gastos Varios */}
-                  <div className="p-5 rounded-2xl bg-slate-50 dark:bg-black border border-slate-200/80 dark:border-zinc-800/80 flex flex-col justify-between h-full text-zinc-900 dark:text-white shadow-xs">
-                    <div className="flex items-center gap-2 mb-4">
-                      <PieChart className="w-5 h-5 text-primary" />
-                      <h3 className="font-bold text-md dark:text-white">
-                        Distribución de Gastos Varios
-                      </h3>
-                    </div>
-                    <PolarAreaCenterChart
-                      data={activeGastosVariosCategories
-                        .map((cat) => ({ name: cat, value: gastosVariosCategoryTotals[cat] || 0 }))
-                        .filter((item) => item.value > 0)}
-                      total={totalGastosVarios}
-                      darkMode={darkMode}
-                      formatValue={formatCurrency}
-                    />
-                  </div>
-
                   {/* Grilla 2x2: Categorías / Tendencia mensual + proyección / Progresión cripto / Progresión acciones */}
                   <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="p-5 rounded-2xl bg-slate-50 dark:bg-black border border-slate-200/80 dark:border-zinc-800/80 flex flex-col text-zinc-900 dark:text-white shadow-xs min-h-[260px]">
+                    <div className="p-5 rounded-2xl bg-slate-50 dark:bg-black border border-slate-200/80 dark:border-zinc-800/80 flex flex-col text-zinc-900 dark:text-white shadow-xs min-h-[260px] overflow-visible">
                       <div className="flex items-center gap-2 mb-3 shrink-0">
                         <TrendingUp className="w-4 h-4 text-primary" />
                         <h3 className="font-bold text-sm dark:text-white">Categorías</h3>
@@ -3736,51 +3792,65 @@ export default function FinanceView({
                           <h3 className="font-bold text-sm dark:text-white">Cripto</h3>
                         </div>
                         <GranularitySelector
-                          value={investmentChartGranularity}
-                          onChange={setInvestmentChartGranularity}
+                          value={criptoChartGranularity}
+                          onChange={setCriptoChartGranularity}
                         />
                       </div>
                       <InvestmentProgressionChart
                         snapshots={investmentSnapshots}
                         valueKey="cryptoGainARS"
-                        granularity={investmentChartGranularity}
+                        granularity={criptoChartGranularity}
                         darkMode={darkMode}
                         formatValue={formatARS}
                       />
                     </div>
 
                     <div className="p-5 rounded-2xl bg-slate-50 dark:bg-black border border-slate-200/80 dark:border-zinc-800/80 flex flex-col text-zinc-900 dark:text-white shadow-xs min-h-[260px]">
-                      <div className="flex items-center gap-2 mb-3 shrink-0">
-                        <BarChart3 className="w-4 h-4 text-primary" />
-                        <h3 className="font-bold text-sm dark:text-white">Acciones</h3>
+                      <div className="flex items-center justify-between gap-2 mb-3 shrink-0">
+                        <div className="flex items-center gap-2">
+                          <BarChart3 className="w-4 h-4 text-primary" />
+                          <h3 className="font-bold text-sm dark:text-white">Acciones</h3>
+                        </div>
+                        <GranularitySelector
+                          value={accionesChartGranularity}
+                          onChange={setAccionesChartGranularity}
+                        />
                       </div>
                       <InvestmentProgressionChart
                         snapshots={investmentSnapshots}
                         valueKey="accionesGainARS"
-                        granularity={investmentChartGranularity}
+                        granularity={accionesChartGranularity}
                         darkMode={darkMode}
                         formatValue={formatARS}
                       />
                     </div>
                   </div>
-                  {/* PolarArea Donut con etiquetas centradas */}
-                  <div className="p-5 rounded-2xl bg-slate-50 dark:bg-black border border-slate-200/80 dark:border-zinc-800/80 flex flex-col justify-between h-full text-zinc-900 dark:text-white shadow-xs">
-                    <div className="flex items-center gap-2 mb-4">
-                      <PieChart className="w-5 h-5 text-primary" />
-                      <h3 className="font-bold text-md dark:text-white">
-                        Distribución por Categoria
-                      </h3>
-                    </div>
-                    <PolarAreaCenterChart
-                      data={activeCategories
-                        .map((cat) => ({
-                          name: cat,
-                          value: categoryDetailedTotals[cat] || 0,
-                        }))
-                        .filter((item) => item.value > 0)}
-                      total={totalSpent}
+
+                  {/* Distribución de Gastos Varios / por Categoria fusionados en un slider, a la
+                      derecha, ocupando el espacio combinado de los dos paneles originales. */}
+                  <div className="lg:col-span-2">
+                    <DonutSlider
                       darkMode={darkMode}
-                      formatValue={formatCurrency}
+                      slides={[
+                        {
+                          icon: <PieChart className="w-5 h-5 text-primary" />,
+                          title: "Distribución de Gastos Varios",
+                          data: activeGastosVariosCategories
+                            .map((cat) => ({ name: cat, value: gastosVariosCategoryTotals[cat] || 0 }))
+                            .filter((item) => item.value > 0),
+                          total: totalGastosVarios,
+                          formatValue: formatCurrency,
+                        },
+                        {
+                          icon: <PieChart className="w-5 h-5 text-primary" />,
+                          title: "Distribución por Categoria",
+                          data: activeCategories
+                            .map((cat) => ({ name: cat, value: categoryDetailedTotals[cat] || 0 }))
+                            .filter((item) => item.value > 0),
+                          total: totalSpent,
+                          formatValue: formatCurrency,
+                        },
+                      ]}
                     />
                   </div>
                 </div>
