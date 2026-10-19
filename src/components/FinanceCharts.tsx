@@ -102,27 +102,25 @@ function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
 // Paleta para gráficos de torta/polar con categorías SIN relación de orden entre sí (a
 // diferencia del ranking de BankRatesBarChart, donde la intensidad del mismo tono comunica
 // "mejor a peor" y por eso usa buildPalette). Partir todas las porciones del mismo matiz con
-// distinta opacidad (como hacía antes) las volvía casi indistinguibles a simple vista. Acá se
-// gira el matiz alrededor del color de acento (en vez de usar una paleta arcoíris cualquiera)
-// para que las porciones se puedan diferenciar bien sin dejar de sentirse parte del mismo tema.
+// distinta OPACIDAD (como hacía antes) las volvía casi indistinguibles. La corrección NO es
+// pasar a un arcoíris de matices random — eso deja de sentirse "del color de acento" apenas se
+// aleja unos pocos grados — sino barrer la LUMINOSIDAD en un rango amplio dentro de ese mismo
+// matiz (con apenas un jitter de pocos grados para separar porciones vecinas que calcularían la
+// misma luminosidad): el resultado son tonos claramente distintos entre sí pero que se leen
+// todos como variantes del mismo color de acento.
 function buildCategoricalPalette(accentHex: string, count: number, darkMode: boolean): string[] {
   const total = Math.max(count, 1);
   const rgb = hexToRgb(accentHex);
   if (!rgb) return buildPalette(accentHex, count, darkMode);
-  const [baseHue, rawSat, baseLight] = rgbToHsl(...rgb);
-  const saturation = Math.min(0.85, Math.max(0.5, rawSat));
-  // El spread crece con la cantidad de porciones (más categorías necesitan más separación de
-  // matiz para no repetirse), pero se limita a 260° para no terminar pareciendo un arcoíris
-  // genérico sin relación con el color de acento elegido.
-  const spread = total > 1 ? Math.min(260, 36 * (total - 1)) : 0;
+  const [baseHue, rawSat] = rgbToHsl(...rgb);
+  const saturation = Math.min(0.9, Math.max(0.55, rawSat));
+  const lightMin = darkMode ? 0.32 : 0.3;
+  const lightMax = darkMode ? 0.78 : 0.62;
   return Array.from({ length: total }, (_, index) => {
-    const t = total > 1 ? index / (total - 1) : 0;
-    const hue = (baseHue + (t - 0.5) * spread + 360) % 360;
-    // Alterna levemente la luminosidad entre porciones vecinas para reforzar la distinción
-    // cuando dos matices calculados quedan parecidos.
-    const lightness = darkMode
-      ? Math.min(0.72, Math.max(0.42, baseLight + (index % 2 === 0 ? 0.06 : -0.04)))
-      : Math.min(0.58, Math.max(0.32, baseLight - 0.04 + (index % 2 === 0 ? 0.05 : -0.05)));
+    const t = total > 1 ? index / (total - 1) : 0.5;
+    const lightness = lightMin + t * (lightMax - lightMin);
+    const hueJitter = total > 1 ? (index % 2 === 0 ? 4 : -4) : 0;
+    const hue = (baseHue + hueJitter + 360) % 360;
     return `hsl(${Math.round(hue)} ${Math.round(saturation * 100)}% ${Math.round(lightness * 100)}%)`;
   });
 }
@@ -777,8 +775,10 @@ export function InvestmentProgressionChart({
   formatValue: (n: number) => string;
   granularity: InvestmentGranularity;
 }) {
+  const accentHex = useAccentHex();
   const gridColor = darkMode ? "rgba(255,255,255,0.06)" : "rgba(15,23,42,0.06)";
   const textColor = darkMode ? "#a1a1aa" : "#64748b";
+  const negativeColor = darkMode ? "#71717a" : "#94a3b8";
 
   const sorted = [...snapshots].sort((a, b) => a.date.localeCompare(b.date));
   const points = sorted.map((s) => ({ date: s.date, value: s[valueKey] }));
@@ -797,7 +797,10 @@ export function InvestmentProgressionChart({
   }
 
   const lastValue = aggregated[aggregated.length - 1].value;
-  const lineColor = lastValue >= 0 ? GREEN : RED;
+  // Acento cuando la progresión va positiva, gris cuando va negativa — a diferencia del resto de
+  // los gráficos de Finanzas (que sí usan rojo/verde semántico), esta línea pidió seguir la
+  // paleta de la app en vez de un semáforo.
+  const lineColor = lastValue >= 0 ? accentHex : negativeColor;
 
   // Animación "progresiva": cada punto se dibuja en orden, no todos juntos — mismo recurso que
   // la muestra de Chart.js que pidió el usuario (animations/progressive-line), adaptado a la

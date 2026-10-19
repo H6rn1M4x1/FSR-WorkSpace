@@ -4,7 +4,7 @@ import { SharedBadge, makeSharedOutHelpers } from "./SharedBadge";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import { generateUniqueId } from "../utils/id";
 import { getLocalDateString, getArgentinaDateParts, getArgentinaDateString } from "../utils/date";
-import { processAndCreateRecurringPayments } from "../utils/recurringPayments";
+import { processAndCreateRecurringPayments, normalizeDateComponents } from "../utils/recurringPayments";
 import { CurrencyInput } from "./CurrencyInput";
 import { parseFormattedNumber, formatNumberToDisplay } from "../lib/numberFormat";
 import { WorkspaceService } from "../lib/workspace";
@@ -555,6 +555,24 @@ function DonutSlider({
   );
 }
 
+// Flecha animada (entra deslizándose desde su propia dirección + fade) que acompaña a cualquier
+// número con signo: verde hacia arriba si positivo, roja hacia abajo si es negativo — mismo
+// lenguaje visual que ya usaban las tarjetas de "Mayor Crecimiento" para el caso positivo, acá
+// generalizado para que también se aplique correctamente al caso negativo.
+function TrendArrow({ positive }: { positive: boolean }) {
+  const Icon = positive ? ArrowUpRight : ArrowDownRight;
+  return (
+    <motion.span
+      initial={{ opacity: 0, y: positive ? 6 : -6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, delay: 0.15 }}
+      className={`inline-flex ${positive ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}
+    >
+      <Icon className="w-5 h-5" />
+    </motion.span>
+  );
+}
+
 export default function FinanceView({
   darkMode,
   invoices,
@@ -811,8 +829,22 @@ export default function FinanceView({
   const [inversionesActiveTable, setInversionesActiveTable] = useState<
     "Tradicional" | "Cripto"
   >("Tradicional");
-  const [criptoChartGranularity, setCriptoChartGranularity] = useState<InvestmentGranularity>("dia");
-  const [accionesChartGranularity, setAccionesChartGranularity] = useState<InvestmentGranularity>("dia");
+  const [criptoChartGranularity, setCriptoChartGranularity] = useState<InvestmentGranularity>("todo");
+  const [accionesChartGranularity, setAccionesChartGranularity] = useState<InvestmentGranularity>("todo");
+
+  // Slider que combina "Información y Análisis de Acciones" y "...de Criptomonedas": auto-avanza
+  // cada 12s, pero se pausa apenas el mouse entra en el área (ver onMouseEnter/Leave más abajo)
+  // para dar tiempo real a leer antes de que cambie solo.
+  const [acctCryptoPage, setAcctCryptoPage] = useState<0 | 1>(0);
+  const [acctCryptoPaused, setAcctCryptoPaused] = useState(false);
+  const goToAcctCryptoPage = (page: 0 | 1) => setAcctCryptoPage(page);
+  useEffect(() => {
+    if (acctCryptoPaused) return;
+    const id = setInterval(() => {
+      setAcctCryptoPage((p) => (p === 0 ? 1 : 0));
+    }, 12000);
+    return () => clearInterval(id);
+  }, [acctCryptoPaused]);
 
   const [localActiveTab, setLocalActiveTab] = useState<
     | "resumen"
@@ -1933,8 +1965,14 @@ export default function FinanceView({
   const buildOperationBasedSeries = React.useCallback(
     (isCryptoCalc: boolean): { date: string; value: number }[] => {
       const ccl = 1198;
+      // El campo "Fecha" de una operación es en realidad "Fecha y Hora" (texto libre
+      // "DD/MM/YYYY HH:MM:SS"), no un ISO "YYYY-MM-DD" — agrupar/ordenar por el string crudo
+      // mezclaba operaciones del mismo día con horas distintas en puntos separados y rompía el
+      // parseo de fecha más abajo (new Date(...) con ese formato da Invalid Date → "NaN-NaN" en
+      // el eje). normalizeDateComponents() entiende ambos formatos y devuelve el isoDate ya sin
+      // la hora, que es lo único que necesita esta serie (agrupada por día calendario).
       const positions = effectiveInversiones.filter((inv) => {
-        if (!inv.fecha) return false;
+        if (!normalizeDateComponents(inv.fecha)) return false;
         const isOpen = !inv.estado || inv.estado.toLowerCase() === "abierto";
         const isCrypto = (cotizacionesCripto || []).some(
           (c) =>
@@ -1972,7 +2010,8 @@ export default function FinanceView({
           gainARS = currentPriceARS * qty - investedARS;
         }
 
-        dailyGains.set(inv.fecha, (dailyGains.get(inv.fecha) || 0) + gainARS);
+        const isoDate = normalizeDateComponents(inv.fecha)!.isoDate;
+        dailyGains.set(isoDate, (dailyGains.get(isoDate) || 0) + gainARS);
       });
 
       let running = 0;
@@ -3260,7 +3299,10 @@ export default function FinanceView({
                                 IPC Mensual ({inflacionData.periodoNombre})
                               </p>
                               <p className="text-xl sm:text-2xl font-black text-primary font-mono mt-0.5">
-                                +{inflacionData.valorMensual.toLocaleString('es-AR')}%
+                                <AnimatedNumber
+                                  value={inflacionData.valorMensual}
+                                  format={(n) => `+${n.toLocaleString('es-AR', { maximumFractionDigits: 2 })}%`}
+                                />
                               </p>
                             </div>
                             {inflacionData.valorInteranual ? (
@@ -3269,14 +3311,17 @@ export default function FinanceView({
                                   Interanual
                                 </p>
                                 <p className="text-base font-black text-slate-800 dark:text-zinc-200 font-mono mt-0.5">
-                                  {inflacionData.valorInteranual.toLocaleString('es-AR')}%
+                                  <AnimatedNumber
+                                    value={inflacionData.valorInteranual}
+                                    format={(n) => `${n.toLocaleString('es-AR', { maximumFractionDigits: 2 })}%`}
+                                  />
                                 </p>
                               </div>
                             ) : null}
                           </div>
 
                           <p className="text-[11px] text-slate-500 dark:text-zinc-400 leading-tight">
-                            Este dato se actualiza una vez al mes tras la publicación oficial del informe técnico del INDEC.
+                            Dato actualizado y extraído del informe técnico del INDEC.
                           </p>
 
                           <a
@@ -3295,9 +3340,25 @@ export default function FinanceView({
                 </div>
 
               </div>
-              {/* Sección de Inversiones: Ganancias/Pérdidas, Acción Abierta con Mayor Crecimiento y Recomendaciones 6M */}
+              {/* Acciones y Criptomonedas combinadas en un slider con auto-avance: son dos
+                  tarjetas largas (cada una con sus propias sub-tarjetas y 3 recomendaciones) — en
+                  vez de apilarlas, se muestran una por vez y el slider se pausa apenas el mouse
+                  entra encima, para dar tiempo a leer, y retoma solo al sacarlo. */}
               <div
-                className={`p-6 rounded-3xl border space-y-6 scroll-reveal ${
+                onMouseEnter={() => setAcctCryptoPaused(true)}
+                onMouseLeave={() => setAcctCryptoPaused(false)}
+              >
+                <AnimatePresence mode="wait">
+                  {acctCryptoPage === 0 ? (
+                    <motion.div
+                      key="acciones-slide"
+                      initial={{ opacity: 0, x: 24 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -24 }}
+                      transition={{ duration: 0.35 }}
+                    >
+              <div
+                className={`p-6 rounded-3xl border space-y-6 ${
                   darkMode
                     ? "bg-zinc-900 border-zinc-800 text-white shadow-lg"
                     : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
@@ -3363,18 +3424,29 @@ export default function FinanceView({
                           }`}
                         >
                           <span>{investmentMetrics.netGainARS >= 0 ? "Ganancia" : "Pérdida"}</span>
-                          <span>Acumulada</span>
+                          <span>
+                            Acumulada{" "}
+                            <AnimatedNumber
+                              value={
+                                investmentMetrics.totalInvertidoARS > 0
+                                  ? (investmentMetrics.netGainARS / investmentMetrics.totalInvertidoARS) * 100
+                                  : 0
+                              }
+                              format={(n) => `(${n >= 0 ? "+" : ""}${n.toFixed(1)}%)`}
+                            />
+                          </span>
                         </span>
                       </div>
 
                       <div className="mt-1">
                         <h4
-                          className={`text-2xl font-black font-mono ${
+                          className={`flex items-center gap-1 text-2xl font-black font-mono ${
                             investmentMetrics.netGainARS >= 0
                               ? "text-emerald-600 dark:text-emerald-400"
                               : "text-red-600 dark:text-red-400"
                           }`}
                         >
+                          <TrendArrow positive={investmentMetrics.netGainARS >= 0} />
                           <AnimatedNumber value={investmentMetrics.netGainARS} format={formatARS} />
                         </h4>
                         <p
@@ -3480,17 +3552,29 @@ export default function FinanceView({
                           </div>
 
                           <div className="text-right">
-                            <div className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-black text-lg">
-                              <ArrowUpRight className="w-5 h-5" />
+                            <div
+                              className={`inline-flex items-center gap-1 font-black text-lg ${
+                                investmentMetrics.bestOpenStock.percentGrowth >= 0
+                                  ? "text-emerald-600 dark:text-emerald-400"
+                                  : "text-red-600 dark:text-red-400"
+                              }`}
+                            >
+                              <TrendArrow positive={investmentMetrics.bestOpenStock.percentGrowth >= 0} />
                               <AnimatedNumber
                                 value={investmentMetrics.bestOpenStock.percentGrowth}
-                                format={(n) => `+${n.toFixed(2)}%`}
+                                format={(n) => `${n >= 0 ? "+" : ""}${n.toFixed(2)}%`}
                               />
                             </div>
-                            <div className="text-xs font-bold text-emerald-600 dark:text-emerald-400 font-mono">
+                            <div
+                              className={`text-xs font-bold font-mono ${
+                                investmentMetrics.bestOpenStock.gainARS >= 0
+                                  ? "text-emerald-600 dark:text-emerald-400"
+                                  : "text-red-600 dark:text-red-400"
+                              }`}
+                            >
                               <AnimatedNumber
                                 value={investmentMetrics.bestOpenStock.gainARS}
-                                format={(n) => `+${formatARS(n)}`}
+                                format={(n) => `${n >= 0 ? "+" : ""}${formatARS(n)}`}
                               />
                             </div>
                           </div>
@@ -3630,10 +3714,17 @@ export default function FinanceView({
                   </div>
                 </div>
               </div>
-
-              {/* Sección de Criptomonedas: Ganancias/Pérdidas, Criptomoneda Abierta con Mayor Crecimiento y Recomendaciones 6M */}
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="cripto-slide"
+                      initial={{ opacity: 0, x: 24 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -24 }}
+                      transition={{ duration: 0.35 }}
+                    >
               <div
-                className={`p-6 rounded-3xl border space-y-6 scroll-reveal ${
+                className={`p-6 rounded-3xl border space-y-6 ${
                   darkMode
                     ? "bg-zinc-900 border-zinc-800 text-white shadow-lg"
                     : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
@@ -3699,18 +3790,29 @@ export default function FinanceView({
                           }`}
                         >
                           <span>{criptoMetrics.netGainARS >= 0 ? "Ganancia" : "Pérdida"}</span>
-                          <span>Acumulada</span>
+                          <span>
+                            Acumulada{" "}
+                            <AnimatedNumber
+                              value={
+                                criptoMetrics.totalInvertidoARS > 0
+                                  ? (criptoMetrics.netGainARS / criptoMetrics.totalInvertidoARS) * 100
+                                  : 0
+                              }
+                              format={(n) => `(${n >= 0 ? "+" : ""}${n.toFixed(1)}%)`}
+                            />
+                          </span>
                         </span>
                       </div>
 
                       <div className="mt-1">
                         <h4
-                          className={`text-2xl font-black font-mono ${
+                          className={`flex items-center gap-1 text-2xl font-black font-mono ${
                             criptoMetrics.netGainARS >= 0
                               ? "text-emerald-600 dark:text-emerald-400"
                               : "text-red-600 dark:text-red-400"
                           }`}
                         >
+                          <TrendArrow positive={criptoMetrics.netGainARS >= 0} />
                           <AnimatedNumber value={criptoMetrics.netGainARS} format={formatARS} />
                         </h4>
                         <p
@@ -3816,17 +3918,29 @@ export default function FinanceView({
                           </div>
 
                           <div className="text-right">
-                            <div className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-black text-lg">
-                              <ArrowUpRight className="w-5 h-5" />
+                            <div
+                              className={`inline-flex items-center gap-1 font-black text-lg ${
+                                criptoMetrics.bestOpenCripto.percentGrowth >= 0
+                                  ? "text-emerald-600 dark:text-emerald-400"
+                                  : "text-red-600 dark:text-red-400"
+                              }`}
+                            >
+                              <TrendArrow positive={criptoMetrics.bestOpenCripto.percentGrowth >= 0} />
                               <AnimatedNumber
                                 value={criptoMetrics.bestOpenCripto.percentGrowth}
-                                format={(n) => `+${n.toFixed(2)}%`}
+                                format={(n) => `${n >= 0 ? "+" : ""}${n.toFixed(2)}%`}
                               />
                             </div>
-                            <div className="text-xs font-bold text-emerald-600 dark:text-emerald-400 font-mono">
+                            <div
+                              className={`text-xs font-bold font-mono ${
+                                criptoMetrics.bestOpenCripto.gainARS >= 0
+                                  ? "text-emerald-600 dark:text-emerald-400"
+                                  : "text-red-600 dark:text-red-400"
+                              }`}
+                            >
                               <AnimatedNumber
                                 value={criptoMetrics.bestOpenCripto.gainARS}
-                                format={(n) => `+${formatARS(n)}`}
+                                format={(n) => `${n >= 0 ? "+" : ""}${formatARS(n)}`}
                               />
                             </div>
                           </div>
@@ -3964,6 +4078,28 @@ export default function FinanceView({
                       );
                     })}
                   </div>
+                </div>
+              </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+                <div className="flex items-center justify-center gap-2 mt-4">
+                  <button
+                    type="button"
+                    onClick={() => goToAcctCryptoPage(0)}
+                    className={`h-1.5 rounded-full transition-all cursor-pointer ${
+                      acctCryptoPage === 0 ? "w-5 bg-primary" : `w-1.5 ${darkMode ? "bg-zinc-700" : "bg-slate-300"}`
+                    }`}
+                    aria-label="Acciones"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => goToAcctCryptoPage(1)}
+                    className={`h-1.5 rounded-full transition-all cursor-pointer ${
+                      acctCryptoPage === 1 ? "w-5 bg-primary" : `w-1.5 ${darkMode ? "bg-zinc-700" : "bg-slate-300"}`
+                    }`}
+                    aria-label="Criptomonedas"
+                  />
                 </div>
               </div>
             </div>
