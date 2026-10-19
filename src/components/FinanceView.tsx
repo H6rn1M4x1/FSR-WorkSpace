@@ -478,11 +478,30 @@ function DonutSlider({
 }) {
   const [page, setPage] = useState(0);
   const [paused, setPaused] = useState(false);
+  // Qué slides ya se mostraron al menos una vez — para que el TOTAL no repita la animación larga
+  // (con delay) cada vez que el slider vuelve a un slide que el usuario ya vio. Es un ref (no
+  // estado) porque solo importa en el momento en que se decide pasar a un slide nuevo, no debe
+  // disparar un re-render propio.
+  const seenPagesRef = useRef<Set<number>>(new Set([0]));
+  const [fastTotal, setFastTotal] = useState(false);
+
+  const goToPage = (next: number) => {
+    const alreadySeen = seenPagesRef.current.has(next);
+    seenPagesRef.current.add(next);
+    setFastTotal(alreadySeen);
+    setPage(next);
+  };
 
   useEffect(() => {
     if (slides.length <= 1 || paused) return;
     const id = setInterval(() => {
-      setPage((p) => (p + 1) % slides.length);
+      setPage((p) => {
+        const next = (p + 1) % slides.length;
+        const alreadySeen = seenPagesRef.current.has(next);
+        seenPagesRef.current.add(next);
+        setFastTotal(alreadySeen);
+        return next;
+      });
     }, 6000);
     return () => clearInterval(id);
   }, [slides.length, paused]);
@@ -513,6 +532,7 @@ function DonutSlider({
             total={slide.total}
             darkMode={darkMode}
             formatValue={slide.formatValue}
+            totalAlreadySeen={fastTotal}
           />
         </motion.div>
       </AnimatePresence>
@@ -522,7 +542,7 @@ function DonutSlider({
             <button
               key={i}
               type="button"
-              onClick={() => setPage(i)}
+              onClick={() => goToPage(i)}
               className={`h-1.5 rounded-full transition-all cursor-pointer ${
                 i === page ? "w-4 bg-primary" : `w-1.5 ${darkMode ? "bg-zinc-700" : "bg-slate-300"}`
               }`}
@@ -1901,6 +1921,97 @@ export default function FinanceView({
     };
   }, [effectiveInversiones, cotizacionesCripto]);
 
+  // Serie diaria de ganancia/pérdida ACUMULADA, derivada directamente de las operaciones reales
+  // del portafolio (Inversiones), para que el gráfico de progresión tenga datos desde el primer
+  // día en vez de depender solo del snapshot diario (que recién empieza a acumularse "hoy" en
+  // adelante y por eso en una cuenta real puede tardar semanas en mostrar algo). Usa la MISMA
+  // fórmula de "Resultado de Inversiones"/"Resultado de Criptomonedas" (precio actual vs. precio
+  // de la operación), pero por cada operación individual en vez de solo el total de hoy — no es
+  // un histórico real de precios pasados (eso no existe), sino cuánto aportó cada compra a la
+  // ganancia actual, ubicado en la fecha en que se cargó. Si varias operaciones caen el mismo
+  // día, sus ganancias se suman/restan en un único punto para ese día.
+  const buildOperationBasedSeries = React.useCallback(
+    (isCryptoCalc: boolean): { date: string; value: number }[] => {
+      const ccl = 1198;
+      const positions = effectiveInversiones.filter((inv) => {
+        if (!inv.fecha) return false;
+        const isOpen = !inv.estado || inv.estado.toLowerCase() === "abierto";
+        const isCrypto = (cotizacionesCripto || []).some(
+          (c) =>
+            c.id.toLowerCase() === inv.ticker.trim().toLowerCase() ||
+            (c.symbol && c.symbol.toLowerCase() === inv.ticker.trim().toLowerCase()),
+        );
+        return isOpen && (isCryptoCalc ? isCrypto : !isCrypto);
+      });
+
+      const dailyGains = new Map<string, number>();
+      positions.forEach((inv) => {
+        const qty = inv.cantidad || 1;
+        const unitCostARS = parseCurrencyVal(inv.valorUnitarioPesos);
+        const unitCostUSD = parseCurrencyVal(inv.valorUnitarioDolares);
+        let gainARS: number;
+
+        if (isCryptoCalc) {
+          const cQuote = cotizacionesCripto?.find(
+            (c) =>
+              c.id.toLowerCase() === inv.ticker.trim().toLowerCase() ||
+              (c.symbol && c.symbol.toLowerCase() === inv.ticker.trim().toLowerCase()),
+          );
+          const currentPriceUSD = cQuote ? parseUSDCurrency(cQuote.price) : unitCostUSD;
+          const implicitExchangeRate =
+            unitCostARS > 0 && unitCostUSD > 0 ? unitCostARS / unitCostUSD : ccl;
+          const currentPriceARS = currentPriceUSD * implicitExchangeRate;
+          const investedARS = parseCurrencyVal(inv.valorTotalPesos) || unitCostARS * qty;
+          gainARS = currentPriceARS * qty - investedARS;
+        } else {
+          const quote = effectiveCotizaciones.find(
+            (c) => c.simbolo.toUpperCase() === inv.ticker.trim().toUpperCase(),
+          );
+          const currentPriceARS = quote ? parseCurrencyVal(quote.ultimoPrecio) : unitCostARS;
+          const investedARS = parseCurrencyVal(inv.valorTotalPesos) || unitCostARS * qty;
+          gainARS = currentPriceARS * qty - investedARS;
+        }
+
+        dailyGains.set(inv.fecha, (dailyGains.get(inv.fecha) || 0) + gainARS);
+      });
+
+      let running = 0;
+      return Array.from(dailyGains.keys())
+        .sort()
+        .map((date) => {
+          running += dailyGains.get(date)!;
+          return { date, value: running };
+        });
+    },
+    [effectiveInversiones, cotizacionesCripto, effectiveCotizaciones],
+  );
+
+  // Combina la serie derivada de operaciones (aproximada, pero siempre disponible) con el
+  // snapshot diario real (exacto, capturado día a día) cuando existe: para cualquier fecha que ya
+  // tenga un snapshot real se usa ese valor; el resto se completa con la serie de operaciones.
+  const mergeWithRealSnapshots = React.useCallback(
+    (
+      operationPoints: { date: string; value: number }[],
+      valueKey: "cryptoGainARS" | "accionesGainARS",
+    ): { date: string; value: number }[] => {
+      const realDates = new Set(investmentSnapshots.map((s) => s.date));
+      const backfill = operationPoints.filter((p) => !realDates.has(p.date));
+      const real = investmentSnapshots.map((s) => ({ date: s.date, value: s[valueKey] }));
+      return [...backfill, ...real].sort((a, b) => a.date.localeCompare(b.date));
+    },
+    [investmentSnapshots],
+  );
+
+  const criptoProgressionSnapshots = React.useMemo(() => {
+    const merged = mergeWithRealSnapshots(buildOperationBasedSeries(true), "cryptoGainARS");
+    return merged.map((p) => ({ date: p.date, cryptoGainARS: p.value, accionesGainARS: 0 }));
+  }, [buildOperationBasedSeries, mergeWithRealSnapshots]);
+
+  const accionesProgressionSnapshots = React.useMemo(() => {
+    const merged = mergeWithRealSnapshots(buildOperationBasedSeries(false), "accionesGainARS");
+    return merged.map((p) => ({ date: p.date, cryptoGainARS: 0, accionesGainARS: p.value }));
+  }, [buildOperationBasedSeries, mergeWithRealSnapshots]);
+
   // Guarda (upsert) la ganancia/pérdida neta de hoy en cripto y acciones — un registro por día,
   // identificado por la fecha — para poder graficar la progresión real con el tiempo en vez de
   // una aproximación. Se reescribe cada vez que cambian los montos (nuevas cotizaciones durante
@@ -2697,6 +2808,181 @@ export default function FinanceView({
                           }}
                         />
                       )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Unificado: Bloque Principal de Finanzas */}
+              <div
+                className={`p-6 rounded-3xl border shadow-xl flex flex-col gap-6 w-full scroll-reveal ${
+                  darkMode
+                    ? "bg-zinc-900 border-zinc-800 text-white"
+                    : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
+                }`}
+              >
+                {/* Top Metrics Row */}
+                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                  {/* Total Gastado */}
+                  <div className="p-5 rounded-2xl bg-slate-50 dark:bg-black border border-slate-200/80 dark:border-zinc-800/80 flex flex-col justify-center text-zinc-900 dark:text-white shadow-xs">
+                    <span className="text-xs text-zinc-400 font-bold uppercase tracking-wider">
+                      Total Gastado
+                    </span>
+                    <h3 className="text-2xl font-black font-mono mt-1 text-primary">
+                      <AnimatedNumber value={totalSpent} format={formatCurrency} />
+                    </h3>
+                  </div>
+
+                  {/* Pendientes de Pago */}
+                  <div className="p-5 rounded-2xl bg-slate-50 dark:bg-black border border-slate-200/80 dark:border-zinc-800/80 flex flex-col justify-center text-zinc-900 dark:text-white shadow-xs">
+                    <span className="text-xs text-zinc-400 font-bold uppercase tracking-wider">
+                      Pendientes de Pago
+                    </span>
+                    <h3 className="text-2xl font-black font-mono mt-1 text-red-500">
+                      {currentMonthDetailedPayments.filter((p) => !p.pago).length}/{currentMonthDetailedPayments.length}
+                    </h3>
+                  </div>
+
+                  {/* Controles de Exportación e Informes */}
+                  <div className="lg:col-span-2 p-5 rounded-2xl bg-slate-50 dark:bg-black border border-slate-200/80 dark:border-zinc-800/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-zinc-900 dark:text-white shadow-xs">
+                    <div>
+                      <h4 className="font-extrabold text-sm dark:text-white">
+                        Controles de Exportación e Informes
+                      </h4>
+                      <p className="text-xs text-zinc-400 mt-1">
+                        Envía tus resúmenes financieros de forma segura
+                      </p>
+                    </div>
+                    <div className="flex gap-2 shrink-0 w-full sm:w-auto mt-2 sm:mt-0">
+                      <button
+                        onClick={handleExportCSV}
+                        className="p-3 rounded-xl bg-slate-200/40 hover:bg-slate-200 dark:bg-zinc-800/40 dark:hover:bg-zinc-800 border border-slate-200/50 dark:border-zinc-700/40 text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-all cursor-pointer"
+                        title="Descargar en formato CSV"
+                      >
+                        <FileDown className="w-5 h-5" />
+                      </button>
+                      <button
+                        onClick={handleSheetsExport}
+                        disabled={exportingSheets}
+                        className="p-3 rounded-xl bg-primary hover:bg-primary text-white dark:text-blue-950 transition-all cursor-pointer shadow-lg shadow-primary/10 disabled:opacity-50"
+                        title="Sincronizar reporte con Google Sheets"
+                      >
+                        <CloudUpload
+                          className={`w-5 h-5 ${exportingSheets ? "animate-spin" : ""}`}
+                        />
+                      </button>
+                      <motion.button
+                        whileHover={{ scale: 1.04 }}
+                        whileTap={{ scale: 0.94 }}
+                        onClick={() => setShowEmailModal(true)}
+                        disabled={sendingEmail}
+                        className="p-3 rounded-xl bg-primary hover:bg-primary text-white dark:text-blue-950 transition-all cursor-pointer shadow-lg shadow-primary/20 disabled:opacity-50"
+                        title="Enviar reporte por Correo Electrónico"
+                      >
+                        <Mail
+                          className={`w-5 h-5 ${sendingEmail ? "animate-spin" : ""}`}
+                        />
+                      </motion.button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bottom Visualizations Row */}
+                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                  {/* Distribución de Gastos Varios / por Categoria fusionados en un slider, a la
+                      izquierda, ocupando el espacio combinado de los dos paneles originales. */}
+                  <div className="lg:col-span-2">
+                    <DonutSlider
+                      darkMode={darkMode}
+                      slides={[
+                        {
+                          icon: <PieChart className="w-5 h-5 text-primary" />,
+                          title: "Distribución de Gastos Varios",
+                          data: activeGastosVariosCategories
+                            .map((cat) => ({ name: cat, value: gastosVariosCategoryTotals[cat] || 0 }))
+                            .filter((item) => item.value > 0),
+                          total: totalGastosVarios,
+                          formatValue: formatCurrency,
+                        },
+                        {
+                          icon: <PieChart className="w-5 h-5 text-primary" />,
+                          title: "Distribución por Categoria",
+                          data: activeCategories
+                            .map((cat) => ({ name: cat, value: categoryDetailedTotals[cat] || 0 }))
+                            .filter((item) => item.value > 0),
+                          total: totalSpent,
+                          formatValue: formatCurrency,
+                        },
+                      ]}
+                    />
+                  </div>
+
+                  {/* Grilla 2x2: Categorías / Tendencia mensual + proyección / Progresión cripto / Progresión acciones */}
+                  <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="p-5 rounded-2xl bg-slate-50 dark:bg-black border border-slate-200/80 dark:border-zinc-800/80 flex flex-col text-zinc-900 dark:text-white shadow-xs min-h-[260px] overflow-visible">
+                      <div className="flex items-center gap-2 mb-3 shrink-0">
+                        <TrendingUp className="w-4 h-4 text-primary" />
+                        <h3 className="font-bold text-sm dark:text-white">Categorías</h3>
+                      </div>
+                      <CategoryComparisonBarChart
+                        categories={activeCategories}
+                        currentTotals={categoryDetailedTotals}
+                        previousTotals={previousMonthCategoryTotals}
+                        darkMode={darkMode}
+                        formatValue={formatCurrency}
+                      />
+                    </div>
+
+                    <div className="p-5 rounded-2xl bg-slate-50 dark:bg-black border border-slate-200/80 dark:border-zinc-800/80 flex flex-col text-zinc-900 dark:text-white shadow-xs min-h-[260px]">
+                      <div className="flex items-center gap-2 mb-3 shrink-0">
+                        <LineChart className="w-4 h-4 text-primary" />
+                        <h3 className="font-bold text-sm dark:text-white">Gasto Mensual</h3>
+                      </div>
+                      <MonthlyTrendChart
+                        history={monthlyHistory}
+                        darkMode={darkMode}
+                        formatValue={formatCurrency}
+                      />
+                    </div>
+
+                    <div className="p-5 rounded-2xl bg-slate-50 dark:bg-black border border-slate-200/80 dark:border-zinc-800/80 flex flex-col text-zinc-900 dark:text-white shadow-xs min-h-[260px]">
+                      <div className="flex items-center justify-between gap-2 mb-3 shrink-0">
+                        <div className="flex items-center gap-2">
+                          <Bitcoin className="w-4 h-4 text-primary" />
+                          <h3 className="font-bold text-sm dark:text-white">Cripto</h3>
+                        </div>
+                        <GranularitySelector
+                          value={criptoChartGranularity}
+                          onChange={setCriptoChartGranularity}
+                        />
+                      </div>
+                      <InvestmentProgressionChart
+                        snapshots={criptoProgressionSnapshots}
+                        valueKey="cryptoGainARS"
+                        granularity={criptoChartGranularity}
+                        darkMode={darkMode}
+                        formatValue={formatARS}
+                      />
+                    </div>
+
+                    <div className="p-5 rounded-2xl bg-slate-50 dark:bg-black border border-slate-200/80 dark:border-zinc-800/80 flex flex-col text-zinc-900 dark:text-white shadow-xs min-h-[260px]">
+                      <div className="flex items-center justify-between gap-2 mb-3 shrink-0">
+                        <div className="flex items-center gap-2">
+                          <BarChart3 className="w-4 h-4 text-primary" />
+                          <h3 className="font-bold text-sm dark:text-white">Acciones</h3>
+                        </div>
+                        <GranularitySelector
+                          value={accionesChartGranularity}
+                          onChange={setAccionesChartGranularity}
+                        />
+                      </div>
+                      <InvestmentProgressionChart
+                        snapshots={accionesProgressionSnapshots}
+                        valueKey="accionesGainARS"
+                        granularity={accionesChartGranularity}
+                        darkMode={darkMode}
+                        formatValue={formatARS}
+                      />
                     </div>
                   </div>
                 </div>
@@ -3677,181 +3963,6 @@ export default function FinanceView({
                         </div>
                       );
                     })}
-                  </div>
-                </div>
-              </div>
-
-              {/* Unificado: Bloque Principal de Finanzas */}
-              <div
-                className={`p-6 rounded-3xl border shadow-xl flex flex-col gap-6 w-full scroll-reveal ${
-                  darkMode
-                    ? "bg-zinc-900 border-zinc-800 text-white"
-                    : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
-                }`}
-              >
-                {/* Top Metrics Row */}
-                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                  {/* Total Gastado */}
-                  <div className="p-5 rounded-2xl bg-slate-50 dark:bg-black border border-slate-200/80 dark:border-zinc-800/80 flex flex-col justify-center text-zinc-900 dark:text-white shadow-xs">
-                    <span className="text-xs text-zinc-400 font-bold uppercase tracking-wider">
-                      Total Gastado
-                    </span>
-                    <h3 className="text-2xl font-black font-mono mt-1 text-primary">
-                      <AnimatedNumber value={totalSpent} format={formatCurrency} />
-                    </h3>
-                  </div>
-
-                  {/* Pendientes de Pago */}
-                  <div className="p-5 rounded-2xl bg-slate-50 dark:bg-black border border-slate-200/80 dark:border-zinc-800/80 flex flex-col justify-center text-zinc-900 dark:text-white shadow-xs">
-                    <span className="text-xs text-zinc-400 font-bold uppercase tracking-wider">
-                      Pendientes de Pago
-                    </span>
-                    <h3 className="text-2xl font-black font-mono mt-1 text-red-500">
-                      {currentMonthDetailedPayments.filter((p) => !p.pago).length}/{currentMonthDetailedPayments.length}
-                    </h3>
-                  </div>
-
-                  {/* Controles de Exportación e Informes */}
-                  <div className="lg:col-span-2 p-5 rounded-2xl bg-slate-50 dark:bg-black border border-slate-200/80 dark:border-zinc-800/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-zinc-900 dark:text-white shadow-xs">
-                    <div>
-                      <h4 className="font-extrabold text-sm dark:text-white">
-                        Controles de Exportación e Informes
-                      </h4>
-                      <p className="text-xs text-zinc-400 mt-1">
-                        Envía tus resúmenes financieros de forma segura
-                      </p>
-                    </div>
-                    <div className="flex gap-2 shrink-0 w-full sm:w-auto mt-2 sm:mt-0">
-                      <button
-                        onClick={handleExportCSV}
-                        className="p-3 rounded-xl bg-slate-200/40 hover:bg-slate-200 dark:bg-zinc-800/40 dark:hover:bg-zinc-800 border border-slate-200/50 dark:border-zinc-700/40 text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-all cursor-pointer"
-                        title="Descargar en formato CSV"
-                      >
-                        <FileDown className="w-5 h-5" />
-                      </button>
-                      <button
-                        onClick={handleSheetsExport}
-                        disabled={exportingSheets}
-                        className="p-3 rounded-xl bg-primary hover:bg-primary text-white dark:text-blue-950 transition-all cursor-pointer shadow-lg shadow-primary/10 disabled:opacity-50"
-                        title="Sincronizar reporte con Google Sheets"
-                      >
-                        <CloudUpload
-                          className={`w-5 h-5 ${exportingSheets ? "animate-spin" : ""}`}
-                        />
-                      </button>
-                      <motion.button
-                        whileHover={{ scale: 1.04 }}
-                        whileTap={{ scale: 0.94 }}
-                        onClick={() => setShowEmailModal(true)}
-                        disabled={sendingEmail}
-                        className="p-3 rounded-xl bg-primary hover:bg-primary text-white dark:text-blue-950 transition-all cursor-pointer shadow-lg shadow-primary/20 disabled:opacity-50"
-                        title="Enviar reporte por Correo Electrónico"
-                      >
-                        <Mail
-                          className={`w-5 h-5 ${sendingEmail ? "animate-spin" : ""}`}
-                        />
-                      </motion.button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Bottom Visualizations Row */}
-                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                  {/* Grilla 2x2: Categorías / Tendencia mensual + proyección / Progresión cripto / Progresión acciones */}
-                  <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="p-5 rounded-2xl bg-slate-50 dark:bg-black border border-slate-200/80 dark:border-zinc-800/80 flex flex-col text-zinc-900 dark:text-white shadow-xs min-h-[260px] overflow-visible">
-                      <div className="flex items-center gap-2 mb-3 shrink-0">
-                        <TrendingUp className="w-4 h-4 text-primary" />
-                        <h3 className="font-bold text-sm dark:text-white">Categorías</h3>
-                      </div>
-                      <CategoryComparisonBarChart
-                        categories={activeCategories}
-                        currentTotals={categoryDetailedTotals}
-                        previousTotals={previousMonthCategoryTotals}
-                        darkMode={darkMode}
-                        formatValue={formatCurrency}
-                      />
-                    </div>
-
-                    <div className="p-5 rounded-2xl bg-slate-50 dark:bg-black border border-slate-200/80 dark:border-zinc-800/80 flex flex-col text-zinc-900 dark:text-white shadow-xs min-h-[260px]">
-                      <div className="flex items-center gap-2 mb-3 shrink-0">
-                        <LineChart className="w-4 h-4 text-primary" />
-                        <h3 className="font-bold text-sm dark:text-white">Gasto Mensual</h3>
-                      </div>
-                      <MonthlyTrendChart
-                        history={monthlyHistory}
-                        darkMode={darkMode}
-                        formatValue={formatCurrency}
-                      />
-                    </div>
-
-                    <div className="p-5 rounded-2xl bg-slate-50 dark:bg-black border border-slate-200/80 dark:border-zinc-800/80 flex flex-col text-zinc-900 dark:text-white shadow-xs min-h-[260px]">
-                      <div className="flex items-center justify-between gap-2 mb-3 shrink-0">
-                        <div className="flex items-center gap-2">
-                          <Bitcoin className="w-4 h-4 text-primary" />
-                          <h3 className="font-bold text-sm dark:text-white">Cripto</h3>
-                        </div>
-                        <GranularitySelector
-                          value={criptoChartGranularity}
-                          onChange={setCriptoChartGranularity}
-                        />
-                      </div>
-                      <InvestmentProgressionChart
-                        snapshots={investmentSnapshots}
-                        valueKey="cryptoGainARS"
-                        granularity={criptoChartGranularity}
-                        darkMode={darkMode}
-                        formatValue={formatARS}
-                      />
-                    </div>
-
-                    <div className="p-5 rounded-2xl bg-slate-50 dark:bg-black border border-slate-200/80 dark:border-zinc-800/80 flex flex-col text-zinc-900 dark:text-white shadow-xs min-h-[260px]">
-                      <div className="flex items-center justify-between gap-2 mb-3 shrink-0">
-                        <div className="flex items-center gap-2">
-                          <BarChart3 className="w-4 h-4 text-primary" />
-                          <h3 className="font-bold text-sm dark:text-white">Acciones</h3>
-                        </div>
-                        <GranularitySelector
-                          value={accionesChartGranularity}
-                          onChange={setAccionesChartGranularity}
-                        />
-                      </div>
-                      <InvestmentProgressionChart
-                        snapshots={investmentSnapshots}
-                        valueKey="accionesGainARS"
-                        granularity={accionesChartGranularity}
-                        darkMode={darkMode}
-                        formatValue={formatARS}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Distribución de Gastos Varios / por Categoria fusionados en un slider, a la
-                      derecha, ocupando el espacio combinado de los dos paneles originales. */}
-                  <div className="lg:col-span-2">
-                    <DonutSlider
-                      darkMode={darkMode}
-                      slides={[
-                        {
-                          icon: <PieChart className="w-5 h-5 text-primary" />,
-                          title: "Distribución de Gastos Varios",
-                          data: activeGastosVariosCategories
-                            .map((cat) => ({ name: cat, value: gastosVariosCategoryTotals[cat] || 0 }))
-                            .filter((item) => item.value > 0),
-                          total: totalGastosVarios,
-                          formatValue: formatCurrency,
-                        },
-                        {
-                          icon: <PieChart className="w-5 h-5 text-primary" />,
-                          title: "Distribución por Categoria",
-                          data: activeCategories
-                            .map((cat) => ({ name: cat, value: categoryDetailedTotals[cat] || 0 }))
-                            .filter((item) => item.value > 0),
-                          total: totalSpent,
-                          formatValue: formatCurrency,
-                        },
-                      ]}
-                    />
                   </div>
                 </div>
               </div>

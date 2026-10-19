@@ -64,6 +64,69 @@ function buildPalette(accentHex: string, count: number, darkMode: boolean): stri
   });
 }
 
+function hexToRgb(hex: string): [number, number, number] | null {
+  const m = hex.trim().match(/^#?([0-9a-fA-F]{6})$/);
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
+  r /= 255;
+  g /= 255;
+  b /= 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  let h = 0;
+  let s = 0;
+  const d = max - min;
+  if (d !== 0) {
+    s = d / (1 - Math.abs(2 * l - 1));
+    switch (max) {
+      case r:
+        h = ((g - b) / d) % 6;
+        break;
+      case g:
+        h = (b - r) / d + 2;
+        break;
+      default:
+        h = (r - g) / d + 4;
+    }
+    h *= 60;
+    if (h < 0) h += 360;
+  }
+  return [h, s, l];
+}
+
+// Paleta para gráficos de torta/polar con categorías SIN relación de orden entre sí (a
+// diferencia del ranking de BankRatesBarChart, donde la intensidad del mismo tono comunica
+// "mejor a peor" y por eso usa buildPalette). Partir todas las porciones del mismo matiz con
+// distinta opacidad (como hacía antes) las volvía casi indistinguibles a simple vista. Acá se
+// gira el matiz alrededor del color de acento (en vez de usar una paleta arcoíris cualquiera)
+// para que las porciones se puedan diferenciar bien sin dejar de sentirse parte del mismo tema.
+function buildCategoricalPalette(accentHex: string, count: number, darkMode: boolean): string[] {
+  const total = Math.max(count, 1);
+  const rgb = hexToRgb(accentHex);
+  if (!rgb) return buildPalette(accentHex, count, darkMode);
+  const [baseHue, rawSat, baseLight] = rgbToHsl(...rgb);
+  const saturation = Math.min(0.85, Math.max(0.5, rawSat));
+  // El spread crece con la cantidad de porciones (más categorías necesitan más separación de
+  // matiz para no repetirse), pero se limita a 260° para no terminar pareciendo un arcoíris
+  // genérico sin relación con el color de acento elegido.
+  const spread = total > 1 ? Math.min(260, 36 * (total - 1)) : 0;
+  return Array.from({ length: total }, (_, index) => {
+    const t = total > 1 ? index / (total - 1) : 0;
+    const hue = (baseHue + (t - 0.5) * spread + 360) % 360;
+    // Alterna levemente la luminosidad entre porciones vecinas para reforzar la distinción
+    // cuando dos matices calculados quedan parecidos.
+    const lightness = darkMode
+      ? Math.min(0.72, Math.max(0.42, baseLight + (index % 2 === 0 ? 0.06 : -0.04)))
+      : Math.min(0.58, Math.max(0.32, baseLight - 0.04 + (index % 2 === 0 ? 0.05 : -0.05)));
+    return `hsl(${Math.round(hue)} ${Math.round(saturation * 100)}% ${Math.round(lightness * 100)}%)`;
+  });
+}
+
 const GREEN = "#22c55e";
 const RED = "#ef4444";
 
@@ -136,11 +199,26 @@ function makeExternalTooltipHandler(darkMode: boolean) {
     el.style.opacity = "1";
     const x = canvasRect.left + tooltip.caretX;
     const y = canvasRect.top + tooltip.caretY;
-    // Clampea horizontalmente para que tampoco se corte contra los bordes de la ventana.
     const margin = 8;
-    el.style.left = `${Math.min(Math.max(x, margin), window.innerWidth - margin)}px`;
+    // El tooltip va centrado en el punto por default (translateX -50%), pero cerca de un borde
+    // de la ventana eso lo sigue cortando aunque el "left" esté clampeado, porque lo que se sale
+    // de pantalla es la MITAD del ancho real del tooltip, no su punto de anclaje. Se mide el
+    // ancho ya renderizado (con el innerHTML ya puesto) y, si no entra centrado, se ancla por su
+    // borde izquierdo o derecho según corresponda en vez de partirlo al medio.
+    const tooltipWidth = el.offsetWidth;
+    const halfWidth = tooltipWidth / 2;
+    let left = x;
+    let translateX = "-50%";
+    if (x - halfWidth < margin) {
+      left = Math.max(x, margin);
+      translateX = "0%";
+    } else if (x + halfWidth > window.innerWidth - margin) {
+      left = Math.min(x, window.innerWidth - margin);
+      translateX = "-100%";
+    }
+    el.style.left = `${left}px`;
     el.style.top = `${Math.max(y, margin)}px`;
-    el.style.transform = "translate(-50%, -115%)";
+    el.style.transform = `translate(${translateX}, -115%)`;
   };
 }
 
@@ -149,11 +227,16 @@ export function PolarAreaCenterChart({
   total,
   darkMode,
   formatValue,
+  totalAlreadySeen,
 }: {
   data: { name: string; value: number }[];
   total: number;
   darkMode: boolean;
   formatValue: (n: number) => string;
+  // true cuando este slide del donut ya se mostró antes en esta sesión (p.ej. el slider ya dio
+  // una vuelta completa) — el TOTAL anima más rápido y sin delay en vez de repetir la animación
+  // larga cada vez que vuelve a aparecer.
+  totalAlreadySeen?: boolean;
 }) {
   const accentHex = useAccentHex();
   const textColor = darkMode ? "#a1a1aa" : "#64748b";
@@ -167,7 +250,7 @@ export function PolarAreaCenterChart({
   // aplica raíz cuadrada al radio para que el área vuelva a ser proporcional al valor real (como
   // en un donut normal), sin dejar de notarse cuál pondera más.
   const chartValues = rawValues.map((v) => Math.sqrt(Math.max(v, 0)));
-  const palette = buildPalette(accentHex, labels.length, darkMode);
+  const palette = buildCategoricalPalette(accentHex, labels.length, darkMode);
 
   const chartData = {
     labels,
@@ -232,7 +315,12 @@ export function PolarAreaCenterChart({
           Total
         </span>
         <span className="text-sm font-black" style={{ color: hasData ? accentHex : textColor }}>
-          <AnimatedNumber value={hasData ? total : 0} format={formatValue} />
+          <AnimatedNumber
+            value={hasData ? total : 0}
+            format={formatValue}
+            duration={totalAlreadySeen ? 0.4 : undefined}
+            delay={totalAlreadySeen ? 0 : undefined}
+          />
         </span>
       </div>
     </div>
