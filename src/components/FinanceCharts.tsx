@@ -10,6 +10,7 @@ import {
   PointElement,
   Tooltip,
   Legend,
+  Filler,
   type Plugin,
   type ChartOptions,
   type TooltipItem,
@@ -28,6 +29,7 @@ ChartJS.register(
   PointElement,
   Tooltip,
   Legend,
+  Filler,
 );
 
 /**
@@ -348,93 +350,119 @@ export function CategoryComparisonBarChart({
   const gridColor = darkMode ? "rgba(255,255,255,0.06)" : "rgba(15,23,42,0.06)";
   const textColor = darkMode ? "#a1a1aa" : "#64748b";
 
-  const rows = categories.map((cat) => {
-    const current = currentTotals[cat] || 0;
-    const previous = previousTotals[cat] || 0;
-    const base = Math.min(current, previous);
-    const delta = Math.abs(current - previous);
-    const increased = current > previous;
-    return { cat, current, previous, base, delta, increased };
-  });
+  // formatValue llega como prop recreada en cada render del padre — se guarda en un ref para que
+  // no invalide el memo de abajo y las barras no vuelvan a rebotar solo porque el padre
+  // renderizó de nuevo sin que los datos reales cambiaran.
+  const formatValueRef = useRef(formatValue);
+  useEffect(() => {
+    formatValueRef.current = formatValue;
+  }, [formatValue]);
 
-  if (rows.length === 0) {
+  const rows = useMemo(
+    () =>
+      categories.map((cat) => {
+        const current = currentTotals[cat] || 0;
+        const previous = previousTotals[cat] || 0;
+        const base = Math.min(current, previous);
+        const delta = Math.abs(current - previous);
+        const increased = current > previous;
+        return { cat, current, previous, base, delta, increased };
+      }),
+    [categories, currentTotals, previousTotals],
+  );
+
+  const chartConfig = useMemo(() => {
+    if (rows.length === 0) return null;
+
+    const data = {
+      labels: rows.map((r) => r.cat),
+      datasets: [
+        {
+          label: "Base",
+          data: rows.map((r) => r.base),
+          backgroundColor: accentHex,
+          borderRadius: rows.map((r) =>
+            r.delta === 0
+              ? 8
+              : { topLeft: 0, topRight: 0, bottomLeft: 8, bottomRight: 8 },
+          ),
+          borderSkipped: false,
+          stack: "s",
+        },
+        {
+          label: "Variación",
+          data: rows.map((r) => r.delta),
+          backgroundColor: rows.map((r) => (r.increased ? RED : GREEN)),
+          borderRadius: { topLeft: 8, topRight: 8, bottomLeft: 0, bottomRight: 0 },
+          borderSkipped: false,
+          stack: "s",
+        },
+      ],
+    };
+
+    const truncateLabel = (label: string) =>
+      label.length > 9 ? `${label.slice(0, 8)}…` : label;
+
+    // Rebote al aparecer (easeOutBounce) y cada barra entra con un pequeño retraso respecto a la
+    // anterior (delay por dataIndex), en vez de todas a la vez — mismo recurso de "aparición
+    // escalonada" que las demás animaciones de Finanzas.
+    const options: ChartOptions<"bar"> = {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: {
+        duration: 900,
+        easing: "easeOutBounce",
+        delay: (ctx) => (ctx.type === "data" ? ctx.dataIndex * 90 : 0),
+      },
+      scales: {
+        x: {
+          stacked: true,
+          grid: { display: false },
+          ticks: {
+            color: textColor,
+            font: { size: 9, weight: "bold" },
+            maxRotation: 50,
+            minRotation: 50,
+            autoSkip: false,
+            callback: (_value, index) => truncateLabel(rows[index].cat),
+          },
+        },
+        y: {
+          stacked: true,
+          grid: { color: gridColor },
+          ticks: { color: textColor, font: { size: 9 }, callback: (v) => formatCompactNumber(Number(v)) },
+        },
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          // enabled:false es obligatorio junto con external, si no Chart.js sigue dibujando
+          // además su propio tooltip nativo (cuadrado, recortado por el canvas) encima del custom.
+          enabled: false,
+          external: makeExternalTooltipHandler(darkMode),
+          callbacks: {
+            title: (items: TooltipItem<"bar">[]) => rows[items[0].dataIndex].cat,
+            label: (ctx: TooltipItem<"bar">) => {
+              const row = rows[ctx.dataIndex];
+              if (ctx.datasetIndex === 0) return `Mes pasado: ${formatValueRef.current(row.previous)}`;
+              return `${row.increased ? "Aumento" : "Disminución"}: ${formatValueRef.current(row.delta)} (este mes: ${formatValueRef.current(row.current)})`;
+            },
+          },
+        },
+      },
+    };
+
+    return { data, options };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, accentHex, darkMode, gridColor, textColor]);
+
+  if (!chartConfig) {
     return (
       <div className="flex-1 flex items-center justify-center text-xs text-zinc-500 italic">
         Sin datos este mes
       </div>
     );
   }
-
-  const data = {
-    labels: rows.map((r) => r.cat),
-    datasets: [
-      {
-        label: "Base",
-        data: rows.map((r) => r.base),
-        backgroundColor: accentHex,
-        borderRadius: rows.map((r) =>
-          r.delta === 0
-            ? 8
-            : { topLeft: 0, topRight: 0, bottomLeft: 8, bottomRight: 8 },
-        ),
-        borderSkipped: false,
-        stack: "s",
-      },
-      {
-        label: "Variación",
-        data: rows.map((r) => r.delta),
-        backgroundColor: rows.map((r) => (r.increased ? RED : GREEN)),
-        borderRadius: { topLeft: 8, topRight: 8, bottomLeft: 0, bottomRight: 0 },
-        borderSkipped: false,
-        stack: "s",
-      },
-    ],
-  };
-
-  const truncateLabel = (label: string) =>
-    label.length > 9 ? `${label.slice(0, 8)}…` : label;
-
-  const options: ChartOptions<"bar"> = {
-    responsive: true,
-    maintainAspectRatio: false,
-    animation: { duration: 600, easing: "easeOutQuart" },
-    scales: {
-      x: {
-        stacked: true,
-        grid: { display: false },
-        ticks: {
-          color: textColor,
-          font: { size: 9, weight: "bold" },
-          maxRotation: 50,
-          minRotation: 50,
-          autoSkip: false,
-          callback: (_value, index) => truncateLabel(rows[index].cat),
-        },
-      },
-      y: {
-        stacked: true,
-        grid: { color: gridColor },
-        ticks: { color: textColor, font: { size: 9 }, callback: (v) => formatCompactNumber(Number(v)) },
-      },
-    },
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        // enabled:false es obligatorio junto con external, si no Chart.js sigue dibujando
-        // además su propio tooltip nativo (cuadrado, recortado por el canvas) encima del custom.
-        enabled: false,
-        external: makeExternalTooltipHandler(darkMode),
-        callbacks: {
-          title: (items: TooltipItem<"bar">[]) => rows[items[0].dataIndex].cat,
-          label: (ctx: TooltipItem<"bar">) => {
-            const row = rows[ctx.dataIndex];
-            if (ctx.datasetIndex === 0) return `Mes pasado: ${formatValue(row.previous)}`;
-            return `${row.increased ? "Aumento" : "Disminución"}: ${formatValue(row.delta)} (este mes: ${formatValue(row.current)})`;
-          },
-        },
-      },
-    },
-  };
 
   return (
     <div className="flex-1 flex flex-col">
@@ -453,7 +481,7 @@ export function CategoryComparisonBarChart({
         </div>
       </div>
       <div className="flex-1 min-h-[160px]">
-        <Bar data={data} options={options} />
+        <Bar data={chartConfig.data} options={chartConfig.options} />
       </div>
     </div>
   );
@@ -475,7 +503,81 @@ export function BankRatesBarChart({
   const textColor = darkMode ? "#a1a1aa" : "#64748b";
   const dimGray = darkMode ? "#3f3f46" : "#94a3b8";
 
-  if (banks.length === 0) {
+  const chartConfig = useMemo(() => {
+    if (banks.length === 0) return null;
+
+    // El color (top 3 en escala de acento, resto en gris) sigue el RANKING real por TNA, pero el
+    // eje se muestra en orden alfabético — son dos cosas independientes.
+    const rankedByTna = [...banks].sort((a, b) => b.tna - a.tna);
+    const rankByName = new Map(rankedByTna.map((b, index) => [b.name, index]));
+    const sorted = [...banks].sort((a, b) => a.name.localeCompare(b.name, "es"));
+
+    const topScale = buildPalette(accentHex, 3, darkMode);
+    const barColors = sorted.map((b) => {
+      const rank = rankByName.get(b.name) ?? 99;
+      return rank < 3 ? topScale[rank] : dimGray;
+    });
+
+    const truncateLabel = (label: string) => (label.length > 9 ? `${label.slice(0, 8)}…` : label);
+
+    const data = {
+      labels: sorted.map((b) => b.name),
+      datasets: [
+        {
+          data: sorted.map((b) => b.tna),
+          backgroundColor: barColors,
+          borderRadius: 8,
+          borderSkipped: false,
+        },
+      ],
+    };
+
+    // Rebote al aparecer (easeOutBounce) con cada barra entrando un poco después de la anterior —
+    // mismo recurso que CategoryComparisonBarChart.
+    const options: ChartOptions<"bar"> = {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: {
+        duration: 900,
+        easing: "easeOutBounce",
+        delay: (ctx) => (ctx.type === "data" ? ctx.dataIndex * 90 : 0),
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: {
+            color: textColor,
+            font: { size: 9, weight: "bold" },
+            maxRotation: 50,
+            minRotation: 50,
+            autoSkip: false,
+            callback: (_value, index) => truncateLabel(sorted[index].name),
+          },
+        },
+        y: {
+          grid: { color: gridColor },
+          ticks: { color: textColor, font: { size: 9 }, callback: (v) => `${v}%` },
+        },
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          // enabled:false es obligatorio junto con external, si no Chart.js sigue dibujando
+          // además su propio tooltip nativo (cuadrado, recortado por el canvas) encima del custom.
+          enabled: false,
+          external: makeExternalTooltipHandler(darkMode),
+          callbacks: {
+            title: (items: TooltipItem<"bar">[]) => sorted[items[0].dataIndex].name,
+            label: (ctx: TooltipItem<"bar">) => `TNA: ${ctx.raw}%`,
+          },
+        },
+      },
+    };
+
+    return { data, options };
+  }, [banks, accentHex, darkMode, dimGray, gridColor, textColor]);
+
+  if (!chartConfig) {
     return (
       <div className="flex-1 flex items-center justify-center text-xs text-zinc-500 italic">
         Sin datos
@@ -483,71 +585,9 @@ export function BankRatesBarChart({
     );
   }
 
-  // El color (top 3 en escala de acento, resto en gris) sigue el RANKING real por TNA, pero el
-  // eje se muestra en orden alfabético — son dos cosas independientes.
-  const rankedByTna = [...banks].sort((a, b) => b.tna - a.tna);
-  const rankByName = new Map(rankedByTna.map((b, index) => [b.name, index]));
-  const sorted = [...banks].sort((a, b) => a.name.localeCompare(b.name, "es"));
-
-  const topScale = buildPalette(accentHex, 3, darkMode);
-  const barColors = sorted.map((b) => {
-    const rank = rankByName.get(b.name) ?? 99;
-    return rank < 3 ? topScale[rank] : dimGray;
-  });
-
-  const truncateLabel = (label: string) => (label.length > 9 ? `${label.slice(0, 8)}…` : label);
-
-  const data = {
-    labels: sorted.map((b) => b.name),
-    datasets: [
-      {
-        data: sorted.map((b) => b.tna),
-        backgroundColor: barColors,
-        borderRadius: 8,
-        borderSkipped: false,
-      },
-    ],
-  };
-
-  const options: ChartOptions<"bar"> = {
-    responsive: true,
-    maintainAspectRatio: false,
-    animation: { duration: 600, easing: "easeOutQuart" },
-    scales: {
-      x: {
-        grid: { display: false },
-        ticks: {
-          color: textColor,
-          font: { size: 9, weight: "bold" },
-          maxRotation: 50,
-          minRotation: 50,
-          autoSkip: false,
-          callback: (_value, index) => truncateLabel(sorted[index].name),
-        },
-      },
-      y: {
-        grid: { color: gridColor },
-        ticks: { color: textColor, font: { size: 9 }, callback: (v) => `${v}%` },
-      },
-    },
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        // enabled:false es obligatorio junto con external, si no Chart.js sigue dibujando
-        // además su propio tooltip nativo (cuadrado, recortado por el canvas) encima del custom.
-        enabled: false,
-        external: makeExternalTooltipHandler(darkMode),
-        callbacks: {
-          title: (items: TooltipItem<"bar">[]) => sorted[items[0].dataIndex].name,
-          label: (ctx: TooltipItem<"bar">) => `TNA: ${ctx.raw}%`,
-        },
-      },
-    },
-  };
-
   return (
     <div className="flex-1 min-h-[160px]">
-      <Bar data={data} options={options} />
+      <Bar data={chartConfig.data} options={chartConfig.options} />
     </div>
   );
 }
@@ -565,12 +605,142 @@ export function MonthlyTrendChart({
   const gridColor = darkMode ? "rgba(255,255,255,0.06)" : "rgba(15,23,42,0.06)";
   const textColor = darkMode ? "#a1a1aa" : "#64748b";
 
-  const monthLabel = (ym: string) => {
-    const [y, m] = ym.split("-").map(Number);
-    return new Date(y, (m || 1) - 1, 1).toLocaleDateString("es-AR", { month: "short" }).replace(".", "");
-  };
+  // formatValue llega como prop recreada en cada render del padre — se guarda en un ref para que
+  // no invalide el memo de abajo y la línea no vuelva a dibujarse solo porque el padre renderizó
+  // de nuevo sin que los datos reales cambiaran.
+  const formatValueRef = useRef(formatValue);
+  useEffect(() => {
+    formatValueRef.current = formatValue;
+  }, [formatValue]);
 
-  if (history.length === 0) {
+  const chartConfig = useMemo(() => {
+    if (history.length === 0) return null;
+
+    const monthLabel = (ym: string) => {
+      const [y, m] = ym.split("-").map(Number);
+      return new Date(y, (m || 1) - 1, 1).toLocaleDateString("es-AR", { month: "short" }).replace(".", "");
+    };
+
+    // Proyección lineal simple a partir del promedio de variación de los últimos meses — se marca
+    // con línea punteada, como "expectativa", nunca como dato real.
+    const PROJECTION_MONTHS = 2;
+    const recent = history.slice(-4);
+    const avgDelta =
+      recent.length > 1
+        ? (recent[recent.length - 1].total - recent[0].total) / (recent.length - 1)
+        : 0;
+    const lastReal = history[history.length - 1];
+    const projected: { month: string; total: number }[] = [];
+    let cursorY = lastReal.month.split("-").map(Number)[0];
+    let cursorM = lastReal.month.split("-").map(Number)[1];
+    let cursorVal = lastReal.total;
+    for (let i = 0; i < PROJECTION_MONTHS; i++) {
+      cursorM += 1;
+      if (cursorM > 12) {
+        cursorM = 1;
+        cursorY += 1;
+      }
+      cursorVal = Math.max(0, cursorVal + avgDelta);
+      projected.push({ month: `${cursorY}-${String(cursorM).padStart(2, "0")}`, total: cursorVal });
+    }
+
+    const allMonths = [...history.map((h) => h.month), ...projected.map((p) => p.month)];
+    const realValues: (number | null)[] = [...history.map((h) => h.total), ...projected.map(() => null)];
+    // El primer punto proyectado repite el último real, así la línea punteada arranca pegada a la
+    // sólida en vez de dejar un salto en blanco entre las dos.
+    const projValues: (number | null)[] = [
+      ...history.map((_, i) => (i === history.length - 1 ? history[i].total : null)),
+      ...projected.map((p) => p.total),
+    ];
+
+    const data = {
+      labels: allMonths.map(monthLabel),
+      datasets: [
+        {
+          label: "Gasto real",
+          data: realValues,
+          borderColor: accentHex,
+          backgroundColor: accentHex,
+          pointRadius: 3,
+          pointBackgroundColor: accentHex,
+          tension: 0.35,
+          spanGaps: false,
+        },
+        {
+          label: "Proyección",
+          data: projValues,
+          borderColor: accentHex,
+          backgroundColor: "transparent",
+          borderDash: [6, 5],
+          pointRadius: (ctx: any) => (ctx.dataIndex >= history.length ? 3 : 0),
+          pointBackgroundColor: accentHex,
+          tension: 0.35,
+          spanGaps: true,
+        },
+      ],
+    };
+
+    // Animación "progresiva": la línea se va dibujando de izquierda a derecha, un punto después
+    // del otro, igual que en el gráfico de progresión de Cripto/Acciones, en vez de aparecer toda
+    // junta de una.
+    const totalPoints = allMonths.length;
+    const totalDuration = 1800;
+    const delayBetweenPoints = totalPoints > 1 ? totalDuration / totalPoints : 0;
+    const previousY = (ctx: any) =>
+      ctx.index === 0
+        ? ctx.chart.scales.y.getPixelForValue(0)
+        : ctx.chart.getDatasetMeta(ctx.datasetIndex).data[ctx.index - 1]?.getProps(["y"], true).y;
+    const animation = {
+      x: { type: "number" as const, easing: "linear" as const, duration: delayBetweenPoints, from: NaN },
+      y: {
+        type: "number" as const,
+        easing: "linear" as const,
+        duration: delayBetweenPoints,
+        from: previousY,
+        delay(ctx: any) {
+          if (ctx.type !== "data" || ctx.yStarted) return 0;
+          ctx.yStarted = true;
+          return ctx.index * delayBetweenPoints;
+        },
+      },
+    };
+
+    const options: ChartOptions<"line"> = {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: animation as any,
+      interaction: { intersect: false, mode: "index" },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: textColor, font: { size: 9 } } },
+        y: {
+          grid: { color: gridColor },
+          ticks: { color: textColor, font: { size: 9 }, callback: (v) => formatCompactNumber(Number(v)) },
+        },
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          // enabled:false es obligatorio junto con external, si no Chart.js sigue dibujando
+          // además su propio tooltip nativo (cuadrado, recortado por el canvas) encima del custom.
+          enabled: false,
+          external: makeExternalTooltipHandler(darkMode),
+          callbacks: {
+            label: (ctx: TooltipItem<"line">) => {
+              const isProjection = ctx.datasetIndex === 1 && (ctx.dataIndex ?? 0) >= history.length - 1;
+              const val = ctx.raw as number | null;
+              if (val === null) return "";
+              return `${isProjection ? "Proyectado" : "Real"}: ${formatValueRef.current(val)}`;
+            },
+          },
+        },
+      },
+    };
+
+    return { data, options };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [history, accentHex, darkMode, gridColor, textColor]);
+
+  if (!chartConfig) {
     return (
       <div className="flex-1 flex items-center justify-center text-xs text-zinc-500 italic">
         Todavía no hay historial suficiente
@@ -578,99 +748,9 @@ export function MonthlyTrendChart({
     );
   }
 
-  // Proyección lineal simple a partir del promedio de variación de los últimos meses — se marca
-  // con línea punteada, como "expectativa", nunca como dato real.
-  const PROJECTION_MONTHS = 2;
-  const recent = history.slice(-4);
-  const avgDelta =
-    recent.length > 1
-      ? (recent[recent.length - 1].total - recent[0].total) / (recent.length - 1)
-      : 0;
-  const lastReal = history[history.length - 1];
-  const projected: { month: string; total: number }[] = [];
-  let cursorY = lastReal.month.split("-").map(Number)[0];
-  let cursorM = lastReal.month.split("-").map(Number)[1];
-  let cursorVal = lastReal.total;
-  for (let i = 0; i < PROJECTION_MONTHS; i++) {
-    cursorM += 1;
-    if (cursorM > 12) {
-      cursorM = 1;
-      cursorY += 1;
-    }
-    cursorVal = Math.max(0, cursorVal + avgDelta);
-    projected.push({ month: `${cursorY}-${String(cursorM).padStart(2, "0")}`, total: cursorVal });
-  }
-
-  const allMonths = [...history.map((h) => h.month), ...projected.map((p) => p.month)];
-  const realValues: (number | null)[] = [...history.map((h) => h.total), ...projected.map(() => null)];
-  // El primer punto proyectado repite el último real, así la línea punteada arranca pegada a la
-  // sólida en vez de dejar un salto en blanco entre las dos.
-  const projValues: (number | null)[] = [
-    ...history.map((_, i) => (i === history.length - 1 ? history[i].total : null)),
-    ...projected.map((p) => p.total),
-  ];
-
-  const data = {
-    labels: allMonths.map(monthLabel),
-    datasets: [
-      {
-        label: "Gasto real",
-        data: realValues,
-        borderColor: accentHex,
-        backgroundColor: accentHex,
-        pointRadius: 3,
-        pointBackgroundColor: accentHex,
-        tension: 0.35,
-        spanGaps: false,
-      },
-      {
-        label: "Proyección",
-        data: projValues,
-        borderColor: accentHex,
-        backgroundColor: "transparent",
-        borderDash: [6, 5],
-        pointRadius: (ctx: any) => (ctx.dataIndex >= history.length ? 3 : 0),
-        pointBackgroundColor: accentHex,
-        tension: 0.35,
-        spanGaps: true,
-      },
-    ],
-  };
-
-  const options: ChartOptions<"line"> = {
-    responsive: true,
-    maintainAspectRatio: false,
-    animation: { duration: 700, easing: "easeOutQuart" },
-    interaction: { intersect: false, mode: "index" },
-    scales: {
-      x: { grid: { display: false }, ticks: { color: textColor, font: { size: 9 } } },
-      y: {
-        grid: { color: gridColor },
-        ticks: { color: textColor, font: { size: 9 }, callback: (v) => formatCompactNumber(Number(v)) },
-      },
-    },
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        // enabled:false es obligatorio junto con external, si no Chart.js sigue dibujando
-        // además su propio tooltip nativo (cuadrado, recortado por el canvas) encima del custom.
-        enabled: false,
-        external: makeExternalTooltipHandler(darkMode),
-        callbacks: {
-          label: (ctx: TooltipItem<"line">) => {
-            const isProjection = ctx.datasetIndex === 1 && (ctx.dataIndex ?? 0) >= history.length - 1;
-            const val = ctx.raw as number | null;
-            if (val === null) return "";
-            return `${isProjection ? "Proyectado" : "Real"}: ${formatValue(val)}`;
-          },
-        },
-      },
-    },
-  };
-
   return (
     <div className="flex-1 min-h-[180px]">
-      <Line data={data} options={options} />
+      <Line data={chartConfig.data} options={chartConfig.options} />
     </div>
   );
 }
