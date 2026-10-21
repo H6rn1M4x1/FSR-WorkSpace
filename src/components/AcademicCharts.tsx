@@ -1,4 +1,5 @@
 import React, { useMemo } from "react";
+import { motion } from "motion/react";
 import {
   Chart as ChartJS,
   RadialLinearScale,
@@ -6,15 +7,12 @@ import {
   PointElement,
   Filler,
   ArcElement,
-  CategoryScale,
-  LinearScale,
-  BarElement,
   Tooltip,
   Legend,
   type ChartOptions,
   type TooltipItem,
 } from "chart.js";
-import { Radar, Doughnut, Bar } from "react-chartjs-2";
+import { Radar, Doughnut } from "react-chartjs-2";
 import { AnimatedNumber } from "./AnimatedNumber";
 import { useAccentHex, formatCompactNumber, makeExternalTooltipHandler } from "./FinanceCharts";
 
@@ -24,9 +22,6 @@ ChartJS.register(
   PointElement,
   Filler,
   ArcElement,
-  CategoryScale,
-  LinearScale,
-  BarElement,
   Tooltip,
   Legend,
 );
@@ -176,107 +171,36 @@ export function AcademicGaugeChart({
 }
 
 /**
- * Barras de avance de estudio por materia fijada: acento = % de archivos marcados como
- * estudiados, gris = lo que falta — mismo estilo apilado/redondeado que CategoryComparisonBarChart
- * en Finanzas, con rebote y entrada escalonada.
+ * Barrita de avance de estudio de UNA materia fijada (% de archivos principales marcados como
+ * estudiados). Se usa una por fila, al lado de su tarjeta de carpeta en "Material de Estudio" —
+ * por eso no es un chart.js con varias categorías: así el ancho y el centro vertical de cada
+ * barra quedan atados por CSS Grid a la fila de su propia tarjeta en vez de aproximarlos a mano.
+ * Siempre con puntas redondeadas (también a 0%, cuando todavía no hay nada marcado) y el
+ * porcentaje escrito adentro — el nombre de la materia no hace falta, ya está a la izquierda.
  */
-export function StudyProgressBarChart({
-  rows,
+export function StudyFolderProgressBar({
+  percent,
   darkMode,
 }: {
-  rows: { materia: string; donePercent: number }[];
+  percent: number;
   darkMode: boolean;
 }) {
-  const accentHex = useAccentHex();
-  const gridColor = darkMode ? "rgba(255,255,255,0.06)" : "rgba(15,23,42,0.06)";
-  const textColor = darkMode ? "#a1a1aa" : "#64748b";
-  const trackColor = darkMode ? "#27272a" : "#e2e8f0";
-
-  const chartConfig = useMemo(() => {
-    if (rows.length === 0) return null;
-
-    const truncateLabel = (label: string) => (label.length > 10 ? `${label.slice(0, 9)}…` : label);
-
-    const data = {
-      labels: rows.map((r) => r.materia),
-      datasets: [
-        {
-          label: "Avanzado",
-          data: rows.map((r) => Math.round(r.donePercent)),
-          backgroundColor: accentHex,
-          borderRadius: { topLeft: 8, topRight: 8, bottomLeft: 8, bottomRight: 8 },
-          borderSkipped: false,
-          stack: "s",
-        },
-        {
-          label: "Falta",
-          data: rows.map((r) => 100 - Math.round(r.donePercent)),
-          backgroundColor: trackColor,
-          borderRadius: 0,
-          borderSkipped: false,
-          stack: "s",
-        },
-      ],
-    };
-
-    const options: ChartOptions<"bar"> = {
-      responsive: true,
-      maintainAspectRatio: false,
-      indexAxis: "y" as const,
-      animation: {
-        duration: 900,
-        easing: "easeOutBounce",
-        delay: (ctx) => (ctx.type === "data" ? ctx.dataIndex * 90 : 0),
-      },
-      scales: {
-        x: {
-          stacked: true,
-          min: 0,
-          max: 100,
-          grid: { color: gridColor },
-          ticks: { color: textColor, font: { size: 9 }, callback: (v) => `${v}%` },
-        },
-        y: {
-          stacked: true,
-          grid: { display: false },
-          ticks: {
-            color: textColor,
-            font: { size: 9, weight: "bold" },
-            autoSkip: false,
-            callback: (_value, index) => truncateLabel(rows[index].materia),
-          },
-        },
-      },
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          enabled: false,
-          external: makeExternalTooltipHandler(darkMode),
-          callbacks: {
-            title: (items: TooltipItem<"bar">[]) => rows[items[0].dataIndex].materia,
-            label: (ctx: TooltipItem<"bar">) =>
-              ctx.datasetIndex === 0
-                ? `Avanzado: ${ctx.raw}%`
-                : `Falta: ${ctx.raw}%`,
-          },
-        },
-      },
-    };
-
-    return { data, options };
-  }, [rows, accentHex, trackColor, darkMode, gridColor, textColor]);
-
-  if (!chartConfig) {
-    return (
-      <div className="flex-1 flex items-center justify-center text-xs text-zinc-500 italic px-4 text-center">
-        Fijá una materia para ver su avance acá.
-      </div>
-    );
-  }
+  const pct = Math.max(0, Math.min(100, Math.round(percent)));
+  const trackColor = darkMode ? "bg-zinc-800" : "bg-zinc-200";
 
   return (
-    <div className="flex-1 min-h-[220px]">
-      <Bar data={chartConfig.data} options={chartConfig.options} />
+    <div className="w-full h-full flex items-center">
+      <div className={`relative w-full h-9 rounded-full overflow-hidden ${trackColor}`}>
+        <motion.div
+          className="absolute inset-y-0 left-0 rounded-full bg-primary"
+          initial={{ width: 0 }}
+          animate={{ width: `${pct}%` }}
+          transition={{ duration: 0.9, ease: "easeOut" }}
+        />
+        <div className="absolute inset-0 flex items-center justify-center text-[11px] font-bold text-white [mix-blend-mode:difference]">
+          {pct}%
+        </div>
+      </div>
     </div>
   );
 }
