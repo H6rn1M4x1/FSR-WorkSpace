@@ -1552,15 +1552,62 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jumpToFolder, accessToken, facultadFolderId]);
 
-  // Fijado de carpetas y selección de "archivos principales" para el seguimiento de avance de
+  // Fijado de carpetas y selección de ítems "principales" para el seguimiento de avance de
   // "Material de Estudio" — vive acá (y no en Material de Estudio) porque este es el único lugar
   // donde se navega el árbol real de Drive.
+  //
+  // Solo la carpeta RAÍZ (sin ningún ancestro ya fijado) crea una tarjeta nueva ahí. Fijar algo
+  // anidado dentro de una carpeta que ya es raíz (un tema, unidad, archivo u otra subcarpeta) no
+  // crea una tarjeta propia: pasa a contar como ítem "principal" de esa raíz, igual que ya
+  // funcionaba para archivos sueltos, y de la misma forma determina si cuenta o no para el % de
+  // avance (según se marque como estudiado).
   const isFolderPinned = (folderId: string) => pinnedFolders.some((p) => p.folderId === folderId);
+
+  // breadcrumbs siempre incluye la carpeta actual como último elemento, así que recorrerlo de
+  // atrás para adelante da el ancestro fijado más cercano (o ninguno si no hay ningún ancestro
+  // fijado en el camino actual).
+  const nearestPinnedAncestorId = (): string | null => {
+    for (let i = breadcrumbs.length - 1; i >= 0; i--) {
+      if (isFolderPinned(breadcrumbs[i].id)) return breadcrumbs[i].id;
+    }
+    return null;
+  };
+  const insidePinnedSubtree = breadcrumbs.some((b) => isFolderPinned(b.id));
+
+  const isItemPrincipal = (itemId: string) => completedFiles.some((c) => c.fileId === itemId);
+  const isItemCompleted = (itemId: string) => !!completedFiles.find((c) => c.fileId === itemId)?.completed;
+
+  const toggleItemPrincipal = (itemId: string) => {
+    if (isItemPrincipal(itemId)) {
+      deleteItemFromFirestore(userId, "completed_study_files", itemId).catch(() => {});
+      setCompletedFiles((prev) => prev.filter((c) => c.fileId !== itemId));
+      return;
+    }
+    const pinnedFolderId = nearestPinnedAncestorId();
+    if (!pinnedFolderId) return;
+    const newEntry: CompletedStudyFile = { id: itemId, fileId: itemId, pinnedFolderId, completed: false };
+    saveItemToFirestore(userId, "completed_study_files", newEntry).catch(() => {});
+    setCompletedFiles((prev) => [...prev, newEntry]);
+  };
+
+  const toggleItemStudied = (itemId: string) => {
+    const existing = completedFiles.find((c) => c.fileId === itemId);
+    if (!existing) return;
+    const updated: CompletedStudyFile = { ...existing, completed: !existing.completed };
+    saveItemToFirestore(userId, "completed_study_files", updated).catch(() => {});
+    setCompletedFiles((prev) => prev.map((c) => (c.fileId === itemId ? updated : c)));
+  };
 
   const togglePinFolder = (file: GoogleDriveFile) => {
     if (isFolderPinned(file.id)) {
       deleteItemFromFirestore(userId, "pinned_study_folders", file.id).catch(() => {});
       setPinnedFolders((prev) => prev.filter((p) => p.folderId !== file.id));
+      return;
+    }
+    if (insidePinnedSubtree) {
+      // Anidada dentro de una carpeta que ya es raíz: no crea una tarjeta nueva, cuenta como
+      // ítem principal de esa raíz.
+      toggleItemPrincipal(file.id);
       return;
     }
     const materiaName = allMateriaNames.get(normalizeMateriaName(file.name)) || file.name;
@@ -1569,30 +1616,17 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
     setPinnedFolders((prev) => [...prev, newPin]);
   };
 
-  // Un archivo solo puede marcarse como "principal" (y luego como estudiado) dentro de una
-  // carpeta que ya está fijada — si la carpeta no se sigue en "Material de Estudio", marcar sus
-  // archivos no tendría ningún efecto visible.
-  const isCurrentFolderPinned = !!currentFolderId && isFolderPinned(currentFolderId);
-  const isFilePrincipal = (fileId: string) => completedFiles.some((c) => c.fileId === fileId);
-  const isFileCompleted = (fileId: string) => !!completedFiles.find((c) => c.fileId === fileId)?.completed;
-
-  const toggleFilePrincipal = (fileId: string) => {
-    if (isFilePrincipal(fileId)) {
-      deleteItemFromFirestore(userId, "completed_study_files", fileId).catch(() => {});
-      setCompletedFiles((prev) => prev.filter((c) => c.fileId !== fileId));
-      return;
+  // Estado/título del botón de fijado de una carpeta en la grilla/lista: refleja fijado como
+  // raíz O como ítem principal de la raíz en la que está anidada, según corresponda.
+  const isFolderPinButtonActive = (folderId: string) => isFolderPinned(folderId) || isItemPrincipal(folderId);
+  const folderPinButtonTitle = (file: GoogleDriveFile) => {
+    if (isFolderPinned(file.id)) return "Dejar de fijar (sacar de Material de Estudio)";
+    if (insidePinnedSubtree) {
+      return isItemPrincipal(file.id)
+        ? "Sacar de los ítems principales"
+        : "Marcar como ítem principal (cuenta para el % de avance)";
     }
-    const newEntry: CompletedStudyFile = { id: fileId, fileId, completed: false };
-    saveItemToFirestore(userId, "completed_study_files", newEntry).catch(() => {});
-    setCompletedFiles((prev) => [...prev, newEntry]);
-  };
-
-  const toggleFileStudied = (fileId: string) => {
-    const existing = completedFiles.find((c) => c.fileId === fileId);
-    if (!existing) return;
-    const updated: CompletedStudyFile = { ...existing, completed: !existing.completed };
-    saveItemToFirestore(userId, "completed_study_files", updated).catch(() => {});
-    setCompletedFiles((prev) => prev.map((c) => (c.fileId === fileId ? updated : c)));
+    return "Fijar (nueva tarjeta en Material de Estudio)";
   };
 
   // Context Menu and clipboard helper methods
@@ -2935,7 +2969,7 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
                           <div className="relative p-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-950/50 border border-zinc-200/50 dark:border-zinc-800/30">
                             {getFileIcon(file.mimeType, hoveredFileId === file.id)}
                             {file.mimeType === "application/vnd.google-apps.folder" && isFolderPinned(file.id) && (
-                              <span className="absolute -top-1.5 -right-1.5 p-0.5 rounded-full bg-primary text-white dark:text-blue-950 shadow-sm">
+                              <span className="absolute -top-1.5 -right-1.5 p-0.5 rounded-full bg-primary text-white dark:text-black shadow-sm">
                                 <Pin className="w-2.5 h-2.5 fill-current" />
                               </span>
                             )}
@@ -2950,53 +2984,51 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
                                   togglePinFolder(file);
                                 }}
                                 className={`p-1.5 rounded-md cursor-pointer ${
-                                  isFolderPinned(file.id)
+                                  isFolderPinButtonActive(file.id)
                                     ? "text-primary hover:bg-primary/10"
                                     : "hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-primary"
                                 }`}
-                                title={isFolderPinned(file.id) ? "Dejar de fijar (sacar de Material de Estudio)" : "Fijar (seguir en Material de Estudio)"}
+                                title={folderPinButtonTitle(file)}
                               >
-                                <Pin className={`w-3 h-3 ${isFolderPinned(file.id) ? "fill-current" : ""}`} />
+                                <Pin className={`w-3 h-3 ${isFolderPinButtonActive(file.id) ? "fill-current" : ""}`} />
                               </button>
                             ) : (
-                              isCurrentFolderPinned && (
-                                <>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      toggleFilePrincipal(file.id);
-                                    }}
-                                    className={`p-1.5 rounded-md cursor-pointer ${
-                                      isFilePrincipal(file.id)
-                                        ? "text-primary hover:bg-primary/10"
-                                        : "hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-primary"
-                                    }`}
-                                    title={isFilePrincipal(file.id) ? "Sacar de los archivos principales" : "Marcar como archivo principal"}
-                                  >
-                                    <Pin className={`w-3 h-3 ${isFilePrincipal(file.id) ? "fill-current" : ""}`} />
-                                  </button>
-                                  {isFilePrincipal(file.id) && (
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        toggleFileStudied(file.id);
-                                      }}
-                                      className={`p-1.5 rounded-md cursor-pointer ${
-                                        isFileCompleted(file.id)
-                                          ? "text-primary hover:bg-primary/10"
-                                          : "hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-primary"
-                                      }`}
-                                      title={isFileCompleted(file.id) ? "Marcar como no estudiado" : "Marcar como estudiado"}
-                                    >
-                                      {isFileCompleted(file.id) ? (
-                                        <CircleCheckBig className="w-3 h-3" />
-                                      ) : (
-                                        <CirclePlus className="w-3 h-3" />
-                                      )}
-                                    </button>
-                                  )}
-                                </>
+                              insidePinnedSubtree && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleItemPrincipal(file.id);
+                                  }}
+                                  className={`p-1.5 rounded-md cursor-pointer ${
+                                    isItemPrincipal(file.id)
+                                      ? "text-primary hover:bg-primary/10"
+                                      : "hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-primary"
+                                  }`}
+                                  title={isItemPrincipal(file.id) ? "Sacar de los ítems principales" : "Marcar como ítem principal"}
+                                >
+                                  <Pin className={`w-3 h-3 ${isItemPrincipal(file.id) ? "fill-current" : ""}`} />
+                                </button>
                               )
+                            )}
+                            {isItemPrincipal(file.id) && !isFolderPinned(file.id) && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleItemStudied(file.id);
+                                }}
+                                className={`p-1.5 rounded-md cursor-pointer ${
+                                  isItemCompleted(file.id)
+                                    ? "text-primary hover:bg-primary/10"
+                                    : "hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-primary"
+                                }`}
+                                title={isItemCompleted(file.id) ? "Marcar como no estudiado" : "Marcar como estudiado"}
+                              >
+                                {isItemCompleted(file.id) ? (
+                                  <CircleCheckBig className="w-3 h-3" />
+                                ) : (
+                                  <CirclePlus className="w-3 h-3" />
+                                )}
+                              </button>
                             )}
                             <button
                               onClick={(e) => {
@@ -3110,8 +3142,8 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
                               {file.mimeType === "application/vnd.google-apps.folder" && isFolderPinned(file.id) && (
                                 <Pin className="w-3 h-3 text-primary fill-current shrink-0" />
                               )}
-                              {file.mimeType !== "application/vnd.google-apps.folder" && isFilePrincipal(file.id) && (
-                                isFileCompleted(file.id)
+                              {isItemPrincipal(file.id) && !isFolderPinned(file.id) && (
+                                isItemCompleted(file.id)
                                   ? <CircleCheckBig className="w-3 h-3 text-primary shrink-0" />
                                   : <CirclePlus className="w-3 h-3 text-zinc-400 shrink-0" />
                               )}
@@ -3134,47 +3166,45 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
                                   <button
                                     onClick={() => togglePinFolder(file)}
                                     className={`p-1.5 rounded-lg cursor-pointer ${
-                                      isFolderPinned(file.id)
+                                      isFolderPinButtonActive(file.id)
                                         ? "text-primary hover:bg-primary/10"
                                         : "hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-primary"
                                     }`}
-                                    title={isFolderPinned(file.id) ? "Dejar de fijar (sacar de Material de Estudio)" : "Fijar (seguir en Material de Estudio)"}
+                                    title={folderPinButtonTitle(file)}
                                   >
-                                    <Pin className={`w-3.5 h-3.5 ${isFolderPinned(file.id) ? "fill-current" : ""}`} />
+                                    <Pin className={`w-3.5 h-3.5 ${isFolderPinButtonActive(file.id) ? "fill-current" : ""}`} />
                                   </button>
                                 ) : (
-                                  isCurrentFolderPinned && (
-                                    <>
-                                      <button
-                                        onClick={() => toggleFilePrincipal(file.id)}
-                                        className={`p-1.5 rounded-lg cursor-pointer ${
-                                          isFilePrincipal(file.id)
-                                            ? "text-primary hover:bg-primary/10"
-                                            : "hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-primary"
-                                        }`}
-                                        title={isFilePrincipal(file.id) ? "Sacar de los archivos principales" : "Marcar como archivo principal"}
-                                      >
-                                        <Pin className={`w-3.5 h-3.5 ${isFilePrincipal(file.id) ? "fill-current" : ""}`} />
-                                      </button>
-                                      {isFilePrincipal(file.id) && (
-                                        <button
-                                          onClick={() => toggleFileStudied(file.id)}
-                                          className={`p-1.5 rounded-lg cursor-pointer ${
-                                            isFileCompleted(file.id)
-                                              ? "text-primary hover:bg-primary/10"
-                                              : "hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-primary"
-                                          }`}
-                                          title={isFileCompleted(file.id) ? "Marcar como no estudiado" : "Marcar como estudiado"}
-                                        >
-                                          {isFileCompleted(file.id) ? (
-                                            <CircleCheckBig className="w-3.5 h-3.5" />
-                                          ) : (
-                                            <CirclePlus className="w-3.5 h-3.5" />
-                                          )}
-                                        </button>
-                                      )}
-                                    </>
+                                  insidePinnedSubtree && (
+                                    <button
+                                      onClick={() => toggleItemPrincipal(file.id)}
+                                      className={`p-1.5 rounded-lg cursor-pointer ${
+                                        isItemPrincipal(file.id)
+                                          ? "text-primary hover:bg-primary/10"
+                                          : "hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-primary"
+                                      }`}
+                                      title={isItemPrincipal(file.id) ? "Sacar de los ítems principales" : "Marcar como ítem principal"}
+                                    >
+                                      <Pin className={`w-3.5 h-3.5 ${isItemPrincipal(file.id) ? "fill-current" : ""}`} />
+                                    </button>
                                   )
+                                )}
+                                {isItemPrincipal(file.id) && !isFolderPinned(file.id) && (
+                                  <button
+                                    onClick={() => toggleItemStudied(file.id)}
+                                    className={`p-1.5 rounded-lg cursor-pointer ${
+                                      isItemCompleted(file.id)
+                                        ? "text-primary hover:bg-primary/10"
+                                        : "hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-primary"
+                                    }`}
+                                    title={isItemCompleted(file.id) ? "Marcar como no estudiado" : "Marcar como estudiado"}
+                                  >
+                                    {isItemCompleted(file.id) ? (
+                                      <CircleCheckBig className="w-3.5 h-3.5" />
+                                    ) : (
+                                      <CirclePlus className="w-3.5 h-3.5" />
+                                    )}
+                                  </button>
                                 )}
                                 <button
                                   onClick={() => {

@@ -350,16 +350,20 @@ export function StudyMaterialBlock({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accessToken, pinnedFolders]);
 
-  // El % de avance se calcula solo sobre los archivos "principales" de la carpeta — los que se
-  // eligieron a mano en Facultad (cualquier archivo con una entrada en completedFiles, exista o
-  // no el id entre los archivos recién listados acá, cuenta como principal) — no sobre el total
-  // de archivos de la carpeta, que puede incluir material que no es para estudiar.
+  // El % de avance se calcula sobre los ítems "principales" de la carpeta: archivos o carpetas/
+  // unidades anidadas marcadas a mano desde Facultad — no sobre el total de material, que puede
+  // incluir cosas que no son para estudiar. Las marcas nuevas ya guardan a qué carpeta fijada
+  // pertenecen (pinnedFolderId); las de antes de poder marcar carpetas (solo archivos) no lo
+  // tienen, así que para esas se sigue infiriendo por pertenencia directa a esta carpeta, como
+  // antes de esta vuelta.
   const progressFor = (folderId: string): number => {
+    const direct = completedFiles.filter((c) => c.pinnedFolderId === folderId);
     const files = filesByFolder[folderId];
-    if (!files || files.length === 0) return 0;
-    const principal = files.filter((f) => completedFiles.some((c) => c.fileId === f.id));
+    const legacyIds = new Set((files || []).map((f) => f.id));
+    const legacy = completedFiles.filter((c) => !c.pinnedFolderId && legacyIds.has(c.fileId));
+    const principal = [...direct, ...legacy];
     if (principal.length === 0) return 0;
-    const done = principal.filter((f) => completedFiles.find((c) => c.fileId === f.id)?.completed).length;
+    const done = principal.filter((c) => c.completed).length;
     return (done / principal.length) * 100;
   };
 
