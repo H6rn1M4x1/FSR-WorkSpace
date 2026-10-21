@@ -897,7 +897,7 @@ export default function CotizacionesCriptoTable({
                     </div>
                   </form>
                 </div>
-                <div className="p-4 sm:p-5 border-t border-slate-100 dark:border-zinc-800/40 bg-slate-50/50 dark:bg-[#0a0a0a] flex items-center justify-end gap-3 shrink-0">
+                <div className="p-4 sm:p-5 border-t border-slate-100 dark:border-zinc-800/40 bg-slate-50/50 dark:bg-[#0a0a0a] flex items-center justify-center sm:justify-end gap-3 shrink-0">
                   <button
                     type="button"
                     disabled={isSaving}

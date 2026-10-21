@@ -119,6 +119,8 @@ interface FinanceViewProps {
   /** Cambia (a cualquier valor distinto del anterior) para navegar directo a "Todos los Pagos"
    *  y abrir el formulario de "Agregar Pago" — usado por el botón "Agendar" de Inicio. */
   autoOpenQuickAdd?: number;
+  /** Fecha del filtro de calendario de Inicio al tocar "Agendar", si había una — se precarga acá. */
+  autoOpenQuickAddDate?: string;
   onQuickAddHandled?: () => void;
   autoOpenEditId?: string;
   autoOpenEditNonce?: number;
@@ -603,6 +605,7 @@ export default function FinanceView({
   onSubTabChange,
   itemsIShared = [],
   autoOpenQuickAdd,
+  autoOpenQuickAddDate,
   onQuickAddHandled,
   autoOpenEditId,
   autoOpenEditNonce,
@@ -4132,6 +4135,7 @@ export default function FinanceView({
                       token={token}
                       userEmail={userEmail}
                       autoOpenQuickAdd={autoOpenQuickAdd}
+                      autoOpenQuickAddDate={autoOpenQuickAddDate}
                       onQuickAddHandled={onQuickAddHandled}
                       autoOpenEditId={mergedEditPaymentId}
                       autoOpenEditNonce={mergedEditPaymentNonce}
@@ -4294,7 +4298,7 @@ export default function FinanceView({
                   </div>
                 )}
 
-                <div className="flex items-center justify-end gap-2.5 pt-2">
+                <div className="flex items-center justify-center sm:justify-end gap-2.5 pt-2">
                   <button
                     type="button"
                     disabled={isSaving}
@@ -4362,7 +4366,7 @@ export default function FinanceView({
                   />
                 </div>
 
-                <div className="flex items-center justify-end gap-2.5">
+                <div className="flex items-center justify-center sm:justify-end gap-2.5">
                   <button
                     type="button"
                     onClick={() => setShowEmailModal(false)}

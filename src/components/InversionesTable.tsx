@@ -2233,7 +2233,7 @@ export default function InversionesTable({
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-slate-100 dark:border-zinc-800/40">
+                  <div className="flex items-center justify-center sm:justify-end gap-2.5 pt-4 border-t border-slate-100 dark:border-zinc-800/40">
                     <button
                       type="button"
                       disabled={isSaving}
@@ -2297,7 +2297,7 @@ export default function InversionesTable({
                 <p className="text-xs text-slate-600 dark:text-zinc-300 leading-relaxed font-medium">
                   ¿Estás seguro de que deseas eliminar este registro de inversión de forma permanente?
                 </p>
-                <div className="flex items-center justify-end gap-2.5 pt-2">
+                <div className="flex items-center justify-center sm:justify-end gap-2.5 pt-2">
                   <button
                     disabled={isDeleting}
                     onClick={() => { if (!isDeleting) setDeleteConfirmId(null); }}

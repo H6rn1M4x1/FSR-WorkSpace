@@ -355,7 +355,7 @@ export const TurnoCategoryManagerModal: React.FC<TurnoCategoryManagerModalProps>
                     </AnimatePresence>
                   </div>
 
-                  <div className="flex items-center justify-end gap-2.5 pt-2">
+                  <div className="flex items-center justify-center sm:justify-end gap-2.5 pt-2">
                     <button
                       type="button"
                       onClick={cancelForm}

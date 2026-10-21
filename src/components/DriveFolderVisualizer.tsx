@@ -3571,7 +3571,7 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
                 )}
               </div>
 
-              <div className="flex justify-end gap-2 text-xs shrink-0 pt-4 mt-auto">
+              <div className="flex justify-center sm:justify-end gap-2 text-xs shrink-0 pt-4 mt-auto">
                 <button
                   type="button"
                   onClick={() => setIsSearchModalOpen(false)}
@@ -3608,7 +3608,7 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
                   placeholder="Ej: Álgebra, Historia, Trabajos Prácticos"
                   className="w-full px-3.5 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-sm focus:border-primary outline-none mb-4"
                 />
-                <div className="flex justify-end gap-2 text-xs">
+                <div className="flex justify-center sm:justify-end gap-2 text-xs">
                   <button
                     type="button"
                     onClick={() => {
@@ -3711,7 +3711,7 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
                   />
                 </div>
 
-                <div className="flex justify-end gap-2 text-xs">
+                <div className="flex justify-center sm:justify-end gap-2 text-xs">
                   <button
                     type="button"
                     onClick={() => {
@@ -3762,7 +3762,7 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
                   onChange={(e) => setRenameValue(e.target.value)}
                   className="w-full px-3.5 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-sm focus:border-primary outline-none mb-4"
                 />
-                <div className="flex justify-end gap-2 text-xs">
+                <div className="flex justify-center sm:justify-end gap-2 text-xs">
                   <button
                     type="button"
                     disabled={isRenaming}
@@ -3827,7 +3827,7 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
                 deshacer.
               </p>
 
-              <div className="flex justify-end gap-2 text-xs">
+              <div className="flex justify-center sm:justify-end gap-2 text-xs">
                 <button
                   type="button"
                   onClick={() => {

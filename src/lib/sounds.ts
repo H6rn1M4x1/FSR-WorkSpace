@@ -47,10 +47,22 @@ type Tone = {
   rampTo?: number;
 };
 
+// Vibración breve en celulares cada vez que suena algo de la interfaz — el mismo pulso para
+// cualquier sonido, ya que el pedido es "que vibre cuando sale un sonido", no un patrón distinto
+// por acción. navigator.vibrate no existe en desktop ni en iOS Safari: el chequeo lo vuelve un
+// no-op inofensivo ahí, no hace falta detectar el dispositivo a mano.
+const VIBRATE_MS = 12;
+const vibrate = () => {
+  try {
+    navigator.vibrate?.(VIBRATE_MS);
+  } catch {}
+};
+
 // Reproduce una secuencia corta de tonos con una envolvente simple (ataque rápido, decaimiento
 // exponencial) para que cada nota suene como un "pop" suave en vez de un pitido plano.
 const playTones = (tones: Tone[]) => {
   if (!isUiSoundEnabled()) return;
+  vibrate();
   const ctx = getAudioContext();
   if (!ctx) return;
   try {

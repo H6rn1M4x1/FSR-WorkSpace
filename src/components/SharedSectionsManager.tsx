@@ -525,7 +525,7 @@ export function SharedSectionsManager({ userEmail, darkMode = false }: SharedSec
           </div>
         </div>
 
-        <div className="flex justify-end pt-2">
+        <div className="flex justify-center sm:justify-end pt-2">
           <button
             type="submit"
             disabled={isSending || selectedSections.length === 0}

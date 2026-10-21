@@ -412,6 +412,8 @@ interface MealsViewProps {
   /** Cambia (a cualquier valor distinto del anterior) para abrir automáticamente el formulario
    *  de "Agregar Planificación Semanal" — usado por el botón "Agendar" de Inicio. */
   autoOpenQuickAdd?: number;
+  /** Fecha del filtro de calendario de Inicio al tocar "Agendar", si había una — se precarga acá. */
+  autoOpenQuickAddDate?: string;
   onQuickAddHandled?: () => void;
   /** Id de una planificación semanal puntual a editar. Usado por el botón de lápiz de Inicio. */
   autoOpenEditId?: string;
@@ -440,6 +442,7 @@ export default function MealsView({
   onSubTabChange,
   itemsIShared = [],
   autoOpenQuickAdd,
+  autoOpenQuickAddDate,
   onQuickAddHandled,
   autoOpenEditId,
   autoOpenEditNonce,
@@ -1126,7 +1129,7 @@ export default function MealsView({
   useEffect(() => {
     if (!autoOpenQuickAdd) return;
     setEditingOrgId(null);
-    setOrgFecha("");
+    setOrgFecha(autoOpenQuickAddDate || "");
     setOrgPlatoId("");
     setShowAddOrg(true);
     onQuickAddHandled?.();
@@ -5156,7 +5159,7 @@ export default function MealsView({
                   </div>
                 </div>
 
-                <div className="flex items-center justify-end gap-2.5 pt-2">
+                <div className="flex items-center justify-center sm:justify-end gap-2.5 pt-2">
                   <button
                     type="button"
                     disabled={isSaving}
