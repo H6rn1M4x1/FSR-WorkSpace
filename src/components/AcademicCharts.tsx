@@ -197,7 +197,11 @@ export function StudyFolderProgressBar({
           animate={{ width: `${pct}%` }}
           transition={{ duration: 0.9, ease: "easeOut" }}
         />
-        <div className="absolute inset-0 flex items-center justify-center text-[11px] font-bold text-white [mix-blend-mode:difference]">
+        <div
+          className={`absolute inset-0 flex items-center justify-center text-[11px] font-bold ${
+            darkMode ? "text-white" : "text-black"
+          }`}
+        >
           {pct}%
         </div>
       </div>

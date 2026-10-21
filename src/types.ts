@@ -553,10 +553,15 @@ export interface PinnedStudyFolder {
   materiaName: string;
 }
 
-// Estado de "estudiado" de un archivo dentro de una carpeta fijada en "Material de Estudio".
+// Estado de "estudiado" de un ítem (archivo, o carpeta/unidad anidada marcada como principal)
+// de una carpeta RAÍZ fijada en "Material de Estudio" — fijar algo anidado dentro de una carpeta
+// ya fijada no crea una tarjeta propia: pasa a sumar acá, contra la carpeta raíz de la que
+// depende (pinnedFolderId). En entradas de antes de poder marcar carpetas (solo archivos) puede
+// faltar pinnedFolderId; el cálculo de avance las sigue reconociendo por pertenencia directa.
 export interface CompletedStudyFile {
   id: string; // = fileId
-  fileId: string;
+  fileId: string; // id de Drive del archivo o carpeta marcado como principal
+  pinnedFolderId?: string;
   completed: boolean;
 }
 
