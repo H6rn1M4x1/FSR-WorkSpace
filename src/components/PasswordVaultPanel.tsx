@@ -918,7 +918,7 @@ export function PasswordVaultPanel({
                 value={editingItem.notes || ""}
                 onChange={(e) => setEditingItem({ ...editingItem, notes: e.target.value })}
               />
-              <div className="flex items-center gap-2 pt-1">
+              <div className="flex items-center justify-center sm:justify-start gap-2 pt-1">
                 <button type="button" onClick={handleSaveItem} className={BTN_PRIMARY}>
                   <Check className="w-4 h-4" /> Guardar
                 </button>
@@ -961,7 +961,7 @@ export function PasswordVaultPanel({
                 className={`${INPUT} text-center font-mono text-xl tracking-[0.4em]`}
               />
               {totpError && <p className="text-xs font-bold text-red-600 dark:text-red-400">{totpError}</p>}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center justify-center sm:justify-start gap-2">
                 <button
                   type="button"
                   onClick={confirmTotpGate}

@@ -786,7 +786,7 @@ export function NotesView({
                 activeMenu={composeMenu === "bgcolor" ? null : composeMenu}
                 onActiveMenuChange={setComposeMenu}
               />
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <div className="relative">
                   <button
                     type="button"
@@ -798,7 +798,7 @@ export function NotesView({
                     <ColorPicker value={composeColor} onChange={setComposeColor} onClose={() => setComposeMenu(null)} />
                   )}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center justify-center sm:justify-start gap-2 w-full sm:w-auto">
                   <button
                     type="button"
                     onClick={() => {

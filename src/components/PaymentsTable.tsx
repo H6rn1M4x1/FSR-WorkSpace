@@ -52,6 +52,8 @@ interface PaymentsTableProps {
   /** Cambia (a cualquier valor distinto del anterior) para abrir automáticamente el formulario
    *  de "Agregar Pago" — usado por el botón "Agendar" de Inicio. */
   autoOpenQuickAdd?: number;
+  /** Fecha del filtro de calendario de Inicio al tocar "Agendar", si había una — se precarga acá. */
+  autoOpenQuickAddDate?: string;
   onQuickAddHandled?: () => void;
   /** Id de un pago puntual a editar — abre el mismo formulario de "Agregar Pago" pero en modo
    *  edición, precargado. Usado por el botón de lápiz de cada tarjeta en Inicio. */
@@ -306,6 +308,7 @@ export default function PaymentsTable({
   token,
   userEmail,
   autoOpenQuickAdd,
+  autoOpenQuickAddDate,
   onQuickAddHandled,
   autoOpenEditId,
   autoOpenEditNonce,
@@ -322,6 +325,7 @@ export default function PaymentsTable({
   useEffect(() => {
     if (!autoOpenQuickAdd) return;
     setShowAddPayment(true);
+    if (autoOpenQuickAddDate) setFechaVencimiento(autoOpenQuickAddDate);
     onQuickAddHandled?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoOpenQuickAdd]);
@@ -1467,7 +1471,7 @@ export default function PaymentsTable({
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100 dark:border-zinc-800/40">
+                  <div className="flex items-center justify-center sm:justify-end gap-2.5 pt-2 border-t border-slate-100 dark:border-zinc-800/40">
                     <button
                       type="button"
                       disabled={isSaving}

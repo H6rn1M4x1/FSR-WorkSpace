@@ -94,7 +94,7 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
               </p>
 
               {/* Botones de Acción */}
-              <div className="pt-2 flex justify-end gap-2.5 text-xs font-bold">
+              <div className="pt-2 flex justify-center sm:justify-end gap-2.5 text-xs font-bold">
                 <motion.button
                   whileTap={{ scale: 0.96 }}
                   whileHover={{ scale: 1.02 }}

@@ -134,8 +134,13 @@ interface HomeViewProps {
    *  de la miniatura en Inicio. */
   onAddNote?: () => void;
   /** Navega a la pestaña real de la categoría elegida y le pide que abra directo su formulario
-   *  de "nuevo" — usado por el botón "Agendar" de Inicio. */
-  onQuickAdd?: (category: "turno" | "finanzas" | "universidad" | "salud" | "comidas") => void;
+   *  de "nuevo" — usado por el botón "Agendar" de Inicio. Si hay una fecha fijada en el filtro
+   *  del calendario de Inicio al tocarlo, se la pasa para que ese formulario la precargue en vez
+   *  de la de hoy. */
+  onQuickAdd?: (
+    category: "turno" | "finanzas" | "universidad" | "salud" | "comidas",
+    date?: string,
+  ) => void;
   /** Navega a la pestaña real de la categoría elegida y le pide que abra directo el formulario
    *  de EDICIÓN de ese ítem puntual — usado por el botón de lápiz en cada tarjeta de la Agenda. */
   onQuickEdit?: (
@@ -2046,7 +2051,7 @@ export default function HomeView({
                             type="button"
                             onClick={() => {
                               setQuickAddMenuOpen(false);
-                              onQuickAdd?.(opt.id);
+                              onQuickAdd?.(opt.id, selectedCalendarDate || undefined);
                             }}
                             className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-left hover:bg-primary/10 text-zinc-700 dark:text-zinc-200 cursor-pointer transition-colors"
                           >

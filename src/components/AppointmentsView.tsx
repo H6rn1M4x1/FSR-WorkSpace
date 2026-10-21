@@ -594,6 +594,8 @@ interface AppointmentsViewProps {
    *  el formulario de "Nuevo Turno / Compromiso" al entrar a esta vista — usado por el botón
    *  "Agendar" de Inicio para saltar directo al formulario real de esta sección. */
   autoOpenQuickAdd?: number;
+  /** Fecha del filtro de calendario de Inicio al tocar "Agendar", si había una — se precarga acá. */
+  autoOpenQuickAddDate?: string;
   onQuickAddHandled?: () => void;
   /** Id de un Turno/Compromiso puntual a editar — abre el mismo formulario de arriba pero en
    *  modo edición, precargado. Usado por el botón de lápiz de cada tarjeta en Inicio. */
@@ -995,6 +997,7 @@ export default function AppointmentsView({
   onSubTabChange,
   itemsIShared = [],
   autoOpenQuickAdd,
+  autoOpenQuickAddDate,
   onQuickAddHandled,
   autoOpenEditId,
   autoOpenEditNonce,
@@ -1759,6 +1762,7 @@ export default function AppointmentsView({
   useEffect(() => {
     if (!autoOpenQuickAdd) return;
     handleOpenNewTurnoCompModal();
+    if (autoOpenQuickAddDate) setTcFecha(autoOpenQuickAddDate);
     onQuickAddHandled?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoOpenQuickAdd]);
@@ -3748,7 +3752,7 @@ export default function AppointmentsView({
                   ></textarea>
                 </div>
 
-                <div className="flex items-center justify-end gap-2.5 pt-2">
+                <div className="flex items-center justify-center sm:justify-end gap-2.5 pt-2">
                   <button
                     type="button"
                     disabled={isSaving}
@@ -3821,7 +3825,7 @@ export default function AppointmentsView({
                   </select>
                 </div>
 
-                <div className="flex items-center justify-end gap-2.5 pt-2">
+                <div className="flex items-center justify-center sm:justify-end gap-2.5 pt-2">
                   <button
                     type="button"
                     disabled={isSaving}
@@ -4362,7 +4366,7 @@ export default function AppointmentsView({
                     )}
 
                   {/* Actions */}
-                  <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 dark:border-zinc-800/40">
+                  <div className="flex items-center justify-center sm:justify-end gap-3 pt-4 border-t border-slate-100 dark:border-zinc-800/40">
                     <button
                       type="button"
                       disabled={isSaving}

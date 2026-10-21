@@ -1474,7 +1474,7 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
               );
             })}
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-zinc-800/80">
+            <div className="flex items-center justify-center sm:justify-end gap-2 pt-2 border-t border-slate-100 dark:border-zinc-800/80">
               <button type="button" onClick={cancelSportsModal} className="px-4 py-2 rounded-xl text-xs font-bold text-zinc-600 dark:text-zinc-300 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 transition-all cursor-pointer">
                 Cancelar
               </button>

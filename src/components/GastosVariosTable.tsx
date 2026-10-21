@@ -999,7 +999,7 @@ export default function GastosVariosTable({
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-slate-100 dark:border-zinc-800/40">
+                    <div className="flex items-center justify-center sm:justify-end gap-2.5 pt-4 border-t border-slate-100 dark:border-zinc-800/40">
                       <button
                         type="button"
                         disabled={isSaving}
@@ -1208,7 +1208,7 @@ export default function GastosVariosTable({
                       </table>
                     </div>
 
-                    <div className="pt-3 flex items-center justify-end gap-2.5">
+                    <div className="pt-3 flex items-center justify-center sm:justify-end gap-2.5">
                       <button
                         type="button"
                         onClick={() => setExtractedPreview([])}

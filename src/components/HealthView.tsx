@@ -567,6 +567,8 @@ interface HealthViewProps {
   /** Cambia (a cualquier valor distinto del anterior) para abrir automáticamente el formulario
    *  de "Agregar Medicamento" — usado por el botón "Agendar" de Inicio. */
   autoOpenQuickAdd?: number;
+  /** Fecha del filtro de calendario de Inicio al tocar "Agendar", si había una — se precarga acá. */
+  autoOpenQuickAddDate?: string;
   onQuickAddHandled?: () => void;
   /** Id de un medicamento puntual a editar. Usado por el botón de lápiz de Inicio. */
   autoOpenEditId?: string;
@@ -658,6 +660,7 @@ export default function HealthView({
   onOpenSettings,
   itemsIShared = [],
   autoOpenQuickAdd,
+  autoOpenQuickAddDate,
   onQuickAddHandled,
   autoOpenEditId,
   autoOpenEditNonce,
@@ -2428,6 +2431,7 @@ export default function HealthView({
   useEffect(() => {
     if (!autoOpenQuickAdd) return;
     openAddModal();
+    if (autoOpenQuickAddDate) setDetFechaInicio(autoOpenQuickAddDate);
     onQuickAddHandled?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoOpenQuickAdd]);
@@ -7040,7 +7044,7 @@ export default function HealthView({
                     </div>
                   </div>
 
-                  <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100 dark:border-zinc-800/40">
+                  <div className="pt-4 flex items-center justify-center sm:justify-end gap-3 border-t border-slate-100 dark:border-zinc-800/40">
                     <button
                       type="button"
                       disabled={isSaving}
@@ -7323,7 +7327,7 @@ export default function HealthView({
                   />
                 </div>
 
-                <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100 dark:border-zinc-800/40">
+                <div className="pt-4 flex items-center justify-center sm:justify-end gap-3 border-t border-slate-100 dark:border-zinc-800/40">
                   <button
                     type="button"
                     disabled={isSaving}
@@ -7463,7 +7467,7 @@ export default function HealthView({
                     />
                   </div>
 
-                  <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100 dark:border-zinc-800/40">
+                  <div className="pt-4 flex items-center justify-center sm:justify-end gap-3 border-t border-slate-100 dark:border-zinc-800/40">
                     <button
                       type="button"
                       disabled={isSaving}
@@ -7619,7 +7623,7 @@ export default function HealthView({
                     </div>
                   </div>
 
-                  <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100 dark:border-zinc-800/40">
+                  <div className="pt-4 flex items-center justify-center sm:justify-end gap-3 border-t border-slate-100 dark:border-zinc-800/40">
                     <button
                       type="button"
                       disabled={isSaving}
@@ -7901,7 +7905,7 @@ export default function HealthView({
                     </div>
                   )}
                   
-                  <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100 dark:border-zinc-800/40">
+                  <div className="pt-4 flex items-center justify-center sm:justify-end gap-3 border-t border-slate-100 dark:border-zinc-800/40">
                     <button
                       type="button"
                       disabled={isSaving}
@@ -8118,7 +8122,7 @@ export default function HealthView({
                       />
                     </div>
                   </div>
-                  <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100 dark:border-zinc-800/40">
+                  <div className="pt-4 flex items-center justify-center sm:justify-end gap-3 border-t border-slate-100 dark:border-zinc-800/40">
                     <button
                       type="button"
                       disabled={isSaving}
@@ -8398,7 +8402,7 @@ export default function HealthView({
                     </div>
                   </div>
 
-                  <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100 dark:border-zinc-800/40">
+                  <div className="pt-4 flex items-center justify-center sm:justify-end gap-3 border-t border-slate-100 dark:border-zinc-800/40">
                     <button
                       type="button"
                       disabled={isSaving}
@@ -8519,7 +8523,7 @@ export default function HealthView({
                   />
                 </div>
 
-                <div className="flex items-center justify-end gap-2.5 pt-2">
+                <div className="flex items-center justify-center sm:justify-end gap-2.5 pt-2">
                   <button
                     type="button"
                     disabled={isSaving}
@@ -8651,7 +8655,7 @@ export default function HealthView({
                     ></textarea>
                   </div>
 
-                  <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100 dark:border-zinc-800/40">
+                  <div className="pt-4 flex items-center justify-center sm:justify-end gap-3 border-t border-slate-100 dark:border-zinc-800/40">
                     <button
                       type="button"
                       disabled={isSaving}
@@ -8787,7 +8791,7 @@ export default function HealthView({
                     />
                   </div>
 
-                  <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100 dark:border-zinc-800/40">
+                  <div className="pt-4 flex items-center justify-center sm:justify-end gap-3 border-t border-slate-100 dark:border-zinc-800/40">
                     <button
                       type="button"
                       disabled={isSaving}

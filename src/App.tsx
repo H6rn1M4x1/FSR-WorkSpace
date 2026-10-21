@@ -138,6 +138,7 @@ export default function App() {
   // este botón. El nonce (Date.now()) es lo que dispara el efecto aunque se pida la misma
   // categoría dos veces seguidas.
   const [quickAddNonce, setQuickAddNonce] = useState<number | undefined>(undefined);
+  const [quickAddDate, setQuickAddDate] = useState<string | undefined>(undefined);
   const [subPanelRows, setSubPanelRows] = useState<NavPanelRow[] | null>(null);
   const [darkMode, setDarkMode] = useState<boolean>(() => AestheticStorageService.getDarkMode());
   const [backgroundStyle, setBackgroundStyle] = useState<"dither" | "pixelblast" | "plasma">(() => AestheticStorageService.getBackgroundStyle());
@@ -348,13 +349,21 @@ export default function App() {
     salud: { tab: "health", subTab: "medicamentos" },
     comidas: { tab: "meals", subTab: "organizacion_semanal" },
   } as const;
-  const handleQuickAdd = (category: keyof typeof QUICK_ADD_TARGETS) => {
+  // Si en Inicio había una fecha filtrada en el calendario al tocar "Agendar", se la pasamos a
+  // la sección destino para que precargue esa fecha en su formulario de "nuevo" en vez de la de
+  // hoy — es la fecha que el usuario ya eligió, tiene sentido que sea la del ítem que está
+  // por agendar.
+  const handleQuickAdd = (category: keyof typeof QUICK_ADD_TARGETS, date?: string) => {
     const target = QUICK_ADD_TARGETS[category];
     handleTabChange(target.tab);
     setActiveSubTab(target.subTab);
+    setQuickAddDate(date);
     setQuickAddNonce(Date.now());
   };
-  const handleQuickAddHandled = () => setQuickAddNonce(undefined);
+  const handleQuickAddHandled = () => {
+    setQuickAddNonce(undefined);
+    setQuickAddDate(undefined);
+  };
 
   // Botón de lápiz en cada tarjeta de la Agenda de Inicio — mismo mecanismo que "Agendar", pero
   // apunta al formulario de EDICIÓN de un ítem puntual en vez de al de "nuevo".
@@ -2461,6 +2470,7 @@ export default function App() {
                   activeSubTab={activeSubTab}
                   onSubTabChange={setActiveSubTab}
                   autoOpenQuickAdd={quickAddNonce}
+                  autoOpenQuickAddDate={quickAddDate}
                   onQuickAddHandled={handleQuickAddHandled}
                   autoOpenEditId={quickEditTarget?.id}
                   autoOpenEditNonce={quickEditTarget?.nonce}
@@ -2490,6 +2500,7 @@ export default function App() {
                   activeSubTab={activeSubTab}
                   onSubTabChange={setActiveSubTab}
                   autoOpenQuickAdd={quickAddNonce}
+                  autoOpenQuickAddDate={quickAddDate}
                   onQuickAddHandled={handleQuickAddHandled}
                   autoOpenEditId={quickEditTarget?.id}
                   autoOpenEditNonce={quickEditTarget?.nonce}
@@ -2528,6 +2539,7 @@ export default function App() {
                   activeSubTab={activeSubTab}
                   onSubTabChange={setActiveSubTab}
                   autoOpenQuickAdd={quickAddNonce}
+                  autoOpenQuickAddDate={quickAddDate}
                   onQuickAddHandled={handleQuickAddHandled}
                   autoOpenEditId={quickEditTarget?.id}
                   autoOpenEditNonce={quickEditTarget?.nonce}
@@ -2556,6 +2568,7 @@ export default function App() {
                   activeSubTab={activeSubTab}
                   onSubTabChange={setActiveSubTab}
                   autoOpenQuickAdd={quickAddNonce}
+                  autoOpenQuickAddDate={quickAddDate}
                   onQuickAddHandled={handleQuickAddHandled}
                   autoOpenEditId={quickEditTarget?.id}
                   autoOpenEditNonce={quickEditTarget?.nonce}
@@ -2603,6 +2616,7 @@ export default function App() {
                   }}
                   onOpenSettings={() => setIsUserSettingsOpen(true)}
                   autoOpenQuickAdd={quickAddNonce}
+                  autoOpenQuickAddDate={quickAddDate}
                   onQuickAddHandled={handleQuickAddHandled}
                   autoOpenEditId={quickEditTarget?.id}
                   autoOpenEditNonce={quickEditTarget?.nonce}
