@@ -2536,6 +2536,7 @@ export default function AcademicView({
                 {/* Material de Estudio: carpetas de Drive fijadas con seguimiento de avance */}
                 <StudyMaterialBlock
                   darkMode={darkMode}
+                  userId={activeUserId}
                   eligibleMaterias={eligibleMateriaNames}
                   allMateriaNames={allMateriaNames}
                   pinnedFolders={pinnedStudyFolders}

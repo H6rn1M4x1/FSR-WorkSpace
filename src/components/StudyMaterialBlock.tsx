@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import AnimatedFolder from "./AnimatedFolder";
 import { googleSignIn, getAccessToken, getAccessTokenSync, initAuth } from "../lib/supabase";
+import { saveItemToFirestore, deleteItemFromFirestore } from "../lib/firestoreSyncService";
 import { PinnedStudyFolder, CompletedStudyFile } from "../types";
 import { StudyProgressBarChart } from "./AcademicCharts";
 import { AnimatedNumber } from "./AnimatedNumber";
@@ -27,6 +28,10 @@ interface DriveFileLite {
 
 interface StudyMaterialBlockProps {
   darkMode: boolean;
+  // Id del usuario activo, para persistir los fijados/progreso en Firestore (igual que el
+  // resto de la app: sin esto, los cambios solo viven en el estado local de React y un
+  // refetch desde el servidor — p.ej. el poll de seguridad cada 60s — los vuelve a pisar).
+  userId: string;
   // Nombres de materias elegibles (en minúscula) para auto-fijado automático, con el nombre
   // "lindo" (tal como figura en materiasInfo) ya resuelto para usar como etiqueta.
   eligibleMaterias: Map<string, string>;
@@ -192,8 +197,15 @@ function PinnedFolderCard({
         darkMode ? "bg-black/40 border-zinc-800/70" : "bg-slate-50 border-zinc-150"
       }`}
     >
-      <div className="flex items-center gap-3">
-        <AnimatedFolder size={34} isHovered={hovered} className="text-primary shrink-0" />
+      <div className="flex items-center gap-4">
+        {/* AnimatedFolder dibuja sus "papeles" con overflow-visible para que la apertura 3D se
+            vea completa; al hover, suben y se agrandan lo suficiente como para acercarse al
+            texto de al lado en una fila tan angosta. Este wrapper recorta ese excedente a la
+            caja del ícono sin tocar el componente (que en otros usos sí se beneficia del
+            overflow), y el gap de al lado se agranda un poco para dejarle aire de sobra. */}
+        <div className="relative shrink-0 overflow-hidden rounded-md" style={{ width: 34, height: 34 }}>
+          <AnimatedFolder size={34} isHovered={hovered} className="text-primary" />
+        </div>
         <button
           type="button"
           onClick={() => setExpanded((e) => !e)}
@@ -296,6 +308,7 @@ function PinnedFolderCard({
 
 export function StudyMaterialBlock({
   darkMode,
+  userId,
   eligibleMaterias,
   allMateriaNames,
   pinnedFolders,
@@ -387,6 +400,11 @@ export function StudyMaterialBlock({
       );
       setScanMeta({ rootFound, visitedCount: visitedFolderNames.length, hadErrors });
       if (matches.length > 0) {
+        // Guarda cada carpeta encontrada en Firestore ANTES de reflejarla en el estado local.
+        // Si esto se omite, el fijado solo vive en memoria: en cuanto el poll de seguridad de
+        // App.tsx (cada 60s) vuelve a traer "pinned_study_folders" del servidor, lo pisa con lo
+        // que de verdad hay guardado (nada) y la carpeta recién encontrada desaparece sola.
+        await Promise.all(matches.map((m) => saveItemToFirestore(userId, "pinned_study_folders", m)));
         setPinnedFolders((prev) => {
           const existingIds = new Set(prev.map((p) => p.folderId));
           return [...prev, ...matches.filter((m) => !existingIds.has(m.folderId))];
@@ -394,8 +412,8 @@ export function StudyMaterialBlock({
       }
     } catch (err: any) {
       // A diferencia de antes, el error ya no se traga en silencio: si el escaneo automático
-      // falla de verdad (token vencido, permisos, etc.) se muestra para poder diagnosticarlo, en
-      // vez de que parezca que "se buscó bien y no había nada".
+      // falla de verdad (token vencido, permisos, guardado en Firestore, etc.) se muestra para
+      // poder diagnosticarlo, en vez de que parezca que "se buscó bien y no había nada".
       setScanError(err?.message || "No se pudo buscar materias en Drive.");
     } finally {
       setAutoPinning(false);
@@ -415,14 +433,14 @@ export function StudyMaterialBlock({
   const togglePin = (folder: DriveFolderLite) => {
     const isPinned = pinnedFolders.some((p) => p.folderId === folder.id);
     if (isPinned) {
+      deleteItemFromFirestore(userId, "pinned_study_folders", folder.id).catch(() => {});
       setPinnedFolders((prev) => prev.filter((p) => p.folderId !== folder.id));
       return;
     }
     const materiaName = allMateriaNames.get(normalizeMateriaName(folder.name)) || folder.name;
-    setPinnedFolders((prev) => [
-      ...prev,
-      { id: folder.id, folderId: folder.id, folderName: folder.name, materiaName },
-    ]);
+    const newPin: PinnedStudyFolder = { id: folder.id, folderId: folder.id, folderName: folder.name, materiaName };
+    saveItemToFirestore(userId, "pinned_study_folders", newPin).catch(() => {});
+    setPinnedFolders((prev) => [...prev, newPin]);
   };
 
   const loadFilesFor = async (folderId: string) => {
@@ -453,12 +471,19 @@ export function StudyMaterialBlock({
   }, [accessToken, pinnedFolders]);
 
   const toggleFileCompleted = (fileId: string) => {
+    const existing = completedFiles.find((c) => c.fileId === fileId);
+    const updated: CompletedStudyFile = existing
+      ? { ...existing, completed: !existing.completed }
+      : { id: fileId, fileId, completed: true };
+    saveItemToFirestore(userId, "completed_study_files", updated).catch(() => {});
     setCompletedFiles((prev) => {
-      const existing = prev.find((c) => c.fileId === fileId);
-      if (existing) {
-        return prev.map((c) => (c.fileId === fileId ? { ...c, completed: !c.completed } : c));
+      const idx = prev.findIndex((c) => c.fileId === fileId);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = updated;
+        return next;
       }
-      return [...prev, { id: fileId, fileId, completed: true }];
+      return [...prev, updated];
     });
   };
 
@@ -617,7 +642,10 @@ export function StudyMaterialBlock({
                 driveConnected={!!accessToken}
                 completedFiles={completedFiles}
                 progress={progressFor(folder.folderId)}
-                onUnpin={() => setPinnedFolders((prev) => prev.filter((p) => p.folderId !== folder.folderId))}
+                onUnpin={() => {
+                  deleteItemFromFirestore(userId, "pinned_study_folders", folder.id).catch(() => {});
+                  setPinnedFolders((prev) => prev.filter((p) => p.folderId !== folder.folderId));
+                }}
                 onToggleFile={toggleFileCompleted}
                 darkMode={darkMode}
               />
