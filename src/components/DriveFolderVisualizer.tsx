@@ -51,6 +51,8 @@ import {
   Mic,
   Volume2,
   VolumeX,
+  CircleCheckBig,
+  CirclePlus,
 } from "lucide-react";
 import {
   googleSignIn,
@@ -67,6 +69,8 @@ import {
   subscribeToCategory,
   refetchCategory,
 } from "../lib/firestoreSyncService";
+import { normalizeMateriaName } from "./StudyMaterialBlock";
+import { PinnedStudyFolder, CompletedStudyFile } from "../types";
 
 interface GoogleDriveFile {
   id: string;
@@ -379,10 +383,30 @@ const renderMarkdown = (text: string) => {
 
 interface DriveFolderVisualizerProps {
   darkMode: boolean;
+  userId: string;
+  // Nombre "lindo" de cada materia (tal como figura en materiasInfo), para resolver la etiqueta
+  // al fijar a mano una carpeta cuyo nombre coincide con una materia.
+  allMateriaNames: Map<string, string>;
+  pinnedFolders: PinnedStudyFolder[];
+  setPinnedFolders: React.Dispatch<React.SetStateAction<PinnedStudyFolder[]>>;
+  completedFiles: CompletedStudyFile[];
+  setCompletedFiles: React.Dispatch<React.SetStateAction<CompletedStudyFile[]>>;
+  // Pedido de "Material de Estudio" para abrir directamente una carpeta ya fijada: al cambiar,
+  // navega ahí (reconstruyendo breadcrumbs desde la raíz) y confirma el pedido con onJumpHandled.
+  jumpToFolder?: { id: string; name: string } | null;
+  onJumpHandled?: () => void;
 }
 
 export default function DriveFolderVisualizer({
   darkMode,
+  userId,
+  allMateriaNames,
+  pinnedFolders,
+  setPinnedFolders,
+  completedFiles,
+  setCompletedFiles,
+  jumpToFolder,
+  onJumpHandled,
 }: DriveFolderVisualizerProps) {
   const [accessToken, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<any>(null);
@@ -1503,6 +1527,72 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
     }
     setCurrentFolderId(folderId);
     setSearchQuery("");
+  };
+
+  // "Material de Estudio" manda a abrir acá una carpeta ya fijada (las carpetas ahí son solo
+  // visuales). Espera a que facultadFolderId ya esté resuelto para no pisar esto con el folder
+  // raíz que pone initFacultadFolder() al montar, y reconstruye un breadcrumb corto (raíz +
+  // destino) ya que PinnedStudyFolder no guarda el camino completo de carpetas intermedias.
+  useEffect(() => {
+    if (!jumpToFolder || !accessToken || !facultadFolderId) return;
+    if (currentFolderId === jumpToFolder.id) {
+      onJumpHandled?.();
+      return;
+    }
+    setBreadcrumbs((prev) => {
+      const root = prev[0];
+      if (root && root.id !== jumpToFolder.id) {
+        return [root, { id: jumpToFolder.id, name: jumpToFolder.name }];
+      }
+      return [{ id: jumpToFolder.id, name: jumpToFolder.name }];
+    });
+    setCurrentFolderId(jumpToFolder.id);
+    setSearchQuery("");
+    onJumpHandled?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jumpToFolder, accessToken, facultadFolderId]);
+
+  // Fijado de carpetas y selección de "archivos principales" para el seguimiento de avance de
+  // "Material de Estudio" — vive acá (y no en Material de Estudio) porque este es el único lugar
+  // donde se navega el árbol real de Drive.
+  const isFolderPinned = (folderId: string) => pinnedFolders.some((p) => p.folderId === folderId);
+
+  const togglePinFolder = (file: GoogleDriveFile) => {
+    if (isFolderPinned(file.id)) {
+      deleteItemFromFirestore(userId, "pinned_study_folders", file.id).catch(() => {});
+      setPinnedFolders((prev) => prev.filter((p) => p.folderId !== file.id));
+      return;
+    }
+    const materiaName = allMateriaNames.get(normalizeMateriaName(file.name)) || file.name;
+    const newPin: PinnedStudyFolder = { id: file.id, folderId: file.id, folderName: file.name, materiaName };
+    saveItemToFirestore(userId, "pinned_study_folders", newPin).catch(() => {});
+    setPinnedFolders((prev) => [...prev, newPin]);
+  };
+
+  // Un archivo solo puede marcarse como "principal" (y luego como estudiado) dentro de una
+  // carpeta que ya está fijada — si la carpeta no se sigue en "Material de Estudio", marcar sus
+  // archivos no tendría ningún efecto visible.
+  const isCurrentFolderPinned = !!currentFolderId && isFolderPinned(currentFolderId);
+  const isFilePrincipal = (fileId: string) => completedFiles.some((c) => c.fileId === fileId);
+  const isFileCompleted = (fileId: string) => !!completedFiles.find((c) => c.fileId === fileId)?.completed;
+
+  const toggleFilePrincipal = (fileId: string) => {
+    if (isFilePrincipal(fileId)) {
+      deleteItemFromFirestore(userId, "completed_study_files", fileId).catch(() => {});
+      setCompletedFiles((prev) => prev.filter((c) => c.fileId !== fileId));
+      return;
+    }
+    const newEntry: CompletedStudyFile = { id: fileId, fileId, completed: false };
+    saveItemToFirestore(userId, "completed_study_files", newEntry).catch(() => {});
+    setCompletedFiles((prev) => [...prev, newEntry]);
+  };
+
+  const toggleFileStudied = (fileId: string) => {
+    const existing = completedFiles.find((c) => c.fileId === fileId);
+    if (!existing) return;
+    const updated: CompletedStudyFile = { ...existing, completed: !existing.completed };
+    saveItemToFirestore(userId, "completed_study_files", updated).catch(() => {});
+    setCompletedFiles((prev) => prev.map((c) => (c.fileId === fileId ? updated : c)));
   };
 
   // Context Menu and clipboard helper methods
@@ -2842,12 +2932,72 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
                       >
                         {/* Top part: Icon & Menu */}
                         <div className="flex items-start justify-between">
-                          <div className="p-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-950/50 border border-zinc-200/50 dark:border-zinc-800/30">
+                          <div className="relative p-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-950/50 border border-zinc-200/50 dark:border-zinc-800/30">
                             {getFileIcon(file.mimeType, hoveredFileId === file.id)}
+                            {file.mimeType === "application/vnd.google-apps.folder" && isFolderPinned(file.id) && (
+                              <span className="absolute -top-1.5 -right-1.5 p-0.5 rounded-full bg-primary text-white dark:text-blue-950 shadow-sm">
+                                <Pin className="w-2.5 h-2.5 fill-current" />
+                              </span>
+                            )}
                           </div>
 
                           {/* Action buttons inside card */}
                           <div className="flex gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                            {file.mimeType === "application/vnd.google-apps.folder" ? (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  togglePinFolder(file);
+                                }}
+                                className={`p-1.5 rounded-md cursor-pointer ${
+                                  isFolderPinned(file.id)
+                                    ? "text-primary hover:bg-primary/10"
+                                    : "hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-primary"
+                                }`}
+                                title={isFolderPinned(file.id) ? "Dejar de fijar (sacar de Material de Estudio)" : "Fijar (seguir en Material de Estudio)"}
+                              >
+                                <Pin className={`w-3 h-3 ${isFolderPinned(file.id) ? "fill-current" : ""}`} />
+                              </button>
+                            ) : (
+                              isCurrentFolderPinned && (
+                                <>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleFilePrincipal(file.id);
+                                    }}
+                                    className={`p-1.5 rounded-md cursor-pointer ${
+                                      isFilePrincipal(file.id)
+                                        ? "text-primary hover:bg-primary/10"
+                                        : "hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-primary"
+                                    }`}
+                                    title={isFilePrincipal(file.id) ? "Sacar de los archivos principales" : "Marcar como archivo principal"}
+                                  >
+                                    <Pin className={`w-3 h-3 ${isFilePrincipal(file.id) ? "fill-current" : ""}`} />
+                                  </button>
+                                  {isFilePrincipal(file.id) && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        toggleFileStudied(file.id);
+                                      }}
+                                      className={`p-1.5 rounded-md cursor-pointer ${
+                                        isFileCompleted(file.id)
+                                          ? "text-primary hover:bg-primary/10"
+                                          : "hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-primary"
+                                      }`}
+                                      title={isFileCompleted(file.id) ? "Marcar como no estudiado" : "Marcar como estudiado"}
+                                    >
+                                      {isFileCompleted(file.id) ? (
+                                        <CircleCheckBig className="w-3 h-3" />
+                                      ) : (
+                                        <CirclePlus className="w-3 h-3" />
+                                      )}
+                                    </button>
+                                  )}
+                                </>
+                              )
+                            )}
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -2957,6 +3107,14 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
                               >
                                 {file.name}
                               </span>
+                              {file.mimeType === "application/vnd.google-apps.folder" && isFolderPinned(file.id) && (
+                                <Pin className="w-3 h-3 text-primary fill-current shrink-0" />
+                              )}
+                              {file.mimeType !== "application/vnd.google-apps.folder" && isFilePrincipal(file.id) && (
+                                isFileCompleted(file.id)
+                                  ? <CircleCheckBig className="w-3 h-3 text-primary shrink-0" />
+                                  : <CirclePlus className="w-3 h-3 text-zinc-400 shrink-0" />
+                              )}
                             </td>
                             <td className="px-4 py-3.5 text-zinc-500 dark:text-zinc-400">
                               {formatDate(file.modifiedTime)}
@@ -2972,6 +3130,52 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
                               onClick={(e) => e.stopPropagation()}
                             >
                               <div className="flex items-center justify-end gap-1">
+                                {file.mimeType === "application/vnd.google-apps.folder" ? (
+                                  <button
+                                    onClick={() => togglePinFolder(file)}
+                                    className={`p-1.5 rounded-lg cursor-pointer ${
+                                      isFolderPinned(file.id)
+                                        ? "text-primary hover:bg-primary/10"
+                                        : "hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-primary"
+                                    }`}
+                                    title={isFolderPinned(file.id) ? "Dejar de fijar (sacar de Material de Estudio)" : "Fijar (seguir en Material de Estudio)"}
+                                  >
+                                    <Pin className={`w-3.5 h-3.5 ${isFolderPinned(file.id) ? "fill-current" : ""}`} />
+                                  </button>
+                                ) : (
+                                  isCurrentFolderPinned && (
+                                    <>
+                                      <button
+                                        onClick={() => toggleFilePrincipal(file.id)}
+                                        className={`p-1.5 rounded-lg cursor-pointer ${
+                                          isFilePrincipal(file.id)
+                                            ? "text-primary hover:bg-primary/10"
+                                            : "hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-primary"
+                                        }`}
+                                        title={isFilePrincipal(file.id) ? "Sacar de los archivos principales" : "Marcar como archivo principal"}
+                                      >
+                                        <Pin className={`w-3.5 h-3.5 ${isFilePrincipal(file.id) ? "fill-current" : ""}`} />
+                                      </button>
+                                      {isFilePrincipal(file.id) && (
+                                        <button
+                                          onClick={() => toggleFileStudied(file.id)}
+                                          className={`p-1.5 rounded-lg cursor-pointer ${
+                                            isFileCompleted(file.id)
+                                              ? "text-primary hover:bg-primary/10"
+                                              : "hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-primary"
+                                          }`}
+                                          title={isFileCompleted(file.id) ? "Marcar como no estudiado" : "Marcar como estudiado"}
+                                        >
+                                          {isFileCompleted(file.id) ? (
+                                            <CircleCheckBig className="w-3.5 h-3.5" />
+                                          ) : (
+                                            <CirclePlus className="w-3.5 h-3.5" />
+                                          )}
+                                        </button>
+                                      )}
+                                    </>
+                                  )
+                                )}
                                 <button
                                   onClick={() => {
                                     setRenameTarget(file);

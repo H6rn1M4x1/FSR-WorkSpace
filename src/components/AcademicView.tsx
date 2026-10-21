@@ -5,7 +5,7 @@ import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import { useBriefLoading } from "../hooks/useBriefLoading";
 import { TableSkeleton } from "./TableSkeleton";
 import { AnimatedNumber } from "./AnimatedNumber";
-import { AcademicRadarChart, AcademicGaugeChart, StudyProgressBarChart } from "./AcademicCharts";
+import { AcademicRadarChart, AcademicGaugeChart } from "./AcademicCharts";
 import { generateUniqueId } from "../utils/id";
 import React, { useState, useEffect } from "react";
 import { saveItemToFirestore, deleteItemFromFirestore } from "../lib/firestoreSyncService";
@@ -893,6 +893,14 @@ export default function AcademicView({
       setLocalActiveSubTab(propActiveSubTab as any);
     }
   }, [propActiveSubTab]);
+
+  // Carpeta pedida desde "Material de Estudio" para abrirla directamente en "Facultad" (ahí las
+  // carpetas de Material de Estudio son solo visuales, el fijado/desfijado real vive en Facultad).
+  const [jumpToFolder, setJumpToFolder] = useState<{ id: string; name: string } | null>(null);
+  const openFolderInFacultad = (folder: PinnedStudyFolder) => {
+    setJumpToFolder({ id: folder.folderId, name: folder.folderName });
+    setActiveSubTab("facultad");
+  };
 
   // Sub-tabs internal states
   const [planEstudioSubTab, setPlanEstudioSubTab] = useState<"plan_estudio" | "historia_academica">("plan_estudio");
@@ -2538,11 +2546,10 @@ export default function AcademicView({
                   darkMode={darkMode}
                   userId={activeUserId}
                   eligibleMaterias={eligibleMateriaNames}
-                  allMateriaNames={allMateriaNames}
                   pinnedFolders={pinnedStudyFolders}
                   setPinnedFolders={setPinnedStudyFolders}
                   completedFiles={completedStudyFiles}
-                  setCompletedFiles={setCompletedStudyFiles}
+                  onOpenInFacultad={openFolderInFacultad}
                 />
 
                 {/* Overview stats & Study timer */}
@@ -4080,7 +4087,17 @@ export default function AcademicView({
         })()}
 
           {activeSubTab === "facultad" && (
-            <DriveFolderVisualizer darkMode={darkMode} />
+            <DriveFolderVisualizer
+              darkMode={darkMode}
+              userId={activeUserId}
+              allMateriaNames={allMateriaNames}
+              pinnedFolders={pinnedStudyFolders}
+              setPinnedFolders={setPinnedStudyFolders}
+              completedFiles={completedStudyFiles}
+              setCompletedFiles={setCompletedStudyFiles}
+              jumpToFolder={jumpToFolder}
+              onJumpHandled={() => setJumpToFolder(null)}
+            />
           )}
         </motion.div>
       </AnimatePresence>

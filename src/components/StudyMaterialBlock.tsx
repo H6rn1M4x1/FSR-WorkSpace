@@ -1,20 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
-import { motion, AnimatePresence } from "motion/react";
-import {
-  BookMarked,
-  Pin,
-  PinOff,
-  CirclePlus,
-  CircleCheckBig,
-  Loader2,
-  ChevronDown,
-  RefreshCw,
-} from "lucide-react";
+import { motion } from "motion/react";
+import { BookMarked, Pin, Loader2, RefreshCw } from "lucide-react";
 import AnimatedFolder from "./AnimatedFolder";
 import { googleSignIn, getAccessToken, getAccessTokenSync, initAuth } from "../lib/supabase";
-import { saveItemToFirestore, deleteItemFromFirestore } from "../lib/firestoreSyncService";
+import { saveItemToFirestore } from "../lib/firestoreSyncService";
 import { PinnedStudyFolder, CompletedStudyFile } from "../types";
-import { StudyProgressBarChart } from "./AcademicCharts";
+import { StudyFolderProgressBar } from "./AcademicCharts";
 import { AnimatedNumber } from "./AnimatedNumber";
 
 interface DriveFolderLite {
@@ -35,11 +26,13 @@ interface StudyMaterialBlockProps {
   // Nombres de materias elegibles (en minúscula) para auto-fijado automático, con el nombre
   // "lindo" (tal como figura en materiasInfo) ya resuelto para usar como etiqueta.
   eligibleMaterias: Map<string, string>;
-  allMateriaNames: Map<string, string>;
   pinnedFolders: PinnedStudyFolder[];
   setPinnedFolders: React.Dispatch<React.SetStateAction<PinnedStudyFolder[]>>;
   completedFiles: CompletedStudyFile[];
-  setCompletedFiles: React.Dispatch<React.SetStateAction<CompletedStudyFile[]>>;
+  // Las carpetas acá son solo visuales: fijarlas/desfijarlas y elegir sus archivos principales
+  // se hace desde "Facultad" (que es donde además se navega el árbol real de Drive). Al tocar
+  // una carpeta, este callback la abre ahí directamente en vez de duplicar esa UI acá.
+  onOpenInFacultad: (folder: PinnedStudyFolder) => void;
 }
 
 // Normaliza un nombre de materia/carpeta para comparar: sin acentos/diacríticos, sin mayúsculas,
@@ -168,33 +161,29 @@ async function scanForEligibleSubjectFolders(
 function PinnedFolderCard({
   folder,
   files,
-  loadingFiles,
   driveConnected,
-  completedFiles,
   progress,
-  onUnpin,
-  onToggleFile,
+  onOpen,
   darkMode,
 }: {
   folder: PinnedStudyFolder;
   files: DriveFileLite[] | undefined;
-  loadingFiles: boolean;
   driveConnected: boolean;
-  completedFiles: CompletedStudyFile[];
   progress: number;
-  onUnpin: () => void;
-  onToggleFile: (fileId: string) => void;
+  onOpen: () => void;
   darkMode: boolean;
 }) {
   const [hovered, setHovered] = useState(false);
-  const [expanded, setExpanded] = useState(false);
 
   return (
-    <div
+    <button
+      type="button"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      className={`rounded-2xl border p-4 transition-colors ${
-        darkMode ? "bg-black/40 border-zinc-800/70" : "bg-slate-50 border-zinc-150"
+      onClick={onOpen}
+      title="Abrir en Facultad"
+      className={`w-full text-left rounded-2xl border p-4 transition-colors cursor-pointer ${
+        darkMode ? "bg-black/40 border-zinc-800/70 hover:bg-zinc-900/60" : "bg-slate-50 border-zinc-150 hover:bg-slate-100"
       }`}
     >
       <div className="flex items-center gap-4">
@@ -206,11 +195,7 @@ function PinnedFolderCard({
         <div className="relative shrink-0 overflow-hidden rounded-md" style={{ width: 34, height: 34 }}>
           <AnimatedFolder size={34} isHovered={hovered} className="text-primary" />
         </div>
-        <button
-          type="button"
-          onClick={() => setExpanded((e) => !e)}
-          className="min-w-0 flex-1 text-left cursor-pointer"
-        >
+        <div className="min-w-0 flex-1">
           <p className="text-xs font-extrabold truncate">{folder.materiaName}</p>
           <p className="text-[10px] text-zinc-500 font-medium">
             {files
@@ -219,23 +204,7 @@ function PinnedFolderCard({
                 ? "Cargando…"
                 : "Conectá Drive para ver el avance"}
           </p>
-        </button>
-        <button
-          type="button"
-          onClick={onUnpin}
-          title="Dejar de fijar carpeta"
-          className="p-1.5 rounded-full text-primary hover:bg-primary/10 transition-all cursor-pointer shrink-0"
-        >
-          <Pin className="w-4 h-4 fill-current" />
-        </button>
-        <button
-          type="button"
-          onClick={() => setExpanded((e) => !e)}
-          title={expanded ? "Ocultar archivos" : "Ver archivos"}
-          className="p-1.5 rounded-full text-zinc-400 hover:bg-primary/10 hover:text-primary transition-all cursor-pointer shrink-0"
-        >
-          <ChevronDown className={`w-4 h-4 transition-transform ${expanded ? "rotate-180" : ""}`} />
-        </button>
+        </div>
       </div>
 
       <div className={`mt-3 h-2 rounded-full overflow-hidden ${darkMode ? "bg-zinc-800" : "bg-zinc-200"}`}>
@@ -249,60 +218,7 @@ function PinnedFolderCard({
       <p className="text-[10px] mt-1 font-bold text-zinc-500">
         <AnimatedNumber value={progress} format={(n) => `${Math.round(n)}%`} /> estudiado
       </p>
-
-      <AnimatePresence initial={false}>
-        {expanded && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.25 }}
-            className="overflow-hidden"
-          >
-            <div className="mt-3 space-y-1.5 pt-3 border-t border-zinc-800/10 dark:border-zinc-800/50">
-              {loadingFiles && (
-                <div className="flex items-center gap-2 text-[10px] text-zinc-500 py-2">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Cargando archivos…</span>
-                </div>
-              )}
-              {!loadingFiles && !driveConnected && (
-                <p className="text-[10px] text-zinc-500 italic py-2">
-                  Conectá tu Google Drive para ver y marcar los archivos de esta carpeta.
-                </p>
-              )}
-              {!loadingFiles && files && files.length === 0 && (
-                <p className="text-[10px] text-zinc-500 italic py-2">Esta carpeta no tiene archivos.</p>
-              )}
-              {!loadingFiles &&
-                files?.map((file) => {
-                  const done = completedFiles.find((c) => c.fileId === file.id)?.completed;
-                  return (
-                    <button
-                      key={file.id}
-                      type="button"
-                      onClick={() => onToggleFile(file.id)}
-                      className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-left cursor-pointer transition-all ${
-                        darkMode ? "hover:bg-zinc-800/70" : "hover:bg-white"
-                      }`}
-                      title={done ? "Marcar como no estudiado" : "Marcar como estudiado"}
-                    >
-                      <span className="text-[10px] font-semibold truncate text-zinc-600 dark:text-zinc-300">
-                        {file.name}
-                      </span>
-                      {done ? (
-                        <CircleCheckBig className="w-4 h-4 text-primary shrink-0" />
-                      ) : (
-                        <CirclePlus className="w-4 h-4 text-zinc-400 shrink-0" />
-                      )}
-                    </button>
-                  );
-                })}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
+    </button>
   );
 }
 
@@ -310,11 +226,10 @@ export function StudyMaterialBlock({
   darkMode,
   userId,
   eligibleMaterias,
-  allMateriaNames,
   pinnedFolders,
   setPinnedFolders,
   completedFiles,
-  setCompletedFiles,
+  onOpenInFacultad,
 }: StudyMaterialBlockProps) {
   // Arranca con el token ya leído de forma SÍNCRONA (localStorage/caché en memoria de
   // firebase.ts) en vez de null — así, si ya hay sesión de Drive conectada en otra parte de la
@@ -323,12 +238,9 @@ export function StudyMaterialBlock({
   const [accessToken, setAccessToken] = useState<string | null>(() => getAccessTokenSync());
   const [connecting, setConnecting] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
-  const [rootFolders, setRootFolders] = useState<DriveFolderLite[] | null>(null);
-  const [loadingFolders, setLoadingFolders] = useState(false);
   const [autoPinning, setAutoPinning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
   const [scanMeta, setScanMeta] = useState<{ rootFound: boolean; visitedCount: number; hadErrors: boolean } | null>(null);
-  const [browserOpen, setBrowserOpen] = useState(false);
   const [filesByFolder, setFilesByFolder] = useState<Record<string, DriveFileLite[]>>({});
   const [loadingFilesFor, setLoadingFilesFor] = useState<Set<string>>(new Set());
   const autoPinDoneRef = useRef(false);
@@ -364,24 +276,6 @@ export function StudyMaterialBlock({
     } catch (err: any) {
       setConnectError(err?.message || "No se pudo conectar con Google Drive.");
       setConnecting(false);
-    }
-  };
-
-  // Carga las subcarpetas de primer nivel de "1 - Facultad" (categorías como "3 - Cursando"),
-  // usadas solo para el selector manual de "Fijar carpetas" más abajo.
-  const loadRootFolders = async (token: string) => {
-    setLoadingFolders(true);
-    try {
-      const rootId = await findFacultadRootId(token);
-      if (!rootId) {
-        setRootFolders([]);
-        return;
-      }
-      setRootFolders(await listChildFolders(rootId, token));
-    } catch {
-      setRootFolders([]);
-    } finally {
-      setLoadingFolders(false);
     }
   };
 
@@ -422,26 +316,12 @@ export function StudyMaterialBlock({
 
   useEffect(() => {
     if (!accessToken) return;
-    loadRootFolders(accessToken);
     if (!autoPinDoneRef.current) {
       autoPinDoneRef.current = true;
       runAutoScan(accessToken);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accessToken]);
-
-  const togglePin = (folder: DriveFolderLite) => {
-    const isPinned = pinnedFolders.some((p) => p.folderId === folder.id);
-    if (isPinned) {
-      deleteItemFromFirestore(userId, "pinned_study_folders", folder.id).catch(() => {});
-      setPinnedFolders((prev) => prev.filter((p) => p.folderId !== folder.id));
-      return;
-    }
-    const materiaName = allMateriaNames.get(normalizeMateriaName(folder.name)) || folder.name;
-    const newPin: PinnedStudyFolder = { id: folder.id, folderId: folder.id, folderName: folder.name, materiaName };
-    saveItemToFirestore(userId, "pinned_study_folders", newPin).catch(() => {});
-    setPinnedFolders((prev) => [...prev, newPin]);
-  };
 
   const loadFilesFor = async (folderId: string) => {
     if (!accessToken || filesByFolder[folderId] || loadingFilesFor.has(folderId)) return;
@@ -470,46 +350,33 @@ export function StudyMaterialBlock({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accessToken, pinnedFolders]);
 
-  const toggleFileCompleted = (fileId: string) => {
-    const existing = completedFiles.find((c) => c.fileId === fileId);
-    const updated: CompletedStudyFile = existing
-      ? { ...existing, completed: !existing.completed }
-      : { id: fileId, fileId, completed: true };
-    saveItemToFirestore(userId, "completed_study_files", updated).catch(() => {});
-    setCompletedFiles((prev) => {
-      const idx = prev.findIndex((c) => c.fileId === fileId);
-      if (idx >= 0) {
-        const next = [...prev];
-        next[idx] = updated;
-        return next;
-      }
-      return [...prev, updated];
-    });
-  };
-
+  // El % de avance se calcula solo sobre los archivos "principales" de la carpeta — los que se
+  // eligieron a mano en Facultad (cualquier archivo con una entrada en completedFiles, exista o
+  // no el id entre los archivos recién listados acá, cuenta como principal) — no sobre el total
+  // de archivos de la carpeta, que puede incluir material que no es para estudiar.
   const progressFor = (folderId: string): number => {
     const files = filesByFolder[folderId];
     if (!files || files.length === 0) return 0;
-    const done = files.filter((f) => completedFiles.find((c) => c.fileId === f.id)?.completed).length;
-    return (done / files.length) * 100;
+    const principal = files.filter((f) => completedFiles.some((c) => c.fileId === f.id));
+    if (principal.length === 0) return 0;
+    const done = principal.filter((f) => completedFiles.find((c) => c.fileId === f.id)?.completed).length;
+    return (done / principal.length) * 100;
   };
 
-  const barRows = pinnedFolders.map((f) => ({ materia: f.materiaName, donePercent: progressFor(f.folderId) }));
-
   const emptyStateMessage = (() => {
-    if (!accessToken) return 'Conectá tu Google Drive para fijar las carpetas de las materias que estás cursando.';
+    if (!accessToken) return 'Conectá tu Google Drive para ver el avance de las materias que estás cursando.';
     if (autoPinning) return "Buscando materias en tus carpetas de Drive…";
     if (scanError) return `No se pudo buscar en Drive: ${scanError}`;
     if (scanMeta && !scanMeta.rootFound) {
-      return 'No se encontró la carpeta "1 - Facultad" en tu Drive. Fijá alguna a mano desde el selector si el nombre es distinto.';
+      return 'No se encontró la carpeta "1 - Facultad" en tu Drive. Fijá alguna a mano desde "Facultad" si el nombre es distinto.';
     }
     if (scanMeta && scanMeta.visitedCount > 0) {
       const warning = scanMeta.hadErrors
         ? " (ojo: algunas subcarpetas no se pudieron leer, puede que falten resultados)"
         : "";
-      return `Se revisaron ${scanMeta.visitedCount} carpetas dentro de "1 - Facultad" y ninguna coincide con una materia que se pueda rendir o cursar.${warning} Fijá alguna a mano si hace falta.`;
+      return `Se revisaron ${scanMeta.visitedCount} carpetas dentro de "1 - Facultad" y ninguna coincide con una materia que se pueda rendir o cursar.${warning} Fijá alguna a mano desde "Facultad" si hace falta.`;
     }
-    return 'No se encontró ninguna carpeta con el nombre de una materia que se pueda rendir o cursar. Fijá alguna a mano desde "1 - Facultad" si hace falta.';
+    return 'No se encontró ninguna carpeta con el nombre de una materia que se pueda rendir o cursar. Fijá alguna a mano desde "Facultad" si hace falta.';
   })();
 
   return (
@@ -535,28 +402,15 @@ export function StudyMaterialBlock({
             <span>Conectar con Drive</span>
           </button>
         ) : (
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                loadRootFolders(accessToken);
-                runAutoScan(accessToken);
-              }}
-              disabled={autoPinning}
-              title="Volver a buscar materias en Drive"
-              className="p-1.5 rounded-full text-zinc-400 hover:bg-primary/10 hover:text-primary transition-all cursor-pointer disabled:opacity-50"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${loadingFolders || autoPinning ? "animate-spin" : ""}`} />
-            </button>
-            <button
-              type="button"
-              onClick={() => setBrowserOpen((o) => !o)}
-              className="px-3 py-1.5 rounded-full bg-primary/10 hover:bg-primary/20 text-primary text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
-            >
-              {browserOpen ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5" />}
-              <span>{browserOpen ? "Ocultar carpetas" : "Fijar carpetas"}</span>
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => runAutoScan(accessToken)}
+            disabled={autoPinning}
+            title="Volver a buscar materias en Drive"
+            className="p-1.5 rounded-full text-zinc-400 hover:bg-primary/10 hover:text-primary transition-all cursor-pointer disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${autoPinning ? "animate-spin" : ""}`} />
+          </button>
         )}
       </div>
 
@@ -564,98 +418,41 @@ export function StudyMaterialBlock({
         <p className="text-[10px] text-red-500 font-semibold mb-3">{connectError}</p>
       )}
 
-      {accessToken && (
-        <AnimatePresence initial={false}>
-          {browserOpen && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.25 }}
-              className="overflow-hidden"
-            >
-              <div
-                className={`mb-5 p-3 rounded-2xl border max-h-56 overflow-y-auto space-y-1 ${
-                  darkMode ? "bg-black/40 border-zinc-800/70" : "bg-slate-50 border-zinc-150"
-                }`}
-              >
-                {loadingFolders && (
-                  <div className="flex items-center gap-2 text-[10px] text-zinc-500 py-2 px-1">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>Cargando carpetas de "1 - Facultad"…</span>
-                  </div>
-                )}
-                {!loadingFolders && rootFolders?.length === 0 && (
-                  <p className="text-[10px] text-zinc-500 italic px-1 py-2">
-                    No se encontraron subcarpetas dentro de "1 - Facultad".
-                  </p>
-                )}
-                {!loadingFolders &&
-                  rootFolders?.map((folder) => {
-                    const isPinned = pinnedFolders.some((p) => p.folderId === folder.id);
-                    return (
-                      <button
-                        key={folder.id}
-                        type="button"
-                        onClick={() => togglePin(folder)}
-                        className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-left cursor-pointer transition-all ${
-                          darkMode ? "hover:bg-zinc-800/70" : "hover:bg-white"
-                        }`}
-                      >
-                        <span className="text-xs font-semibold truncate">{folder.name}</span>
-                        {isPinned ? (
-                          <Pin className="w-4 h-4 text-primary fill-current shrink-0" />
-                        ) : (
-                          <PinOff className="w-4 h-4 text-zinc-400 shrink-0" />
-                        )}
-                      </button>
-                    );
-                  })}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-x-6 gap-y-3">
+        {autoPinning && (
+          <div className="lg:col-span-4 flex items-center gap-2 text-[10px] text-zinc-500 font-medium px-1 pb-1">
+            <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+            <span>Buscando materias que se pueden rendir o cursar en tus carpetas de Drive…</span>
+          </div>
+        )}
+        {pinnedFolders.length === 0 ? (
+          <div className="lg:col-span-4 flex flex-col items-center justify-center text-center py-10 gap-2">
+            <AnimatedFolder size={36} className="text-zinc-400" />
+            <p className={`text-xs italic max-w-sm ${scanError ? "text-red-500 font-semibold" : "text-zinc-500"}`}>
+              {emptyStateMessage}
+            </p>
+          </div>
+        ) : (
+          pinnedFolders.map((folder) => (
+            <React.Fragment key={folder.folderId}>
+              <div className="lg:col-span-3">
+                <PinnedFolderCard
+                  folder={folder}
+                  files={filesByFolder[folder.folderId]}
+                  driveConnected={!!accessToken}
+                  progress={progressFor(folder.folderId)}
+                  onOpen={() => onOpenInFacultad(folder)}
+                  darkMode={darkMode}
+                />
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        <div className="lg:col-span-3 space-y-3">
-          {autoPinning && (
-            <div className="flex items-center gap-2 text-[10px] text-zinc-500 font-medium px-1 pb-1">
-              <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
-              <span>Buscando materias que se pueden rendir o cursar en tus carpetas de Drive…</span>
-            </div>
-          )}
-          {pinnedFolders.length === 0 ? (
-            <div className="flex flex-col items-center justify-center text-center py-10 gap-2">
-              <AnimatedFolder size={36} className="text-zinc-400" />
-              <p className={`text-xs italic max-w-sm ${scanError ? "text-red-500 font-semibold" : "text-zinc-500"}`}>
-                {emptyStateMessage}
-              </p>
-            </div>
-          ) : (
-            pinnedFolders.map((folder) => (
-              <PinnedFolderCard
-                key={folder.folderId}
-                folder={folder}
-                files={filesByFolder[folder.folderId]}
-                loadingFiles={loadingFilesFor.has(folder.folderId)}
-                driveConnected={!!accessToken}
-                completedFiles={completedFiles}
-                progress={progressFor(folder.folderId)}
-                onUnpin={() => {
-                  deleteItemFromFirestore(userId, "pinned_study_folders", folder.id).catch(() => {});
-                  setPinnedFolders((prev) => prev.filter((p) => p.folderId !== folder.folderId));
-                }}
-                onToggleFile={toggleFileCompleted}
-                darkMode={darkMode}
-              />
-            ))
-          )}
-        </div>
-
-        <div className="lg:col-span-1 flex flex-col">
-          <StudyProgressBarChart rows={barRows} darkMode={darkMode} />
-        </div>
+              {/* Misma fila de grilla que la tarjeta de al lado: así la barrita queda siempre
+                  centrada verticalmente con su carpeta, sin importar cuánto mida la tarjeta. */}
+              <div className="lg:col-span-1">
+                <StudyFolderProgressBar percent={progressFor(folder.folderId)} darkMode={darkMode} />
+              </div>
+            </React.Fragment>
+          ))
+        )}
       </div>
     </div>
   );
