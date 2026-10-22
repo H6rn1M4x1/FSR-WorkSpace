@@ -26,6 +26,8 @@ import {
   Maximize,
   Paperclip,
   X,
+  Loader2,
+  ExternalLink,
 } from "lucide-react";
 import { StudyPlanTree, StudyPlanTreeNode } from "../types";
 import { layoutStudyPlanTree } from "../lib/studyPlanTree";
@@ -139,6 +141,7 @@ function FlowDiagram({
   nodes: planNodes,
   darkMode,
   jumpTarget,
+  focusedTopId,
   attachments,
   onNodeContextMenu,
   onNodeClick,
@@ -146,6 +149,9 @@ function FlowDiagram({
   nodes: StudyPlanTreeNode[];
   darkMode: boolean;
   jumpTarget: { id: string; nonce: number } | null;
+  // Solo para decidir CUÁNDO reencuadrar (ver el efecto de abajo) — no se usa para filtrar nodos,
+  // eso ya lo hizo el padre al armar `planNodes`.
+  focusedTopId: string | null;
   attachments: Record<string, { fileId: string; fileName: string }>;
   onNodeContextMenu: (event: React.MouseEvent, nodeId: string) => void;
   onNodeClick: (nodeId: string) => void;
@@ -173,10 +179,15 @@ function FlowDiagram({
   }, [planNodes, attachments]);
 
   // El fitView declarativo de ReactFlow solo corre una vez al montar — este efecto reencuadra
-  // cada vez que cambia el subconjunto de nodos visible (al enfocar/desenfocar una unidad).
+  // cada vez que cambia la unidad enfocada (clic en "Todas las unidades" o en una unidad del
+  // menú). A propósito depende de `focusedTopId` y NO de `planNodes`/`attachments`: esos objetos
+  // llegan nuevos en cada resync de Firestore (poll de 60s / listener en tiempo real) aunque el
+  // contenido sea el mismo, y reencuadrar en esos casos le pisaba al usuario el zoom/paneo manual
+  // que había hecho poco antes — por eso "a veces, al minuto, el zoom se vuelve para atrás".
   useEffect(() => {
     instanceRef.current?.fitView({ duration: 500, padding: 0.3 });
-  }, [planNodes]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusedTopId]);
 
   // Clic en un subtema del menú: centra y hace zoom específicamente sobre ESE nodo (más cerca
   // que un fitView del subárbol entero). Se dispara después del efecto de arriba en el mismo
@@ -410,9 +421,23 @@ export function StudyPlanTreeView({
   const [focusedTopId, setFocusedTopId] = useState<string | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [jumpTarget, setJumpTarget] = useState<{ id: string; nonce: number } | null>(null);
-  const [rightPanel, setRightPanel] = useState<RightPanelContent | null>(null);
+  // Abierto por defecto mostrando el programa original — el usuario lo puede colapsar con el
+  // botón de arriba a la derecha o el de cerrar del propio panel.
+  const [rightPanel, setRightPanel] = useState<RightPanelContent | null>(() => ({
+    kind: "original",
+    fileId: studyPlanTree.sourceFileId,
+    fileName: studyPlanTree.sourceFileName,
+  }));
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeId: string } | null>(null);
   const [attachPickerNode, setAttachPickerNode] = useState<StudyPlanTreeNode | null>(null);
+  // Si el panel arranca abierto no hay ninguna animación de ancho que esperar (arranca ya en su
+  // tamaño final) — solo las aperturas POSTERIORES (reabrir tras cerrar, primer adjunto de un
+  // tema) pasan por una animación real de 0 a 320px, y ESA es la que hay que esperar a que
+  // termine antes de montar el iframe: si arranca mientras el contenedor todavía mide 0px, el
+  // visor de Drive a veces queda renderizado en negro hasta forzar un remount (cerrar y reabrir
+  // el modal entero) — por eso "se quedó en negro, tuve que salir y volver a entrar".
+  const rightPanelWasOpenRef = useRef(true);
+  const [rightPanelReady, setRightPanelReady] = useState(true);
 
   const attachPicker = useDriveFilePicker(accessToken, folderId, folderName);
 
@@ -433,6 +458,19 @@ export function StudyPlanTreeView({
   }, [planNodes, focusedTopId]);
 
   const selectedId = jumpTarget?.id ?? focusedTopId;
+
+  useEffect(() => {
+    if (!rightPanel) {
+      rightPanelWasOpenRef.current = false;
+      setRightPanelReady(false);
+    } else if (rightPanelWasOpenRef.current) {
+      // Ya estaba abierto (se cambió de adjunto/original a otro contenido): el contenedor ya
+      // tiene su ancho final, no hay ninguna animación que esperar.
+      setRightPanelReady(true);
+    }
+    // Si se está recién abriendo desde cerrado, rightPanelReady queda en false hasta que
+    // onAnimationComplete (abajo, en el motion.div) avise que la animación de ancho terminó.
+  }, [rightPanel]);
 
   const toggleExpanded = (id: string) => {
     uiSounds.navigate();
@@ -457,6 +495,13 @@ export function StudyPlanTreeView({
       const topId = findTopAncestorId(planNodes, node.id);
       setFocusedTopId(topId);
       setJumpTarget({ id: node.id, nonce: Date.now() });
+    }
+    // Si el tema seleccionado (unidad o subtema) tiene un archivo adjunto, mostrarlo directo a la
+    // derecha — seleccionarlo desde el menú es la forma principal de navegar, no solo clickearlo
+    // en el diagrama.
+    const att = attachments[node.id];
+    if (att) {
+      setRightPanel({ kind: "attachment", fileId: att.fileId, fileName: att.fileName, nodeLabel: node.label });
     }
   };
 
@@ -574,6 +619,7 @@ export function StudyPlanTreeView({
             nodes={visibleNodes}
             darkMode={darkMode}
             jumpTarget={jumpTarget}
+            focusedTopId={focusedTopId}
             attachments={attachments}
             onNodeContextMenu={handleDiagramNodeContextMenu}
             onNodeClick={handleDiagramNodeClick}
@@ -581,10 +627,19 @@ export function StudyPlanTreeView({
         </ReactFlowProvider>
       </div>
 
-      {/* Panel derecho: programa original o archivo adjunto del nodo clickeado */}
+      {/* Panel derecho: programa original o archivo adjunto del nodo seleccionado */}
       <motion.div
         animate={{ width: rightPanel ? 320 : 0 }}
         transition={{ type: "spring", stiffness: 300, damping: 32 }}
+        onAnimationComplete={() => {
+          // Este callback dispara tanto al terminar de ABRIR como de CERRAR (cualquier animación
+          // de ancho que asiente) — sin el `if` de afuera, una cerrada marcaría "ya estaba
+          // abierto" y la PRÓXIMA apertura montaría el iframe de nuevo sin esperar su animación.
+          if (rightPanel) {
+            rightPanelWasOpenRef.current = true;
+            setRightPanelReady(true);
+          }
+        }}
         className={`h-full shrink-0 overflow-hidden border-l ${
           darkMode ? "bg-zinc-900/60 border-zinc-800" : "bg-slate-50 border-zinc-150"
         }`}
@@ -603,23 +658,44 @@ export function StudyPlanTreeView({
                   </p>
                   <p className="text-[11px] font-semibold truncate">{rightPanel.fileName}</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setRightPanel(null)}
-                  className={`p-1.5 rounded-full shrink-0 cursor-pointer ${
-                    darkMode ? "hover:bg-zinc-800 text-zinc-400" : "hover:bg-zinc-200 text-zinc-500"
-                  }`}
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
+                <div className="flex items-center gap-0.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      window.open(`https://drive.google.com/file/d/${rightPanel.fileId}/view`, "_blank", "noopener,noreferrer")
+                    }
+                    title="Abrir en Google Drive"
+                    className={`p-1.5 rounded-full cursor-pointer ${
+                      darkMode ? "hover:bg-zinc-800 text-zinc-400" : "hover:bg-zinc-200 text-zinc-500"
+                    }`}
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRightPanel(null)}
+                    title="Cerrar"
+                    className={`p-1.5 rounded-full cursor-pointer ${
+                      darkMode ? "hover:bg-zinc-800 text-zinc-400" : "hover:bg-zinc-200 text-zinc-500"
+                    }`}
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
-              <iframe
-                key={rightPanel.fileId}
-                src={`https://drive.google.com/file/d/${rightPanel.fileId}/preview`}
-                className="flex-1 w-full border-0"
-                allow="autoplay"
-                title={rightPanel.fileName}
-              />
+              {rightPanelReady ? (
+                <iframe
+                  key={rightPanel.fileId}
+                  src={`https://drive.google.com/file/d/${rightPanel.fileId}/preview`}
+                  className="flex-1 w-full border-0"
+                  allow="autoplay"
+                  title={rightPanel.fileName}
+                />
+              ) : (
+                <div className="flex-1 flex items-center justify-center">
+                  <Loader2 className="w-5 h-5 text-primary animate-spin" />
+                </div>
+              )}
             </>
           )}
         </div>
