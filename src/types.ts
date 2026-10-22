@@ -586,6 +586,10 @@ export interface StudyPlanTree {
   sourceFileId: string;
   sourceFileName: string;
   updatedAt: string;
+  // Archivos de referencia adjuntados a nodos puntuales del árbol (clic derecho → "Adjuntar
+  // archivo"), clave = StudyPlanTreeNode.id de ESTA generación — se pierden si se regenera el
+  // árbol (los ids de nodo cambian), igual que el resto del árbol.
+  attachments?: Record<string, { fileId: string; fileName: string }>;
 }
 
 // --- Password Vault (client-side end-to-end encrypted) ---

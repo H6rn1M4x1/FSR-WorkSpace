@@ -1,39 +1,17 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
-import { X, FileText, ChevronRight, Loader2, Sparkles, RotateCcw, AlertCircle } from "lucide-react";
+import { X, Loader2, Sparkles, RotateCcw } from "lucide-react";
 import { StudyPlanTree } from "../types";
 import { saveItemToFirestore } from "../lib/firestoreSyncService";
 import { downloadDriveFileAsBase64, extractStudyPlanTree, MAX_STUDY_PLAN_FILE_BYTES } from "../lib/studyPlanTree";
 import { StudyPlanTreeView } from "./StudyPlanTreeView";
+import { DriveFilePickerView } from "./DriveFilePickerView";
+import { useDriveFilePicker, DriveItemLite } from "../hooks/useDriveFilePicker";
 import { uiSounds } from "../lib/sounds";
-import AnimatedFolder from "./AnimatedFolder";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 
-interface DriveItemLite {
-  id: string;
-  name: string;
-  mimeType: string;
-  size?: string;
-}
-
 const PDF_MIME = "application/pdf";
-const FOLDER_MIME = "application/vnd.google-apps.folder";
-
-async function driveFetch(url: string, accessToken: string) {
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
-  if (!res.ok) throw new Error(`Drive API ${res.status}`);
-  return res.json();
-}
-
-async function listFolderContents(folderId: string, token: string): Promise<DriveItemLite[]> {
-  const q = `'${folderId}' in parents and trashed = false`;
-  const data = await driveFetch(
-    `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name,mimeType,size)&pageSize=200&orderBy=folder,name`,
-    token,
-  );
-  return data.files || [];
-}
 
 export function StudyPlanTreeModal({
   open,
@@ -62,49 +40,19 @@ export function StudyPlanTreeModal({
     studyPlanTree ? "viewing" : "picking",
   );
   const [error, setError] = useState<string | null>(null);
-  const [breadcrumbs, setBreadcrumbs] = useState<{ id: string; name: string }[]>([]);
-  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
-  const [items, setItems] = useState<DriveItemLite[] | null>(null);
-  const [loadingItems, setLoadingItems] = useState(false);
-  const [hoveredItemId, setHoveredItemId] = useState<string | null>(null);
   const [genProgress, setGenProgress] = useState<{ done: number; total: number } | null>(null);
-  const initRef = useRef(false);
+  const picker = useDriveFilePicker(accessToken, folderId, folderName);
 
   useLockBodyScroll(open);
 
-  // Al abrir, si ya hay un árbol guardado lo muestra directo; si no, arranca el picker directo en
-  // la carpeta de Drive de ESTA materia (nunca en la raíz de Facultad ni en otra carpeta genérica
-  // — es la misma carpeta que el usuario ya fijó en Material de Estudio). Se resetea cada vez que
-  // se vuelve a abrir el modal.
+  // Al abrir, si ya hay un árbol guardado lo muestra directo; si no, arranca en modo "picking" —
+  // el picker ya arranca solo directo en la carpeta de esta materia (ver useDriveFilePicker).
   useEffect(() => {
-    if (!open) {
-      initRef.current = false;
-      return;
-    }
+    if (!open) return;
     setMode(studyPlanTree ? "viewing" : "picking");
     setError(null);
-    if (initRef.current) return;
-    initRef.current = true;
-    setBreadcrumbs([{ id: folderId, name: folderName }]);
-    setCurrentFolderId(folderId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
-
-  useEffect(() => {
-    if (!currentFolderId || !accessToken || mode !== "picking") return;
-    setLoadingItems(true);
-    listFolderContents(currentFolderId, accessToken)
-      .then(setItems)
-      .catch((err) => setError(err?.message || "No se pudo leer la carpeta."))
-      .finally(() => setLoadingItems(false));
-  }, [currentFolderId, accessToken, mode]);
-
-  const navigateTo = (id: string, name: string) => {
-    uiSounds.navigate();
-    const existingIdx = breadcrumbs.findIndex((b) => b.id === id);
-    setBreadcrumbs(existingIdx !== -1 ? breadcrumbs.slice(0, existingIdx + 1) : [...breadcrumbs, { id, name }]);
-    setCurrentFolderId(id);
-  };
 
   const handlePickFile = async (file: DriveItemLite) => {
     if (!accessToken) return;
@@ -144,6 +92,18 @@ export function StudyPlanTreeModal({
     }
   };
 
+  // Adjuntar/quitar un archivo de referencia a un nodo puntual del árbol (clic derecho en el
+  // diagrama) — se guarda como parte del mismo documento del árbol, no es una colección aparte.
+  const handleSaveAttachment = (nodeId: string, file: { fileId: string; fileName: string } | null) => {
+    if (!studyPlanTree) return;
+    const nextAttachments = { ...(studyPlanTree.attachments || {}) };
+    if (file) nextAttachments[nodeId] = file;
+    else delete nextAttachments[nodeId];
+    const updatedTree: StudyPlanTree = { ...studyPlanTree, attachments: nextAttachments };
+    saveItemToFirestore(userId, "study_plan_tree", updatedTree).catch(() => {});
+    setStudyPlanTree((prev) => [...prev.filter((t) => t.id !== updatedTree.id), updatedTree]);
+  };
+
   if (!open) return null;
 
   return createPortal(
@@ -161,7 +121,7 @@ export function StudyPlanTreeModal({
           exit={{ opacity: 0, scale: 0.95, y: 10 }}
           transition={{ duration: 0.2 }}
           onClick={(e) => e.stopPropagation()}
-          className={`w-full max-w-4xl h-[85vh] rounded-3xl border shadow-2xl flex flex-col overflow-hidden ${
+          className={`w-full max-w-6xl h-[85vh] rounded-3xl border shadow-2xl flex flex-col overflow-hidden ${
             darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-white border-zinc-200 text-zinc-800"
           }`}
         >
@@ -207,7 +167,14 @@ export function StudyPlanTreeModal({
 
           <div className="flex-1 min-h-0 overflow-hidden">
             {mode === "viewing" && studyPlanTree && (
-              <StudyPlanTreeView planNodes={studyPlanTree.nodes} darkMode={darkMode} />
+              <StudyPlanTreeView
+                studyPlanTree={studyPlanTree}
+                darkMode={darkMode}
+                accessToken={accessToken}
+                folderId={folderId}
+                folderName={folderName}
+                onSaveAttachment={handleSaveAttachment}
+              />
             )}
 
             {mode === "generating" && (
@@ -225,70 +192,17 @@ export function StudyPlanTreeModal({
             )}
 
             {(mode === "picking" || mode === "error") && (
-              <div className="w-full h-full flex flex-col">
-                {error && (
-                  <div className="mx-5 mt-4 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-xs font-semibold flex items-start gap-2">
-                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                    <span>{error}</span>
-                  </div>
-                )}
-                <div className="flex items-center gap-1 px-5 pt-4 pb-2 text-xs font-bold text-zinc-500 overflow-x-auto">
-                  {breadcrumbs.map((b, i) => (
-                    <React.Fragment key={b.id}>
-                      {i > 0 && <ChevronRight className="w-3 h-3 shrink-0" />}
-                      <button
-                        type="button"
-                        onClick={() => navigateTo(b.id, b.name)}
-                        className={`whitespace-nowrap hover:text-primary cursor-pointer ${
-                          i === breadcrumbs.length - 1 ? "text-primary" : ""
-                        }`}
-                      >
-                        {b.name}
-                      </button>
-                    </React.Fragment>
-                  ))}
-                </div>
-                <div className="flex-1 overflow-y-auto px-5 pb-5">
-                  {loadingItems ? (
-                    <div className="flex items-center justify-center py-16">
-                      <Loader2 className="w-6 h-6 text-primary animate-spin" />
-                    </div>
-                  ) : !items || items.length === 0 ? (
-                    <p className="text-xs text-zinc-500 italic text-center py-16">
-                      Esta carpeta no tiene subcarpetas ni archivos PDF.
-                    </p>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {items
-                        .filter((it) => it.mimeType === FOLDER_MIME || it.mimeType === PDF_MIME)
-                        .map((it) => {
-                          const isFolder = it.mimeType === FOLDER_MIME;
-                          return (
-                            <button
-                              key={it.id}
-                              type="button"
-                              onClick={() => (isFolder ? navigateTo(it.id, it.name) : handlePickFile(it))}
-                              onMouseEnter={() => isFolder && setHoveredItemId(it.id)}
-                              onMouseLeave={() => isFolder && setHoveredItemId((prev) => (prev === it.id ? null : prev))}
-                              className={`flex items-center gap-2.5 px-3.5 py-3 rounded-xl border text-left transition-all cursor-pointer ${
-                                darkMode
-                                  ? "bg-zinc-800/40 border-zinc-800 hover:bg-zinc-800 hover:border-primary/40"
-                                  : "bg-slate-50 border-zinc-150 hover:bg-slate-100 hover:border-primary/40"
-                              }`}
-                            >
-                              {isFolder ? (
-                                <AnimatedFolder size={18} isHovered={hoveredItemId === it.id} className="text-primary shrink-0" />
-                              ) : (
-                                <FileText className="w-4 h-4 text-red-500 shrink-0" />
-                              )}
-                              <span className="text-xs font-semibold truncate">{it.name}</span>
-                            </button>
-                          );
-                        })}
-                    </div>
-                  )}
-                </div>
-              </div>
+              <DriveFilePickerView
+                darkMode={darkMode}
+                breadcrumbs={picker.breadcrumbs}
+                items={picker.items}
+                loadingItems={picker.loadingItems}
+                error={error || picker.error}
+                onNavigate={picker.navigateTo}
+                onPickFile={handlePickFile}
+                fileMimeTypes={[PDF_MIME]}
+                emptyMessage="Esta carpeta no tiene subcarpetas ni archivos PDF."
+              />
             )}
           </div>
         </motion.div>
