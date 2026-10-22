@@ -67,6 +67,7 @@ export function StudyPlanTreeModal({
   const [items, setItems] = useState<DriveItemLite[] | null>(null);
   const [loadingItems, setLoadingItems] = useState(false);
   const [hoveredItemId, setHoveredItemId] = useState<string | null>(null);
+  const [genProgress, setGenProgress] = useState<{ done: number; total: number } | null>(null);
   const initRef = useRef(false);
 
   useLockBodyScroll(open);
@@ -118,9 +119,10 @@ export function StudyPlanTreeModal({
     }
     setMode("generating");
     setError(null);
+    setGenProgress(null);
     try {
       const base64 = await downloadDriveFileAsBase64(file.id, accessToken);
-      const nodes = await extractStudyPlanTree(base64, PDF_MIME);
+      const nodes = await extractStudyPlanTree(base64, PDF_MIME, (done, total) => setGenProgress({ done, total }));
       const tree: StudyPlanTree = {
         id: folderId,
         folderId,
@@ -211,9 +213,13 @@ export function StudyPlanTreeModal({
             {mode === "generating" && (
               <div className="w-full h-full flex flex-col items-center justify-center gap-3 px-6 text-center">
                 <Loader2 className="w-8 h-8 text-primary animate-spin" />
-                <p className="text-sm font-bold">Leyendo el plan de estudio y armando el árbol…</p>
+                <p className="text-sm font-bold">
+                  {genProgress && genProgress.total > 0
+                    ? `Procesando unidad ${genProgress.done} de ${genProgress.total}…`
+                    : "Leyendo el plan de estudio…"}
+                </p>
                 <p className="text-xs text-zinc-500 max-w-sm">
-                  Puede tardar unos segundos según el tamaño del archivo.
+                  Un documento largo puede tardar más de un minuto — se procesa por partes para que no se corte.
                 </p>
               </div>
             )}
