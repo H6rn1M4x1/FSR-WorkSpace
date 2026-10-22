@@ -1,12 +1,13 @@
 import React, { useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
-import { BookMarked, Pin, Loader2, RefreshCw } from "lucide-react";
+import { BookMarked, Pin, Loader2, RefreshCw, Network, CheckCircle2 } from "lucide-react";
 import AnimatedFolder from "./AnimatedFolder";
 import { googleSignIn, getAccessToken, getAccessTokenSync, initAuth } from "../lib/supabase";
 import { saveItemToFirestore } from "../lib/firestoreSyncService";
-import { PinnedStudyFolder, CompletedStudyFile } from "../types";
-import { StudyFolderProgressBar } from "./AcademicCharts";
+import { PinnedStudyFolder, CompletedStudyFile, StudyPlanTree } from "../types";
 import { AnimatedNumber } from "./AnimatedNumber";
+import { StudyPlanTreeModal } from "./StudyPlanTreeModal";
+import { uiSounds } from "../lib/sounds";
 
 interface DriveFolderLite {
   id: string;
@@ -33,6 +34,10 @@ interface StudyMaterialBlockProps {
   // se hace desde "Facultad" (que es donde además se navega el árbol real de Drive). Al tocar
   // una carpeta, este callback la abre ahí directamente en vez de duplicar esa UI acá.
   onOpenInFacultad: (folder: PinnedStudyFolder) => void;
+  // Árbol de materias armado con IA a partir de un plan de estudio en PDF — un solo documento
+  // por usuario (0 o 1 elementos), igual que el resto de las colecciones de la app.
+  studyPlanTree: StudyPlanTree[];
+  setStudyPlanTree: React.Dispatch<React.SetStateAction<StudyPlanTree[]>>;
 }
 
 // Normaliza un nombre de materia/carpeta para comparar: sin acentos/diacríticos, sin mayúsculas,
@@ -230,12 +235,15 @@ export function StudyMaterialBlock({
   setPinnedFolders,
   completedFiles,
   onOpenInFacultad,
+  studyPlanTree,
+  setStudyPlanTree,
 }: StudyMaterialBlockProps) {
   // Arranca con el token ya leído de forma SÍNCRONA (localStorage/caché en memoria de
   // firebase.ts) en vez de null — así, si ya hay sesión de Drive conectada en otra parte de la
   // app (p.ej. "Facultad"), este bloque aparece conectado desde el primer render, sin el delay
   // de esperar un round-trip async (ni una ventana donde se ve "Conectar con Drive" de más).
   const [accessToken, setAccessToken] = useState<string | null>(() => getAccessTokenSync());
+  const [treeModalOpen, setTreeModalOpen] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
   const [autoPinning, setAutoPinning] = useState(false);
@@ -449,15 +457,46 @@ export function StudyMaterialBlock({
                   darkMode={darkMode}
                 />
               </div>
-              {/* Misma fila de grilla que la tarjeta de al lado: así la barrita queda siempre
-                  centrada verticalmente con su carpeta, sin importar cuánto mida la tarjeta. */}
-              <div className="lg:col-span-1">
-                <StudyFolderProgressBar percent={progressFor(folder.folderId)} darkMode={darkMode} />
+              {/* Misma fila de grilla que la tarjeta de al lado: así el botón queda siempre
+                  centrado verticalmente con su carpeta, sin importar cuánto mida la tarjeta. */}
+              <div className="lg:col-span-1 h-full flex items-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    uiSounds.click();
+                    setTreeModalOpen(true);
+                  }}
+                  title={studyPlanTree[0] ? "Ver el árbol de materias" : "Crear el árbol de materias con IA"}
+                  className={`w-full h-9 flex items-center justify-center gap-1.5 rounded-full text-[11px] font-bold transition-all cursor-pointer ${
+                    studyPlanTree[0]
+                      ? "bg-primary/10 text-primary hover:bg-primary hover:text-white dark:hover:text-black"
+                      : darkMode
+                        ? "bg-zinc-800 text-zinc-300 hover:bg-primary hover:text-white"
+                        : "bg-zinc-100 text-zinc-600 hover:bg-primary hover:text-white"
+                  }`}
+                >
+                  {studyPlanTree[0] ? (
+                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                  ) : (
+                    <Network className="w-3.5 h-3.5 shrink-0" />
+                  )}
+                  <span className="truncate">{studyPlanTree[0] ? "Ver Árbol" : "Crear Árbol"}</span>
+                </button>
               </div>
             </React.Fragment>
           ))
         )}
       </div>
+
+      <StudyPlanTreeModal
+        open={treeModalOpen}
+        onClose={() => setTreeModalOpen(false)}
+        darkMode={darkMode}
+        userId={userId}
+        accessToken={accessToken}
+        studyPlanTree={studyPlanTree[0]}
+        setStudyPlanTree={setStudyPlanTree}
+      />
     </div>
   );
 }

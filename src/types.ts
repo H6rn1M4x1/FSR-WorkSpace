@@ -565,6 +565,27 @@ export interface CompletedStudyFile {
   completed: boolean;
 }
 
+// Un nodo del árbol de materias generado a partir de un plan de estudio (PDF de Drive) con IA.
+// "group" son encabezados/secciones tal cual los tenía el documento (años, ciclos, ejes) — solo
+// existen si el documento realmente los tenía, no se inventan; "materia" son las hojas.
+export interface StudyPlanTreeNode {
+  id: string;
+  label: string;
+  parentId: string | null;
+  kind: "group" | "materia";
+}
+
+// Árbol de materias del plan de estudio, generado una vez por usuario a partir de un PDF elegido
+// en Facultad y guardado para no tener que volver a generarlo — un solo documento por usuario
+// (id fijo), igual que otras colecciones de configuración puntual de la app.
+export interface StudyPlanTree {
+  id: string; // fijo: "default"
+  nodes: StudyPlanTreeNode[];
+  sourceFileId: string;
+  sourceFileName: string;
+  updatedAt: string;
+}
+
 // --- Password Vault (client-side end-to-end encrypted) ---
 // Every field here is either non-sensitive metadata or an opaque ciphertext.
 // The server/Firestore NEVER sees a plaintext site password, master password,

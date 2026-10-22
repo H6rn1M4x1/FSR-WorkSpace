@@ -25,6 +25,9 @@ export class GeminiService {
       enableSearch?: boolean;
       enableMaps?: boolean;
       userLocation?: { latitude: number; longitude: number };
+      // Archivos adjuntos al mensaje (p.ej. un PDF) — la función ya los soporta en el body,
+      // solo faltaba exponerlos acá para poder usarlos desde otras pantallas además del chat.
+      files?: { mimeType: string; data: string }[];
     } = {}
   ): Promise<{ text: string; groundingChunks?: GroundingChunk[] }> {
     const res = await fetch("/api/gemini/chat", {
