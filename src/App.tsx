@@ -81,7 +81,8 @@ import {
   ExamenItem,
   AgendaShare,
   PinnedStudyFolder,
-  CompletedStudyFile
+  CompletedStudyFile,
+  StudyPlanTree
 } from "./types";
 import {
   subscribeOutgoingShares,
@@ -465,6 +466,7 @@ export default function App() {
   const [examenes, setExamenes] = useState<ExamenItem[]>([]);
   const [pinnedStudyFolders, setPinnedStudyFolders] = useState<PinnedStudyFolder[]>([]);
   const [completedStudyFiles, setCompletedStudyFiles] = useState<CompletedStudyFile[]>([]);
+  const [studyPlanTree, setStudyPlanTree] = useState<StudyPlanTree[]>([]);
 
   // User Settings State
   const [isUserSettingsOpen, setIsUserSettingsOpen] = useState(false);
@@ -854,7 +856,8 @@ export default function App() {
       { key: "horarios", targetUserId: currentUserId, setState: setHorarios },
       { key: "examenes", targetUserId: currentUserId, setState: setExamenes },
       { key: "pinned_study_folders", targetUserId: currentUserId, setState: setPinnedStudyFolders },
-      { key: "completed_study_files", targetUserId: currentUserId, setState: setCompletedStudyFiles }
+      { key: "completed_study_files", targetUserId: currentUserId, setState: setCompletedStudyFiles },
+      { key: "study_plan_tree", targetUserId: currentUserId, setState: setStudyPlanTree }
     ];
 
     const unsubs = collections.map((col) => {
@@ -937,6 +940,7 @@ export default function App() {
       { key: "examenes", targetUserId: currentUserId },
       { key: "pinned_study_folders", targetUserId: currentUserId },
       { key: "completed_study_files", targetUserId: currentUserId },
+      { key: "study_plan_tree", targetUserId: currentUserId },
     ];
 
     const runPollNow = () => {
@@ -2467,6 +2471,8 @@ export default function App() {
                   setPinnedStudyFolders={setPinnedStudyFolders}
                   completedStudyFiles={completedStudyFiles}
                   setCompletedStudyFiles={setCompletedStudyFiles}
+                  studyPlanTree={studyPlanTree}
+                  setStudyPlanTree={setStudyPlanTree}
                   activeSubTab={activeSubTab}
                   onSubTabChange={setActiveSubTab}
                   autoOpenQuickAdd={quickAddNonce}

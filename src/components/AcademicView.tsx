@@ -62,6 +62,7 @@ import {
   ExamenItem,
   PinnedStudyFolder,
   CompletedStudyFile,
+  StudyPlanTree,
 } from "../types";
 import { SmartDateTimePicker } from "./SmartDateTimePicker";
 import DriveFolderVisualizer from "./DriveFolderVisualizer";
@@ -820,6 +821,8 @@ interface AcademicViewProps {
   setPinnedStudyFolders: React.Dispatch<React.SetStateAction<PinnedStudyFolder[]>>;
   completedStudyFiles: CompletedStudyFile[];
   setCompletedStudyFiles: React.Dispatch<React.SetStateAction<CompletedStudyFile[]>>;
+  studyPlanTree: StudyPlanTree[];
+  setStudyPlanTree: React.Dispatch<React.SetStateAction<StudyPlanTree[]>>;
   activeSubTab?: string;
   onSubTabChange?: (tab: string) => void;
   /** Cambia (a cualquier valor distinto del anterior) para abrir automáticamente el formulario
@@ -855,6 +858,8 @@ export default function AcademicView({
   setPinnedStudyFolders,
   completedStudyFiles,
   setCompletedStudyFiles,
+  studyPlanTree,
+  setStudyPlanTree,
   activeSubTab: propActiveSubTab,
   onSubTabChange,
   itemsIShared = [],
@@ -2553,6 +2558,8 @@ export default function AcademicView({
                   setPinnedFolders={setPinnedStudyFolders}
                   completedFiles={completedStudyFiles}
                   onOpenInFacultad={openFolderInFacultad}
+                  studyPlanTree={studyPlanTree}
+                  setStudyPlanTree={setStudyPlanTree}
                 />
 
                 {/* Overview stats & Study timer */}

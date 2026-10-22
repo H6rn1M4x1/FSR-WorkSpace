@@ -1,5 +1,4 @@
 import React, { useMemo } from "react";
-import { motion } from "motion/react";
 import {
   Chart as ChartJS,
   RadialLinearScale,
@@ -170,41 +169,3 @@ export function AcademicGaugeChart({
   );
 }
 
-/**
- * Barrita de avance de estudio de UNA materia fijada (% de archivos principales marcados como
- * estudiados). Se usa una por fila, al lado de su tarjeta de carpeta en "Material de Estudio" —
- * por eso no es un chart.js con varias categorías: así el ancho y el centro vertical de cada
- * barra quedan atados por CSS Grid a la fila de su propia tarjeta en vez de aproximarlos a mano.
- * Siempre con puntas redondeadas (también a 0%, cuando todavía no hay nada marcado) y el
- * porcentaje escrito adentro — el nombre de la materia no hace falta, ya está a la izquierda.
- */
-export function StudyFolderProgressBar({
-  percent,
-  darkMode,
-}: {
-  percent: number;
-  darkMode: boolean;
-}) {
-  const pct = Math.max(0, Math.min(100, Math.round(percent)));
-  const trackColor = darkMode ? "bg-zinc-800" : "bg-zinc-200";
-
-  return (
-    <div className="w-full h-full flex items-center">
-      <div className={`relative w-full h-9 rounded-full overflow-hidden ${trackColor}`}>
-        <motion.div
-          className="absolute inset-y-0 left-0 rounded-full bg-primary"
-          initial={{ width: 0 }}
-          animate={{ width: `${pct}%` }}
-          transition={{ duration: 0.9, ease: "easeOut" }}
-        />
-        <div
-          className={`absolute inset-0 flex items-center justify-center text-[11px] font-bold ${
-            darkMode ? "text-white" : "text-black"
-          }`}
-        >
-          {pct}%
-        </div>
-      </div>
-    </div>
-  );
-}

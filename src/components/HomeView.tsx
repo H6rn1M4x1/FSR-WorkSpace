@@ -2011,15 +2011,16 @@ export default function HomeView({
                   Agenda Central Integrada
                 </h3>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center flex-wrap gap-2 w-full sm:w-auto">
                 {/* Botón "Agendar": acceso directo a cargar un turno, pago, examen, medicamento o
                     comida planificada sin tener que ir a buscar esa pestaña — abre el formulario
-                    real de esa sección (ver App.tsx/handleQuickAdd). */}
-                <div className="relative" ref={quickAddMenuRef}>
+                    real de esa sección (ver App.tsx/handleQuickAdd). En celular ocupa todo el
+                    ancho disponible; de sm (640px) en adelante vuelve a su ancho fijo de siempre. */}
+                <div className="relative w-full sm:w-auto" ref={quickAddMenuRef}>
                   <button
                     type="button"
                     onClick={() => setQuickAddMenuOpen((v) => !v)}
-                    className="w-64 flex items-center justify-center gap-1.5 px-4 py-2 rounded-full text-xs font-extrabold bg-primary text-white dark:text-zinc-950 hover:bg-primary/90 transition-all cursor-pointer active:scale-95 shadow-xs"
+                    className="w-full sm:w-64 flex items-center justify-center gap-1.5 px-4 py-2 rounded-full text-xs font-extrabold bg-primary text-white dark:text-zinc-950 hover:bg-primary/90 transition-all cursor-pointer active:scale-95 shadow-xs"
                     title="Agendar un turno, pago, examen, medicamento o comida planificada"
                   >
                     <CalendarPlus className="w-4 h-4 shrink-0" />
