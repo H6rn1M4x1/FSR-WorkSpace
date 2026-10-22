@@ -24,11 +24,21 @@ export async function downloadDriveFileAsBase64(fileId: string, accessToken: str
   return btoa(binary);
 }
 
-const EXTRACTION_PROMPT = `Sos un asistente que lee programas/planes de estudio universitarios en PDF y devuelve su estructura en JSON estricto, sin texto extra, sin bloques de código markdown, sin explicaciones.
+const EXTRACTION_PROMPT = `Sos un asistente que lee programas/planes de estudio universitarios en PDF y devuelve su estructura jerárquica en JSON estricto, sin texto extra, sin bloques de código markdown, sin explicaciones.
 
-Extraé TODAS las materias/asignaturas que aparezcan en el documento, respetando el orden exacto en que aparecen (no las reordenes ni las agrupes por tu cuenta).
+El documento puede ser de dos tipos muy distintos — identificá cuál es ANTES de extraer nada:
 
-Si el documento tiene encabezados o secciones propias (años, ciclos, módulos, ejes temáticos, etc.) usalos como nodos "group" padres de las materias que contienen. Si el documento NO tiene ese tipo de agrupación, todas las materias van con "parentId": null (sin agrupar).
+A) PLAN DE UNA CARRERA COMPLETA: lista varias materias/asignaturas distintas (de distintos años o cuatrimestres). En este caso extraé cada materia como nodo hoja ("materia"), agrupadas por año/ciclo/módulo si el documento los muestra como encabezados propios (nodos "group").
+
+B) PROGRAMA DE UNA SOLA MATERIA: el documento trata sobre UNA única asignatura puntual (tiene un nombre de materia en la carátula/encabezado) y tiene una sección de contenidos organizada en "unidades temáticas", "unidades", "ejes" o "módulos" numerados, cada uno con sus propios temas/subtemas numerados (ej. "UNIDAD 1: ... / 1.1 ... / 1.2 ...", o varios niveles como "8.1 ... / 8.1.1 ... / 8.1.2 ..."). Este es el caso más común. Acá NO hay varias materias para extraer — extraé la estructura INTERNA de esa única materia: cada unidad temática es un nodo "group", y cada tema/subtema dentro de ella es un nodo hijo (con "group" si a su vez tiene sus propios subtemas, o "materia" si es un nodo hoja sin hijos). Respetá fielmente los niveles de anidamiento que el documento realmente tenga (una unidad puede tener sub-puntos, y esos sub-puntos sus propios sub-sub-puntos) — no los aplanes a un solo nivel.
+
+En ambos casos, extraé TODOS los nodos de contenido que aparezcan, respetando el orden y la jerarquía exacta en que aparecen (no reordenes ni inventes agrupaciones que el documento no tenga).
+
+IMPORTANTE — para un programa de UNA sola materia (caso B), ignorá por completo estas secciones, NO las conviertas en nodos del árbol:
+- Listas de correlatividades o materias para las que ésta es base/requisito ("constituye la base para...", "es indispensable haber cursado...", materias correlativas).
+- Equipo de cátedra, docentes, horarios de clase o de consulta.
+- Bibliografía, cronograma de evaluaciones, metodología de enseñanza-aprendizaje, sistema de promoción y evaluación, objetivos/competencias/fundamentos generales de la materia.
+- Cualquier sección administrativa que no sea el contenido temático en sí (la sección de "organización y secuencia de los contenidos" o equivalente).
 
 Formato de salida (JSON puro, nada más):
 {
@@ -38,12 +48,11 @@ Formato de salida (JSON puro, nada más):
 }
 
 Reglas:
-- "label" de una materia: el nombre tal cual figura, sin inventar ni resumir.
-- "label" de un "group": el texto exacto del encabezado/sección.
-- No inventes materias ni encabezados que no estén en el documento.
+- "label": el texto tal cual figura (nombre de materia, de unidad temática, o de tema/subtema), sin inventar ni resumir.
+- No inventes nodos que no estén en el documento.
 - No generes nodos duplicados.
 - Los "id" deben ser únicos dentro del array (usá un slug corto, por ejemplo "g1", "m1", "m2").
-- Un nodo "materia" puede tener como parentId un nodo "group", u otro "materia" si el documento muestra una jerarquía de esa forma; si no hay jerarquía clara, parentId: null.`;
+- "kind": "group" para cualquier nodo que tenga hijos propios en el árbol (sea una unidad temática, una materia agrupadora, o un sub-punto con sus propios subtemas); "materia" para los nodos hoja, sin hijos. Un nodo puede tener como parentId cualquier otro nodo del array (group o materia) según la jerarquía real del documento — no hay límite de niveles.`;
 
 interface GeminiTreeNode {
   id: string;

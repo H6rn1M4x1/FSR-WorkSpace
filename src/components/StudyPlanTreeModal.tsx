@@ -17,27 +17,6 @@ interface DriveItemLite {
   size?: string;
 }
 
-type SavedPath = { id: string; name: string }[];
-const LAST_PATH_STORAGE_KEY = "study_plan_tree_last_drive_path";
-
-function readSavedPath(): SavedPath | null {
-  try {
-    const raw = localStorage.getItem(LAST_PATH_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0 && parsed.every((p) => p && typeof p.id === "string" && typeof p.name === "string")) {
-      return parsed;
-    }
-  } catch (_) {}
-  return null;
-}
-
-function saveLastPath(path: SavedPath) {
-  try {
-    localStorage.setItem(LAST_PATH_STORAGE_KEY, JSON.stringify(path));
-  } catch (_) {}
-}
-
 const PDF_MIME = "application/pdf";
 const FOLDER_MIME = "application/vnd.google-apps.folder";
 
@@ -45,15 +24,6 @@ async function driveFetch(url: string, accessToken: string) {
   const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
   if (!res.ok) throw new Error(`Drive API ${res.status}`);
   return res.json();
-}
-
-async function findFacultadRootId(token: string): Promise<string | null> {
-  const q = "name = '1 - Facultad' and mimeType = 'application/vnd.google-apps.folder' and trashed = false";
-  const data = await driveFetch(
-    `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name)&pageSize=10`,
-    token,
-  );
-  return data.files?.[0]?.id || null;
 }
 
 async function listFolderContents(folderId: string, token: string): Promise<DriveItemLite[]> {
@@ -71,6 +41,8 @@ export function StudyPlanTreeModal({
   darkMode,
   userId,
   accessToken,
+  folderId,
+  folderName,
   studyPlanTree,
   setStudyPlanTree,
 }: {
@@ -79,6 +51,10 @@ export function StudyPlanTreeModal({
   darkMode: boolean;
   userId: string;
   accessToken: string | null;
+  // Carpeta de Drive de ESTA materia (la misma que el usuario ya fijó en Material de Estudio) —
+  // el picker arranca directo ahí, nunca en la raíz de Facultad.
+  folderId: string;
+  folderName: string;
   studyPlanTree: StudyPlanTree | undefined;
   setStudyPlanTree: React.Dispatch<React.SetStateAction<StudyPlanTree[]>>;
 }) {
@@ -95,10 +71,10 @@ export function StudyPlanTreeModal({
 
   useLockBodyScroll(open);
 
-  // Al abrir, si ya hay un árbol guardado lo muestra directo; si no, arranca el picker — en la
-  // última carpeta que el usuario haya navegado (guardada en localStorage), para no tener que
-  // volver a buscarla cada vez, o si es la primera vez, en la raíz de Facultad. Se resetea cada
-  // vez que se vuelve a abrir el modal.
+  // Al abrir, si ya hay un árbol guardado lo muestra directo; si no, arranca el picker directo en
+  // la carpeta de Drive de ESTA materia (nunca en la raíz de Facultad ni en otra carpeta genérica
+  // — es la misma carpeta que el usuario ya fijó en Material de Estudio). Se resetea cada vez que
+  // se vuelve a abrir el modal.
   useEffect(() => {
     if (!open) {
       initRef.current = false;
@@ -106,27 +82,10 @@ export function StudyPlanTreeModal({
     }
     setMode(studyPlanTree ? "viewing" : "picking");
     setError(null);
-    if (initRef.current || !accessToken) return;
+    if (initRef.current) return;
     initRef.current = true;
-    (async () => {
-      try {
-        const rootId = await findFacultadRootId(accessToken);
-        if (!rootId) {
-          setError('No se encontró la carpeta "1 - Facultad" en tu Drive.');
-          return;
-        }
-        const saved = readSavedPath();
-        if (saved && saved[0]?.id === rootId) {
-          setBreadcrumbs(saved);
-          setCurrentFolderId(saved[saved.length - 1].id);
-        } else {
-          setBreadcrumbs([{ id: rootId, name: "1 - Facultad" }]);
-          setCurrentFolderId(rootId);
-        }
-      } catch (err: any) {
-        setError(err?.message || "No se pudo conectar con Drive.");
-      }
-    })();
+    setBreadcrumbs([{ id: folderId, name: folderName }]);
+    setCurrentFolderId(folderId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -142,10 +101,8 @@ export function StudyPlanTreeModal({
   const navigateTo = (id: string, name: string) => {
     uiSounds.navigate();
     const existingIdx = breadcrumbs.findIndex((b) => b.id === id);
-    const next = existingIdx !== -1 ? breadcrumbs.slice(0, existingIdx + 1) : [...breadcrumbs, { id, name }];
-    setBreadcrumbs(next);
+    setBreadcrumbs(existingIdx !== -1 ? breadcrumbs.slice(0, existingIdx + 1) : [...breadcrumbs, { id, name }]);
     setCurrentFolderId(id);
-    saveLastPath(next);
   };
 
   const handlePickFile = async (file: DriveItemLite) => {
@@ -165,14 +122,17 @@ export function StudyPlanTreeModal({
       const base64 = await downloadDriveFileAsBase64(file.id, accessToken);
       const nodes = await extractStudyPlanTree(base64, PDF_MIME);
       const tree: StudyPlanTree = {
-        id: "default",
+        id: folderId,
+        folderId,
         nodes,
         sourceFileId: file.id,
         sourceFileName: file.name,
         updatedAt: new Date().toISOString(),
       };
       await saveItemToFirestore(userId, "study_plan_tree", tree);
-      setStudyPlanTree([tree]);
+      // Upsert por folderId: reemplaza el árbol de ESTA materia sin tocar los de las demás
+      // (antes `setStudyPlanTree([tree])` borraba todos los árboles del resto de materias).
+      setStudyPlanTree((prev) => [...prev.filter((t) => t.id !== tree.id), tree]);
       uiSounds.success();
       setMode("viewing");
     } catch (err: any) {
@@ -208,11 +168,11 @@ export function StudyPlanTreeModal({
               <Sparkles className="w-5 h-5 text-primary shrink-0" />
               <div className="min-w-0">
                 <h3 className="font-extrabold text-sm truncate">Árbol de Materias</h3>
-                {mode === "viewing" && studyPlanTree && (
-                  <p className="text-[10px] text-zinc-500 font-semibold truncate">
-                    Generado desde {studyPlanTree.sourceFileName}
-                  </p>
-                )}
+                <p className="text-[10px] text-zinc-500 font-semibold truncate">
+                  {mode === "viewing" && studyPlanTree
+                    ? `${folderName} · Generado desde ${studyPlanTree.sourceFileName}`
+                    : folderName}
+                </p>
               </div>
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
@@ -221,8 +181,8 @@ export function StudyPlanTreeModal({
                   type="button"
                   onClick={() => {
                     // No resetea breadcrumbs/carpeta actual a propósito: ya están en la carpeta
-                    // desde donde se generó este árbol (o la última que se navegó), así que
-                    // "Regenerar" abre directo ahí en vez de mandar de nuevo a la raíz de Facultad.
+                    // de esta materia (o en la subcarpeta donde se navegó dentro de ella), así
+                    // que "Regenerar" abre directo ahí en vez de volver al punto de partida.
                     setMode("picking");
                     setError(null);
                   }}

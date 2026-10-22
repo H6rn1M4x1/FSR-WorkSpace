@@ -243,7 +243,10 @@ export function StudyMaterialBlock({
   // app (p.ej. "Facultad"), este bloque aparece conectado desde el primer render, sin el delay
   // de esperar un round-trip async (ni una ventana donde se ve "Conectar con Drive" de más).
   const [accessToken, setAccessToken] = useState<string | null>(() => getAccessTokenSync());
-  const [treeModalOpen, setTreeModalOpen] = useState(false);
+  // Qué fila (carpeta fijada) tiene abierto su modal de árbol — null = ninguna. Hay un árbol
+  // guardado por folderId (no uno solo global), así que el modal necesita saber de qué fila vino.
+  const [treeModalFolder, setTreeModalFolder] = useState<PinnedStudyFolder | null>(null);
+  const treeFor = (folderId: string) => studyPlanTree.find((t) => t.folderId === folderId);
   const [connecting, setConnecting] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
   const [autoPinning, setAutoPinning] = useState(false);
@@ -460,43 +463,52 @@ export function StudyMaterialBlock({
               {/* Misma fila de grilla que la tarjeta de al lado: así el botón queda siempre
                   centrado verticalmente con su carpeta, sin importar cuánto mida la tarjeta. */}
               <div className="lg:col-span-1 h-full flex items-center">
-                <button
-                  type="button"
-                  onClick={() => {
-                    uiSounds.click();
-                    setTreeModalOpen(true);
-                  }}
-                  title={studyPlanTree[0] ? "Ver el árbol de materias" : "Crear el árbol de materias con IA"}
-                  className={`w-full h-9 flex items-center justify-center gap-1.5 rounded-full text-[11px] font-bold transition-all cursor-pointer ${
-                    studyPlanTree[0]
-                      ? "bg-primary/10 text-primary hover:bg-primary hover:text-white dark:hover:text-black"
-                      : darkMode
-                        ? "bg-zinc-800 text-zinc-300 hover:bg-primary hover:text-white"
-                        : "bg-zinc-100 text-zinc-600 hover:bg-primary hover:text-white"
-                  }`}
-                >
-                  {studyPlanTree[0] ? (
-                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                  ) : (
-                    <Network className="w-3.5 h-3.5 shrink-0" />
-                  )}
-                  <span className="truncate">{studyPlanTree[0] ? "Ver Árbol" : "Crear Árbol"}</span>
-                </button>
+                {(() => {
+                  const folderTree = treeFor(folder.folderId);
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        uiSounds.click();
+                        setTreeModalFolder(folder);
+                      }}
+                      title={folderTree ? "Ver el árbol de materias" : "Crear el árbol de materias con IA"}
+                      className={`w-full h-9 flex items-center justify-center gap-1.5 rounded-full text-[11px] font-bold transition-all cursor-pointer ${
+                        folderTree
+                          ? "bg-primary/10 text-primary hover:bg-primary hover:text-white dark:hover:text-black"
+                          : darkMode
+                            ? "bg-zinc-800 text-zinc-300 hover:bg-primary hover:text-white"
+                            : "bg-zinc-100 text-zinc-600 hover:bg-primary hover:text-white"
+                      }`}
+                    >
+                      {folderTree ? (
+                        <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                      ) : (
+                        <Network className="w-3.5 h-3.5 shrink-0" />
+                      )}
+                      <span className="truncate">{folderTree ? "Ver Árbol" : "Crear Árbol"}</span>
+                    </button>
+                  );
+                })()}
               </div>
             </React.Fragment>
           ))
         )}
       </div>
 
-      <StudyPlanTreeModal
-        open={treeModalOpen}
-        onClose={() => setTreeModalOpen(false)}
-        darkMode={darkMode}
-        userId={userId}
-        accessToken={accessToken}
-        studyPlanTree={studyPlanTree[0]}
-        setStudyPlanTree={setStudyPlanTree}
-      />
+      {treeModalFolder && (
+        <StudyPlanTreeModal
+          open
+          onClose={() => setTreeModalFolder(null)}
+          darkMode={darkMode}
+          userId={userId}
+          accessToken={accessToken}
+          folderId={treeModalFolder.folderId}
+          folderName={treeModalFolder.folderName}
+          studyPlanTree={treeFor(treeModalFolder.folderId)}
+          setStudyPlanTree={setStudyPlanTree}
+        />
+      )}
     </div>
   );
 }
