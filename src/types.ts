@@ -565,9 +565,10 @@ export interface CompletedStudyFile {
   completed: boolean;
 }
 
-// Un nodo del árbol de materias generado a partir de un plan de estudio (PDF de Drive) con IA.
-// "group" son encabezados/secciones tal cual los tenía el documento (años, ciclos, ejes) — solo
-// existen si el documento realmente los tenía, no se inventan; "materia" son las hojas.
+// Un nodo del árbol generado a partir de un PDF (plan de estudio o programa de UNA materia) con
+// IA. "group" es cualquier nodo con hijos propios tal cual el documento los tenía (puede ser un
+// año/ciclo con varias materias, o una unidad temática con sus propios subtemas) — solo existen
+// si el documento realmente los tenía, no se inventan; "materia" son los nodos hoja.
 export interface StudyPlanTreeNode {
   id: string;
   label: string;
@@ -575,11 +576,12 @@ export interface StudyPlanTreeNode {
   kind: "group" | "materia";
 }
 
-// Árbol de materias del plan de estudio, generado una vez por usuario a partir de un PDF elegido
-// en Facultad y guardado para no tener que volver a generarlo — un solo documento por usuario
-// (id fijo), igual que otras colecciones de configuración puntual de la app.
+// Árbol de materias generado con IA a partir de un PDF de Drive — uno por carpeta de materia
+// fijada en "Material de Estudio" (folderId), así el botón de cada fila abre directo en la
+// carpeta de Drive de ESA materia (y guarda su propio árbol) en vez de una raíz genérica.
 export interface StudyPlanTree {
-  id: string; // fijo: "default"
+  id: string; // = folderId, así el sync hace upsert en vez de duplicar
+  folderId: string;
   nodes: StudyPlanTreeNode[];
   sourceFileId: string;
   sourceFileName: string;
