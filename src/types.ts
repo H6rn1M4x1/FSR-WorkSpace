@@ -576,6 +576,25 @@ export interface StudyPlanTreeNode {
   kind: "group" | "materia";
 }
 
+// Una porción puntual resaltada dentro de un PDF adjunto (texto seleccionado, o un recuadro
+// libre dibujado a mano para contenido sin texto como imágenes/diagramas) — al ver el adjunto de
+// un nodo que tiene esto, el visor salta directo a esa página y la marca, en vez de mostrar el
+// archivo entero desde la página 1.
+export interface StudyPlanTreeHighlight {
+  page: number; // 1-indexado
+  // Coordenadas normalizadas (0 a 1) relativas al tamaño de la página renderizada al momento de
+  // resaltar — así no dependen de en qué zoom se haya hecho el resaltado ni en qué zoom se vea
+  // después (se multiplican por el tamaño actual de la página al dibujar la marca).
+  rects: { x: number; y: number; width: number; height: number }[];
+  text?: string; // snippet de texto resaltado, si se resaltó seleccionando texto y no un recuadro libre
+}
+
+export interface StudyPlanTreeAttachment {
+  fileId: string;
+  fileName: string;
+  highlight?: StudyPlanTreeHighlight;
+}
+
 // Árbol de materias generado con IA a partir de un PDF de Drive — uno por carpeta de materia
 // fijada en "Material de Estudio" (folderId), así el botón de cada fila abre directo en la
 // carpeta de Drive de ESA materia (y guarda su propio árbol) en vez de una raíz genérica.
@@ -589,7 +608,7 @@ export interface StudyPlanTree {
   // Archivos de referencia adjuntados a nodos puntuales del árbol (clic derecho → "Adjuntar
   // archivo"), clave = StudyPlanTreeNode.id de ESTA generación — se pierden si se regenera el
   // árbol (los ids de nodo cambian), igual que el resto del árbol.
-  attachments?: Record<string, { fileId: string; fileName: string }>;
+  attachments?: Record<string, StudyPlanTreeAttachment>;
 }
 
 // --- Password Vault (client-side end-to-end encrypted) ---
