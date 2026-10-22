@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { X, Loader2, Sparkles, RotateCcw } from "lucide-react";
-import { StudyPlanTree } from "../types";
+import { StudyPlanTree, StudyPlanTreeAttachment } from "../types";
 import { saveItemToFirestore } from "../lib/firestoreSyncService";
 import { downloadDriveFileAsBase64, extractStudyPlanTree, MAX_STUDY_PLAN_FILE_BYTES } from "../lib/studyPlanTree";
 import { StudyPlanTreeView } from "./StudyPlanTreeView";
@@ -94,7 +94,7 @@ export function StudyPlanTreeModal({
 
   // Adjuntar/quitar un archivo de referencia a un nodo puntual del árbol (clic derecho en el
   // diagrama) — se guarda como parte del mismo documento del árbol, no es una colección aparte.
-  const handleSaveAttachment = (nodeId: string, file: { fileId: string; fileName: string } | null) => {
+  const handleSaveAttachment = (nodeId: string, file: StudyPlanTreeAttachment | null) => {
     if (!studyPlanTree) return;
     const nextAttachments = { ...(studyPlanTree.attachments || {}) };
     if (file) nextAttachments[nodeId] = file;
