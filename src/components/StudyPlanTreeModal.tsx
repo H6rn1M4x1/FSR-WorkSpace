@@ -1,17 +1,41 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
-import { X, FileText, Folder, ChevronRight, Loader2, Sparkles, RotateCcw, AlertCircle } from "lucide-react";
+import { X, FileText, ChevronRight, Loader2, Sparkles, RotateCcw, AlertCircle } from "lucide-react";
 import { StudyPlanTree } from "../types";
 import { saveItemToFirestore } from "../lib/firestoreSyncService";
-import { downloadDriveFileAsBase64, extractStudyPlanTree } from "../lib/studyPlanTree";
+import { downloadDriveFileAsBase64, extractStudyPlanTree, MAX_STUDY_PLAN_FILE_BYTES } from "../lib/studyPlanTree";
 import { StudyPlanTreeView } from "./StudyPlanTreeView";
 import { uiSounds } from "../lib/sounds";
+import AnimatedFolder from "./AnimatedFolder";
+import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 
 interface DriveItemLite {
   id: string;
   name: string;
   mimeType: string;
+  size?: string;
+}
+
+type SavedPath = { id: string; name: string }[];
+const LAST_PATH_STORAGE_KEY = "study_plan_tree_last_drive_path";
+
+function readSavedPath(): SavedPath | null {
+  try {
+    const raw = localStorage.getItem(LAST_PATH_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0 && parsed.every((p) => p && typeof p.id === "string" && typeof p.name === "string")) {
+      return parsed;
+    }
+  } catch (_) {}
+  return null;
+}
+
+function saveLastPath(path: SavedPath) {
+  try {
+    localStorage.setItem(LAST_PATH_STORAGE_KEY, JSON.stringify(path));
+  } catch (_) {}
 }
 
 const PDF_MIME = "application/pdf";
@@ -35,7 +59,7 @@ async function findFacultadRootId(token: string): Promise<string | null> {
 async function listFolderContents(folderId: string, token: string): Promise<DriveItemLite[]> {
   const q = `'${folderId}' in parents and trashed = false`;
   const data = await driveFetch(
-    `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name,mimeType)&pageSize=200&orderBy=folder,name`,
+    `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name,mimeType,size)&pageSize=200&orderBy=folder,name`,
     token,
   );
   return data.files || [];
@@ -62,15 +86,19 @@ export function StudyPlanTreeModal({
     studyPlanTree ? "viewing" : "picking",
   );
   const [error, setError] = useState<string | null>(null);
-  const [facultadRootId, setFacultadRootId] = useState<string | null>(null);
   const [breadcrumbs, setBreadcrumbs] = useState<{ id: string; name: string }[]>([]);
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [items, setItems] = useState<DriveItemLite[] | null>(null);
   const [loadingItems, setLoadingItems] = useState(false);
+  const [hoveredItemId, setHoveredItemId] = useState<string | null>(null);
   const initRef = useRef(false);
 
-  // Al abrir, si ya hay un árbol guardado lo muestra directo; si no, arranca el picker desde la
-  // raíz de Facultad. Se resetea cada vez que se vuelve a abrir el modal.
+  useLockBodyScroll(open);
+
+  // Al abrir, si ya hay un árbol guardado lo muestra directo; si no, arranca el picker — en la
+  // última carpeta que el usuario haya navegado (guardada en localStorage), para no tener que
+  // volver a buscarla cada vez, o si es la primera vez, en la raíz de Facultad. Se resetea cada
+  // vez que se vuelve a abrir el modal.
   useEffect(() => {
     if (!open) {
       initRef.current = false;
@@ -87,9 +115,14 @@ export function StudyPlanTreeModal({
           setError('No se encontró la carpeta "1 - Facultad" en tu Drive.');
           return;
         }
-        setFacultadRootId(rootId);
-        setBreadcrumbs([{ id: rootId, name: "1 - Facultad" }]);
-        setCurrentFolderId(rootId);
+        const saved = readSavedPath();
+        if (saved && saved[0]?.id === rootId) {
+          setBreadcrumbs(saved);
+          setCurrentFolderId(saved[saved.length - 1].id);
+        } else {
+          setBreadcrumbs([{ id: rootId, name: "1 - Facultad" }]);
+          setCurrentFolderId(rootId);
+        }
       } catch (err: any) {
         setError(err?.message || "No se pudo conectar con Drive.");
       }
@@ -109,12 +142,23 @@ export function StudyPlanTreeModal({
   const navigateTo = (id: string, name: string) => {
     uiSounds.navigate();
     const existingIdx = breadcrumbs.findIndex((b) => b.id === id);
-    setBreadcrumbs(existingIdx !== -1 ? breadcrumbs.slice(0, existingIdx + 1) : [...breadcrumbs, { id, name }]);
+    const next = existingIdx !== -1 ? breadcrumbs.slice(0, existingIdx + 1) : [...breadcrumbs, { id, name }];
+    setBreadcrumbs(next);
     setCurrentFolderId(id);
+    saveLastPath(next);
   };
 
   const handlePickFile = async (file: DriveItemLite) => {
     if (!accessToken) return;
+    const sizeBytes = file.size ? parseInt(file.size, 10) : 0;
+    if (sizeBytes > MAX_STUDY_PLAN_FILE_BYTES) {
+      uiSounds.error();
+      setError(
+        `Ese archivo pesa ${(sizeBytes / (1024 * 1024)).toFixed(1)} MB, es demasiado grande para procesarlo (máx. ~4 MB). Probá con un PDF más liviano.`,
+      );
+      setMode("error");
+      return;
+    }
     setMode("generating");
     setError(null);
     try {
@@ -176,9 +220,11 @@ export function StudyPlanTreeModal({
                 <button
                   type="button"
                   onClick={() => {
+                    // No resetea breadcrumbs/carpeta actual a propósito: ya están en la carpeta
+                    // desde donde se generó este árbol (o la última que se navegó), así que
+                    // "Regenerar" abre directo ahí en vez de mandar de nuevo a la raíz de Facultad.
                     setMode("picking");
-                    setBreadcrumbs(facultadRootId ? [{ id: facultadRootId, name: "1 - Facultad" }] : []);
-                    setCurrentFolderId(facultadRootId);
+                    setError(null);
                   }}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold bg-primary/10 hover:bg-primary hover:text-white dark:hover:text-black text-primary transition-all cursor-pointer"
                   title="Elegir otro archivo y regenerar el árbol"
@@ -256,6 +302,8 @@ export function StudyPlanTreeModal({
                               key={it.id}
                               type="button"
                               onClick={() => (isFolder ? navigateTo(it.id, it.name) : handlePickFile(it))}
+                              onMouseEnter={() => isFolder && setHoveredItemId(it.id)}
+                              onMouseLeave={() => isFolder && setHoveredItemId((prev) => (prev === it.id ? null : prev))}
                               className={`flex items-center gap-2.5 px-3.5 py-3 rounded-xl border text-left transition-all cursor-pointer ${
                                 darkMode
                                   ? "bg-zinc-800/40 border-zinc-800 hover:bg-zinc-800 hover:border-primary/40"
@@ -263,7 +311,7 @@ export function StudyPlanTreeModal({
                               }`}
                             >
                               {isFolder ? (
-                                <Folder className="w-4 h-4 text-primary shrink-0" />
+                                <AnimatedFolder size={18} isHovered={hoveredItemId === it.id} className="text-primary shrink-0" />
                               ) : (
                                 <FileText className="w-4 h-4 text-red-500 shrink-0" />
                               )}

@@ -79,6 +79,10 @@ export const handler: Handler = async (event) => {
         config,
       });
     } catch (e: any) {
+      // Si ya se había pedido el modelo liviano, no hay a qué más caer — reintentar el mismo
+      // modelo acá adentro solo duplicaría la espera (y el riesgo de que Netlify corte la función
+      // por tiempo) sin cambiar el resultado.
+      if (selectedModel === "gemini-3.5-flash-lite") throw e;
       console.warn(`Model ${selectedModel} busy/unavailable. Retrying with gemini-3.5-flash-lite...`, e?.message);
       response = await ai.models.generateContent({
         model: "gemini-3.5-flash-lite",

@@ -1,6 +1,12 @@
 import { GeminiService } from "./gemini";
 import { StudyPlanTreeNode } from "../types";
 
+// Las funciones de Netlify (Lambda síncrono) cortan el request en ~6MB de body — el base64 infla
+// el archivo original ~33%, así que un PDF de más de ~4MB ya corre riesgo real de fallar antes de
+// llegar siquiera a nuestro código (respuesta HTML de error, no JSON). Se chequea del lado del
+// cliente ANTES de intentar nada, para avisar al toque en vez de fallar a mitad de camino.
+export const MAX_STUDY_PLAN_FILE_BYTES = 4 * 1024 * 1024;
+
 // Descarga un archivo de Drive (binario) y lo devuelve en base64 — en chunks, para no reventar
 // el límite de argumentos de String.fromCharCode con PDFs grandes.
 export async function downloadDriveFileAsBase64(fileId: string, accessToken: string): Promise<string> {
@@ -52,14 +58,36 @@ function stripCodeFences(text: string): string {
   return fenced ? fenced[1].trim() : trimmed;
 }
 
-// Pide a Gemini (vía la función ya desplegada /api/gemini/chat, que ya acepta archivos adjuntos)
-// que lea el PDF y devuelva la estructura de materias. Regenera los ids del lado del cliente
-// (en vez de confiar en que la IA los mantenga únicos) preservando los links padre-hijo.
-export async function extractStudyPlanTree(
-  fileBase64: string,
-  mimeType: string,
-): Promise<StudyPlanTreeNode[]> {
+// Modelo liviano directo: para extracción estructurada no hace falta el modelo "grande", y acá la
+// latencia importa — Netlify corta las funciones síncronas que tardan demasiado (respuesta HTML,
+// no JSON), así que cuanto más rápido responda, menos chance de toparse con ese corte.
+const EXTRACTION_MODEL = "gemini-3.5-flash-lite";
+
+// Picos de demanda ("503 UNAVAILABLE") y cortes por timeout (HTML en vez de JSON) suelen ser
+// transitorios — vale la pena un segundo intento antes de darse por vencido.
+function isTransientExtractionError(err: any): boolean {
+  const raw = String(err?.message || err || "");
+  return /UNAVAILABLE|503|overloaded|high demand|Unexpected token|is not valid JSON/i.test(raw);
+}
+
+function friendlyExtractionError(err: any): string {
+  const raw = String(err?.message || err || "");
+  if (/UNAVAILABLE|503|overloaded|high demand/i.test(raw)) {
+    return "El servicio de IA está saturado en este momento. Probá de nuevo en unos segundos.";
+  }
+  if (/Unexpected token|is not valid JSON|<html/i.test(raw)) {
+    return "La generación tardó demasiado y se cortó. Probá de nuevo — si el archivo es muy largo, puede necesitar más de un intento.";
+  }
+  return raw || "No se pudo generar el árbol. Probá de nuevo o con otro archivo.";
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function requestStudyPlanNodes(fileBase64: string, mimeType: string): Promise<StudyPlanTreeNode[]> {
   const { text } = await GeminiService.sendChatMessage(EXTRACTION_PROMPT, [], {
+    model: EXTRACTION_MODEL,
     files: [{ mimeType, data: fileBase64 }],
   });
 
@@ -67,7 +95,7 @@ export async function extractStudyPlanTree(
   try {
     parsed = JSON.parse(stripCodeFences(text));
   } catch {
-    throw new Error("La IA no devolvió un JSON válido. Probá de nuevo o con otro archivo.");
+    throw new Error("La IA no devolvió un JSON válido.");
   }
   if (!parsed || !Array.isArray(parsed.nodes) || parsed.nodes.length === 0) {
     throw new Error("No se encontraron materias en ese documento.");
@@ -91,6 +119,29 @@ export async function extractStudyPlanTree(
 
   // Evita que un nodo quede apuntando a sí mismo (podría pasar con un id mal copiado).
   return cleanNodes.map((n) => (n.parentId === n.id ? { ...n, parentId: null } : n));
+}
+
+// Pide a Gemini (vía la función ya desplegada /api/gemini/chat, que ya acepta archivos adjuntos)
+// que lea el PDF y devuelva la estructura de materias. Un solo reintento ante errores que pintan
+// transitorios (modelo saturado, corte por timeout) — cada intento es un POST nuevo, con su propio
+// presupuesto de tiempo en Netlify, así que reintentar acá tiene más chance de éxito que un retry
+// adentro de la misma invocación de función.
+export async function extractStudyPlanTree(
+  fileBase64: string,
+  mimeType: string,
+): Promise<StudyPlanTreeNode[]> {
+  const MAX_ATTEMPTS = 2;
+  let lastErr: any = null;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      return await requestStudyPlanNodes(fileBase64, mimeType);
+    } catch (err: any) {
+      lastErr = err;
+      if (attempt === MAX_ATTEMPTS || !isTransientExtractionError(err)) break;
+      await sleep(1500);
+    }
+  }
+  throw new Error(friendlyExtractionError(lastErr));
 }
 
 export interface LaidOutTreeNode extends StudyPlanTreeNode {
