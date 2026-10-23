@@ -16,6 +16,8 @@ import {
   Highlighter,
   Underline,
   Strikethrough,
+  Undo2,
+  Redo2,
 } from "lucide-react";
 import { StudyPlanTreeAnnotation, StudyPlanTreeAnnotationType, StudyPlanTreeUnderlineStyle } from "../types";
 import { uiSounds } from "../lib/sounds";
@@ -53,6 +55,28 @@ const TOOLS: { type: StudyPlanTreeAnnotationType; label: string; icon: typeof Hi
   { type: "underline", label: "Subrayar", icon: Underline },
   { type: "strikethrough", label: "Tachar", icon: Strikethrough },
 ];
+
+// Mismos paths que los íconos de lucide-react de arriba (Highlighter/Underline/Strikethrough),
+// copiados acá para poder incrustarlos en un cursor SVG propio — el cursor nativo del sistema no
+// puede referenciar un componente de React, necesita un data URI con el SVG ya armado.
+const TOOL_CURSOR_PATHS: Record<StudyPlanTreeAnnotationType, string> = {
+  highlight: '<path d="m9 11-6 6v3h9l3-3"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/>',
+  underline: '<path d="M6 4v6a6 6 0 0 0 12 0V4"/><line x1="4" x2="20" y1="20" y2="20"/>',
+  strikethrough: '<path d="M16 4H9a3 3 0 0 0-2.83 4"/><path d="M14 12a4 4 0 0 1 0 8H6"/><line x1="4" x2="20" y1="12" y2="12"/>',
+};
+
+// Cursor del mouse con el ícono de la herramienta activa (y su color elegido), para que quede
+// claro qué se está por hacer sin tener que mirar la barra de herramientas — un círculo blanco de
+// fondo para que se vea tanto en PDFs claros como oscuros, con hotspot centrado.
+function toolCursor(type: StudyPlanTreeAnnotationType, color: string): string {
+  const svg =
+    `<svg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'>` +
+    `<circle cx='14' cy='14' r='12.5' fill='white' fill-opacity='0.95' stroke='rgba(0,0,0,0.25)' stroke-width='1'/>` +
+    `<g transform='translate(2,2)' fill='none' stroke='${color}' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'>` +
+    TOOL_CURSOR_PATHS[type] +
+    `</g></svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 14 14, text`;
+}
 
 function rectToStyle(r: NormRect, containerWidth: number, containerHeight: number): React.CSSProperties {
   return {
@@ -173,12 +197,15 @@ function mergeRectsByLine(rawRects: RawRect[]): MergedLine[] {
 // desbordando bien afuera de su línea).
 const TEXT_LAYER_STYLE = `
 .fsr-pdf-text-layer {
-  position: absolute; inset: 0; overflow: hidden; line-height: 1; opacity: 1;
+  position: absolute; inset: 0; overflow: hidden; line-height: 1; opacity: 1; cursor: text;
   --min-font-size: 1;
   --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
   --min-font-size-inv: calc(1 / var(--min-font-size));
 }
-.fsr-pdf-text-layer span, .fsr-pdf-text-layer br { color: transparent; position: absolute; white-space: pre; cursor: text; transform-origin: 0% 0%; }
+/* Sin cursor propio: así el cursor dinámico (ícono de la herramienta activa) que se pone inline
+   en el contenedor .fsr-pdf-text-layer se hereda también sobre los spans, en vez de que cada span
+   lo tape con su propio "cursor: text" fijo. */
+.fsr-pdf-text-layer span, .fsr-pdf-text-layer br { color: transparent; position: absolute; white-space: pre; transform-origin: 0% 0%; }
 .fsr-pdf-text-layer > span {
   --font-height: 0;
   font-size: calc(var(--text-scale-factor) * var(--font-height));
@@ -315,6 +342,11 @@ export function PdfHighlightViewer({
   const [pendingAnnotations, setPendingAnnotations] = useState<StudyPlanTreeAnnotation[]>(() =>
     annotations ? [...annotations] : [],
   );
+  // Deshacer/rehacer de los cambios a `pendingAnnotations` dentro de esta sesión de marcado (se
+  // pierde al cerrar el visor, como el resto del estado "select" no guardado) — cada agregado o
+  // quitado de marca empuja el estado ANTERIOR acá antes de aplicarse.
+  const [past, setPast] = useState<StudyPlanTreeAnnotation[][]>([]);
+  const [future, setFuture] = useState<StudyPlanTreeAnnotation[][]>([]);
   const [activeTool, setActiveTool] = useState<{
     type: StudyPlanTreeAnnotationType;
     color: string;
@@ -404,8 +436,16 @@ export function PdfHighlightViewer({
     window.getSelection()?.removeAllRanges();
   };
 
+  // Registra el estado ANTES de un cambio en el historial de deshacer, y vacía "rehacer" (un
+  // cambio nuevo invalida cualquier camino de rehacer que hubiera quedado de un deshacer previo).
+  const pushHistory = () => {
+    setPast((p) => [...p, pendingAnnotations]);
+    setFuture([]);
+  };
+
   const addPendingAnnotation = (rects: NormRect[], text?: string) => {
     uiSounds.click();
+    pushHistory();
     setPendingAnnotations((prev) => [
       ...prev,
       {
@@ -422,7 +462,26 @@ export function PdfHighlightViewer({
 
   const removePendingAnnotation = (id: string) => {
     uiSounds.click();
+    pushHistory();
     setPendingAnnotations((prev) => prev.filter((a) => a.id !== id));
+  };
+
+  const handleUndo = () => {
+    if (past.length === 0) return;
+    uiSounds.click();
+    const prevState = past[past.length - 1];
+    setPast((p) => p.slice(0, -1));
+    setFuture((f) => [...f, pendingAnnotations]);
+    setPendingAnnotations(prevState);
+  };
+
+  const handleRedo = () => {
+    if (future.length === 0) return;
+    uiSounds.click();
+    const nextState = future[future.length - 1];
+    setFuture((f) => f.slice(0, -1));
+    setPast((p) => [...p, pendingAnnotations]);
+    setPendingAnnotations(nextState);
   };
 
   const handleTextSelectionEnd = () => {
@@ -500,6 +559,14 @@ export function PdfHighlightViewer({
     return [];
   }, [mode, pendingAnnotations, annotations, currentPage]);
 
+  // Solo tiene sentido mostrar "qué se va a marcar" mientras se puede marcar algo con un clic de
+  // texto — en modo dibujo ya hay un cursor de cruz propio (más claro para esa acción puntual), y
+  // en modo "view" no hay ninguna herramienta activa.
+  const textLayerCursor = useMemo(() => {
+    if (mode !== "select" || drawMode) return undefined;
+    return toolCursor(activeTool.type, activeTool.color);
+  }, [mode, drawMode, activeTool.type, activeTool.color]);
+
   const btnClass = `p-1.5 rounded-full transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${
     darkMode ? "text-zinc-300 hover:bg-zinc-700" : "text-zinc-600 hover:bg-zinc-200"
   }`;
@@ -557,6 +624,29 @@ export function PdfHighlightViewer({
           <button type="button" className={btnClass} onClick={() => setScale((s) => Math.min(3, s + 0.15))}>
             <Plus className="w-3.5 h-3.5" />
           </button>
+          {mode === "select" && (
+            <>
+              <span className={`w-px h-4 mx-0.5 ${darkMode ? "bg-zinc-700" : "bg-zinc-200"}`} />
+              <button
+                type="button"
+                title="Deshacer"
+                disabled={past.length === 0}
+                onClick={handleUndo}
+                className={btnClass}
+              >
+                <Undo2 className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                title="Rehacer"
+                disabled={future.length === 0}
+                onClick={handleRedo}
+                className={btnClass}
+              >
+                <Redo2 className="w-3.5 h-3.5" />
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -667,7 +757,12 @@ export function PdfHighlightViewer({
             style={{ width: canvasSize.width, height: canvasSize.height, ["--total-scale-factor" as any]: scale }}
           >
             <canvas ref={canvasRef} className="block" />
-            <div ref={textLayerRef} className="fsr-pdf-text-layer" onMouseUp={handleTextSelectionEnd} />
+            <div
+              ref={textLayerRef}
+              className="fsr-pdf-text-layer"
+              style={textLayerCursor ? { cursor: textLayerCursor } : undefined}
+              onMouseUp={handleTextSelectionEnd}
+            />
             {mode === "select" && drawMode && (
               <div
                 className="absolute inset-0 cursor-crosshair"

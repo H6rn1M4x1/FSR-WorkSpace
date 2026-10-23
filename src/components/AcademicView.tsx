@@ -902,11 +902,12 @@ export default function AcademicView({
     }
   }, [propActiveSubTab]);
 
-  // Carpeta pedida desde "Material de Estudio" para abrirla directamente en "Facultad" (ahí las
-  // carpetas de Material de Estudio son solo visuales, el fijado/desfijado real vive en Facultad).
-  const [jumpToFolder, setJumpToFolder] = useState<{ id: string; name: string } | null>(null);
-  const openFolderInFacultad = (folder: PinnedStudyFolder) => {
-    setJumpToFolder({ id: folder.folderId, name: folder.folderName });
+  // Carpeta pedida desde "Material de Estudio" (o desde el Árbol de Materias, con un archivo
+  // puntual) para abrirla directamente en "Facultad" (ahí las carpetas de Material de Estudio son
+  // solo visuales, el fijado/desfijado real vive en Facultad).
+  const [jumpToFolder, setJumpToFolder] = useState<{ id: string; name: string; fileId?: string } | null>(null);
+  const openFolderInFacultad = (folderId: string, folderName: string, fileId?: string) => {
+    setJumpToFolder({ id: folderId, name: folderName, fileId });
     setActiveSubTab("facultad");
   };
 

@@ -391,9 +391,12 @@ interface DriveFolderVisualizerProps {
   setPinnedFolders: React.Dispatch<React.SetStateAction<PinnedStudyFolder[]>>;
   completedFiles: CompletedStudyFile[];
   setCompletedFiles: React.Dispatch<React.SetStateAction<CompletedStudyFile[]>>;
-  // Pedido de "Material de Estudio" para abrir directamente una carpeta ya fijada: al cambiar,
-  // navega ahí (reconstruyendo breadcrumbs desde la raíz) y confirma el pedido con onJumpHandled.
-  jumpToFolder?: { id: string; name: string } | null;
+  // Pedido de "Material de Estudio" (o del Árbol de Materias) para abrir directamente una carpeta
+  // ya fijada: al cambiar, navega ahí (reconstruyendo breadcrumbs desde la raíz) y confirma el
+  // pedido con onJumpHandled. `fileId`, si viene, además deja seleccionado ese archivo puntual en
+  // cuanto termina de cargar el listado de la carpeta (el listado todavía no está disponible en el
+  // mismo instante en que se resuelve la navegación de carpeta).
+  jumpToFolder?: { id: string; name: string; fileId?: string } | null;
   onJumpHandled?: () => void;
 }
 
@@ -1529,13 +1532,30 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
     setSearchQuery("");
   };
 
-  // "Material de Estudio" manda a abrir acá una carpeta ya fijada (las carpetas ahí son solo
-  // visuales). Espera a que facultadFolderId ya esté resuelto para no pisar esto con el folder
-  // raíz que pone initFacultadFolder() al montar, y reconstruye un breadcrumb corto (raíz +
-  // destino) ya que PinnedStudyFolder no guarda el camino completo de carpetas intermedias.
+  // Archivo puntual pendiente de seleccionar en cuanto termine de cargar el listado de la carpeta
+  // a la que se acaba de saltar (ver `jumpToFolder.fileId` y el efecto de más abajo que lo
+  // consume cuando `files` se actualiza).
+  const pendingFileSelectIdRef = useRef<string | null>(null);
+
+  // "Material de Estudio" (o el Árbol de Materias) manda a abrir acá una carpeta ya fijada (las
+  // carpetas ahí son solo visuales). Espera a que facultadFolderId ya esté resuelto para no pisar
+  // esto con el folder raíz que pone initFacultadFolder() al montar, y reconstruye un breadcrumb
+  // corto (raíz + destino) ya que PinnedStudyFolder no guarda el camino completo de carpetas
+  // intermedias.
   useEffect(() => {
     if (!jumpToFolder || !accessToken || !facultadFolderId) return;
+    if (jumpToFolder.fileId) pendingFileSelectIdRef.current = jumpToFolder.fileId;
     if (currentFolderId === jumpToFolder.id) {
+      // Ya está en esa carpeta — si el listado de archivos ya estaba cargado de antes, el efecto
+      // de selección de archivo no se va a volver a disparar solo (no cambia `files`), así que acá
+      // se intenta una vez de una.
+      if (pendingFileSelectIdRef.current) {
+        const match = files.find((f) => f.id === pendingFileSelectIdRef.current);
+        if (match) {
+          setSelectedFile(match);
+          pendingFileSelectIdRef.current = null;
+        }
+      }
       onJumpHandled?.();
       return;
     }
@@ -1551,6 +1571,17 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
     onJumpHandled?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jumpToFolder, accessToken, facultadFolderId]);
+
+  // Una vez que termina de cargar el listado de la carpeta recién saltada, selecciona el archivo
+  // pendiente (si lo había) para que se abra directo, no solo la carpeta.
+  useEffect(() => {
+    if (!pendingFileSelectIdRef.current) return;
+    const match = files.find((f) => f.id === pendingFileSelectIdRef.current);
+    if (match) {
+      setSelectedFile(match);
+      pendingFileSelectIdRef.current = null;
+    }
+  }, [files]);
 
   // Fijado de carpetas y selección de ítems "principales" para el seguimiento de avance de
   // "Material de Estudio" — vive acá (y no en Material de Estudio) porque este es el único lugar
