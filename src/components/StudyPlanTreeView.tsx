@@ -60,7 +60,7 @@ function TreeNode({ data }: NodeProps<Node<TreeNodeData>>) {
         isGroup
           ? "bg-primary text-white dark:text-black border-primary font-extrabold text-xs"
           : "bg-white dark:bg-zinc-900 border-primary/40 text-zinc-800 dark:text-zinc-100 font-bold text-[11px] hover:border-primary hover:shadow-lg transition-all"
-      }`}
+      } ${data.hasAttachment ? "cursor-pointer hover:scale-[1.04]" : ""}`}
     >
       <Handle type="target" position={Position.Top} className="!bg-primary !border-0 !w-2 !h-2" />
       {isGroup ? <Layers className="w-3.5 h-3.5 shrink-0" /> : <BookOpen className="w-3 h-3 text-primary shrink-0" />}
@@ -217,6 +217,13 @@ function FlowDiagram({
         proOptions={{ hideAttribution: true }}
         minZoom={0.2}
         maxZoom={2}
+        // El layout se recalcula entero en el useMemo de arriba cada vez que cambian los nodos, así
+        // que una posición arrastrada a mano se perdería en el próximo render igual — dejar arrastrar
+        // no sirve para nada y de paso hacía que un clic con el más mínimo movimiento de mouse se
+        // interpretara como el inicio de un arrastre y no disparara onNodeClick (por eso el archivo
+        // adjunto a veces no se abría clickeando el nodo).
+        nodesDraggable={false}
+        nodesConnectable={false}
         onInit={(instance) => {
           instanceRef.current = instance;
         }}
