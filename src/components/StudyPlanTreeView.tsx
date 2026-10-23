@@ -152,6 +152,13 @@ function FlowDiagram({
   jumpTarget,
   focusedTopId,
   attachments,
+  // Mientras el panel derecho está animando su ancho (abriéndose o cerrándose como consecuencia
+  // de ESTA MISMA selección — ver el estado homónimo en el padre), el contenedor del diagrama
+  // todavía no tiene su tamaño final: encuadrar/hacer zoom en ese instante calcula contra un
+  // ancho viejo, y el resultado queda mal ubicado una vez que el panel termina de animar (de ahí
+  // "tengo que presionar dos veces" al pasar de un tema con adjunto a uno sin adjunto, que es
+  // justo cuando el panel se colapsa). Los efectos de abajo esperan a que esto vuelva a `true`.
+  panelWidthSettled,
   onNodeContextMenu,
   onNodeClick,
 }: {
@@ -162,6 +169,7 @@ function FlowDiagram({
   // eso ya lo hizo el padre al armar `planNodes`.
   focusedTopId: string | null;
   attachments: Record<string, StudyPlanTreeAttachment>;
+  panelWidthSettled: boolean;
   onNodeContextMenu: (event: React.MouseEvent, nodeId: string) => void;
   onNodeClick: (nodeId: string) => void;
 }) {
@@ -194,17 +202,20 @@ function FlowDiagram({
   // contenido sea el mismo, y reencuadrar en esos casos le pisaba al usuario el zoom/paneo manual
   // que había hecho poco antes — por eso "a veces, al minuto, el zoom se vuelve para atrás".
   useEffect(() => {
+    if (!panelWidthSettled) return;
     instanceRef.current?.fitView({ duration: 500, padding: 0.3 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusedTopId]);
+  }, [focusedTopId, panelWidthSettled]);
 
   // Clic en un subtema del menú: centra y hace zoom específicamente sobre ESE nodo (más cerca
   // que un fitView del subárbol entero). Se dispara después del efecto de arriba en el mismo
-  // commit, así que su animación termina "ganando" sobre el reencuadre general.
+  // commit, así que su animación termina "ganando" sobre el reencuadre general. Si el panel
+  // derecho está a mitad de su animación de ancho, espera (vía la dependencia de abajo) a que
+  // `panelWidthSettled` vuelva a `true` para recién ahí encuadrar, ya con el tamaño final.
   useEffect(() => {
-    if (!jumpTarget || !instanceRef.current) return;
+    if (!jumpTarget || !instanceRef.current || !panelWidthSettled) return;
     instanceRef.current.fitView({ nodes: [{ id: jumpTarget.id }], duration: 650, padding: 0.6, maxZoom: 1.4 });
-  }, [jumpTarget]);
+  }, [jumpTarget, panelWidthSettled]);
 
   return (
     <>
@@ -485,6 +496,11 @@ export function StudyPlanTreeView({
   // el modal entero) — por eso "se quedó en negro, tuve que salir y volver a entrar".
   const rightPanelWasOpenRef = useRef(true);
   const [rightPanelReady, setRightPanelReady] = useState(true);
+  // Si una selección hace que el panel derecho se abra o se cierre (ver `syncRightPanelToNode`),
+  // el diagrama necesita esperar a que esa animación de ancho termine antes de encuadrar/hacer
+  // zoom — si no, calcula contra el ancho viejo del contenedor (ver el comentario en `FlowDiagram`).
+  const [panelWidthSettled, setPanelWidthSettled] = useState(true);
+  const rightPanelOpenRef = useRef(true);
 
   const attachPicker = useDriveFilePicker(accessToken, folderId, folderName);
 
@@ -517,6 +533,18 @@ export function StudyPlanTreeView({
     }
     // Si se está recién abriendo desde cerrado, rightPanelReady queda en false hasta que
     // onAnimationComplete (abajo, en el motion.div) avise que la animación de ancho terminó.
+  }, [rightPanel]);
+
+  // Detecta específicamente cuando el panel CAMBIA entre abierto/cerrado (no cuando solo cambia
+  // de contenido estando ya abierto, que no dispara ninguna animación de ancho) para avisarle al
+  // diagrama que espere con el fitView — ver `panelWidthSettled` arriba y el comentario en
+  // `FlowDiagram`.
+  useEffect(() => {
+    const isOpenNow = !!rightPanel;
+    if (isOpenNow !== rightPanelOpenRef.current) {
+      rightPanelOpenRef.current = isOpenNow;
+      setPanelWidthSettled(false);
+    }
   }, [rightPanel]);
 
   const toggleExpanded = (id: string) => {
@@ -744,6 +772,7 @@ export function StudyPlanTreeView({
             jumpTarget={jumpTarget}
             focusedTopId={focusedTopId}
             attachments={attachments}
+            panelWidthSettled={panelWidthSettled}
             onNodeContextMenu={handleDiagramNodeContextMenu}
             onNodeClick={handleDiagramNodeClick}
           />
@@ -762,6 +791,10 @@ export function StudyPlanTreeView({
             rightPanelWasOpenRef.current = true;
             setRightPanelReady(true);
           }
+          // El diagrama, en cambio, necesita enterarse de AMBAS direcciones (abrir y cerrar): en
+          // cualquiera de las dos el ancho del contenedor del diagrama termina de asentarse recién
+          // acá.
+          setPanelWidthSettled(true);
         }}
         className={`h-full shrink-0 overflow-hidden border-l ${
           darkMode ? "bg-zinc-900/60 border-zinc-800" : "bg-slate-50 border-zinc-150"
