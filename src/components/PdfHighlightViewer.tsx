@@ -66,16 +66,19 @@ const TOOL_CURSOR_PATHS: Record<StudyPlanTreeAnnotationType, string> = {
 };
 
 // Cursor del mouse con el ícono de la herramienta activa (y su color elegido), para que quede
-// claro qué se está por hacer sin tener que mirar la barra de herramientas — un círculo blanco de
-// fondo para que se vea tanto en PDFs claros como oscuros, con hotspot centrado.
+// claro qué se está por hacer sin tener que mirar la barra de herramientas. Sin ninguna forma de
+// fondo (ni círculo ni cuadrado) — fondo 100% transparente, el ícono se dibuja dos veces, una
+// como halo blanco grueso y semitransparente por detrás y otra con su color real encima, así
+// queda legible sobre cualquier color de página (clara u oscura) sin necesitar un relleno sólido.
 function toolCursor(type: StudyPlanTreeAnnotationType, color: string): string {
+  const path = TOOL_CURSOR_PATHS[type];
   const svg =
-    `<svg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'>` +
-    `<circle cx='14' cy='14' r='12.5' fill='white' fill-opacity='0.95' stroke='rgba(0,0,0,0.25)' stroke-width='1'/>` +
-    `<g transform='translate(2,2)' fill='none' stroke='${color}' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'>` +
-    TOOL_CURSOR_PATHS[type] +
+    `<svg xmlns='http://www.w3.org/2000/svg' width='30' height='30' viewBox='0 0 30 30'>` +
+    `<g transform='translate(3,3)' fill='none' stroke-linecap='round' stroke-linejoin='round'>` +
+    `<g stroke='white' stroke-opacity='0.9' stroke-width='4.5'>${path}</g>` +
+    `<g stroke='${color}' stroke-width='2.1'>${path}</g>` +
     `</g></svg>`;
-  return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 14 14, text`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 15 15, text`;
 }
 
 function rectToStyle(r: NormRect, containerWidth: number, containerHeight: number): React.CSSProperties {
