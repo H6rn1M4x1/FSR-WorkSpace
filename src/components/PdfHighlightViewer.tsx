@@ -154,12 +154,29 @@ export function PdfHighlightViewer({
     if (!textLayerRef.current.contains(range.commonAncestorContainer)) return;
     const clientRects = Array.from(range.getClientRects()).filter((r) => r.width > 0 && r.height > 0);
     if (clientRects.length === 0) return;
+    // pdf.js posiciona cada span de texto en absoluto (no en flujo normal), así que
+    // Range.getClientRects() sobre una selección que cruza varios spans de una misma línea visual
+    // devuelve varios rects angostos y a veces superpuestos entre sí, en vez de uno solo prolijo —
+    // se agrupan por línea (mismo "top" aproximado) en un único rectángulo de punta a punta, igual
+    // a como se ve un resaltado de texto normal.
     const containerRect = pageContainerRef.current.getBoundingClientRect();
-    const rects: NormRect[] = clientRects.map((r) => ({
-      x: (r.left - containerRect.left) / containerRect.width,
-      y: (r.top - containerRect.top) / containerRect.height,
-      width: r.width / containerRect.width,
-      height: r.height / containerRect.height,
+    const lines: { top: number; bottom: number; left: number; right: number }[] = [];
+    for (const r of clientRects) {
+      const line = lines.find((l) => Math.abs(l.top - r.top) < 3);
+      if (line) {
+        line.left = Math.min(line.left, r.left);
+        line.right = Math.max(line.right, r.right);
+        line.top = Math.min(line.top, r.top);
+        line.bottom = Math.max(line.bottom, r.bottom);
+      } else {
+        lines.push({ top: r.top, bottom: r.bottom, left: r.left, right: r.right });
+      }
+    }
+    const rects: NormRect[] = lines.map((l) => ({
+      x: (l.left - containerRect.left) / containerRect.width,
+      y: (l.top - containerRect.top) / containerRect.height,
+      width: (l.right - l.left) / containerRect.width,
+      height: (l.bottom - l.top) / containerRect.height,
     }));
     setPendingSelection({ rects, text: selection.toString().trim() });
   };
