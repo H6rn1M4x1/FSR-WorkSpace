@@ -32,8 +32,10 @@ interface StudyMaterialBlockProps {
   completedFiles: CompletedStudyFile[];
   // Las carpetas acá son solo visuales: fijarlas/desfijarlas y elegir sus archivos principales
   // se hace desde "Facultad" (que es donde además se navega el árbol real de Drive). Al tocar
-  // una carpeta, este callback la abre ahí directamente en vez de duplicar esa UI acá.
-  onOpenInFacultad: (folder: PinnedStudyFolder) => void;
+  // una carpeta, este callback la abre ahí directamente en vez de duplicar esa UI acá. `fileId`
+  // (opcional) además deja ese archivo puntual abierto — lo usa el botón "Abrir en Facultad" del
+  // Árbol de Materias para un adjunto concreto, no solo la carpeta.
+  onOpenInFacultad: (folderId: string, folderName: string, fileId?: string) => void;
   // Árbol de materias armado con IA a partir de un plan de estudio en PDF — un solo documento
   // por usuario (0 o 1 elementos), igual que el resto de las colecciones de la app.
   studyPlanTree: StudyPlanTree[];
@@ -456,7 +458,7 @@ export function StudyMaterialBlock({
                   files={filesByFolder[folder.folderId]}
                   driveConnected={!!accessToken}
                   progress={progressFor(folder.folderId)}
-                  onOpen={() => onOpenInFacultad(folder)}
+                  onOpen={() => onOpenInFacultad(folder.folderId, folder.folderName)}
                   darkMode={darkMode}
                 />
               </div>
@@ -507,6 +509,12 @@ export function StudyMaterialBlock({
           folderName={treeModalFolder.folderName}
           studyPlanTree={treeFor(treeModalFolder.folderId)}
           setStudyPlanTree={setStudyPlanTree}
+          onOpenInFacultad={(folderId, folderNameArg, fileId) => {
+            // Navegar a Facultad con el árbol todavía abierto arriba se ve roto (como si no
+            // hubiera pasado nada) — se cierra el modal de una vez, antes de la navegación.
+            setTreeModalFolder(null);
+            onOpenInFacultad(folderId, folderNameArg, fileId);
+          }}
         />
       )}
     </div>

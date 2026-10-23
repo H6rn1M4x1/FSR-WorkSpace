@@ -28,7 +28,7 @@ import {
   Highlighter,
   X,
   Loader2,
-  ExternalLink,
+  FolderOpen,
   FileX,
 } from "lucide-react";
 import { StudyPlanTree, StudyPlanTreeNode, StudyPlanTreeAttachment, StudyPlanTreeAnnotation } from "../types";
@@ -460,6 +460,7 @@ export function StudyPlanTreeView({
   folderId,
   folderName,
   onSaveAttachment,
+  onOpenInFacultad,
 }: {
   studyPlanTree: StudyPlanTree;
   darkMode: boolean;
@@ -467,6 +468,7 @@ export function StudyPlanTreeView({
   folderId: string;
   folderName: string;
   onSaveAttachment: (nodeId: string, file: StudyPlanTreeAttachment | null) => void;
+  onOpenInFacultad: (folderId: string, folderName: string, fileId?: string) => void;
 }) {
   const planNodes = studyPlanTree.nodes;
   const attachments = studyPlanTree.attachments || {};
@@ -697,6 +699,40 @@ export function StudyPlanTreeView({
   // resaltado de uno existente).
   const handleHighlightCancel = () => setHighlightTarget(null);
 
+  // "Abrir en Facultad": en vez de mandar a la Drive real, navega DENTRO de la app a la sección
+  // Facultad, en la carpeta real donde vive el archivo (no necesariamente la carpeta fijada de la
+  // materia — un adjunto puede estar en una subcarpeta), con el archivo ya seleccionado/abierto
+  // ahí. Para saber esa carpeta real hace falta resolver el padre del archivo en Drive (dos
+  // llamadas: el archivo → su carpeta padre, y esa carpeta → su nombre, para el breadcrumb); si
+  // algo de eso falla, cae de vuelta a la carpeta fijada de la materia (sigue siendo útil, aunque
+  // el archivo puntual no aparezca listado ahí si está más anidado).
+  const handleOpenInFacultad = async () => {
+    if (!rightPanel || rightPanel.kind === "empty") return;
+    uiSounds.click();
+    const { fileId } = rightPanel;
+    if (!accessToken) {
+      onOpenInFacultad(folderId, folderName, fileId);
+      return;
+    }
+    try {
+      const parentRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=parents`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const parentId: string | undefined = parentRes.ok ? (await parentRes.json())?.parents?.[0] : undefined;
+      if (!parentId) {
+        onOpenInFacultad(folderId, folderName, fileId);
+        return;
+      }
+      const nameRes = await fetch(`https://www.googleapis.com/drive/v3/files/${parentId}?fields=name`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const parentName: string | undefined = nameRes.ok ? (await nameRes.json())?.name : undefined;
+      onOpenInFacultad(parentId, parentName || folderName, fileId);
+    } catch {
+      onOpenInFacultad(folderId, folderName, fileId);
+    }
+  };
+
   return (
     <div className="w-full h-full flex rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800">
       {/* Sidebar de unidades/submenús */}
@@ -822,15 +858,13 @@ export function StudyPlanTreeView({
                   {rightPanel.kind !== "empty" && (
                     <button
                       type="button"
-                      onClick={() =>
-                        window.open(`https://drive.google.com/file/d/${rightPanel.fileId}/view`, "_blank", "noopener,noreferrer")
-                      }
-                      title="Abrir en Google Drive"
+                      onClick={handleOpenInFacultad}
+                      title="Abrir en Facultad"
                       className={`p-1.5 rounded-full cursor-pointer ${
                         darkMode ? "hover:bg-zinc-800 text-zinc-400" : "hover:bg-zinc-200 text-zinc-500"
                       }`}
                     >
-                      <ExternalLink className="w-3.5 h-3.5" />
+                      <FolderOpen className="w-3.5 h-3.5" />
                     </button>
                   )}
                   <button

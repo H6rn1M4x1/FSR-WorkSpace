@@ -23,6 +23,7 @@ export function StudyPlanTreeModal({
   folderName,
   studyPlanTree,
   setStudyPlanTree,
+  onOpenInFacultad,
 }: {
   open: boolean;
   onClose: () => void;
@@ -35,6 +36,10 @@ export function StudyPlanTreeModal({
   folderName: string;
   studyPlanTree: StudyPlanTree | undefined;
   setStudyPlanTree: React.Dispatch<React.SetStateAction<StudyPlanTree[]>>;
+  // Abre un archivo de Drive (y su carpeta) directo en la sección "Facultad" de la app, en vez de
+  // la Drive real — lo usa el botón del panel derecho del árbol para el programa original o el
+  // adjunto de un nodo.
+  onOpenInFacultad: (folderId: string, folderName: string, fileId?: string) => void;
 }) {
   const [mode, setMode] = useState<"viewing" | "picking" | "generating" | "error">(
     studyPlanTree ? "viewing" : "picking",
@@ -174,6 +179,7 @@ export function StudyPlanTreeModal({
                 folderId={folderId}
                 folderName={folderName}
                 onSaveAttachment={handleSaveAttachment}
+                onOpenInFacultad={onOpenInFacultad}
               />
             )}
 
