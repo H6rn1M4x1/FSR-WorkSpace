@@ -26,7 +26,10 @@ import { uiSounds } from "../lib/sounds";
 // proyecto no tiene configurados) ni de un import con sufijo "?url".
 GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).href;
 
-type NormRect = { x: number; y: number; width: number; height: number };
+// `baseline`/`ascent` (mismas unidades que `y`/`height`, normalizadas 0-1): línea base real y
+// ascent medidos del font del texto seleccionado — ver `measureSpanFontMetrics`. Quedan `undefined`
+// en un recuadro dibujado a mano (no hay texto del que medir nada).
+type NormRect = { x: number; y: number; width: number; height: number; baseline?: number; ascent?: number };
 
 const COLOR_PALETTE: { name: string; value: string }[] = [
   { name: "Amarillo", value: "#facc15" },
@@ -64,15 +67,48 @@ function newAnnotationId(): string {
   return `ann_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+let measureCtx: CanvasRenderingContext2D | null = null;
+const fontMetricsCache = new Map<string, { ascentPx: number; descentPx: number }>();
+
+// Ascent/descent REALES (en px) del font que pdf.js le puso a este span puntual — vía el Canvas 2D
+// TextMetrics del mismo font-size/family, no una fracción adivinada de la caja. Cacheado por
+// string de font: dentro de una misma selección, decenas de spans suelen compartir exactamente el
+// mismo font/tamaño.
+function measureSpanFontMetrics(span: HTMLElement): { ascentPx: number; descentPx: number } {
+  const computed = window.getComputedStyle(span);
+  const fontKey = `${computed.fontStyle} ${computed.fontWeight} ${computed.fontSize} ${computed.fontFamily}`;
+  const cached = fontMetricsCache.get(fontKey);
+  if (cached) return cached;
+  if (!measureCtx) measureCtx = document.createElement("canvas").getContext("2d");
+  let result: { ascentPx: number; descentPx: number };
+  if (measureCtx) {
+    measureCtx.font = fontKey;
+    const m = measureCtx.measureText("Mgjpqy");
+    const sizePx = parseFloat(computed.fontSize) || 12;
+    result = {
+      ascentPx: m.fontBoundingBoxAscent || sizePx * 0.8,
+      descentPx: m.fontBoundingBoxDescent || sizePx * 0.2,
+    };
+  } else {
+    const sizePx = parseFloat(computed.fontSize) || 12;
+    result = { ascentPx: sizePx * 0.8, descentPx: sizePx * 0.2 };
+  }
+  fontMetricsCache.set(fontKey, result);
+  return result;
+}
+
+type RawRect = { rect: DOMRect; ascentPx: number };
+
 // Devuelve, para una selección de texto (Range) dentro de la capa de texto de pdf.js, los rects
-// "crudos" de cada span que la selección toca — recortados con un sub-rango al tramo exacto
-// seleccionado DENTRO de ese span — en vez de pedirle los rects directo a `range` con
-// `getClientRects()`: como pdf.js posiciona cada span de texto en absoluto (no en flujo normal),
-// un Range que cruza VARIOS spans a veces devuelve menos rects de los que hacen falta (se "comía"
-// el final de algunas líneas). Yendo span por span el resultado es consistente.
-function getRawRectsForRange(range: Range, textLayerEl: HTMLElement): DOMRect[] {
+// "crudos" de cada span que la selección toca (recortados con un sub-rango al tramo exacto
+// seleccionado DENTRO de ese span, en vez de pedirle los rects directo a `range` con
+// `getClientRects()`: como pdf.js posiciona cada span de texto en absoluto —no en flujo normal—,
+// un Range que cruza VARIOS spans a veces devuelve menos rects de los que hacen falta), junto con
+// el ascent real medido de CADA span (para ubicar después el subrayado/tachado en su línea base
+// real, no en una fracción adivinada de una caja que puede incluir interlineado de más).
+function getRawRectsForRange(range: Range, textLayerEl: HTMLElement): RawRect[] {
   const spans = Array.from(textLayerEl.querySelectorAll("span"));
-  const raw: DOMRect[] = [];
+  const raw: RawRect[] = [];
   for (const span of spans) {
     const textNode = span.firstChild;
     if (!textNode || textNode.nodeType !== Node.TEXT_NODE || !textNode.textContent) continue;
@@ -87,7 +123,10 @@ function getRawRectsForRange(range: Range, textLayerEl: HTMLElement): DOMRect[] 
         sub.setEnd(range.endContainer, range.endOffset);
       }
       if (sub.collapsed) continue;
-      raw.push(...Array.from(sub.getClientRects()).filter((r) => r.width > 0 && r.height > 0));
+      const { ascentPx } = measureSpanFontMetrics(span);
+      for (const rect of Array.from(sub.getClientRects())) {
+        if (rect.width > 0 && rect.height > 0) raw.push({ rect, ascentPx });
+      }
     } catch {
       // Un span cuya posición relativa al range no se puede acotar así (caso borde) se saltea —
       // mejor perder una marca puntual que romper toda la captura.
@@ -96,32 +135,57 @@ function getRawRectsForRange(range: Range, textLayerEl: HTMLElement): DOMRect[] 
   return raw;
 }
 
+type MergedLine = { top: number; bottom: number; left: number; right: number; baselinePx: number; ascentPx: number };
+
 // Agrupa rects por línea visual (mismo "top" aproximado) en un único rectángulo de punta a punta
-// por línea — varios rects angostos/superpuestos de una misma línea se ven como un resaltado
-// prolijo en vez de manchado.
-function mergeRectsByLine(rects: DOMRect[]): { top: number; bottom: number; left: number; right: number }[] {
-  const lines: { top: number; bottom: number; left: number; right: number }[] = [];
-  for (const r of rects) {
+// por línea — varios rects angostos/superpuestos de una misma línea se ven como una marca prolija
+// en vez de manchada. De paso calcula la línea base real de la línea (top del span más "alto" de
+// esa línea + su ascent medido).
+function mergeRectsByLine(rawRects: RawRect[]): MergedLine[] {
+  const lines: MergedLine[] = [];
+  for (const { rect: r, ascentPx } of rawRects) {
     const line = lines.find((l) => Math.abs(l.top - r.top) < 3);
     if (line) {
       line.left = Math.min(line.left, r.left);
       line.right = Math.max(line.right, r.right);
+      if (r.top <= line.top) {
+        line.baselinePx = r.top + ascentPx;
+        line.ascentPx = ascentPx;
+      }
       line.top = Math.min(line.top, r.top);
       line.bottom = Math.max(line.bottom, r.bottom);
     } else {
-      lines.push({ top: r.top, bottom: r.bottom, left: r.left, right: r.right });
+      lines.push({ top: r.top, bottom: r.bottom, left: r.left, right: r.right, baselinePx: r.top + ascentPx, ascentPx });
     }
   }
   return lines;
 }
 
 // Texto seleccionable invisible superpuesto al canvas (pdf.js dibuja los glifos en el canvas; esta
-// capa solo necesita estar ahí para que el navegador pueda seleccionar texto) — mínimo necesario,
-// sin la hoja de estilos completa del visor oficial de pdf.js (esa trae estructura/chrome que acá
-// no se usa, este componente arma su propia interfaz).
+// capa solo necesita estar ahí para que el navegador pueda seleccionar texto) — sin la estructura
+// completa del visor oficial de pdf.js (ese trae chrome que acá no se usa, este componente arma su
+// propia interfaz), PERO las reglas de abajo (--font-height/--scale-x/--text-scale-factor y cómo
+// se consumen) SÍ son una copia fiel de las de pdf.js (web/pdf_viewer.css, regla ".textLayer"):
+// el propio JS de `TextLayer` pone esas variables como custom properties inline en cada span
+// esperando que ALGUNA hoja de estilos las consuma así — sin esto, el font-size y el escalado
+// horizontal de cada span quedan en un `calc()` inválido y el texto se renderiza con un tamaño/
+// ancho que no corresponde al zoom real (se detectó porque una selección de texto terminaba
+// desbordando bien afuera de su línea).
 const TEXT_LAYER_STYLE = `
-.fsr-pdf-text-layer { position: absolute; inset: 0; overflow: hidden; line-height: 1; opacity: 1; }
+.fsr-pdf-text-layer {
+  position: absolute; inset: 0; overflow: hidden; line-height: 1; opacity: 1;
+  --min-font-size: 1;
+  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
+}
 .fsr-pdf-text-layer span, .fsr-pdf-text-layer br { color: transparent; position: absolute; white-space: pre; cursor: text; transform-origin: 0% 0%; }
+.fsr-pdf-text-layer > span {
+  --font-height: 0;
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+  --scale-x: 1;
+  --rotate: 0deg;
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+}
 .fsr-pdf-text-layer ::selection { background: rgba(var(--color-primary-rgb, 26, 115, 232), 0.35); }
 `;
 
@@ -160,8 +224,13 @@ function AnnotationMarks({
               />
             );
           }
+          // Línea base real del texto (ya medida al marcar) si está disponible; para un recuadro
+          // dibujado a mano (sin `baseline`) se aproxima con una fracción fija de la caja, lo
+          // mejor que se puede hacer sin texto del que medir nada.
+          const baselinePx = r.baseline != null ? r.baseline * containerHeight : (style.top as number) + h * 0.85;
+          const ascentPx = r.ascent != null ? r.ascent * containerHeight : h * 0.7;
           if (ann.type === "underline") {
-            const thickness = Math.max(2, h * 0.09);
+            const thickness = Math.max(1.5, ascentPx * 0.07);
             return (
               <div
                 key={key}
@@ -174,15 +243,18 @@ function AnnotationMarks({
                   ...common,
                   left: style.left,
                   width: style.width,
-                  top: (style.top as number) + h - thickness,
-                  height: Math.max(thickness, 6),
+                  top: baselinePx,
+                  height: Math.max(thickness, 2),
                   borderBottom: `${thickness}px ${ann.underlineStyle || "solid"} ${ann.color}`,
                 }}
               />
             );
           }
-          // strikethrough
-          const thickness = Math.max(2, h * 0.09);
+          // strikethrough: cruza por donde suele estar el cuerpo de las minúsculas (más o menos
+          // a un tercio del ascent por encima de la línea base), no por el medio de toda la caja
+          // (que incluye el espacio de las mayúsculas/ascendentes y el interlineado de pdf.js).
+          const thickness = Math.max(1.5, ascentPx * 0.07);
+          const strikeTop = baselinePx - ascentPx * 0.33;
           return (
             <div
               key={key}
@@ -195,7 +267,7 @@ function AnnotationMarks({
                 ...common,
                 left: style.left,
                 width: style.width,
-                top: (style.top as number) + h / 2 - thickness / 2,
+                top: strikeTop - thickness / 2,
                 height: thickness,
                 backgroundColor: ann.color,
               }}
@@ -368,6 +440,8 @@ export function PdfHighlightViewer({
       y: (l.top - containerRect.top) / containerRect.height,
       width: (l.right - l.left) / containerRect.width,
       height: (l.bottom - l.top) / containerRect.height,
+      baseline: (l.baselinePx - containerRect.top) / containerRect.height,
+      ascent: l.ascentPx / containerRect.height,
     }));
     const text = selection.toString().trim();
     selection.removeAllRanges();
@@ -585,7 +659,12 @@ export function PdfHighlightViewer({
           <div
             ref={pageContainerRef}
             className="relative shadow-lg shrink-0"
-            style={{ width: canvasSize.width, height: canvasSize.height }}
+            // pdf.js calcula el font-size (y otras medidas) de cada span de texto con
+            // `calc(Npx * var(--total-scale-factor))` — esa variable la define la hoja de
+            // estilos OFICIAL de pdf.js (que acá no se usa a propósito, ver comentario arriba de
+            // TEXT_LAYER_STYLE), así que sin esto el calc() queda inválido y el texto se renderiza
+            // con un tamaño de fuente que no corresponde al zoom real, desbordando su recuadro.
+            style={{ width: canvasSize.width, height: canvasSize.height, ["--total-scale-factor" as any]: scale }}
           >
             <canvas ref={canvasRef} className="block" />
             <div ref={textLayerRef} className="fsr-pdf-text-layer" onMouseUp={handleTextSelectionEnd} />

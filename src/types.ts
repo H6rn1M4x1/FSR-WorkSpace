@@ -592,8 +592,13 @@ export interface StudyPlanTreeAnnotation {
   page: number; // 1-indexado
   // Coordenadas normalizadas (0 a 1) relativas al tamaño de la página renderizada al momento de
   // marcar — así no dependen de en qué zoom se haya marcado ni en qué zoom se vea después (se
-  // multiplican por el tamaño actual de la página al dibujar la marca).
-  rects: { x: number; y: number; width: number; height: number }[];
+  // multiplican por el tamaño actual de la página al dibujar la marca). `baseline`/`ascent`
+  // (mismas unidades que `y`/`height`) son la línea base real y el ascent del tipo de letra de ESE
+  // tramo de texto, medidos con el Canvas 2D TextMetrics del font real que pdf.js le puso a cada
+  // span al momento de marcar — permiten ubicar el subrayado/tachado exactos en vez de aproximar
+  // con una fracción fija de `height` (que varía mucho según la tipografía de cada PDF). Quedan
+  // sin definir en un recuadro dibujado a mano (no hay texto del que medir una línea base).
+  rects: { x: number; y: number; width: number; height: number; baseline?: number; ascent?: number }[];
   text?: string; // snippet de texto, si se marcó seleccionando texto y no un recuadro libre
 }
 
