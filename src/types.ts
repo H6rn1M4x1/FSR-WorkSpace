@@ -576,23 +576,31 @@ export interface StudyPlanTreeNode {
   kind: "group" | "materia";
 }
 
-// Una porción puntual resaltada dentro de un PDF adjunto (texto seleccionado, o un recuadro
-// libre dibujado a mano para contenido sin texto como imágenes/diagramas) — al ver el adjunto de
-// un nodo que tiene esto, el visor salta directo a esa página y la marca, en vez de mostrar el
-// archivo entero desde la página 1.
-export interface StudyPlanTreeHighlight {
+export type StudyPlanTreeAnnotationType = "highlight" | "underline" | "strikethrough";
+export type StudyPlanTreeUnderlineStyle = "solid" | "dashed" | "dotted" | "double";
+
+// Una marca puntual dentro de un PDF adjunto (texto seleccionado, o un recuadro libre dibujado a
+// mano para contenido sin texto como imágenes/diagramas) — un adjunto puede tener varias, de
+// distinto tipo/color, incluso en páginas distintas. Al ver el adjunto de un nodo que tiene
+// alguna, el visor salta directo a la página de la primera, en vez de mostrar el archivo entero
+// desde la página 1.
+export interface StudyPlanTreeAnnotation {
+  id: string;
+  type: StudyPlanTreeAnnotationType;
+  color: string; // hex, ej "#facc15"
+  underlineStyle?: StudyPlanTreeUnderlineStyle; // solo si type === "underline"
   page: number; // 1-indexado
   // Coordenadas normalizadas (0 a 1) relativas al tamaño de la página renderizada al momento de
-  // resaltar — así no dependen de en qué zoom se haya hecho el resaltado ni en qué zoom se vea
-  // después (se multiplican por el tamaño actual de la página al dibujar la marca).
+  // marcar — así no dependen de en qué zoom se haya marcado ni en qué zoom se vea después (se
+  // multiplican por el tamaño actual de la página al dibujar la marca).
   rects: { x: number; y: number; width: number; height: number }[];
-  text?: string; // snippet de texto resaltado, si se resaltó seleccionando texto y no un recuadro libre
+  text?: string; // snippet de texto, si se marcó seleccionando texto y no un recuadro libre
 }
 
 export interface StudyPlanTreeAttachment {
   fileId: string;
   fileName: string;
-  highlight?: StudyPlanTreeHighlight;
+  annotations?: StudyPlanTreeAnnotation[];
 }
 
 // Árbol de materias generado con IA a partir de un PDF de Drive — uno por carpeta de materia
