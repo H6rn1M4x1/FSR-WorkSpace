@@ -29,8 +29,9 @@ import {
   X,
   Loader2,
   ExternalLink,
+  FileX,
 } from "lucide-react";
-import { StudyPlanTree, StudyPlanTreeNode, StudyPlanTreeAttachment, StudyPlanTreeHighlight } from "../types";
+import { StudyPlanTree, StudyPlanTreeNode, StudyPlanTreeAttachment, StudyPlanTreeAnnotation } from "../types";
 import { layoutStudyPlanTree } from "../lib/studyPlanTree";
 import { uiSounds } from "../lib/sounds";
 import { DriveFilePickerView } from "./DriveFilePickerView";
@@ -423,17 +424,23 @@ function NodeContextMenu({
   );
 }
 
-type RightPanelContent = {
-  kind: "original" | "attachment";
-  fileId: string;
-  fileName: string;
-  nodeLabel?: string;
-  highlight?: StudyPlanTreeHighlight;
-};
+type RightPanelContent =
+  | { kind: "original"; fileId: string; fileName: string }
+  | { kind: "attachment"; fileId: string; fileName: string; nodeLabel?: string; annotations?: StudyPlanTreeAnnotation[] }
+  // El tema seleccionado no tiene ningún archivo adjunto — se muestra solo si el usuario reabre el
+  // panel a propósito (el toggle de arriba a la derecha), nunca se abre solo.
+  | { kind: "empty"; nodeLabel?: string };
 
 // Qué hacer con el visor de resaltado abierto (clic derecho → "Adjuntar archivo" sobre un PDF
-// recién elegido, o clic derecho → "Resaltar una parte" sobre uno ya adjuntado).
-type HighlightTarget = { node: StudyPlanTreeNode; fileId: string; fileName: string };
+// recién elegido, o clic derecho → "Resaltar una parte" sobre uno ya adjuntado — en ese caso
+// `existingAnnotations` precarga lo que ya tenía, para agregar/sacar marcas en vez de arrancar de
+// cero).
+type HighlightTarget = {
+  node: StudyPlanTreeNode;
+  fileId: string;
+  fileName: string;
+  existingAnnotations?: StudyPlanTreeAnnotation[];
+};
 
 export function StudyPlanTreeView({
   studyPlanTree,
@@ -464,6 +471,9 @@ export function StudyPlanTreeView({
     fileId: studyPlanTree.sourceFileId,
     fileName: studyPlanTree.sourceFileName,
   }));
+  // Último tema clickeado/seleccionado (sidebar o diagrama), tenga o no adjunto — determina qué
+  // mostrar si el usuario reabre el panel derecho a mano (su adjunto, o el aviso de "sin archivo").
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeId: string } | null>(null);
   const [attachPickerNode, setAttachPickerNode] = useState<StudyPlanTreeNode | null>(null);
   const [highlightTarget, setHighlightTarget] = useState<HighlightTarget | null>(null);
@@ -519,6 +529,27 @@ export function StudyPlanTreeView({
     });
   };
 
+  // Sincroniza el panel derecho con el tema recién seleccionado (sidebar o diagrama). Si tiene
+  // adjunto, siempre lo muestra (lo abre si estaba cerrado, lo actualiza si mostraba otra cosa —
+  // así quedó desde una ronda anterior). Si NO tiene adjunto y el panel estaba mostrando algo
+  // ligado a OTRO tema (un adjunto suyo, o el aviso de "sin archivo" de un tema previo), lo
+  // colapsa — mostrar el adjunto de un tema distinto como si fuera de este confunde. Si estaba
+  // cerrado o mostrando el programa original (no ligado a ningún tema puntual), no lo toca.
+  const syncRightPanelToNode = (node: StudyPlanTreeNode) => {
+    const att = attachments[node.id];
+    if (att) {
+      setRightPanel({
+        kind: "attachment",
+        fileId: att.fileId,
+        fileName: att.fileName,
+        nodeLabel: node.label,
+        annotations: att.annotations,
+      });
+      return;
+    }
+    setRightPanel((prev) => (prev && prev.kind !== "original" ? null : prev));
+  };
+
   const handleSelectNode = (node: StudyPlanTreeNode, isTopLevel: boolean) => {
     uiSounds.click();
     if (isTopLevel) {
@@ -533,19 +564,8 @@ export function StudyPlanTreeView({
       setFocusedTopId(topId);
       setJumpTarget({ id: node.id, nonce: Date.now() });
     }
-    // Si el tema seleccionado (unidad o subtema) tiene un archivo adjunto, mostrarlo directo a la
-    // derecha — seleccionarlo desde el menú es la forma principal de navegar, no solo clickearlo
-    // en el diagrama.
-    const att = attachments[node.id];
-    if (att) {
-      setRightPanel({
-        kind: "attachment",
-        fileId: att.fileId,
-        fileName: att.fileName,
-        nodeLabel: node.label,
-        highlight: att.highlight,
-      });
-    }
+    setSelectedNodeId(node.id);
+    syncRightPanelToNode(node);
   };
 
   const showAll = () => {
@@ -559,26 +579,43 @@ export function StudyPlanTreeView({
     if (!att) return;
     const node = planNodes.find((n) => n.id === nodeId);
     uiSounds.click();
+    setSelectedNodeId(nodeId);
     setRightPanel({
       kind: "attachment",
       fileId: att.fileId,
       fileName: att.fileName,
       nodeLabel: node?.label,
-      highlight: att.highlight,
+      annotations: att.annotations,
     });
   };
 
-  const toggleOriginal = () => {
+  // Reabre el panel a mano (botón de arriba a la derecha, cuando está cerrado): si hay un tema
+  // seleccionado, muestra su adjunto (si tiene) o el aviso de "sin archivo" (si no); sin ningún
+  // tema seleccionado todavía, muestra el programa original como siempre.
+  const toggleRightPanel = () => {
     uiSounds.click();
-    setRightPanel((prev) =>
-      prev?.kind === "original"
-        ? null
-        : { kind: "original", fileId: studyPlanTree.sourceFileId, fileName: studyPlanTree.sourceFileName },
-    );
+    if (rightPanel) {
+      setRightPanel(null);
+      return;
+    }
+    const node = selectedNodeId ? planNodes.find((n) => n.id === selectedNodeId) : null;
+    if (node) {
+      const att = attachments[node.id];
+      setRightPanel(
+        att
+          ? { kind: "attachment", fileId: att.fileId, fileName: att.fileName, nodeLabel: node.label, annotations: att.annotations }
+          : { kind: "empty", nodeLabel: node.label },
+      );
+      return;
+    }
+    setRightPanel({ kind: "original", fileId: studyPlanTree.sourceFileId, fileName: studyPlanTree.sourceFileName });
   };
 
   const handleDiagramNodeClick = (nodeId: string) => {
-    if (attachments[nodeId]) showAttachmentFor(nodeId);
+    const node = planNodes.find((n) => n.id === nodeId);
+    if (!node) return;
+    setSelectedNodeId(nodeId);
+    syncRightPanelToNode(node);
   };
 
   const handleDiagramNodeContextMenu = (event: React.MouseEvent, nodeId: string) => {
@@ -592,7 +629,7 @@ export function StudyPlanTreeView({
     const node = attachPickerNode;
     setAttachPickerNode(null);
     if (isPdfFile(file.name)) {
-      // Antes de guardar el adjunto, dejar elegir qué parte del PDF vincular a este tema (o
+      // Antes de guardar el adjunto, dejar elegir qué parte(s) del PDF marcar para este tema (o
       // saltear y adjuntar el archivo completo) — ver `handleHighlightSave`/`handleHighlightSkip`.
       uiSounds.click();
       setHighlightTarget({ node, fileId: file.id, fileName: file.name });
@@ -600,27 +637,30 @@ export function StudyPlanTreeView({
     }
     onSaveAttachment(node.id, { fileId: file.id, fileName: file.name });
     uiSounds.success();
+    setSelectedNodeId(node.id);
     setRightPanel({ kind: "attachment", fileId: file.id, fileName: file.name, nodeLabel: node.label });
   };
 
-  // Confirmar un resaltado nuevo (texto seleccionado o recuadro dibujado): guarda el adjunto YA
-  // con esa porción vinculada, y lo muestra a la derecha.
-  const handleHighlightSave = (highlight: StudyPlanTreeHighlight) => {
+  // Confirmar las marcas nuevas (texto seleccionado y/o recuadros dibujados, puede ser más de
+  // una): guarda el adjunto YA con esas marcas, y lo muestra a la derecha.
+  const handleHighlightSave = (newAnnotations: StudyPlanTreeAnnotation[]) => {
     if (!highlightTarget) return;
     const { node, fileId, fileName } = highlightTarget;
-    onSaveAttachment(node.id, { fileId, fileName, highlight });
-    setRightPanel({ kind: "attachment", fileId, fileName, nodeLabel: node.label, highlight });
+    onSaveAttachment(node.id, { fileId, fileName, annotations: newAnnotations });
+    setSelectedNodeId(node.id);
+    setRightPanel({ kind: "attachment", fileId, fileName, nodeLabel: node.label, annotations: newAnnotations });
     setHighlightTarget(null);
   };
 
-  // "Guardar sin resaltar": adjunta (o deja) el archivo completo, sin ninguna porción marcada —
-  // sirve tanto para el primer adjunto (saltear el resaltado) como para quitarle el resaltado a
-  // uno que ya tenía.
+  // "Guardar sin marcar": adjunta (o deja) el archivo completo, sin ninguna porción marcada —
+  // sirve tanto para el primer adjunto (saltear el marcado) como para sacarle las marcas a uno
+  // que ya tenía.
   const handleHighlightSkip = () => {
     if (!highlightTarget) return;
     const { node, fileId, fileName } = highlightTarget;
     onSaveAttachment(node.id, { fileId, fileName });
     uiSounds.success();
+    setSelectedNodeId(node.id);
     setRightPanel({ kind: "attachment", fileId, fileName, nodeLabel: node.label });
     setHighlightTarget(null);
   };
@@ -685,10 +725,10 @@ export function StudyPlanTreeView({
         </button>
         <button
           type="button"
-          onClick={toggleOriginal}
-          title={rightPanel?.kind === "original" ? "Ocultar programa original" : "Ver programa original"}
+          onClick={toggleRightPanel}
+          title={rightPanel ? "Ocultar panel" : "Ver archivo"}
           className={`absolute top-3 right-3 z-10 p-2 rounded-full shadow-md transition-all cursor-pointer ${
-            rightPanel?.kind === "original"
+            rightPanel
               ? "bg-primary text-white dark:text-black"
               : darkMode
                 ? "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
@@ -737,23 +777,29 @@ export function StudyPlanTreeView({
               >
                 <div className="min-w-0">
                   <p className="text-[9px] font-bold text-primary uppercase tracking-wide truncate">
-                    {rightPanel.kind === "original" ? "Programa original" : `Adjunto · ${rightPanel.nodeLabel}`}
+                    {rightPanel.kind === "original"
+                      ? "Programa original"
+                      : rightPanel.kind === "attachment"
+                        ? `Adjunto · ${rightPanel.nodeLabel}`
+                        : rightPanel.nodeLabel}
                   </p>
-                  <p className="text-[11px] font-semibold truncate">{rightPanel.fileName}</p>
+                  {rightPanel.kind !== "empty" && <p className="text-[11px] font-semibold truncate">{rightPanel.fileName}</p>}
                 </div>
                 <div className="flex items-center gap-0.5 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      window.open(`https://drive.google.com/file/d/${rightPanel.fileId}/view`, "_blank", "noopener,noreferrer")
-                    }
-                    title="Abrir en Google Drive"
-                    className={`p-1.5 rounded-full cursor-pointer ${
-                      darkMode ? "hover:bg-zinc-800 text-zinc-400" : "hover:bg-zinc-200 text-zinc-500"
-                    }`}
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </button>
+                  {rightPanel.kind !== "empty" && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        window.open(`https://drive.google.com/file/d/${rightPanel.fileId}/view`, "_blank", "noopener,noreferrer")
+                      }
+                      title="Abrir en Google Drive"
+                      className={`p-1.5 rounded-full cursor-pointer ${
+                        darkMode ? "hover:bg-zinc-800 text-zinc-400" : "hover:bg-zinc-200 text-zinc-500"
+                      }`}
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setRightPanel(null)}
@@ -766,7 +812,15 @@ export function StudyPlanTreeView({
                   </button>
                 </div>
               </div>
-              {rightPanelReady ? (
+              {rightPanel.kind === "empty" ? (
+                <div className="flex-1 flex flex-col items-center justify-center gap-2 text-center px-6">
+                  <FileX className="w-7 h-7 text-zinc-400" />
+                  <p className={`text-xs font-bold ${darkMode ? "text-zinc-300" : "text-zinc-600"}`}>
+                    Este tema no tiene ningún archivo adjuntado
+                  </p>
+                  <p className="text-[10px] text-zinc-500">Clic derecho sobre el tema → "Adjuntar archivo"</p>
+                </div>
+              ) : rightPanelReady ? (
                 rightPanel.kind === "attachment" && isPdfFile(rightPanel.fileName) ? (
                   <PdfHighlightViewer
                     key={rightPanel.fileId}
@@ -774,7 +828,7 @@ export function StudyPlanTreeView({
                     accessToken={accessToken}
                     darkMode={darkMode}
                     mode="view"
-                    highlight={rightPanel.highlight}
+                    annotations={rightPanel.annotations}
                   />
                 ) : (
                   <iframe
@@ -811,12 +865,22 @@ export function StudyPlanTreeView({
           }}
           onHighlight={() => {
             const att = attachments[contextNode.id];
-            if (att) setHighlightTarget({ node: contextNode, fileId: att.fileId, fileName: att.fileName });
+            if (att) {
+              setHighlightTarget({
+                node: contextNode,
+                fileId: att.fileId,
+                fileName: att.fileName,
+                existingAnnotations: att.annotations,
+              });
+            }
             setContextMenu(null);
           }}
           onRemoveAttachment={() => {
+            const removedFileId = attachments[contextNode.id]?.fileId;
             onSaveAttachment(contextNode.id, null);
-            setRightPanel((prev) => (prev?.kind === "attachment" && prev.nodeLabel === contextNode.label ? null : prev));
+            setRightPanel((prev) =>
+              prev && prev.kind === "attachment" && prev.fileId === removedFileId ? null : prev,
+            );
             setContextMenu(null);
           }}
           onClose={() => setContextMenu(null)}
@@ -909,6 +973,7 @@ export function StudyPlanTreeView({
                 accessToken={accessToken}
                 darkMode={darkMode}
                 mode="select"
+                annotations={highlightTarget.existingAnnotations}
                 onSave={handleHighlightSave}
                 onSkip={handleHighlightSkip}
               />
