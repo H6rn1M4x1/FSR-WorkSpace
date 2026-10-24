@@ -63,10 +63,12 @@ import {
   PinnedStudyFolder,
   CompletedStudyFile,
   StudyPlanTree,
+  Exam,
 } from "../types";
 import { SmartDateTimePicker } from "./SmartDateTimePicker";
 import DriveFolderVisualizer from "./DriveFolderVisualizer";
 import { StudyMaterialBlock, normalizeMateriaName } from "./StudyMaterialBlock";
+import { ExamsBlock } from "./ExamsBlock";
 
 interface SelectPopoverPosition {
   top?: number;
@@ -823,6 +825,8 @@ interface AcademicViewProps {
   setCompletedStudyFiles: React.Dispatch<React.SetStateAction<CompletedStudyFile[]>>;
   studyPlanTree: StudyPlanTree[];
   setStudyPlanTree: React.Dispatch<React.SetStateAction<StudyPlanTree[]>>;
+  exams: Exam[];
+  setExams: React.Dispatch<React.SetStateAction<Exam[]>>;
   activeSubTab?: string;
   onSubTabChange?: (tab: string) => void;
   /** Cambia (a cualquier valor distinto del anterior) para abrir automáticamente el formulario
@@ -860,6 +864,8 @@ export default function AcademicView({
   setCompletedStudyFiles,
   studyPlanTree,
   setStudyPlanTree,
+  exams,
+  setExams,
   activeSubTab: propActiveSubTab,
   onSubTabChange,
   itemsIShared = [],
@@ -2561,7 +2567,14 @@ export default function AcademicView({
                   onOpenInFacultad={openFolderInFacultad}
                   studyPlanTree={studyPlanTree}
                   setStudyPlanTree={setStudyPlanTree}
+                  setExams={setExams}
                 />
+
+                {exams.length > 0 && (
+                  <div className="mt-6">
+                    <ExamsBlock darkMode={darkMode} userId={activeUserId} exams={exams} setExams={setExams} />
+                  </div>
+                )}
 
                 {/* Overview stats & Study timer */}
                 <div className="space-y-6">

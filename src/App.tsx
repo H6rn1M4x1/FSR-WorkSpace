@@ -82,7 +82,8 @@ import {
   AgendaShare,
   PinnedStudyFolder,
   CompletedStudyFile,
-  StudyPlanTree
+  StudyPlanTree,
+  Exam
 } from "./types";
 import {
   subscribeOutgoingShares,
@@ -467,6 +468,9 @@ export default function App() {
   const [pinnedStudyFolders, setPinnedStudyFolders] = useState<PinnedStudyFolder[]>([]);
   const [completedStudyFiles, setCompletedStudyFiles] = useState<CompletedStudyFile[]>([]);
   const [studyPlanTree, setStudyPlanTree] = useState<StudyPlanTree[]>([]);
+  // Exámenes de práctica armados/corregidos por IA — colección propia ("ai_exams", NO "examenes":
+  // esa ya existe para el calendario de exámenes reales de la facultad, es un concepto distinto).
+  const [exams, setExams] = useState<Exam[]>([]);
 
   // User Settings State
   const [isUserSettingsOpen, setIsUserSettingsOpen] = useState(false);
@@ -857,7 +861,8 @@ export default function App() {
       { key: "examenes", targetUserId: currentUserId, setState: setExamenes },
       { key: "pinned_study_folders", targetUserId: currentUserId, setState: setPinnedStudyFolders },
       { key: "completed_study_files", targetUserId: currentUserId, setState: setCompletedStudyFiles },
-      { key: "study_plan_tree", targetUserId: currentUserId, setState: setStudyPlanTree }
+      { key: "study_plan_tree", targetUserId: currentUserId, setState: setStudyPlanTree },
+      { key: "ai_exams", targetUserId: currentUserId, setState: setExams }
     ];
 
     const unsubs = collections.map((col) => {
@@ -941,6 +946,7 @@ export default function App() {
       { key: "pinned_study_folders", targetUserId: currentUserId },
       { key: "completed_study_files", targetUserId: currentUserId },
       { key: "study_plan_tree", targetUserId: currentUserId },
+      { key: "ai_exams", targetUserId: currentUserId },
     ];
 
     const runPollNow = () => {
@@ -2473,6 +2479,8 @@ export default function App() {
                   setCompletedStudyFiles={setCompletedStudyFiles}
                   studyPlanTree={studyPlanTree}
                   setStudyPlanTree={setStudyPlanTree}
+                  exams={exams}
+                  setExams={setExams}
                   activeSubTab={activeSubTab}
                   onSubTabChange={setActiveSubTab}
                   autoOpenQuickAdd={quickAddNonce}
