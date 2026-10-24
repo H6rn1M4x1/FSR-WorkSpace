@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
-import { X, Loader2, Sparkles, RotateCcw } from "lucide-react";
-import { StudyPlanTree, StudyPlanTreeAttachment } from "../types";
+import { X, Loader2, Sparkles, RotateCcw, GraduationCap } from "lucide-react";
+import { StudyPlanTree, StudyPlanTreeAttachment, Exam } from "../types";
 import { saveItemToFirestore } from "../lib/firestoreSyncService";
 import { downloadDriveFileAsBase64, extractStudyPlanTree, MAX_STUDY_PLAN_FILE_BYTES } from "../lib/studyPlanTree";
 import { StudyPlanTreeView } from "./StudyPlanTreeView";
 import { DriveFilePickerView } from "./DriveFilePickerView";
 import { useDriveFilePicker, DriveItemLite } from "../hooks/useDriveFilePicker";
+import { ExamModal } from "./ExamModal";
 import { uiSounds } from "../lib/sounds";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 
@@ -24,6 +25,7 @@ export function StudyPlanTreeModal({
   studyPlanTree,
   setStudyPlanTree,
   onOpenInFacultad,
+  setExams,
 }: {
   open: boolean;
   onClose: () => void;
@@ -40,12 +42,16 @@ export function StudyPlanTreeModal({
   // la Drive real — lo usa el botón del panel derecho del árbol para el programa original o el
   // adjunto de un nodo.
   onOpenInFacultad: (folderId: string, folderName: string, fileId?: string) => void;
+  // "Crear Examen", junto a "Regenerar" — arma un examen de práctica con IA a partir de archivos
+  // de esta materia (el programa original, los adjuntos del árbol, o buscando en Facultad).
+  setExams: React.Dispatch<React.SetStateAction<Exam[]>>;
 }) {
   const [mode, setMode] = useState<"viewing" | "picking" | "generating" | "error">(
     studyPlanTree ? "viewing" : "picking",
   );
   const [error, setError] = useState<string | null>(null);
   const [genProgress, setGenProgress] = useState<{ done: number; total: number } | null>(null);
+  const [examModalOpen, setExamModalOpen] = useState(false);
   const picker = useDriveFilePicker(accessToken, folderId, folderName);
 
   useLockBodyScroll(open);
@@ -109,6 +115,19 @@ export function StudyPlanTreeModal({
     setStudyPlanTree((prev) => [...prev.filter((t) => t.id !== updatedTree.id), updatedTree]);
   };
 
+  // Archivos para ofrecer como selección rápida al crear un examen: el programa original del
+  // árbol + los adjuntos de sus nodos, sin duplicados (el mismo archivo puede estar adjuntado a
+  // más de un nodo).
+  const examQuickPickFiles = (() => {
+    if (!studyPlanTree) return [];
+    const seen = new Map<string, { fileId: string; fileName: string }>();
+    seen.set(studyPlanTree.sourceFileId, { fileId: studyPlanTree.sourceFileId, fileName: studyPlanTree.sourceFileName });
+    Object.values(studyPlanTree.attachments || {}).forEach((att) => {
+      if (!seen.has(att.fileId)) seen.set(att.fileId, { fileId: att.fileId, fileName: att.fileName });
+    });
+    return Array.from(seen.values());
+  })();
+
   if (!open) return null;
 
   return createPortal(
@@ -158,6 +177,17 @@ export function StudyPlanTreeModal({
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">Regenerar</span>
+                </button>
+              )}
+              {mode === "viewing" && (
+                <button
+                  type="button"
+                  onClick={() => setExamModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold bg-primary/10 hover:bg-primary hover:text-white dark:hover:text-black text-primary transition-all cursor-pointer"
+                  title="Armar un examen de práctica con IA a partir del material de esta materia"
+                >
+                  <GraduationCap className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Crear Examen</span>
                 </button>
               )}
               <button
@@ -213,6 +243,19 @@ export function StudyPlanTreeModal({
           </div>
         </motion.div>
       </motion.div>
+      {examModalOpen && (
+        <ExamModal
+          open={examModalOpen}
+          onClose={() => setExamModalOpen(false)}
+          darkMode={darkMode}
+          userId={userId}
+          accessToken={accessToken}
+          folderId={folderId}
+          folderName={folderName}
+          quickPickFiles={examQuickPickFiles}
+          setExams={setExams}
+        />
+      )}
     </AnimatePresence>,
     document.body,
   );

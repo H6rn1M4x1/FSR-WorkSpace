@@ -4,7 +4,7 @@ import { BookMarked, Pin, Loader2, RefreshCw, Network, CheckCircle2 } from "luci
 import AnimatedFolder from "./AnimatedFolder";
 import { googleSignIn, getAccessToken, getAccessTokenSync, initAuth } from "../lib/supabase";
 import { saveItemToFirestore } from "../lib/firestoreSyncService";
-import { PinnedStudyFolder, CompletedStudyFile, StudyPlanTree } from "../types";
+import { PinnedStudyFolder, CompletedStudyFile, StudyPlanTree, Exam } from "../types";
 import { AnimatedNumber } from "./AnimatedNumber";
 import { StudyPlanTreeModal } from "./StudyPlanTreeModal";
 import { uiSounds } from "../lib/sounds";
@@ -40,6 +40,9 @@ interface StudyMaterialBlockProps {
   // por usuario (0 o 1 elementos), igual que el resto de las colecciones de la app.
   studyPlanTree: StudyPlanTree[];
   setStudyPlanTree: React.Dispatch<React.SetStateAction<StudyPlanTree[]>>;
+  // Exámenes de práctica armados con IA — el modal del árbol los crea (botón "Crear Examen"), el
+  // bloque "Exámenes con IA" (debajo de este) los lista.
+  setExams: React.Dispatch<React.SetStateAction<Exam[]>>;
 }
 
 // Normaliza un nombre de materia/carpeta para comparar: sin acentos/diacríticos, sin mayúsculas,
@@ -239,6 +242,7 @@ export function StudyMaterialBlock({
   onOpenInFacultad,
   studyPlanTree,
   setStudyPlanTree,
+  setExams,
 }: StudyMaterialBlockProps) {
   // Arranca con el token ya leído de forma SÍNCRONA (localStorage/caché en memoria de
   // firebase.ts) en vez de null — así, si ya hay sesión de Drive conectada en otra parte de la
@@ -515,6 +519,7 @@ export function StudyMaterialBlock({
             setTreeModalFolder(null);
             onOpenInFacultad(folderId, folderNameArg, fileId);
           }}
+          setExams={setExams}
         />
       )}
     </div>

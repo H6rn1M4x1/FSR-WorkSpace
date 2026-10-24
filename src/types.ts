@@ -624,6 +624,61 @@ export interface StudyPlanTree {
   attachments?: Record<string, StudyPlanTreeAttachment>;
 }
 
+// --- Exámenes con IA (generados y corregidos por Gemini a partir del material de la materia) ---
+// Distinto de `ExamenItem` (arriba): eso es el CALENDARIO de exámenes reales de la facultad
+// (fecha/aula/nota de un parcial o final); esto es un examen de PRÁCTICA que arma y corrige la IA.
+
+export type ExamQuestionType = "multiple_choice" | "essay";
+export type ExamDifficulty = "facil" | "media" | "dificil";
+
+export interface ExamMultipleChoiceOption {
+  id: string;
+  text: string;
+}
+
+export interface ExamQuestion {
+  id: string;
+  type: ExamQuestionType;
+  prompt: string;
+  difficulty: ExamDifficulty;
+  points: number; // sobre 100 en conjunto, ponderado según dificultad relativa dentro de ESTE examen
+  options?: ExamMultipleChoiceOption[];
+  correctOptionId?: string;
+}
+
+export interface ExamAnswer {
+  questionId: string;
+  value: string;
+}
+
+export interface ExamQuestionGrade {
+  questionId: string;
+  pointsEarned: number;
+  pointsPossible: number;
+  feedback: string;
+}
+
+export interface ExamResult {
+  score: number; // 0-100
+  summary: string;
+  questionGrades: ExamQuestionGrade[];
+  gradedAt: string;
+}
+
+export interface Exam {
+  id: string;
+  folderId: string;
+  folderName: string;
+  name: string;
+  sourceFiles: { fileId: string; fileName: string; mimeType: string }[];
+  questions: ExamQuestion[];
+  answers?: ExamAnswer[];
+  result?: ExamResult;
+  status: "generated" | "graded";
+  createdAt: string;
+  updatedAt: string;
+}
+
 // --- Password Vault (client-side end-to-end encrypted) ---
 // Every field here is either non-sensitive metadata or an opaque ciphertext.
 // The server/Firestore NEVER sees a plaintext site password, master password,
