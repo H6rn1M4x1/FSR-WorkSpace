@@ -38,7 +38,11 @@ export function ExamsBlock({
 
   if (exams.length === 0) return null;
 
-  const sorted = [...exams].sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""));
+  // `String(...)` antes de comparar: `saveItemToFirestore` completa `updatedAt` con `Date.now()`
+  // (un número) cuando el item que se guarda no trae uno propio — sin esto, un examen con esa
+  // forma rompe TODO el bloque con un TypeError ("...localeCompare is not a function") apenas hay
+  // un segundo examen con el que comparar (con uno solo, `.sort()` nunca llega a invocar esto).
+  const sorted = [...exams].sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
 
   return (
     <div

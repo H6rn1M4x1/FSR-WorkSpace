@@ -28,6 +28,7 @@ import {
 import { DriveFilePickerView } from "./DriveFilePickerView";
 import { useDriveFilePicker, DriveItemLite } from "../hooks/useDriveFilePicker";
 import { PdfHighlightViewer } from "./PdfHighlightViewer";
+import { CustomSelect } from "./CustomSelect";
 import { uiSounds } from "../lib/sounds";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 
@@ -341,18 +342,12 @@ export function ExamModal({
                   </div>
                   <div className="sm:w-52 shrink-0">
                     <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wide mb-1.5 block">Instancia</label>
-                    <select
+                    <CustomSelect
                       value={examInstancia}
-                      onChange={(e) => setExamInstancia(e.target.value as ExamInstancia | "")}
-                      className={`${inputClass} cursor-pointer`}
-                    >
-                      <option value="">Sin especificar</option>
-                      {EXAM_INSTANCIAS.map((i) => (
-                        <option key={i} value={i}>
-                          {i}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(v) => setExamInstancia(v as ExamInstancia | "")}
+                      options={[{ value: "", label: "Sin especificar" }, ...EXAM_INSTANCIAS.map((i) => ({ value: i, label: i }))]}
+                      placeholder="Sin especificar"
+                    />
                   </div>
                 </div>
 
