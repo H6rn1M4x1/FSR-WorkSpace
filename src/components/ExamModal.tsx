@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -14,8 +14,9 @@ import {
   AlertCircle,
   RotateCcw,
   BookOpenCheck,
+  Clock,
 } from "lucide-react";
-import { Exam, ExamAnswer, ExamInstancia, ExamQuestionGrade } from "../types";
+import { EXAM_INSTANCIAS, Exam, ExamAnswer, ExamInstancia, ExamQuestionGrade, ExamResult } from "../types";
 import { saveItemToFirestore } from "../lib/firestoreSyncService";
 import {
   generateExamQuestions,
@@ -27,22 +28,18 @@ import {
 } from "../lib/exams";
 import { DriveFilePickerView } from "./DriveFilePickerView";
 import { useDriveFilePicker, DriveItemLite } from "../hooks/useDriveFilePicker";
-import { PdfHighlightViewer } from "./PdfHighlightViewer";
 import { CustomSelect } from "./CustomSelect";
 import { uiSounds } from "../lib/sounds";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 
+function formatDuration(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
+
 type SourceFile = { fileId: string; fileName: string };
 type Mode = "creating" | "generating" | "answering" | "grading" | "reviewing" | "error";
-
-const EXAM_INSTANCIAS: ExamInstancia[] = [
-  "Primer Parcial",
-  "Segundo Parcial",
-  "Recuperatorio del Primer Parcial",
-  "Recuperatorio del Segundo Parcial",
-  "Extraordinario",
-  "Examen Final",
-];
 
 // Número con una pequeña animación de "salto" cada vez que cambia — para los contadores de
 // preguntas (+/-), junto con el sonido y la vibración que ya vienen con cualquier `uiSounds.*()`.
@@ -125,10 +122,14 @@ export function ExamModal({
   const [genProgress, setGenProgress] = useState<string | null>(null);
   const picker = useDriveFilePicker(accessToken, folderId, folderName);
 
-  // "Ver en el material": archivo fuente de la cita de una pregunta de desarrollo + estado de la
-  // búsqueda automática dentro del visor — null cuando no hay ninguno abierto.
-  const [sourceViewer, setSourceViewer] = useState<{ fileId: string; fileName: string; quote: string } | null>(null);
-  const [locateStatus, setLocateStatus] = useState<"searching" | "found" | "not-found">("searching");
+  // Arranca a contar apenas se entra a responder (generando uno nuevo, o reabriendo uno pendiente
+  // ya existente) — se usa al entregar para guardar cuánto tardó esta vuelta.
+  const answeringStartedAtRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (mode === "answering" && answeringStartedAtRef.current == null) {
+      answeringStartedAtRef.current = Date.now();
+    }
+  }, [mode]);
 
   const [localAnswers, setLocalAnswers] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {};
@@ -237,7 +238,9 @@ export function ExamModal({
         exam.sourceFiles.map((f) => prepareFilePart(f.fileId, f.mimeType, f.fileName, accessToken)),
       );
       const result = await gradeExam(fileParts, exam.questions, answers);
-      const updatedExam: Exam = { ...exam, answers, result, status: "graded", updatedAt: new Date().toISOString() };
+      const timeSpentSeconds = answeringStartedAtRef.current != null ? Math.round((Date.now() - answeringStartedAtRef.current) / 1000) : undefined;
+      const resultWithTime: ExamResult = { ...result, timeSpentSeconds };
+      const updatedExam: Exam = { ...exam, answers, result: resultWithTime, status: "graded", updatedAt: new Date().toISOString() };
       await saveItemToFirestore(userId, "ai_exams", updatedExam);
       setExams((prev) => [...prev.filter((e) => e.id !== updatedExam.id), updatedExam]);
       setExam(updatedExam);
@@ -254,10 +257,8 @@ export function ExamModal({
   const answeredCount = exam ? exam.questions.filter((q) => (localAnswers[q.id] || "").trim().length > 0).length : 0;
   const gradeByQuestion = new Map<string, ExamQuestionGrade>((exam?.result?.questionGrades || []).map((g) => [g.questionId, g]));
 
-  // Botón "Ver en el material" de una pregunta de desarrollo corregida: si el archivo fuente de la
-  // cita es un PDF, lo abre acá mismo (con la cita ubicada y marcada sola); si no es un PDF (p.ej.
-  // un Excel o PowerPoint usado como referencia), no hay forma de resaltarlo — cae a abrirlo en
-  // Facultad como cualquier otro archivo.
+  // Botón "Ver en el material" de una pregunta de desarrollo corregida: de qué archivo fuente
+  // viene la cita que respalda la respuesta (para saber cuál abrir en Facultad).
   const resolveSourceFile = (grade: ExamQuestionGrade) => {
     if (!exam || !grade.sourceQuote) return null;
     const idx = grade.sourceFileIndex ?? (exam.sourceFiles.length === 1 ? 0 : undefined);
@@ -265,17 +266,15 @@ export function ExamModal({
     return exam.sourceFiles[idx] || null;
   };
 
+  // Navega de verdad a Facultad (cierra este modal) con ese archivo abierto en su carpeta real —
+  // mismo mecanismo que el resto de la app usa para "Abrir en Facultad", en vez de un visor propio
+  // flotando arriba del examen.
   const handleViewSource = (grade: ExamQuestionGrade) => {
     const file = resolveSourceFile(grade);
-    if (!file || !grade.sourceQuote) return;
+    if (!file) return;
     uiSounds.click();
-    if (file.mimeType === "application/pdf") {
-      setLocateStatus("searching");
-      setSourceViewer({ fileId: file.fileId, fileName: file.fileName, quote: grade.sourceQuote });
-    } else {
-      onClose();
-      onOpenInFacultad(folderId, folderName, file.fileId);
-    }
+    onClose();
+    onOpenInFacultad(folderId, folderName, file.fileId);
   };
 
   const inputClass = `w-full px-3.5 py-2.5 rounded-xl border text-sm font-semibold outline-none transition-colors ${
@@ -558,7 +557,40 @@ export function ExamModal({
                 <div className="flex flex-col items-center justify-center text-center py-4">
                   <p className={`text-5xl font-black ${scoreColorClass(exam.result.score)}`}>{exam.result.score}</p>
                   <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wide mt-1">sobre 100</p>
+                  {exam.result.timeSpentSeconds != null && (
+                    <div className="flex items-end gap-2 mt-2">
+                      {(() => {
+                        const prevTime = exam.previousAttempts?.[exam.previousAttempts.length - 1]?.timeSpentSeconds;
+                        return prevTime != null ? (
+                          <span className="text-[10px] font-semibold text-zinc-400 line-through decoration-zinc-500/40">
+                            {formatDuration(prevTime)}
+                          </span>
+                        ) : null;
+                      })()}
+                      <span className={`flex items-center gap-1 text-xs font-bold ${darkMode ? "text-zinc-300" : "text-zinc-600"}`}>
+                        <Clock className="w-3 h-3" />
+                        {formatDuration(exam.result.timeSpentSeconds)}
+                      </span>
+                    </div>
+                  )}
                   <p className="text-xs font-medium mt-3 max-w-md text-center">{exam.result.summary}</p>
+                  {(exam.previousAttempts?.length || 0) > 0 && (
+                    <div className="flex items-end justify-center gap-2.5 mt-4">
+                      {[...(exam.previousAttempts || []), exam.result].map((r, i, arr) => {
+                        const isLast = i === arr.length - 1;
+                        return (
+                          <div key={i} className="flex flex-col items-center gap-1">
+                            <span className="text-[9px] font-black">{r.score}</span>
+                            <div
+                              className={`w-5 rounded-t-md ${isLast ? "bg-primary" : "bg-primary/35"}`}
+                              style={{ height: `${Math.max(4, (r.score / 100) * 48)}px` }}
+                            />
+                            <span className="text-[8px] font-bold text-zinc-500">#{i + 1}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
                 {exam.questions.map((q, qi) => {
                   const grade = gradeByQuestion.get(q.id);
@@ -696,50 +728,6 @@ export function ExamModal({
                     onNavigate={picker.navigateTo}
                     onPickFile={handlePickExtraFile}
                     emptyMessage="Esta carpeta no tiene subcarpetas ni archivos."
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {sourceViewer && (
-            <div
-              className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-              onClick={() => setSourceViewer(null)}
-            >
-              <div
-                onClick={(e) => e.stopPropagation()}
-                className={`w-full max-w-3xl h-[75vh] rounded-3xl border shadow-2xl flex flex-col overflow-hidden ${
-                  darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-white border-zinc-200 text-zinc-800"
-                }`}
-              >
-                <div className={`flex items-center justify-between gap-3 px-5 py-4 border-b shrink-0 ${darkMode ? "border-zinc-800" : "border-zinc-150"}`}>
-                  <div className="min-w-0">
-                    <h3 className="font-extrabold text-sm truncate">{sourceViewer.fileName}</h3>
-                    <p className="text-[10px] text-zinc-500 font-semibold">
-                      {locateStatus === "searching"
-                        ? "Buscando la parte exacta…"
-                        : locateStatus === "found"
-                          ? "Marcado en el documento"
-                          : "No se encontró el texto exacto — mostrando el documento igual"}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setSourceViewer(null)}
-                    className={`p-2 rounded-full cursor-pointer shrink-0 ${darkMode ? "hover:bg-zinc-800 text-zinc-400" : "hover:bg-zinc-100 text-zinc-400"}`}
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-                <div className="flex-1 min-h-0">
-                  <PdfHighlightViewer
-                    fileId={sourceViewer.fileId}
-                    accessToken={accessToken}
-                    darkMode={darkMode}
-                    mode="view"
-                    locateQuote={sourceViewer.quote}
-                    onLocateStatusChange={setLocateStatus}
                   />
                 </div>
               </div>

@@ -1,7 +1,7 @@
 import { GeminiService } from "./gemini";
 import { downloadDriveFileAsBase64 } from "./studyPlanTree";
 import { needsTextExtraction, extractOfficeText, textToBase64 } from "./officeTextExtract";
-import { ExamAnswer, ExamDifficulty, ExamMultipleChoiceOption, ExamQuestion, ExamQuestionGrade, ExamResult } from "../types";
+import { Exam, ExamAnswer, ExamDifficulty, ExamInstancia, ExamMultipleChoiceOption, ExamQuestion, ExamQuestionGrade, ExamResult } from "../types";
 
 // Mismo motivo que el árbol de materias: la función de Netlify es síncrona y corta el request si
 // tarda/pesa de más. Acá además puede haber VARIOS archivos en una sola llamada (generación y
@@ -55,7 +55,7 @@ async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
   throw lastErr;
 }
 
-function newId(prefix: string): string {
+export function newId(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
@@ -134,7 +134,7 @@ const VALID_DIFFICULTIES: ExamDifficulty[] = ["facil", "media", "dificil"];
 
 // Reparte 100 puntos entre las preguntas según el peso de su dificultad relativa — una "dificil"
 // vale más que una "facil", no todas valen lo mismo por igual (pedido explícito del usuario).
-function assignPoints(difficulties: ExamDifficulty[]): number[] {
+export function assignPoints(difficulties: ExamDifficulty[]): number[] {
   const weights = difficulties.map((d) => DIFFICULTY_WEIGHT[d] ?? 1);
   const totalWeight = weights.reduce((a, b) => a + b, 0) || 1;
   const points = weights.map((w) => Math.round((w / totalWeight) * 100));
@@ -150,7 +150,7 @@ function assignPoints(difficulties: ExamDifficulty[]): number[] {
 
 // Fisher-Yates — para que las preguntas de opción múltiple y desarrollo no salgan agrupadas por
 // tipo (primero todas las MC, después todas las de desarrollo) sino intercaladas al azar.
-function shuffle<T>(arr: T[]): T[] {
+export function shuffle<T>(arr: T[]): T[] {
   const copy = [...arr];
   for (let i = copy.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -354,6 +354,41 @@ export async function gradeExam(
     summary: summary || `Sacaste ${score}/100.`,
     questionGrades: allGrades,
     gradedAt: new Date().toISOString(),
+  };
+}
+
+// Arma un examen nuevo juntando las preguntas de 2 o más exámenes ya existentes ("Combinar
+// exámenes") — no hace ninguna llamada a Gemini, solo reorganiza preguntas que ya se generaron
+// antes. Como cada examen por separado ya suma 100 puntos, simplemente concatenarlos sumaría
+// 100 × cantidad de exámenes — se vuelven a repartir los puntos entre TODAS las preguntas juntas
+// (mismo criterio ponderado por dificultad de siempre) y se mezclan de nuevo.
+export function combineExams(exams: Exam[], name: string, instancia?: ExamInstancia): Exam {
+  if (exams.length < 2) throw new Error("Elegí al menos 2 exámenes para combinar.");
+
+  const allQuestions = exams.flatMap((e) => e.questions);
+  if (allQuestions.length === 0) throw new Error("Los exámenes elegidos no tienen preguntas.");
+  const points = assignPoints(allQuestions.map((q) => q.difficulty));
+  const questions = shuffle(allQuestions.map((q, i) => ({ ...q, points: points[i] })));
+
+  const sourceFilesMap = new Map<string, { fileId: string; fileName: string; mimeType: string }>();
+  exams.forEach((e) => e.sourceFiles.forEach((f) => {
+    if (!sourceFilesMap.has(f.fileId)) sourceFilesMap.set(f.fileId, f);
+  }));
+
+  const now = new Date().toISOString();
+  const first = exams[0];
+  return {
+    id: newId("exam"),
+    folderId: first.folderId,
+    folderName: first.folderName,
+    name,
+    instancia,
+    sourceFiles: Array.from(sourceFilesMap.values()),
+    questions,
+    status: "generated",
+    createdAt: now,
+    updatedAt: now,
+    combinedFrom: exams.map((e) => e.name),
   };
 }
 

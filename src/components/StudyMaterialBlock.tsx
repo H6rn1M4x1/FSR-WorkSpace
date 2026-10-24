@@ -175,6 +175,8 @@ function PinnedFolderCard({
   progress,
   onOpen,
   darkMode,
+  hasTree,
+  onTreeClick,
 }: {
   folder: PinnedStudyFolder;
   files: DriveFileLite[] | undefined;
@@ -182,53 +184,81 @@ function PinnedFolderCard({
   progress: number;
   onOpen: () => void;
   darkMode: boolean;
+  // Botón "Ver/Crear Árbol" — unificado adentro de esta misma tarjeta (al extremo derecho de la
+  // fila de arriba) en vez de una celda de grilla aparte al lado.
+  hasTree: boolean;
+  onTreeClick: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
 
   return (
-    <button
-      type="button"
+    <div
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      onClick={onOpen}
-      title="Abrir en Facultad"
-      className={`w-full text-left rounded-2xl border p-4 transition-colors cursor-pointer ${
+      className={`w-full rounded-2xl border p-4 transition-colors ${
         darkMode ? "bg-black/40 border-zinc-800/70 hover:bg-zinc-900/60" : "bg-slate-50 border-zinc-150 hover:bg-slate-100"
       }`}
     >
-      <div className="flex items-center gap-4">
-        {/* AnimatedFolder dibuja sus "papeles" con overflow-visible para que la apertura 3D se
-            vea completa; al hover, suben y se agrandan lo suficiente como para acercarse al
-            texto de al lado en una fila tan angosta. Este wrapper recorta ese excedente a la
-            caja del ícono sin tocar el componente (que en otros usos sí se beneficia del
-            overflow), y el gap de al lado se agranda un poco para dejarle aire de sobra. */}
-        <div className="relative shrink-0 overflow-hidden rounded-md" style={{ width: 34, height: 34 }}>
-          <AnimatedFolder size={34} isHovered={hovered} className="text-primary" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-xs font-extrabold truncate">{folder.materiaName}</p>
-          <p className="text-[10px] text-zinc-500 font-medium">
-            {files
-              ? `${files.length} archivo${files.length === 1 ? "" : "s"}`
-              : driveConnected
-                ? "Cargando…"
-                : "Conectá Drive para ver el avance"}
-          </p>
-        </div>
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={onOpen}
+          title="Abrir en Facultad"
+          className="flex items-center gap-4 min-w-0 flex-1 text-left cursor-pointer"
+        >
+          {/* AnimatedFolder dibuja sus "papeles" con overflow-visible para que la apertura 3D se
+              vea completa; al hover, suben y se agrandan lo suficiente como para acercarse al
+              texto de al lado en una fila tan angosta. Este wrapper recorta ese excedente a la
+              caja del ícono sin tocar el componente (que en otros usos sí se beneficia del
+              overflow), y el gap de al lado se agranda un poco para dejarle aire de sobra. */}
+          <div className="relative shrink-0 overflow-hidden rounded-md" style={{ width: 34, height: 34 }}>
+            <AnimatedFolder size={34} isHovered={hovered} className="text-primary" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-extrabold truncate">{folder.materiaName}</p>
+            <p className="text-[10px] text-zinc-500 font-medium">
+              {files
+                ? `${files.length} archivo${files.length === 1 ? "" : "s"}`
+                : driveConnected
+                  ? "Cargando…"
+                  : "Conectá Drive para ver el avance"}
+            </p>
+          </div>
+        </button>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onTreeClick();
+          }}
+          title={hasTree ? "Ver el árbol de materias" : "Crear el árbol de materias con IA"}
+          className={`shrink-0 h-9 px-3 flex items-center justify-center gap-1.5 rounded-full text-[11px] font-bold transition-all cursor-pointer ${
+            hasTree
+              ? "bg-primary/10 text-primary hover:bg-primary hover:text-white dark:hover:text-black"
+              : darkMode
+                ? "bg-zinc-800 text-zinc-300 hover:bg-primary hover:text-white"
+                : "bg-zinc-100 text-zinc-600 hover:bg-primary hover:text-white"
+          }`}
+        >
+          {hasTree ? <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> : <Network className="w-3.5 h-3.5 shrink-0" />}
+          <span className="hidden sm:inline truncate">{hasTree ? "Ver Árbol" : "Crear Árbol"}</span>
+        </button>
       </div>
 
-      <div className={`mt-3 h-2 rounded-full overflow-hidden ${darkMode ? "bg-zinc-800" : "bg-zinc-200"}`}>
-        <motion.div
-          className="h-full rounded-full bg-primary"
-          initial={{ width: 0 }}
-          animate={{ width: `${progress}%` }}
-          transition={{ duration: 0.9, ease: "easeOut" }}
-        />
-      </div>
-      <p className="text-[10px] mt-1 font-bold text-zinc-500">
-        <AnimatedNumber value={progress} format={(n) => `${Math.round(n)}%`} /> estudiado
-      </p>
-    </button>
+      <button type="button" onClick={onOpen} className="block w-full text-left cursor-pointer mt-3">
+        <div className={`h-2 rounded-full overflow-hidden ${darkMode ? "bg-zinc-800" : "bg-zinc-200"}`}>
+          <motion.div
+            className="h-full rounded-full bg-primary"
+            initial={{ width: 0 }}
+            animate={{ width: `${progress}%` }}
+            transition={{ duration: 0.9, ease: "easeOut" }}
+          />
+        </div>
+        <p className="text-[10px] mt-1 font-bold text-zinc-500">
+          <AnimatedNumber value={progress} format={(n) => `${Math.round(n)}%`} /> estudiado
+        </p>
+      </button>
+    </div>
   );
 }
 
@@ -439,15 +469,15 @@ export function StudyMaterialBlock({
         <p className="text-[10px] text-red-500 font-semibold mb-3">{connectError}</p>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-x-6 gap-y-3">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         {autoPinning && (
-          <div className="lg:col-span-4 flex items-center gap-2 text-[10px] text-zinc-500 font-medium px-1 pb-1">
+          <div className="lg:col-span-2 flex items-center gap-2 text-[10px] text-zinc-500 font-medium px-1 pb-1">
             <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
             <span>Buscando materias que se pueden rendir o cursar en tus carpetas de Drive…</span>
           </div>
         )}
         {pinnedFolders.length === 0 ? (
-          <div className="lg:col-span-4 flex flex-col items-center justify-center text-center py-10 gap-2">
+          <div className="lg:col-span-2 flex flex-col items-center justify-center text-center py-10 gap-2">
             <AnimatedFolder size={36} className="text-zinc-400" />
             <p className={`text-xs italic max-w-sm ${scanError ? "text-red-500 font-semibold" : "text-zinc-500"}`}>
               {emptyStateMessage}
@@ -455,49 +485,20 @@ export function StudyMaterialBlock({
           </div>
         ) : (
           pinnedFolders.map((folder) => (
-            <React.Fragment key={folder.folderId}>
-              <div className="lg:col-span-3">
-                <PinnedFolderCard
-                  folder={folder}
-                  files={filesByFolder[folder.folderId]}
-                  driveConnected={!!accessToken}
-                  progress={progressFor(folder.folderId)}
-                  onOpen={() => onOpenInFacultad(folder.folderId, folder.folderName)}
-                  darkMode={darkMode}
-                />
-              </div>
-              {/* Misma fila de grilla que la tarjeta de al lado: así el botón queda siempre
-                  centrado verticalmente con su carpeta, sin importar cuánto mida la tarjeta. */}
-              <div className="lg:col-span-1 h-full flex items-center">
-                {(() => {
-                  const folderTree = treeFor(folder.folderId);
-                  return (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        uiSounds.click();
-                        setTreeModalFolder(folder);
-                      }}
-                      title={folderTree ? "Ver el árbol de materias" : "Crear el árbol de materias con IA"}
-                      className={`w-full h-9 flex items-center justify-center gap-1.5 rounded-full text-[11px] font-bold transition-all cursor-pointer ${
-                        folderTree
-                          ? "bg-primary/10 text-primary hover:bg-primary hover:text-white dark:hover:text-black"
-                          : darkMode
-                            ? "bg-zinc-800 text-zinc-300 hover:bg-primary hover:text-white"
-                            : "bg-zinc-100 text-zinc-600 hover:bg-primary hover:text-white"
-                      }`}
-                    >
-                      {folderTree ? (
-                        <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                      ) : (
-                        <Network className="w-3.5 h-3.5 shrink-0" />
-                      )}
-                      <span className="truncate">{folderTree ? "Ver Árbol" : "Crear Árbol"}</span>
-                    </button>
-                  );
-                })()}
-              </div>
-            </React.Fragment>
+            <PinnedFolderCard
+              key={folder.folderId}
+              folder={folder}
+              files={filesByFolder[folder.folderId]}
+              driveConnected={!!accessToken}
+              progress={progressFor(folder.folderId)}
+              onOpen={() => onOpenInFacultad(folder.folderId, folder.folderName)}
+              darkMode={darkMode}
+              hasTree={!!treeFor(folder.folderId)}
+              onTreeClick={() => {
+                uiSounds.click();
+                setTreeModalFolder(folder);
+              }}
+            />
           ))
         )}
       </div>
