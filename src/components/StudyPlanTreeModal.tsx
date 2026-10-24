@@ -254,6 +254,7 @@ export function StudyPlanTreeModal({
           folderName={folderName}
           quickPickFiles={examQuickPickFiles}
           setExams={setExams}
+          onOpenInFacultad={onOpenInFacultad}
         />
       )}
     </AnimatePresence>,

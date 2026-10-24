@@ -13,24 +13,56 @@ import {
   XCircle,
   AlertCircle,
   RotateCcw,
+  BookOpenCheck,
 } from "lucide-react";
-import { Exam, ExamAnswer, ExamQuestionGrade } from "../types";
+import { Exam, ExamAnswer, ExamInstancia, ExamQuestionGrade } from "../types";
 import { saveItemToFirestore } from "../lib/firestoreSyncService";
 import {
   generateExamQuestions,
   gradeExam,
   resolveFileMeta,
-  downloadDriveFileAsBase64,
+  prepareFilePart,
   MAX_EXAM_SOURCE_FILE_BYTES,
   MAX_EXAM_SOURCE_TOTAL_BYTES,
 } from "../lib/exams";
 import { DriveFilePickerView } from "./DriveFilePickerView";
 import { useDriveFilePicker, DriveItemLite } from "../hooks/useDriveFilePicker";
+import { PdfHighlightViewer } from "./PdfHighlightViewer";
 import { uiSounds } from "../lib/sounds";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 
 type SourceFile = { fileId: string; fileName: string };
 type Mode = "creating" | "generating" | "answering" | "grading" | "reviewing" | "error";
+
+const EXAM_INSTANCIAS: ExamInstancia[] = [
+  "Primer Parcial",
+  "Segundo Parcial",
+  "Recuperatorio del Primer Parcial",
+  "Recuperatorio del Segundo Parcial",
+  "Extraordinario",
+  "Examen Final",
+];
+
+// Número con una pequeña animación de "salto" cada vez que cambia — para los contadores de
+// preguntas (+/-), junto con el sonido y la vibración que ya vienen con cualquier `uiSounds.*()`.
+function BouncingCount({ value }: { value: number }) {
+  return (
+    <span className="relative inline-flex w-6 h-5 items-center justify-center overflow-hidden">
+      <AnimatePresence mode="popLayout" initial={false}>
+        <motion.span
+          key={value}
+          initial={{ y: -10, opacity: 0, scale: 0.7 }}
+          animate={{ y: 0, opacity: 1, scale: 1 }}
+          exit={{ y: 10, opacity: 0, scale: 0.7 }}
+          transition={{ duration: 0.18, ease: "easeOut" }}
+          className="absolute text-sm font-extrabold"
+        >
+          {value}
+        </motion.span>
+      </AnimatePresence>
+    </span>
+  );
+}
 
 function newExamId(): string {
   return `exam_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -53,6 +85,7 @@ export function ExamModal({
   quickPickFiles,
   setExams,
   existingExam,
+  onOpenInFacultad,
 }: {
   open: boolean;
   onClose: () => void;
@@ -67,9 +100,12 @@ export function ExamModal({
   // archivo fuente) — se ofrecen como checkboxes antes de ofrecer "Buscar en Facultad".
   quickPickFiles: SourceFile[];
   setExams: React.Dispatch<React.SetStateAction<Exam[]>>;
-  // Si se abre desde el bloque "Exámenes con IA" para responder o revisar uno ya generado, en vez
+  // Si se abre desde el bloque "Exámenes Creados" para responder o revisar uno ya generado, en vez
   // de crear uno nuevo desde cero.
   existingExam?: Exam | null;
+  // Para "Ver en el material" en la corrección — si el archivo fuente de la cita no es un PDF (no
+  // se puede resaltar con el visor propio), cae a abrirlo en Facultad como el resto de la app.
+  onOpenInFacultad: (folderId: string, folderName: string, fileId?: string) => void;
 }) {
   const [mode, setMode] = useState<Mode>(() =>
     existingExam ? (existingExam.status === "graded" ? "reviewing" : "answering") : "creating",
@@ -79,6 +115,7 @@ export function ExamModal({
   const [exam, setExam] = useState<Exam | null>(existingExam || null);
 
   const [examName, setExamName] = useState("");
+  const [examInstancia, setExamInstancia] = useState<ExamInstancia | "">(existingExam?.instancia || "");
   const [selectedQuickFiles, setSelectedQuickFiles] = useState<Set<string>>(new Set());
   const [extraFiles, setExtraFiles] = useState<SourceFile[]>([]);
   const [mcCount, setMcCount] = useState(5);
@@ -86,6 +123,11 @@ export function ExamModal({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [genProgress, setGenProgress] = useState<string | null>(null);
   const picker = useDriveFilePicker(accessToken, folderId, folderName);
+
+  // "Ver en el material": archivo fuente de la cita de una pregunta de desarrollo + estado de la
+  // búsqueda automática dentro del visor — null cuando no hay ninguno abierto.
+  const [sourceViewer, setSourceViewer] = useState<{ fileId: string; fileName: string; quote: string } | null>(null);
+  const [locateStatus, setLocateStatus] = useState<"searching" | "found" | "not-found">("searching");
 
   const [localAnswers, setLocalAnswers] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {};
@@ -146,20 +188,19 @@ export function ExamModal({
           `Los archivos elegidos pesan ${(totalSize / (1024 * 1024)).toFixed(1)} MB en total, es demasiado para procesarlos juntos (máx. ~8 MB). Elegí menos archivos.`,
         );
       }
-      setGenProgress("Generando preguntas…");
-      const base64Files = await Promise.all(
-        allSelectedFiles.map(async (f, i) => ({
-          mimeType: metas[i].mimeType,
-          data: await downloadDriveFileAsBase64(f.fileId, accessToken),
-        })),
+      setGenProgress("Leyendo el contenido de los archivos…");
+      const fileParts = await Promise.all(
+        allSelectedFiles.map((f, i) => prepareFilePart(f.fileId, metas[i].mimeType, f.fileName, accessToken)),
       );
-      const questions = await generateExamQuestions(base64Files, mcCount, essayCount);
+      setGenProgress("Generando preguntas…");
+      const questions = await generateExamQuestions(fileParts, mcCount, essayCount);
       const now = new Date().toISOString();
       const newExam: Exam = {
         id: newExamId(),
         folderId,
         folderName,
         name: examName.trim(),
+        instancia: examInstancia || undefined,
         sourceFiles: allSelectedFiles.map((f, i) => ({ fileId: f.fileId, fileName: f.fileName, mimeType: metas[i].mimeType })),
         questions,
         status: "generated",
@@ -191,14 +232,10 @@ export function ExamModal({
     setError(null);
     try {
       const answers: ExamAnswer[] = exam.questions.map((q) => ({ questionId: q.id, value: localAnswers[q.id] || "" }));
-      const metas = await Promise.all(exam.sourceFiles.map((f) => resolveFileMeta(f.fileId, accessToken)));
-      const base64Files = await Promise.all(
-        exam.sourceFiles.map(async (f, i) => ({
-          mimeType: metas[i].mimeType,
-          data: await downloadDriveFileAsBase64(f.fileId, accessToken),
-        })),
+      const fileParts = await Promise.all(
+        exam.sourceFiles.map((f) => prepareFilePart(f.fileId, f.mimeType, f.fileName, accessToken)),
       );
-      const result = await gradeExam(base64Files, exam.questions, answers);
+      const result = await gradeExam(fileParts, exam.questions, answers);
       const updatedExam: Exam = { ...exam, answers, result, status: "graded", updatedAt: new Date().toISOString() };
       await saveItemToFirestore(userId, "ai_exams", updatedExam);
       setExams((prev) => [...prev.filter((e) => e.id !== updatedExam.id), updatedExam]);
@@ -215,6 +252,30 @@ export function ExamModal({
 
   const answeredCount = exam ? exam.questions.filter((q) => (localAnswers[q.id] || "").trim().length > 0).length : 0;
   const gradeByQuestion = new Map<string, ExamQuestionGrade>((exam?.result?.questionGrades || []).map((g) => [g.questionId, g]));
+
+  // Botón "Ver en el material" de una pregunta de desarrollo corregida: si el archivo fuente de la
+  // cita es un PDF, lo abre acá mismo (con la cita ubicada y marcada sola); si no es un PDF (p.ej.
+  // un Excel o PowerPoint usado como referencia), no hay forma de resaltarlo — cae a abrirlo en
+  // Facultad como cualquier otro archivo.
+  const resolveSourceFile = (grade: ExamQuestionGrade) => {
+    if (!exam || !grade.sourceQuote) return null;
+    const idx = grade.sourceFileIndex ?? (exam.sourceFiles.length === 1 ? 0 : undefined);
+    if (idx == null) return null;
+    return exam.sourceFiles[idx] || null;
+  };
+
+  const handleViewSource = (grade: ExamQuestionGrade) => {
+    const file = resolveSourceFile(grade);
+    if (!file || !grade.sourceQuote) return;
+    uiSounds.click();
+    if (file.mimeType === "application/pdf") {
+      setLocateStatus("searching");
+      setSourceViewer({ fileId: file.fileId, fileName: file.fileName, quote: grade.sourceQuote });
+    } else {
+      onClose();
+      onOpenInFacultad(folderId, folderName, file.fileId);
+    }
+  };
 
   const inputClass = `w-full px-3.5 py-2.5 rounded-xl border text-sm font-semibold outline-none transition-colors ${
     darkMode
@@ -265,17 +326,34 @@ export function ExamModal({
           <div className="flex-1 min-h-0 overflow-y-auto">
             {mode === "creating" && (
               <div className="p-5 space-y-5">
-                <div>
-                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wide mb-1.5 block">
-                    Nombre del examen
-                  </label>
-                  <input
-                    type="text"
-                    value={examName}
-                    onChange={(e) => setExamName(e.target.value)}
-                    placeholder="Ej: Repaso Unidad 3"
-                    className={inputClass}
-                  />
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <div className="flex-1 min-w-0">
+                    <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wide mb-1.5 block">
+                      Nombre del examen
+                    </label>
+                    <input
+                      type="text"
+                      value={examName}
+                      onChange={(e) => setExamName(e.target.value)}
+                      placeholder="Ej: Repaso Unidad 3"
+                      className={inputClass}
+                    />
+                  </div>
+                  <div className="sm:w-52 shrink-0">
+                    <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wide mb-1.5 block">Instancia</label>
+                    <select
+                      value={examInstancia}
+                      onChange={(e) => setExamInstancia(e.target.value as ExamInstancia | "")}
+                      className={`${inputClass} cursor-pointer`}
+                    >
+                      <option value="">Sin especificar</option>
+                      {EXAM_INSTANCIAS.map((i) => (
+                        <option key={i} value={i}>
+                          {i}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
                 <div>
@@ -347,16 +425,22 @@ export function ExamModal({
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        onClick={() => setMcCount((n) => Math.max(0, n - 1))}
-                        className={`p-2 rounded-full cursor-pointer ${darkMode ? "hover:bg-zinc-800" : "hover:bg-zinc-100"}`}
+                        onClick={() => {
+                          uiSounds.toggle();
+                          setMcCount((n) => Math.max(0, n - 1));
+                        }}
+                        className={`p-2 rounded-full cursor-pointer transition-transform active:scale-90 ${darkMode ? "hover:bg-zinc-800" : "hover:bg-zinc-100"}`}
                       >
                         <Minus className="w-3.5 h-3.5" />
                       </button>
-                      <span className="text-sm font-extrabold w-6 text-center">{mcCount}</span>
+                      <BouncingCount value={mcCount} />
                       <button
                         type="button"
-                        onClick={() => setMcCount((n) => Math.min(12, n + 1))}
-                        className={`p-2 rounded-full cursor-pointer ${darkMode ? "hover:bg-zinc-800" : "hover:bg-zinc-100"}`}
+                        onClick={() => {
+                          uiSounds.toggle();
+                          setMcCount((n) => Math.min(12, n + 1));
+                        }}
+                        className={`p-2 rounded-full cursor-pointer transition-transform active:scale-90 ${darkMode ? "hover:bg-zinc-800" : "hover:bg-zinc-100"}`}
                       >
                         <Plus className="w-3.5 h-3.5" />
                       </button>
@@ -367,16 +451,22 @@ export function ExamModal({
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        onClick={() => setEssayCount((n) => Math.max(0, n - 1))}
-                        className={`p-2 rounded-full cursor-pointer ${darkMode ? "hover:bg-zinc-800" : "hover:bg-zinc-100"}`}
+                        onClick={() => {
+                          uiSounds.toggle();
+                          setEssayCount((n) => Math.max(0, n - 1));
+                        }}
+                        className={`p-2 rounded-full cursor-pointer transition-transform active:scale-90 ${darkMode ? "hover:bg-zinc-800" : "hover:bg-zinc-100"}`}
                       >
                         <Minus className="w-3.5 h-3.5" />
                       </button>
-                      <span className="text-sm font-extrabold w-6 text-center">{essayCount}</span>
+                      <BouncingCount value={essayCount} />
                       <button
                         type="button"
-                        onClick={() => setEssayCount((n) => Math.min(12, n + 1))}
-                        className={`p-2 rounded-full cursor-pointer ${darkMode ? "hover:bg-zinc-800" : "hover:bg-zinc-100"}`}
+                        onClick={() => {
+                          uiSounds.toggle();
+                          setEssayCount((n) => Math.min(12, n + 1));
+                        }}
+                        className={`p-2 rounded-full cursor-pointer transition-transform active:scale-90 ${darkMode ? "hover:bg-zinc-800" : "hover:bg-zinc-100"}`}
                       >
                         <Plus className="w-3.5 h-3.5" />
                       </button>
@@ -521,14 +611,31 @@ export function ExamModal({
                           })}
                         </div>
                       ) : (
-                        <p className={`text-[11px] font-medium italic mb-2 ${darkMode ? "text-zinc-400" : "text-zinc-500"}`}>
-                          Tu respuesta: {userAnswer || "(sin responder)"}
-                        </p>
+                        <>
+                          <p className={`text-[11px] font-medium italic mb-2 ${darkMode ? "text-zinc-400" : "text-zinc-500"}`}>
+                            Tu respuesta: {userAnswer || "(sin responder)"}
+                          </p>
+                          {!userAnswer.trim() && grade?.expectedAnswer && (
+                            <p className="text-[11px] font-semibold mb-2 text-emerald-600 dark:text-emerald-400">
+                              Respuesta correcta: {grade.expectedAnswer}
+                            </p>
+                          )}
+                        </>
                       )}
                       {grade?.feedback && (
                         <p className={`text-[10px] font-semibold mt-2 pt-2 border-t ${darkMode ? "border-zinc-700 text-zinc-300" : "border-zinc-200 text-zinc-600"}`}>
                           {grade.feedback}
                         </p>
+                      )}
+                      {q.type === "essay" && grade && resolveSourceFile(grade) && (
+                        <button
+                          type="button"
+                          onClick={() => handleViewSource(grade)}
+                          className="mt-2 flex items-center gap-1.5 text-[10px] font-bold text-primary hover:underline cursor-pointer"
+                        >
+                          <BookOpenCheck className="w-3 h-3" />
+                          Ver en el material
+                        </button>
                       )}
                     </div>
                   );
@@ -594,6 +701,50 @@ export function ExamModal({
                     onNavigate={picker.navigateTo}
                     onPickFile={handlePickExtraFile}
                     emptyMessage="Esta carpeta no tiene subcarpetas ni archivos."
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {sourceViewer && (
+            <div
+              className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+              onClick={() => setSourceViewer(null)}
+            >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                className={`w-full max-w-3xl h-[75vh] rounded-3xl border shadow-2xl flex flex-col overflow-hidden ${
+                  darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-white border-zinc-200 text-zinc-800"
+                }`}
+              >
+                <div className={`flex items-center justify-between gap-3 px-5 py-4 border-b shrink-0 ${darkMode ? "border-zinc-800" : "border-zinc-150"}`}>
+                  <div className="min-w-0">
+                    <h3 className="font-extrabold text-sm truncate">{sourceViewer.fileName}</h3>
+                    <p className="text-[10px] text-zinc-500 font-semibold">
+                      {locateStatus === "searching"
+                        ? "Buscando la parte exacta…"
+                        : locateStatus === "found"
+                          ? "Marcado en el documento"
+                          : "No se encontró el texto exacto — mostrando el documento igual"}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSourceViewer(null)}
+                    className={`p-2 rounded-full cursor-pointer shrink-0 ${darkMode ? "hover:bg-zinc-800 text-zinc-400" : "hover:bg-zinc-100 text-zinc-400"}`}
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="flex-1 min-h-0">
+                  <PdfHighlightViewer
+                    fileId={sourceViewer.fileId}
+                    accessToken={accessToken}
+                    darkMode={darkMode}
+                    mode="view"
+                    locateQuote={sourceViewer.quote}
+                    onLocateStatusChange={setLocateStatus}
                   />
                 </div>
               </div>

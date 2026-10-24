@@ -116,10 +116,14 @@ export function AcademicGaugeChart({
   percent,
   subtitle,
   darkMode,
+  compact,
 }: {
   percent: number;
   subtitle: string;
   darkMode: boolean;
+  // Tamaño chico para usar dentro de una tarjeta (p.ej. el puntaje de un examen en el bloque
+  // "Exámenes Creados") en vez del tamaño completo pensado para un bloque propio.
+  compact?: boolean;
 }) {
   const accentHex = useAccentHex();
   const trackColor = darkMode ? "#27272a" : "#e2e8f0";
@@ -151,6 +155,22 @@ export function AcademicGaugeChart({
 
     return { data, options };
   }, [clamped, accentHex, trackColor]);
+
+  if (compact) {
+    return (
+      <div className="relative h-20 w-32 shrink-0">
+        <Doughnut data={chartConfig.data} options={chartConfig.options} />
+        <div className="absolute inset-x-0 bottom-0 flex flex-col items-center">
+          <span className="text-lg font-black leading-none" style={{ color: accentHex }}>
+            <AnimatedNumber value={clamped} format={(n) => `${Math.round(n)}`} />
+          </span>
+          <span className="text-[8px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 text-center px-1 mt-0.5">
+            {subtitle}
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center min-h-[220px] gap-1">

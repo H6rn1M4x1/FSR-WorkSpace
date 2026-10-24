@@ -1,5 +1,6 @@
 import { GeminiService } from "./gemini";
 import { downloadDriveFileAsBase64 } from "./studyPlanTree";
+import { needsTextExtraction, extractOfficeText, textToBase64 } from "./officeTextExtract";
 import { ExamAnswer, ExamDifficulty, ExamMultipleChoiceOption, ExamQuestion, ExamQuestionGrade, ExamResult } from "../types";
 
 // Mismo motivo que el árbol de materias: la función de Netlify es síncrona y corta el request si
@@ -77,6 +78,24 @@ export async function resolveFileMeta(
   };
 }
 
+// Descarga un archivo de Drive y lo deja listo para mandar a Gemini — si es un Word/Excel/
+// PowerPoint, lo convierte a texto plano del lado del cliente primero (Gemini no sabe leer esos
+// formatos como `inlineData`, ver `officeTextExtract.ts`); cualquier otro formato (PDF, imagen,
+// video) se manda tal cual, como hasta ahora.
+export async function prepareFilePart(
+  fileId: string,
+  mimeType: string,
+  fileName: string,
+  accessToken: string,
+): Promise<{ mimeType: string; data: string; fileName: string }> {
+  const data = await downloadDriveFileAsBase64(fileId, accessToken);
+  if (!needsTextExtraction(mimeType)) {
+    return { mimeType, data, fileName };
+  }
+  const text = await extractOfficeText(data, mimeType, fileName);
+  return { mimeType: "text/plain", data: textToBase64(text), fileName };
+}
+
 interface GeneratedQuestionRaw {
   type?: string;
   prompt?: string;
@@ -129,6 +148,17 @@ function assignPoints(difficulties: ExamDifficulty[]): number[] {
   return points;
 }
 
+// Fisher-Yates — para que las preguntas de opción múltiple y desarrollo no salgan agrupadas por
+// tipo (primero todas las MC, después todas las de desarrollo) sino intercaladas al azar.
+function shuffle<T>(arr: T[]): T[] {
+  const copy = [...arr];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
 // Arma las preguntas de un examen nuevo a partir de uno o más archivos de Drive ya descargados
 // (base64) — un solo pedido a Gemini, con los dos tipos de pregunta mezclados en la respuesta.
 export async function generateExamQuestions(
@@ -159,7 +189,7 @@ export async function generateExamQuestions(
   );
   const points = assignPoints(difficulties);
 
-  return raw.map((q, i) => {
+  return shuffle(raw.map((q, i) => {
     const id = newId("q");
     const isMultipleChoice = q.type === "multiple_choice" && Array.isArray(q.options) && q.options.length >= 2;
     if (isMultipleChoice) {
@@ -183,18 +213,22 @@ export async function generateExamQuestions(
       difficulty: difficulties[i],
       points: points[i],
     };
-  });
+  }));
 }
 
 interface GradeResultRaw {
   questionId?: string;
   pointsEarned?: number;
   feedback?: string;
+  expectedAnswer?: string;
+  sourceQuote?: string;
+  sourceFileIndex?: number;
 }
 
 function buildGradingPrompt(
   essayItems: { id: string; prompt: string; maxPoints: number; answer: string }[],
   mcSummary: { correct: boolean }[],
+  sourceFileNames: string[],
 ): string {
   const essayBlock = essayItems
     .map(
@@ -209,16 +243,27 @@ function buildGradingPrompt(
         mcSummary.filter((m) => m.correct).length
       } correctas de ${mcSummary.length}.`
     : "";
+  const filesBlock =
+    sourceFileNames.length > 0
+      ? `\n\nArchivos de referencia adjuntos, en este orden exacto (usá su número, empezando en 0, para "sourceFileIndex"): ${sourceFileNames
+          .map((n, i) => `${i}) ${n}`)
+          .join(", ")}.`
+      : "";
   return `Sos un profesor universitario corrigiendo las respuestas de desarrollo de un examen de práctica, usando el material adjunto como referencia del contenido correcto.
 
 Para cada pregunta de desarrollo, analizá la respuesta del alumno y asignale un puntaje de 0 al máximo indicado, proporcional a qué tan completa/correcta está — una respuesta parcialmente correcta o incompleta merece puntaje parcial, no todo o nada. Si no respondió nada, 0 puntos.
 
-${essayBlock}${mcBlock}
+Además, para CADA pregunta de desarrollo (la haya respondido el alumno o no) incluí:
+- "expectedAnswer": una respuesta modelo completa y correcta a esa pregunta, basada en el material adjunto — se le muestra al alumno como referencia, en especial cuando no respondió nada.
+- "sourceQuote": una cita TEXTUAL (1 a 3 oraciones), copiada palabra por palabra tal como aparece en el material de referencia — sin resumir, parafrasear ni traducir — que respalde esa respuesta modelo. Tiene que poder encontrarse buscando ese texto exacto dentro del documento. Si no estás seguro de poder citarla de forma exactamente literal, dejala como cadena vacía en vez de aproximar.
+- "sourceFileIndex": el número de CUÁL de los archivos de referencia (de la lista de abajo) contiene esa cita.
+
+${essayBlock}${mcBlock}${filesBlock}
 
 Formato de salida (JSON puro, sin texto extra, sin bloques de código markdown):
 {
   "grades": [
-    { "questionId": "el id exacto entre corchetes de arriba", "pointsEarned": número, "feedback": "1-2 oraciones explicando qué estuvo bien/mal o qué faltó" }
+    { "questionId": "el id exacto entre corchetes de arriba", "pointsEarned": número, "feedback": "1-2 oraciones explicando qué estuvo bien/mal o qué faltó", "expectedAnswer": "...", "sourceQuote": "...", "sourceFileIndex": 0 }
   ],
   "summary": "2-4 oraciones con un comentario general sobre el desempeño en TODO el examen (considerá también el resultado de multiple choice si te lo compartí arriba), mencionando fortalezas y qué repasar."
 }
@@ -233,7 +278,7 @@ Reglas:
 // pregunta, para no multiplicar la latencia/costo). Si el examen es 100% multiple choice, no hace
 // ninguna llamada a la IA.
 export async function gradeExam(
-  files: { mimeType: string; data: string }[],
+  files: { mimeType: string; data: string; fileName?: string }[],
   questions: ExamQuestion[],
   answers: ExamAnswer[],
 ): Promise<ExamResult> {
@@ -265,8 +310,9 @@ export async function gradeExam(
   if (essayItems.length > 0) {
     let parsed: { grades?: GradeResultRaw[]; summary?: string };
     try {
+      const sourceFileNames = files.map((f, i) => f.fileName || `Archivo ${i + 1}`);
       const { text } = await withRetry(() =>
-        GeminiService.sendChatMessage(buildGradingPrompt(essayItems, mcSummary), [], {
+        GeminiService.sendChatMessage(buildGradingPrompt(essayItems, mcSummary, sourceFileNames), [], {
           model: EXAM_MODEL,
           files,
         }),
@@ -279,11 +325,19 @@ export async function gradeExam(
     essayGrades = essayItems.map((item) => {
       const g = gradesById.get(item.id);
       const pointsEarned = g && typeof g.pointsEarned === "number" ? Math.max(0, Math.min(item.maxPoints, Math.round(g.pointsEarned))) : 0;
+      const sourceQuote = g?.sourceQuote?.trim() || undefined;
+      const validFileIndex =
+        sourceQuote && typeof g?.sourceFileIndex === "number" && g.sourceFileIndex >= 0 && g.sourceFileIndex < files.length
+          ? g.sourceFileIndex
+          : undefined;
       return {
         questionId: item.id,
         pointsEarned,
         pointsPossible: item.maxPoints,
         feedback: g?.feedback || "No se pudo evaluar esta respuesta.",
+        expectedAnswer: g?.expectedAnswer?.trim() || undefined,
+        sourceQuote,
+        sourceFileIndex: validFileIndex,
       };
     });
     summary = parsed.summary || "";

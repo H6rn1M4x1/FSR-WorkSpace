@@ -2572,7 +2572,13 @@ export default function AcademicView({
 
                 {exams.length > 0 && (
                   <div className="mt-6">
-                    <ExamsBlock darkMode={darkMode} userId={activeUserId} exams={exams} setExams={setExams} />
+                    <ExamsBlock
+                      darkMode={darkMode}
+                      userId={activeUserId}
+                      exams={exams}
+                      setExams={setExams}
+                      onOpenInFacultad={openFolderInFacultad}
+                    />
                   </div>
                 )}
 

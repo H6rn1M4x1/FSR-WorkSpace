@@ -94,6 +94,83 @@ function newAnnotationId(): string {
   return `ann_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+// Color fijo (no es parte de la paleta de usuario) para la marca que ubica sola la IA — así se
+// distingue a simple vista de una marca hecha a mano.
+const LOCATED_QUOTE_COLOR = "#2dd4bf";
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// Arma un regex a partir de la cita de la IA que tolera espacios/saltos de línea distintos a los
+// del documento original (p.ej. un guión de corte de línea que el extractor de texto no ve igual
+// que el layout real) sin dejar de exigir las palabras exactas, en el mismo orden.
+function buildFuzzyQuoteRegex(quote: string): RegExp | null {
+  const words = quote.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return null;
+  const pattern = words.map(escapeRegExp).join("\\s+");
+  try {
+    return new RegExp(pattern, "i");
+  } catch {
+    return null;
+  }
+}
+
+// Busca la cita textual DENTRO de la capa de texto ya renderizada de una página (spans reales del
+// DOM) y arma una marca de resaltado a partir de ahí — mismo mecanismo que capturar una selección
+// de mouse (`getRawRectsForRange` + `mergeRectsByLine`), pero el "Range" lo arma el código en vez
+// del usuario.
+function locateQuoteInTextLayer(quote: string, textLayerEl: HTMLElement, containerEl: HTMLElement, page: number): StudyPlanTreeAnnotation | null {
+  const regex = buildFuzzyQuoteRegex(quote);
+  if (!regex) return null;
+  const spans = Array.from(textLayerEl.querySelectorAll("span")).filter(
+    (span) => span.firstChild && span.firstChild.nodeType === Node.TEXT_NODE,
+  );
+  if (spans.length === 0) return null;
+
+  let concatenated = "";
+  const charMap: { span: Element; offset: number }[] = [];
+  for (const span of spans) {
+    const text = span.textContent || "";
+    for (let i = 0; i < text.length; i++) charMap.push({ span, offset: i });
+    concatenated += text;
+    // Separador entre spans (el regex ya tolera cualquier cantidad de espacio de más) — sin esto
+    // dos palabras de spans distintos sin espacio real entre ellas quedarían pegadas.
+    concatenated += " ";
+    charMap.push({ span, offset: text.length });
+  }
+
+  const match = regex.exec(concatenated);
+  if (!match) return null;
+  const startIdx = match.index;
+  const endIdx = match.index + match[0].length - 1;
+  if (startIdx >= charMap.length || endIdx < 0 || endIdx >= charMap.length) return null;
+  const startEntry = charMap[startIdx];
+  const endEntry = charMap[endIdx];
+
+  try {
+    const range = document.createRange();
+    range.setStart(startEntry.span.firstChild!, Math.min(startEntry.offset, (startEntry.span.textContent || "").length));
+    range.setEnd(endEntry.span.firstChild!, Math.min(endEntry.offset + 1, (endEntry.span.textContent || "").length));
+    if (range.collapsed) return null;
+    const rawRects = getRawRectsForRange(range, textLayerEl);
+    if (rawRects.length === 0) return null;
+    const lines = mergeRectsByLine(rawRects);
+    const containerRect = containerEl.getBoundingClientRect();
+    const rects: NormRect[] = lines.map((l) => ({
+      x: (l.left - containerRect.left) / containerRect.width,
+      y: (l.top - containerRect.top) / containerRect.height,
+      width: (l.right - l.left) / containerRect.width,
+      height: (l.bottom - l.top) / containerRect.height,
+      baseline: (l.baselinePx - containerRect.top) / containerRect.height,
+      ascent: l.ascentPx / containerRect.height,
+    }));
+    return { id: newAnnotationId(), type: "highlight", color: LOCATED_QUOTE_COLOR, page, rects };
+  } catch {
+    return null;
+  }
+}
+
 let measureCtx: CanvasRenderingContext2D | null = null;
 const fontMetricsCache = new Map<string, { ascentPx: number; descentPx: number }>();
 
@@ -317,6 +394,8 @@ export function PdfHighlightViewer({
   annotations,
   onSave,
   onSkip,
+  locateQuote,
+  onLocateStatusChange,
 }: {
   fileId: string;
   accessToken: string | null;
@@ -327,6 +406,11 @@ export function PdfHighlightViewer({
   annotations?: StudyPlanTreeAnnotation[];
   onSave?: (annotations: StudyPlanTreeAnnotation[]) => void;
   onSkip?: () => void;
+  // Cita textual a ubicar y marcar sola, sin que el usuario tenga que buscarla (la usa el botón
+  // "Ver en el material" de la corrección de exámenes) — busca en todas las páginas, salta a la
+  // que la contiene, y la resalta automáticamente ahí.
+  locateQuote?: string;
+  onLocateStatusChange?: (status: "searching" | "found" | "not-found") => void;
 }) {
   const [pdfDoc, setPdfDoc] = useState<PDFDocumentProxy | null>(null);
   const [numPages, setNumPages] = useState(0);
@@ -356,11 +440,16 @@ export function PdfHighlightViewer({
     underlineStyle: StudyPlanTreeUnderlineStyle;
   }>({ type: "highlight", color: COLOR_PALETTE[0].value, underlineStyle: "solid" });
   const [openPopover, setOpenPopover] = useState<StudyPlanTreeAnnotationType | null>(null);
+  const [locatedAnnotation, setLocatedAnnotation] = useState<StudyPlanTreeAnnotation | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textLayerRef = useRef<HTMLDivElement>(null);
   const pageContainerRef = useRef<HTMLDivElement>(null);
   const drawStartRef = useRef<{ x: number; y: number } | null>(null);
+  // true en cuanto `locateQuote` se encuentra en alguna página — evita seguir avanzando páginas
+  // de más una vez ubicada (y evita re-ubicarla de nuevo si currentPage cambia por otro motivo,
+  // p.ej. el usuario navegando a mano).
+  const locateFoundRef = useRef(false);
 
   // Descarga el PDF una sola vez (bytes crudos, no base64 — acá no hace falta mandárselo a nadie,
   // pdf.js lo lee directo desde el ArrayBuffer).
@@ -417,11 +506,30 @@ export function PdfHighlightViewer({
       if (cancelled || !textLayerRef.current) return;
       const textLayer = new TextLayer({ textContentSource: textContent, container: textLayerRef.current, viewport });
       await textLayer.render();
+      if (cancelled) return;
+      // Búsqueda incremental de `locateQuote`, página por página: si no está en la que se acaba
+      // de renderizar y hay más páginas, avanza a la siguiente (eso vuelve a disparar este mismo
+      // efecto solo). Integrado acá (en vez de un efecto aparte que primero decide la página) para
+      // no depender de qué efecto termina antes — si la cita cae justo en la página con la que ya
+      // arrancó el visor, un `setCurrentPage` a ESE mismo número no dispararía nada por sí solo.
+      if (locateQuote && locateQuote.trim() && !locateFoundRef.current && textLayerRef.current && pageContainerRef.current) {
+        const found = locateQuoteInTextLayer(locateQuote, textLayerRef.current, pageContainerRef.current, safePage);
+        if (found) {
+          locateFoundRef.current = true;
+          setLocatedAnnotation(found);
+          onLocateStatusChange?.("found");
+        } else if (safePage < pdfDoc.numPages) {
+          setCurrentPage(safePage + 1);
+        } else {
+          onLocateStatusChange?.("not-found");
+        }
+      }
     })();
     return () => {
       cancelled = true;
     };
-  }, [pdfDoc, currentPage, scale]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pdfDoc, currentPage, scale, locateQuote]);
 
   // Modo "view": si hay marcas guardadas, arranca en la página de la primera (ya lo hace el
   // useState inicial) — esto cubre el caso de volver a abrir el mismo visor con otro adjunto
@@ -431,6 +539,29 @@ export function PdfHighlightViewer({
       setCurrentPage(Math.min(...annotations.map((a) => a.page)));
     }
   }, [mode, annotations]);
+
+  // Arranca (o reinicia) la búsqueda de `locateQuote` desde la página 1 cada vez que cambia a una
+  // cita distinta — compara contra la cita anterior (no solo "si está seteada") para no volver a
+  // la página 1 en cada re-render de por sí.
+  const prevLocateQuoteRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (locateQuote === prevLocateQuoteRef.current) return;
+    prevLocateQuoteRef.current = locateQuote;
+    locateFoundRef.current = false;
+    setLocatedAnnotation(null);
+    if (locateQuote && locateQuote.trim()) {
+      onLocateStatusChange?.("searching");
+      setCurrentPage(1);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locateQuote]);
+
+  // Centra en pantalla la marca recién ubicada — así no hace falta scrollear a mano para verla.
+  useEffect(() => {
+    if (!locatedAnnotation) return;
+    const el = pageContainerRef.current?.querySelector(`[data-mark-id="${locatedAnnotation.id}"]`);
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [locatedAnnotation]);
 
   const goToPage = (p: number) => {
     uiSounds.navigate();
@@ -557,10 +688,11 @@ export function PdfHighlightViewer({
   };
 
   const visibleAnnotations: StudyPlanTreeAnnotation[] = useMemo(() => {
-    if (mode === "select") return pendingAnnotations.filter((a) => a.page === currentPage);
-    if (mode === "view" && annotations) return annotations.filter((a) => a.page === currentPage);
-    return [];
-  }, [mode, pendingAnnotations, annotations, currentPage]);
+    const located = locatedAnnotation && locatedAnnotation.page === currentPage ? [locatedAnnotation] : [];
+    if (mode === "select") return [...pendingAnnotations.filter((a) => a.page === currentPage), ...located];
+    if (mode === "view") return [...(annotations || []).filter((a) => a.page === currentPage), ...located];
+    return located;
+  }, [mode, pendingAnnotations, annotations, currentPage, locatedAnnotation]);
 
   // Solo tiene sentido mostrar "qué se va a marcar" mientras se puede marcar algo con un clic de
   // texto — en modo dibujo ya hay un cursor de cruz propio (más claro para esa acción puntual), y

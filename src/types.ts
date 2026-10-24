@@ -656,6 +656,12 @@ export interface ExamQuestionGrade {
   pointsEarned: number;
   pointsPossible: number;
   feedback: string;
+  // Solo para preguntas de desarrollo (la IA las arma al corregir, a partir del material de
+  // referencia) — para mostrar "la respuesta correcta" cuando el alumno dejó la pregunta sin
+  // responder, y para poder abrir el archivo fuente con esa parte marcada.
+  expectedAnswer?: string;
+  sourceQuote?: string;
+  sourceFileIndex?: number;
 }
 
 export interface ExamResult {
@@ -665,11 +671,23 @@ export interface ExamResult {
   gradedAt: string;
 }
 
+// Instancia de evaluación que es este examen de práctica — mismas 6 opciones que pidió el
+// usuario, como texto libre asociado al examen (no tiene relación con `ExamenItem.instancia`,
+// que es del calendario real de exámenes).
+export type ExamInstancia =
+  | "Primer Parcial"
+  | "Segundo Parcial"
+  | "Recuperatorio del Primer Parcial"
+  | "Recuperatorio del Segundo Parcial"
+  | "Extraordinario"
+  | "Examen Final";
+
 export interface Exam {
   id: string;
   folderId: string;
   folderName: string;
   name: string;
+  instancia?: ExamInstancia;
   sourceFiles: { fileId: string; fileName: string; mimeType: string }[];
   questions: ExamQuestion[];
   answers?: ExamAnswer[];
