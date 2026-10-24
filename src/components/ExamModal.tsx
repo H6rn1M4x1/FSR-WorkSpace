@@ -257,12 +257,16 @@ export function ExamModal({
   // cita es un PDF, lo abre acá mismo (con la cita ubicada y marcada sola); si no es un PDF (p.ej.
   // un Excel o PowerPoint usado como referencia), no hay forma de resaltarlo — cae a abrirlo en
   // Facultad como cualquier otro archivo.
-  const handleViewSource = (grade: ExamQuestionGrade) => {
-    if (!exam || !grade.sourceQuote) return;
+  const resolveSourceFile = (grade: ExamQuestionGrade) => {
+    if (!exam || !grade.sourceQuote) return null;
     const idx = grade.sourceFileIndex ?? (exam.sourceFiles.length === 1 ? 0 : undefined);
-    if (idx == null) return;
-    const file = exam.sourceFiles[idx];
-    if (!file) return;
+    if (idx == null) return null;
+    return exam.sourceFiles[idx] || null;
+  };
+
+  const handleViewSource = (grade: ExamQuestionGrade) => {
+    const file = resolveSourceFile(grade);
+    if (!file || !grade.sourceQuote) return;
     uiSounds.click();
     if (file.mimeType === "application/pdf") {
       setLocateStatus("searching");
@@ -623,7 +627,7 @@ export function ExamModal({
                           {grade.feedback}
                         </p>
                       )}
-                      {q.type === "essay" && grade?.sourceQuote && (
+                      {q.type === "essay" && grade && resolveSourceFile(grade) && (
                         <button
                           type="button"
                           onClick={() => handleViewSource(grade)}
