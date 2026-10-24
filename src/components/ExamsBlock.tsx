@@ -3,13 +3,8 @@ import { GraduationCap, Clock } from "lucide-react";
 import { Exam } from "../types";
 import { getAccessTokenSync } from "../lib/supabase";
 import { ExamModal } from "./ExamModal";
+import { AcademicGaugeChart } from "./AcademicCharts";
 import { uiSounds } from "../lib/sounds";
-
-function scoreColorClass(score: number): string {
-  if (score >= 70) return "text-emerald-500";
-  if (score >= 40) return "text-amber-500";
-  return "text-red-500";
-}
 
 function formatExamDate(iso: string): string {
   try {
@@ -28,11 +23,15 @@ export function ExamsBlock({
   userId,
   exams,
   setExams,
+  onOpenInFacultad,
 }: {
   darkMode: boolean;
   userId: string;
   exams: Exam[];
   setExams: React.Dispatch<React.SetStateAction<Exam[]>>;
+  // Para el botón "Ver en el material" dentro de la corrección de un examen — mismo callback que
+  // ya usa el resto de Académico para abrir un archivo de Drive en Facultad.
+  onOpenInFacultad: (folderId: string, folderName: string, fileId?: string) => void;
 }) {
   const [openExam, setOpenExam] = useState<Exam | null>(null);
   const accessToken = getAccessTokenSync();
@@ -42,10 +41,12 @@ export function ExamsBlock({
   const sorted = [...exams].sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""));
 
   return (
-    <div className={`rounded-3xl border p-5 ${darkMode ? "bg-zinc-900/40 border-zinc-800" : "bg-white border-zinc-150"}`}>
+    <div
+      className={`scroll-reveal rounded-3xl border p-5 ${darkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-zinc-150"}`}
+    >
       <div className="flex items-center gap-2 mb-4">
         <GraduationCap className="w-4.5 h-4.5 text-primary" />
-        <h3 className="font-extrabold text-sm">Exámenes con IA</h3>
+        <h3 className="font-extrabold text-sm">Exámenes Creados</h3>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
         {sorted.map((exam) => (
@@ -56,21 +57,24 @@ export function ExamsBlock({
               uiSounds.click();
               setOpenExam(exam);
             }}
-            className={`flex flex-col gap-1.5 px-4 py-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+            className={`flex flex-col items-center gap-1 px-3 py-3 rounded-2xl border text-center transition-all cursor-pointer ${
               darkMode
-                ? "bg-zinc-800/40 border-zinc-800 hover:border-primary/40"
-                : "bg-slate-50 border-zinc-150 hover:border-primary/40"
+                ? "bg-black border-zinc-800 hover:border-primary/40"
+                : "bg-white border-zinc-150 hover:border-primary/40 shadow-sm"
             }`}
           >
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-bold truncate">{exam.name}</span>
-              {exam.status === "graded" && exam.result ? (
-                <span className={`text-sm font-black shrink-0 ${scoreColorClass(exam.result.score)}`}>{exam.result.score}</span>
-              ) : (
-                <Clock className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-              )}
-            </div>
-            <p className="text-[10px] font-semibold text-zinc-500 truncate">{exam.folderName}</p>
+            <span className="text-xs font-bold truncate max-w-full px-1">{exam.name}</span>
+            {exam.instancia && (
+              <span className="text-[8px] font-bold uppercase tracking-wide text-primary/80">{exam.instancia}</span>
+            )}
+            {exam.status === "graded" && exam.result ? (
+              <AcademicGaugeChart percent={exam.result.score} subtitle="PUNTAJE" darkMode={darkMode} compact />
+            ) : (
+              <div className="h-20 w-32 flex items-center justify-center">
+                <Clock className="w-5 h-5 text-amber-500" />
+              </div>
+            )}
+            <p className="text-[10px] font-semibold text-zinc-500 truncate max-w-full">{exam.folderName}</p>
             <p className="text-[9px] font-semibold text-zinc-400">{formatExamDate(exam.createdAt)}</p>
           </button>
         ))}
@@ -88,6 +92,7 @@ export function ExamsBlock({
           quickPickFiles={[]}
           setExams={setExams}
           existingExam={openExam}
+          onOpenInFacultad={onOpenInFacultad}
         />
       )}
     </div>
