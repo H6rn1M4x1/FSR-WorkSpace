@@ -626,7 +626,10 @@ export default function DriveFolderVisualizer({
         setChatSessions(
           [...items].sort((a, b) => {
             if (!!b.pinned !== !!a.pinned) return (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0);
-            return (b.updatedAt || "").localeCompare(a.updatedAt || "");
+            // String(...): `saveItemToFirestore` completa `updatedAt` con `Date.now()` (número)
+            // cuando el item guardado no trae uno propio — sin esto, una sesión con esa forma
+            // puede romper el sort entero con un TypeError.
+            return String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""));
           })
         );
       }
