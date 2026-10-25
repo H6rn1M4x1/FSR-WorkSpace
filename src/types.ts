@@ -669,6 +669,9 @@ export interface ExamResult {
   summary: string;
   questionGrades: ExamQuestionGrade[];
   gradedAt: string;
+  // Segundos desde que se entró a responder hasta que se entregó — para mostrar cuánto tardó esta
+  // vez y, si hay un intento anterior, comparar contra ese tiempo.
+  timeSpentSeconds?: number;
 }
 
 // Instancia de evaluación que es este examen de práctica — mismas 6 opciones que pidió el
@@ -681,6 +684,15 @@ export type ExamInstancia =
   | "Recuperatorio del Segundo Parcial"
   | "Extraordinario"
   | "Examen Final";
+
+export const EXAM_INSTANCIAS: ExamInstancia[] = [
+  "Primer Parcial",
+  "Segundo Parcial",
+  "Recuperatorio del Primer Parcial",
+  "Recuperatorio del Segundo Parcial",
+  "Extraordinario",
+  "Examen Final",
+];
 
 export interface Exam {
   id: string;
@@ -695,6 +707,13 @@ export interface Exam {
   status: "generated" | "graded";
   createdAt: string;
   updatedAt: string;
+  // Historial de intentos previos (se completa al "Rehacer": el resultado actual se empuja acá
+  // antes de limpiar `answers`/`result` para la vuelta nueva) — más viejo primero, así el índice
+  // + 1 es directamente el número de intento.
+  previousAttempts?: ExamResult[];
+  // true si este examen se armó combinando las preguntas de 2+ exámenes ya existentes ("Combinar
+  // exámenes") — sourceExamNames queda solo como referencia (los exámenes originales no se tocan).
+  combinedFrom?: string[];
 }
 
 // --- Password Vault (client-side end-to-end encrypted) ---
