@@ -22,7 +22,7 @@ import {
   generateExamQuestions,
   gradeExam,
   resolveFileMeta,
-  prepareFilePart,
+  prepareFileParts,
   MAX_EXAM_SOURCE_FILE_BYTES,
   MAX_EXAM_SOURCE_TOTAL_BYTES,
 } from "../lib/exams";
@@ -31,6 +31,7 @@ import { useDriveFilePicker, DriveItemLite } from "../hooks/useDriveFilePicker";
 import { CustomSelect } from "./CustomSelect";
 import { uiSounds } from "../lib/sounds";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
+import { useToast } from "../context/ToastContext";
 
 function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -121,6 +122,7 @@ export function ExamModal({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [genProgress, setGenProgress] = useState<string | null>(null);
   const picker = useDriveFilePicker(accessToken, folderId, folderName);
+  const { showToast } = useToast();
 
   // Arranca a contar apenas se entra a responder (generando uno nuevo, o reabriendo uno pendiente
   // ya existente) — se usa al entregar para guardar cuánto tardó esta vuelta.
@@ -191,24 +193,38 @@ export function ExamModal({
         );
       }
       setGenProgress("Leyendo el contenido de los archivos…");
-      const fileParts = await Promise.all(
-        allSelectedFiles.map((f, i) => prepareFilePart(f.fileId, metas[i].mimeType, f.fileName, accessToken)),
+      const { parts: fileParts, failed: downloadFailures } = await prepareFileParts(
+        allSelectedFiles.map((f, i) => ({ fileId: f.fileId, mimeType: metas[i].mimeType, fileName: f.fileName })),
+        accessToken,
       );
       setGenProgress("Generando preguntas…");
       const questions = await generateExamQuestions(fileParts, mcCount, essayCount);
       const now = new Date().toISOString();
+      // `sourceFiles` queda solo con los que de verdad se pudieron leer — guardar uno que ya
+      // falló acá no sirve de nada, va a volver a fallar igual al corregir.
+      const succeededIds = new Set(fileParts.map((p) => p.fileId));
       const newExam: Exam = {
         id: newExamId(),
         folderId,
         folderName,
         name: examName.trim(),
         instancia: examInstancia || undefined,
-        sourceFiles: allSelectedFiles.map((f, i) => ({ fileId: f.fileId, fileName: f.fileName, mimeType: metas[i].mimeType })),
+        sourceFiles: allSelectedFiles
+          .map((f, i) => ({ fileId: f.fileId, fileName: f.fileName, mimeType: metas[i].mimeType }))
+          .filter((f) => succeededIds.has(f.fileId)),
         questions,
         status: "generated",
         createdAt: now,
         updatedAt: now,
       };
+      if (downloadFailures.length > 0) {
+        showToast(
+          `El examen se generó igual, pero no se pudo leer ${downloadFailures.length === 1 ? "este archivo" : "estos archivos"}: ${downloadFailures
+            .map((f) => `"${f.fileName}"`)
+            .join(", ")}.`,
+          "error",
+        );
+      }
       await saveItemToFirestore(userId, "ai_exams", newExam);
       setExams((prev) => [...prev.filter((e) => e.id !== newExam.id), newExam]);
       setExam(newExam);
@@ -234,9 +250,18 @@ export function ExamModal({
     setError(null);
     try {
       const answers: ExamAnswer[] = exam.questions.map((q) => ({ questionId: q.id, value: localAnswers[q.id] || "" }));
-      const fileParts = await Promise.all(
-        exam.sourceFiles.map((f) => prepareFilePart(f.fileId, f.mimeType, f.fileName, accessToken)),
+      const { parts: fileParts, failed: downloadFailures } = await prepareFileParts(
+        exam.sourceFiles.map((f) => ({ fileId: f.fileId, mimeType: f.mimeType, fileName: f.fileName })),
+        accessToken,
       );
+      if (downloadFailures.length > 0) {
+        showToast(
+          `No se pudo leer ${downloadFailures.length === 1 ? "este archivo" : "estos archivos"} de referencia (puede que ya no exista en Drive): ${downloadFailures
+            .map((f) => `"${f.fileName}"`)
+            .join(", ")}. Se corrigió igual con el resto del material.`,
+          "error",
+        );
+      }
       const result = await gradeExam(fileParts, exam.questions, answers);
       const timeSpentSeconds = answeringStartedAtRef.current != null ? Math.round((Date.now() - answeringStartedAtRef.current) / 1000) : undefined;
       const resultWithTime: ExamResult = { ...result, timeSpentSeconds };

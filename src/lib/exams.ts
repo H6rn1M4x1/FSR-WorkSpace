@@ -87,13 +87,38 @@ export async function prepareFilePart(
   mimeType: string,
   fileName: string,
   accessToken: string,
-): Promise<{ mimeType: string; data: string; fileName: string }> {
+): Promise<{ fileId: string; mimeType: string; data: string; fileName: string }> {
   const data = await downloadDriveFileAsBase64(fileId, accessToken);
   if (!needsTextExtraction(mimeType)) {
-    return { mimeType, data, fileName };
+    return { fileId, mimeType, data, fileName };
   }
   const text = await extractOfficeText(data, mimeType, fileName);
-  return { mimeType: "text/plain", data: textToBase64(text), fileName };
+  return { fileId, mimeType: "text/plain", data: textToBase64(text), fileName };
+}
+
+// Prepara VARIOS archivos a la vez, pero sin que uno solo roto (borrado de Drive, movido fuera de
+// alcance, etc.) tire abajo TODO el examen — antes un único 404 cortaba la generación/corrección
+// entera con `Promise.all`. Si falla alguno, se sigue con los que sí se pudieron leer; solo se
+// tira error si TODOS fallaron (ahí no queda nada de donde generar/corregir).
+export async function prepareFileParts(
+  files: { fileId: string; mimeType: string; fileName: string }[],
+  accessToken: string,
+): Promise<{
+  parts: { fileId: string; mimeType: string; data: string; fileName: string }[];
+  failed: { fileId: string; fileName: string; error: string }[];
+}> {
+  const settled = await Promise.allSettled(files.map((f) => prepareFilePart(f.fileId, f.mimeType, f.fileName, accessToken)));
+  const parts: { fileId: string; mimeType: string; data: string; fileName: string }[] = [];
+  const failed: { fileId: string; fileName: string; error: string }[] = [];
+  settled.forEach((result, i) => {
+    if (result.status === "fulfilled") parts.push(result.value);
+    else failed.push({ fileId: files[i].fileId, fileName: files[i].fileName, error: result.reason?.message || "No se pudo leer el archivo." });
+  });
+  if (parts.length === 0) {
+    const detail = failed.map((f) => `"${f.fileName}": ${f.error}`).join(" · ");
+    throw new Error(`No se pudo leer ninguno de los archivos de referencia. ${detail}`);
+  }
+  return { parts, failed };
 }
 
 interface GeneratedQuestionRaw {

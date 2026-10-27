@@ -9,6 +9,7 @@ import { AcademicGaugeChart } from "./AcademicCharts";
 import { CustomSelect } from "./CustomSelect";
 import { ConfirmationModal } from "./ConfirmationModal";
 import { uiSounds } from "../lib/sounds";
+import { useToast } from "../context/ToastContext";
 
 function formatExamDate(iso: string): string {
   try {
@@ -49,6 +50,7 @@ export function ExamsBlock({
   const [combineName, setCombineName] = useState("");
   const [combineInstancia, setCombineInstancia] = useState<ExamInstancia | "">("");
   const [combineError, setCombineError] = useState<string | null>(null);
+  const { showToast } = useToast();
 
   if (exams.length === 0) return null;
 
@@ -81,6 +83,7 @@ export function ExamsBlock({
       await deleteItemFromFirestore(userId, "ai_exams", exam.id);
       setExams((prev) => prev.filter((e) => e.id !== exam.id));
       uiSounds.delete();
+      showToast(`"${exam.name}" se eliminó.`, "success");
     } else {
       // "Rehacer": el resultado actual (si lo hay) pasa al historial de intentos antes de
       // limpiar `answers`/`result` — así no se pierde el puntaje de la vuelta anterior.
@@ -95,6 +98,7 @@ export function ExamsBlock({
       await saveItemToFirestore(userId, "ai_exams", resetExam);
       setExams((prev) => [...prev.filter((e) => e.id !== resetExam.id), resetExam]);
       uiSounds.success();
+      showToast(`"${exam.name}" está listo para responder de nuevo.`, "success");
       setOpenExam(resetExam);
     }
   };
@@ -108,6 +112,7 @@ export function ExamsBlock({
       await saveItemToFirestore(userId, "ai_exams", combined);
       setExams((prev) => [...prev, combined]);
       uiSounds.success();
+      showToast(`"${combined.name}" se creó combinando ${selectedExams.length} exámenes.`, "success");
       setCombineMode(false);
       setCombineSelected(new Set());
       setCombineName("");
