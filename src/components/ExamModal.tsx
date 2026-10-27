@@ -15,6 +15,7 @@ import {
   RotateCcw,
   BookOpenCheck,
   Clock,
+  Trash2,
 } from "lucide-react";
 import { EXAM_INSTANCIAS, Exam, ExamAnswer, ExamInstancia, ExamQuestionGrade, ExamResult } from "../types";
 import { saveItemToFirestore } from "../lib/firestoreSyncService";
@@ -85,6 +86,7 @@ export function ExamModal({
   setExams,
   existingExam,
   onOpenInFacultad,
+  onDeleteExam,
 }: {
   open: boolean;
   onClose: () => void;
@@ -105,6 +107,11 @@ export function ExamModal({
   // Para "Ver en el material" en la corrección — si el archivo fuente de la cita no es un PDF (no
   // se puede resaltar con el visor propio), cae a abrirlo en Facultad como el resto de la app.
   onOpenInFacultad: (folderId: string, folderName: string, fileId?: string) => void;
+  // Botón de eliminar en el encabezado — además del ícono chico en la tarjeta de "Exámenes
+  // Creados" (fácil de pasar por alto, en especial en un examen sin corregir todavía, que no
+  // tiene más que un reloj) hay una forma clara de borrar el examen que se está mirando en este
+  // momento. Solo se muestra si hay un examen existente (no al crear uno nuevo desde cero).
+  onDeleteExam?: () => void;
 }) {
   const [mode, setMode] = useState<Mode>(() =>
     existingExam ? (existingExam.status === "graded" ? "reviewing" : "answering") : "creating",
@@ -339,13 +346,25 @@ export function ExamModal({
                 <p className="text-[10px] text-zinc-500 font-semibold truncate">{folderName}</p>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 cursor-pointer shrink-0"
-            >
-              <X className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-1 shrink-0">
+              {existingExam && onDeleteExam && (
+                <button
+                  type="button"
+                  onClick={onDeleteExam}
+                  title="Eliminar este examen"
+                  className="p-2 rounded-full hover:bg-red-500/10 text-zinc-400 hover:text-red-500 cursor-pointer"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={onClose}
+                className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           <div className="flex-1 min-h-0 overflow-y-auto">

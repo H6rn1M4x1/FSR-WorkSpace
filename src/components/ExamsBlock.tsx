@@ -299,6 +299,11 @@ export function ExamsBlock({
           setExams={setExams}
           existingExam={openExam}
           onOpenInFacultad={onOpenInFacultad}
+          onDeleteExam={() => {
+            const target = openExam;
+            setOpenExam(null);
+            setConfirmTarget({ exam: target, action: "delete" });
+          }}
         />
       )}
 
