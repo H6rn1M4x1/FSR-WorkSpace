@@ -72,6 +72,12 @@ import DriveFolderVisualizer from "./DriveFolderVisualizer";
 import { StudyMaterialBlock, normalizeMateriaName } from "./StudyMaterialBlock";
 import { ExamsBlock } from "./ExamsBlock";
 
+// Horario de Clases sigue guardando sus datos igual que siempre (Firestore vía `horarios`), pero
+// la tabla/lista vieja (búsqueda, filtros, "Nuevo Horario") queda oculta: ahora se agrega y quita
+// todo desde WeeklyScheduleGrid (la rejilla "a pinceladas"), que reusa el mismo estado/modal de
+// edición. Se deja como constante (no se borra el bloque) por si hace falta reactivarla.
+const SHOW_LEGACY_HORARIO_LIST = false;
+
 interface TimeInput24hProps {
   value: string;
   onChange: (value: string) => void;
@@ -3728,6 +3734,7 @@ export default function AcademicView({
                 onCopyDayToOthers={handleCopyDayToOthers}
                 generateId={generateUniqueId}
               />
+            {SHOW_LEGACY_HORARIO_LIST && (
             <div className={`p-6 rounded-3xl border scroll-reveal ${darkMode ? "bg-zinc-900 border-zinc-800 text-white shadow-lg" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"}`}>
               {/* Header Controls */}
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
@@ -4032,6 +4039,7 @@ export default function AcademicView({
                 )}
               </div>
             </div>
+            )}
             </div>
           );
         })()}

@@ -1,5 +1,5 @@
 import React, { useRef, useState, useCallback, useEffect } from "react";
-import { Paintbrush, Eraser, Copy, Trash2, Clock, Check } from "lucide-react";
+import { Paintbrush, Eraser, Copy, Trash2, Clock, Check, X } from "lucide-react";
 import { HorarioItem } from "../types";
 import { AnimatedNumber } from "./AnimatedNumber";
 import { CustomSelect } from "./CustomSelect";
@@ -29,23 +29,92 @@ const MIN_BLOCK_MIN = 30;
 const DEFAULT_CLICK_DURATION_MIN = 60;
 const CLICK_THRESHOLD_PX = 6;
 
-// Misma paleta de colores de acento que usan los gráficos de la app (ver chartColors en
-// FinanceView.tsx), para que los bloques pintados se sientan parte del mismo sistema visual.
-const MATERIA_PALETTE = [
-  "#3B82F6", // blue
-  "#10B981", // emerald
-  "#EF4444", // red
-  "#F59E0B", // amber
-  "#8B5CF6", // purple
-  "#EC4899", // pink
-  "#14B8A6", // teal
+// La paleta de materias se arma en tiempo real a partir de var(--color-primary) (el color de
+// acento que el usuario eligió en Ajustes, no un color fijo) — así cada materia tiene un tono
+// distinto pero todos quedan "en escala" del mismo acento, en vez de un arcoíris de colores sin
+// relación entre sí.
+function hexToHsl(hex: string): { h: number; s: number; l: number } {
+  const clean = hex.replace("#", "").trim();
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  if (clean.length === 3) {
+    r = parseInt(clean[0] + clean[0], 16);
+    g = parseInt(clean[1] + clean[1], 16);
+    b = parseInt(clean[2] + clean[2], 16);
+  } else if (clean.length >= 6) {
+    r = parseInt(clean.slice(0, 2), 16);
+    g = parseInt(clean.slice(2, 4), 16);
+    b = parseInt(clean.slice(4, 6), 16);
+  }
+  if ([r, g, b].some((n) => isNaN(n))) return { h: 32, s: 85, l: 48 }; // fallback naranja/acento por defecto
+  r /= 255;
+  g /= 255;
+  b /= 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  let h = 0;
+  let s = 0;
+  const d = max - min;
+  if (d !== 0) {
+    s = d / (1 - Math.abs(2 * l - 1));
+    if (max === r) h = ((g - b) / d) % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h *= 60;
+    if (h < 0) h += 360;
+  }
+  return { h, s: s * 100, l: l * 100 };
+}
+
+function hslToHex(h: number, s: number, l: number): string {
+  const sN = s / 100;
+  const lN = l / 100;
+  const c = (1 - Math.abs(2 * lN - 1)) * sN;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = lN - c / 2;
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  if (h < 60) { r = c; g = x; b = 0; }
+  else if (h < 120) { r = x; g = c; b = 0; }
+  else if (h < 180) { r = 0; g = c; b = x; }
+  else if (h < 240) { r = 0; g = x; b = c; }
+  else if (h < 300) { r = x; g = 0; b = c; }
+  else { r = c; g = 0; b = x; }
+  const toHex = (n: number) => Math.round(Math.max(0, Math.min(255, (n + m) * 255))).toString(16).padStart(2, "0");
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+function getAccentColorHex(): string {
+  if (typeof window === "undefined") return "#E09407";
+  const raw = getComputedStyle(document.documentElement).getPropertyValue("--color-primary").trim();
+  return raw || "#E09407";
+}
+
+// Variaciones chicas de matiz/saturación/luminosidad sobre el acento base — quedan "en la misma
+// familia" de color pero se distinguen entre sí (de más oscuro/saturado a más claro/suave).
+const PALETTE_STEPS: { dh: number; ds: number; dl: number }[] = [
+  { dh: 0, ds: 0, dl: 0 },
+  { dh: -16, ds: -8, dl: -10 },
+  { dh: 16, ds: 5, dl: 10 },
+  { dh: -30, ds: -15, dl: 14 },
+  { dh: 26, ds: 0, dl: -14 },
+  { dh: -8, ds: 10, dl: 6 },
+  { dh: 38, ds: -10, dl: -5 },
 ];
 
-function colorForMateria(materia: string): string {
-  if (!materia) return MATERIA_PALETTE[0];
-  let h = 0;
-  for (let i = 0; i < materia.length; i++) h = (h * 31 + materia.charCodeAt(i)) >>> 0;
-  return MATERIA_PALETTE[h % MATERIA_PALETTE.length];
+function buildAccentPalette(baseHex: string, darkMode: boolean): string[] {
+  const { h, s, l } = hexToHsl(baseHex);
+  return PALETTE_STEPS.map(({ dh, ds, dl }) => {
+    const hue = (h + dh + 360) % 360;
+    const sat = Math.min(95, Math.max(35, s + ds));
+    // En modo oscuro conviene partir un poco más clara la base para que no se pierda contra el
+    // fondo negro — se invierte el sentido de los pasos de luminosidad en vez de sumar lo mismo.
+    const light = Math.min(78, Math.max(26, l + (darkMode ? -dl : dl)));
+    return hslToHex(hue, sat, light);
+  });
 }
 
 const parseTimeMin = (t: string): number => {
@@ -115,6 +184,16 @@ export function WeeklyScheduleGrid({
   const [drag, setDrag] = useState<DragState | null>(null);
   const dragRef = useRef<DragState | null>(null);
 
+  // Paleta de colores "en escala" del acento actual (recalculada en cada render — es barato y
+  // así sigue el color de acento si el usuario lo cambia en Ajustes mientras ve esta pantalla).
+  const accentPalette = buildAccentPalette(getAccentColorHex(), darkMode);
+  const colorForMateria = (materia: string): string => {
+    if (!materia) return accentPalette[0];
+    let h = 0;
+    for (let i = 0; i < materia.length; i++) h = (h * 31 + materia.charCodeAt(i)) >>> 0;
+    return accentPalette[h % accentPalette.length];
+  };
+
   // Panel izquierdo: mismos campos que tenía el modal "Nuevo Horario" (Día/Hora Inicio/Hora
   // Fin para el alta manual, Aula/s y Profesor/es que además viajan con cada trazo pintado).
   const [panelDia, setPanelDia] = useState<string>(DIAS[0]);
@@ -122,6 +201,11 @@ export function WeeklyScheduleGrid({
   const [panelHoraFin, setPanelHoraFin] = useState("10:00");
   const [panelAulas, setPanelAulas] = useState("");
   const [panelProfesores, setPanelProfesores] = useState("");
+
+  // El trazo recién pintado no se guarda solo: queda "titilando" en la rejilla (en la posición
+  // que marcan panelDia/panelHoraInicio/panelHoraFin, que se van completando en vivo mientras se
+  // arrastra) hasta que se confirma con el botón "Agregar Horario" del panel.
+  const [hasPendingDraft, setHasPendingDraft] = useState(false);
 
   const gridStartMin = horarios.reduce(
     (min, h) => Math.min(min, Math.floor(parseTimeMin(h.horaInicio) / 60) * 60),
@@ -159,9 +243,14 @@ export function WeeklyScheduleGrid({
         hi = Math.min(gridEndMin, lo + DEFAULT_CLICK_DURATION_MIN);
       }
       if (hi - lo < MIN_BLOCK_MIN) return;
-      onDirectCreate(dia, minToTime(lo), minToTime(hi), selectedMateria, panelAulas, panelProfesores);
+      // No se guarda todavía: el trazo queda como borrador "titilando" sobre la rejilla, con
+      // el día/horario ya cargados en el panel — recién se confirma con "Agregar Horario".
+      setPanelDia(dia);
+      setPanelHoraInicio(minToTime(lo));
+      setPanelHoraFin(minToTime(hi));
+      setHasPendingDraft(true);
     },
-    [gridEndMin, onDirectCreate, selectedMateria, panelAulas, panelProfesores],
+    [gridEndMin, selectedMateria],
   );
 
   const commitErase = useCallback(
@@ -237,6 +326,15 @@ export function WeeklyScheduleGrid({
       } else {
         const min = minutesFromClientY(e.clientY, current.rectTop);
         setDrag({ ...current, currentMin: min });
+        // "Va tipeando" en vivo: mientras se arrastra para pintar, el panel de la izquierda
+        // muestra el día/horario que se está por crear, antes incluso de soltar el mouse.
+        if (current.type === "create") {
+          const lo = Math.min(current.anchorMin, min);
+          const hi = Math.max(current.anchorMin, min);
+          setPanelDia(current.dia);
+          setPanelHoraInicio(minToTime(lo));
+          setPanelHoraFin(minToTime(Math.max(hi, lo + SLOT_MIN)));
+        }
       }
     };
 
@@ -307,6 +405,11 @@ export function WeeklyScheduleGrid({
   const handleManualAdd = () => {
     if (!canManualAdd) return;
     onDirectCreate(panelDia, panelHoraInicio, panelHoraFin, selectedMateria, panelAulas, panelProfesores);
+    setHasPendingDraft(false);
+  };
+
+  const handleCancelDraft = () => {
+    setHasPendingDraft(false);
   };
 
   return (
@@ -485,7 +588,10 @@ export function WeeklyScheduleGrid({
             </button>
             <button
               type="button"
-              onClick={() => setMode("borrar")}
+              onClick={() => {
+                setMode("borrar");
+                setHasPendingDraft(false);
+              }}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all cursor-pointer ${
                 mode === "borrar"
                   ? "bg-primary text-white dark:text-blue-950 shadow-sm"
@@ -651,6 +757,39 @@ export function WeeklyScheduleGrid({
                         {drag.type === "create" ? "Pinta" : "Borra"}: {formatHM(Math.min(drag.anchorMin, drag.currentMin))}–
                         {formatHM(Math.max(drag.anchorMin, drag.currentMin))}
                       </span>
+                    </div>
+                  )}
+
+                  {/* Trazo recién pintado, todavía sin guardar — titila hasta que se confirma
+                      con "Agregar Horario" en el panel (o se cancela con la X). */}
+                  {!drag && hasPendingDraft && mode === "pintar" && panelDia === dia && (
+                    <div
+                      onPointerDown={(e) => e.stopPropagation()}
+                      className="absolute left-0.5 right-0.5 rounded-lg border-2 border-dashed animate-pulse z-10 overflow-hidden px-1.5 py-1"
+                      style={{
+                        top: ((parseTimeMin(panelHoraInicio) - gridStartMin) / SLOT_MIN) * ROW_PX,
+                        height: Math.max(
+                          ROW_PX,
+                          ((parseTimeMin(panelHoraFin) - parseTimeMin(panelHoraInicio)) / SLOT_MIN) * ROW_PX,
+                        ),
+                        backgroundColor: `${colorForMateria(selectedMateria)}70`,
+                        borderColor: colorForMateria(selectedMateria),
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={handleCancelDraft}
+                        title="Cancelar"
+                        className="absolute top-0.5 right-0.5 p-0.5 rounded-full bg-black/30 hover:bg-black/50 text-white cursor-pointer"
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                      <p className="text-[9px] font-extrabold text-white leading-tight truncate pr-3">
+                        {selectedMateria || "Sin confirmar"}
+                      </p>
+                      <p className="text-[8px] text-white/85 leading-tight truncate">
+                        {panelHoraInicio}–{panelHoraFin}
+                      </p>
                     </div>
                   )}
                 </div>
