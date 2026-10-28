@@ -1604,15 +1604,22 @@ export default function AcademicView({
   // aula/profesor quedan vacíos y se completan después editando el bloque, que sigue
   // reusando el modal/estado de siempre. Las operaciones en lote (redimensionar, borrar por
   // arrastre, copiar un día a los demás) tampoco pasan por ese modal.
-  const handleGridDirectCreate = (dia: string, horaInicio: string, horaFin: string, materia: string) => {
+  const handleGridDirectCreate = (
+    dia: string,
+    horaInicio: string,
+    horaFin: string,
+    materia: string,
+    aulas: string,
+    profesores: string,
+  ) => {
     const newItem: HorarioItem = {
       id: generateUniqueId("hor"),
       dia: dia as HorarioItem["dia"],
       horaInicio,
       horaFin,
       materia,
-      aulas: "",
-      profesores: "",
+      aulas,
+      profesores,
     };
     handleHorarioBatchUpdate({ toDelete: [], toUpsert: [newItem] });
   };
