@@ -22,14 +22,14 @@ const DIAS_CORTO: Record<string, string> = {
 };
 
 const SLOT_MIN = 30;
-// Filas más altas (antes 22px) para que el texto entre más cómodo, y el techo por defecto baja
-// de las 22:00 a las 19:00 — antes la rejilla siempre reservaba horas vacías hasta esa hora
-// aunque no hubiera nada agendado, lo que sumaba un scroll chico e incómodo dentro de la página
-// para llegar a ver el final del bloque. Si se carga (a mano, desde el panel) un horario que
-// termina después de las 19:00, la rejilla se extiende igual para mostrarlo.
+// La rejilla sigue mostrando de 7:00 a 22:00 siempre (no se recorta aunque no haya nada agendado
+// a la tarde) — filas un poco más altas que al principio (26px) para que entre más cómodo. El
+// scroll incómodo no venía del rango de horas en sí, sino de que el contenedor de la rejilla
+// quedaba con scroll propio (ver el split overflow-x más abajo, en el JSX) en vez de crecer
+// libremente con la página.
 const ROW_PX = 26;
 const DEFAULT_START_MIN = 7 * 60;
-const DEFAULT_END_MIN = 19 * 60;
+const DEFAULT_END_MIN = 22 * 60;
 const MIN_BLOCK_MIN = 30;
 const DEFAULT_CLICK_DURATION_MIN = 60;
 const CLICK_THRESHOLD_PX = 6;
@@ -633,8 +633,14 @@ export function WeeklyScheduleGrid({
         </p>
       )}
 
-      {/* Rejilla */}
-      <div className="overflow-x-auto rounded-2xl border border-slate-100 dark:border-zinc-800/80 bg-slate-50/50 dark:bg-black/40">
+      {/* Rejilla — el borde/fondo van en un contenedor SIN overflow propio (crece libre junto con
+          la página, nunca con scroll interno) y el scroll horizontal (para pantallas angostas,
+          donde las 6 columnas no entran) vive en un wrapper aparte, adentro. Si los dos overflow
+          (x e y) estuvieran en el mismo div, los navegadores fuerzan el eje vertical a "auto"
+          también apenas el horizontal deja de ser "visible" — eso es lo que generaba el scroll
+          interno chico e incómodo que había antes. */}
+      <div className="rounded-2xl border border-slate-100 dark:border-zinc-800/80 bg-slate-50/50 dark:bg-black/40">
+        <div className="overflow-x-auto">
         <div className="flex min-w-[620px]">
           {/* Columna de horas */}
           <div className="shrink-0 w-12 pt-8 relative" style={{ height: totalHeight + 32 }}>
@@ -821,6 +827,7 @@ export function WeeklyScheduleGrid({
               </div>
             );
           })}
+        </div>
         </div>
       </div>
 
