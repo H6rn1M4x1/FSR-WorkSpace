@@ -766,6 +766,10 @@ export default function AcademicView({
   const [hAulas, setHAulas] = useState("");
   const [hProfesores, setHProfesores] = useState("");
 
+  // Materia activa del "pincel" de WeeklyScheduleGrid — se elige antes de pintar en vez de
+  // abrir un menú desplegable, así que vive como selección independiente del modal.
+  const [selectedGridMateria, setSelectedGridMateria] = useState("");
+
   // Examenes States
   const [exSearchQuery, setExSearchQuery] = useState("");
   const [exSelectedMateria, setExSelectedMateria] = useState("Todos");
@@ -1570,19 +1574,47 @@ export default function AcademicView({
     );
   };
 
-  // Handlers para WeeklyScheduleGrid (edición visual "a pinceladas" del Horario de Clases) —
-  // reusan el mismo modal/estado de siempre para crear o editar un horario con materia/aula/
-  // profesor, y agregan operaciones en lote (redimensionar, borrar por arrastre, copiar un día
-  // a los demás) que no pasan por ese modal.
-  const handleGridPaintCreate = (dia: string, horaInicio: string, horaFin: string) => {
-    setEditingHorarioId(null);
-    setHDia(dia as HorarioItem["dia"]);
-    setHHoraInicio(horaInicio);
-    setHHoraFin(horaFin);
-    setHMateria("");
-    setHAulas("");
-    setHProfesores("");
-    setShowHorarioModal(true);
+  // Materias disponibles para el "pincel" del WeeklyScheduleGrid: las que todavía se pueden
+  // cursar, más cualquiera que ya tenga horarios cargados (por si cambió de estado después).
+  const gridMateriaOptions = Array.from(
+    new Set(
+      materiasInfo
+        .filter(
+          (m) =>
+            getAcademicStatus(m).type === "puede_cursar" ||
+            horarios.some((h) => h.materia === m.materia),
+        )
+        .map((m) => m.materia),
+    ),
+  ).sort();
+  const gridMateriaOptionsKey = gridMateriaOptions.join("|");
+
+  // Si la materia activa del pincel queda vacía o deja de ser una opción válida, se
+  // selecciona automáticamente la primera disponible — así siempre hay algo elegido y el
+  // usuario puede pintar sin tener que abrir nada primero.
+  useEffect(() => {
+    if (!gridMateriaOptions.includes(selectedGridMateria)) {
+      setSelectedGridMateria(gridMateriaOptions[0] || "");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gridMateriaOptionsKey]);
+
+  // Handlers para WeeklyScheduleGrid (edición visual "a pinceladas" del Horario de Clases).
+  // Pintar crea el horario directo con la materia activa del pincel (sin abrir ningún menú);
+  // aula/profesor quedan vacíos y se completan después editando el bloque, que sigue
+  // reusando el modal/estado de siempre. Las operaciones en lote (redimensionar, borrar por
+  // arrastre, copiar un día a los demás) tampoco pasan por ese modal.
+  const handleGridDirectCreate = (dia: string, horaInicio: string, horaFin: string, materia: string) => {
+    const newItem: HorarioItem = {
+      id: generateUniqueId("hor"),
+      dia: dia as HorarioItem["dia"],
+      horaInicio,
+      horaFin,
+      materia,
+      aulas: "",
+      profesores: "",
+    };
+    handleHorarioBatchUpdate({ toDelete: [], toUpsert: [newItem] });
   };
 
   const handleGridEditBlock = (h: HorarioItem) => {
@@ -3679,7 +3711,10 @@ export default function AcademicView({
               <WeeklyScheduleGrid
                 horarios={horarios}
                 darkMode={darkMode}
-                onPaintCreate={handleGridPaintCreate}
+                materiaOptions={gridMateriaOptions}
+                selectedMateria={selectedGridMateria}
+                onSelectMateria={setSelectedGridMateria}
+                onDirectCreate={handleGridDirectCreate}
                 onEditBlock={handleGridEditBlock}
                 onBatchUpdate={handleHorarioBatchUpdate}
                 onClearWeek={handleClearWeekHorarios}
