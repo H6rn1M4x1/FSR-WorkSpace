@@ -4486,7 +4486,7 @@ export default function AppointmentsView({
                       setTcLat(selected.lat);
                       setTcLon(selected.lon);
                     }}
-                    heightClass="h-[460px]"
+                    heightClass="h-[340px]"
                   />
 
                   {tcLugar && (

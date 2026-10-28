@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import L from "leaflet";
-import { Navigation, Locate, RefreshCw } from "lucide-react";
+import { Locate, RefreshCw } from "lucide-react";
 
 interface LocationPickerMapProps {
   lat?: number;
@@ -144,10 +144,17 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
         center: [currentLat, currentLon],
         zoom: 16,
         zoomControl: false,
+        attributionControl: false,
       });
 
       // Add Zoom control in top right
       L.control.zoom({ position: "topright" }).addTo(map);
+
+      // Atribución propia, chica y discreta (abajo a la izquierda, donde antes estaba el banner
+      // de instrucciones que se sacó) — Leaflet y OpenStreetMap exigen mostrar la atribución para
+      // poder usar sus baldosas gratis, así que no se puede sacar del todo, pero sí hacerla mucho
+      // menos protagonista que la que trae Leaflet por default.
+      L.control.attribution({ position: "bottomleft", prefix: false }).addTo(map);
 
       // OpenStreetMap Tile Layer
       const tileLayer = L.tileLayer(getOSMTileUrl(mapType), {
@@ -328,13 +335,6 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
           </div>
         )}
 
-        {/* Floating Instruction Banner */}
-        {!embedMode && !readOnly && (
-          <div className="absolute bottom-2 left-2 z-20 px-2.5 py-1 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-primary/30 dark:border-primary/20 rounded-xl text-[10px] text-slate-800 dark:text-zinc-100 font-semibold shadow-md flex items-center gap-1.5 pointer-events-none ring-1 ring-primary/20 map-instruction-banner">
-            <Navigation className="w-3 h-3 text-primary animate-bounce fill-primary/20" />
-            <span>Haz clic o arrastra el marcador para fijar la ubicación exacta</span>
-          </div>
-        )}
       </div>
     </div>
   );
