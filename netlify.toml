@@ -3,6 +3,9 @@
   publish = "dist"
   functions = "netlify/functions"
 
+[build.environment]
+  NODE_OPTIONS = "--max-old-space-size=4096"
+
 [functions]
   node_bundler = "esbuild"
 
