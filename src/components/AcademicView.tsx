@@ -1606,10 +1606,10 @@ export default function AcademicView({
   }, [gridMateriaOptionsKey]);
 
   // Handlers para WeeklyScheduleGrid (edición visual "a pinceladas" del Horario de Clases).
-  // Pintar crea el horario directo con la materia activa del pincel (sin abrir ningún menú);
-  // aula/profesor quedan vacíos y se completan después editando el bloque, que sigue
-  // reusando el modal/estado de siempre. Las operaciones en lote (redimensionar, borrar por
-  // arrastre, copiar un día a los demás) tampoco pasan por ese modal.
+  // Tanto pintar como hacer clic en un bloque existente arman un borrador en el panel (nunca
+  // abren el modal viejo) — crear y editar terminan acá, cada uno con su mensaje de
+  // confirmación. Las operaciones en lote (redimensionar, borrar por arrastre, copiar un día a
+  // los demás) quedan silenciosas, como antes.
   const handleGridDirectCreate = (
     dia: string,
     horaInicio: string,
@@ -1627,21 +1627,34 @@ export default function AcademicView({
       aulas,
       profesores,
     };
-    handleHorarioBatchUpdate({ toDelete: [], toUpsert: [newItem] });
+    handleHorarioBatchUpdate({ toDelete: [], toUpsert: [newItem] }, "Horario agregado con éxito");
   };
 
-  const handleGridEditBlock = (h: HorarioItem) => {
-    setEditingHorarioId(h.id);
-    setHDia(h.dia);
-    setHHoraInicio(h.horaInicio);
-    setHHoraFin(h.horaFin);
-    setHMateria(h.materia);
-    setHAulas(h.aulas);
-    setHProfesores(h.profesores);
-    setShowHorarioModal(true);
+  const handleGridConfirmEdit = (
+    id: string,
+    dia: string,
+    horaInicio: string,
+    horaFin: string,
+    materia: string,
+    aulas: string,
+    profesores: string,
+  ) => {
+    const updatedItem: HorarioItem = {
+      id,
+      dia: dia as HorarioItem["dia"],
+      horaInicio,
+      horaFin,
+      materia,
+      aulas,
+      profesores,
+    };
+    handleHorarioBatchUpdate({ toDelete: [], toUpsert: [updatedItem] }, "Horario actualizado con éxito");
   };
 
-  const handleHorarioBatchUpdate = async ({ toDelete, toUpsert }: WeeklyScheduleGridBatch) => {
+  const handleHorarioBatchUpdate = async (
+    { toDelete, toUpsert }: WeeklyScheduleGridBatch,
+    successMessage?: string,
+  ) => {
     if (toDelete.length === 0 && toUpsert.length === 0) return;
     setHorarios((prev) => {
       let next = prev.filter((h) => !toDelete.includes(h.id));
@@ -1656,6 +1669,7 @@ export default function AcademicView({
         ...toDelete.map((id) => deleteItemFromFirestore(activeUserId, "horarios", id)),
         ...toUpsert.map((item) => saveItemToFirestore(activeUserId, "horarios", item)),
       ]);
+      if (successMessage) showToast(successMessage, "success");
     } catch (error) {
       console.error("[AcademicView] Error en actualización masiva de horarios:", error);
       showToast("Error al actualizar el horario", "error");
@@ -3728,7 +3742,7 @@ export default function AcademicView({
                 selectedMateria={selectedGridMateria}
                 onSelectMateria={setSelectedGridMateria}
                 onDirectCreate={handleGridDirectCreate}
-                onEditBlock={handleGridEditBlock}
+                onConfirmEdit={handleGridConfirmEdit}
                 onBatchUpdate={handleHorarioBatchUpdate}
                 onClearWeek={handleClearWeekHorarios}
                 onCopyDayToOthers={handleCopyDayToOthers}
