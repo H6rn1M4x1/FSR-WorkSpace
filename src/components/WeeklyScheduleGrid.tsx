@@ -1,7 +1,8 @@
 import React, { useRef, useState, useCallback, useEffect } from "react";
-import { Paintbrush, Eraser, Copy, Trash2, Clock } from "lucide-react";
+import { Paintbrush, Eraser, Copy, Trash2, Clock, Check } from "lucide-react";
 import { HorarioItem } from "../types";
 import { AnimatedNumber } from "./AnimatedNumber";
+import { CustomSelect } from "./CustomSelect";
 
 const DIAS: HorarioItem["dia"][] = [
   "Lunes",
@@ -80,8 +81,16 @@ interface WeeklyScheduleGridProps {
   /** Materia actualmente activa en el pincel; "" si no hay ninguna (no se puede pintar). */
   selectedMateria: string;
   onSelectMateria: (materia: string) => void;
-  /** Pintar crea el horario directo con la materia activa — no pasa por ningún modal. */
-  onDirectCreate: (dia: string, horaInicio: string, horaFin: string, materia: string) => void;
+  /** Pintar (o el botón "Agregar Horario" del panel) crea el horario directo con la materia
+   * activa y los datos del panel — no pasa por ningún modal. */
+  onDirectCreate: (
+    dia: string,
+    horaInicio: string,
+    horaFin: string,
+    materia: string,
+    aulas: string,
+    profesores: string,
+  ) => void;
   onEditBlock: (horario: HorarioItem) => void;
   onBatchUpdate: (batch: WeeklyScheduleGridBatch) => void;
   onClearWeek: () => void;
@@ -105,6 +114,14 @@ export function WeeklyScheduleGrid({
   const [mode, setMode] = useState<"pintar" | "borrar">("pintar");
   const [drag, setDrag] = useState<DragState | null>(null);
   const dragRef = useRef<DragState | null>(null);
+
+  // Panel izquierdo: mismos campos que tenía el modal "Nuevo Horario" (Día/Hora Inicio/Hora
+  // Fin para el alta manual, Aula/s y Profesor/es que además viajan con cada trazo pintado).
+  const [panelDia, setPanelDia] = useState<string>(DIAS[0]);
+  const [panelHoraInicio, setPanelHoraInicio] = useState("08:00");
+  const [panelHoraFin, setPanelHoraFin] = useState("10:00");
+  const [panelAulas, setPanelAulas] = useState("");
+  const [panelProfesores, setPanelProfesores] = useState("");
 
   const gridStartMin = horarios.reduce(
     (min, h) => Math.min(min, Math.floor(parseTimeMin(h.horaInicio) / 60) * 60),
@@ -142,9 +159,9 @@ export function WeeklyScheduleGrid({
         hi = Math.min(gridEndMin, lo + DEFAULT_CLICK_DURATION_MIN);
       }
       if (hi - lo < MIN_BLOCK_MIN) return;
-      onDirectCreate(dia, minToTime(lo), minToTime(hi), selectedMateria);
+      onDirectCreate(dia, minToTime(lo), minToTime(hi), selectedMateria, panelAulas, panelProfesores);
     },
-    [gridEndMin, onDirectCreate, selectedMateria],
+    [gridEndMin, onDirectCreate, selectedMateria, panelAulas, panelProfesores],
   );
 
   const commitErase = useCallback(
@@ -285,69 +302,174 @@ export function WeeklyScheduleGrid({
   const hourMarks: number[] = [];
   for (let m = gridStartMin; m <= gridEndMin; m += 60) hourMarks.push(m);
 
+  const canManualAdd = Boolean(selectedMateria && panelHoraInicio && panelHoraFin && panelHoraFin > panelHoraInicio);
+
+  const handleManualAdd = () => {
+    if (!canManualAdd) return;
+    onDirectCreate(panelDia, panelHoraInicio, panelHoraFin, selectedMateria, panelAulas, panelProfesores);
+  };
+
   return (
     <div
       className={`p-6 rounded-3xl border scroll-reveal ${
         darkMode ? "bg-black/85 backdrop-blur-md border-zinc-800 text-white shadow-lg" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
       }`}
     >
-      {/* Header: pincel de materia + título + contador animado + modo pintar/borrar */}
-      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 mb-2">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3 lg:gap-4 w-full lg:w-auto min-w-0">
-          {/* Selector de materia (pincel) — se elige con un clic, nunca abre un menú */}
-          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-1 sm:pb-0 shrink-0 max-w-full sm:max-w-[240px]">
-            {materiaOptions.length === 0 ? (
-              <span className="text-[11px] text-zinc-500 italic whitespace-nowrap">Sin materias para cursar</span>
-            ) : (
-              materiaOptions.map((m) => {
-                const color = colorForMateria(m);
-                const isActive = selectedMateria === m;
-                return (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => onSelectMateria(m)}
-                    title={m}
-                    className={`shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[11px] font-bold border-2 transition-all cursor-pointer whitespace-nowrap ${
-                      isActive ? "text-white shadow-sm" : "bg-transparent hover:bg-slate-100 dark:hover:bg-zinc-800/60"
-                    }`}
-                    style={isActive ? { backgroundColor: color, borderColor: color } : { borderColor: `${color}55`, color }}
-                  >
-                    <span
-                      className="w-1.5 h-1.5 rounded-full shrink-0"
-                      style={{ backgroundColor: isActive ? "#ffffff" : color }}
-                    />
-                    <span className="truncate max-w-[88px]">{m}</span>
-                  </button>
-                );
-              })
-            )}
+      <div className="lg:flex lg:gap-6 lg:items-start">
+        {/* Panel izquierdo: mismas funciones que tenía el modal "Nuevo Horario" (materia, día,
+            horas, aula, profesor) pero siempre visible — el pincel se elige acá, nunca en un
+            menú, y también alimenta lo que se pinta arrastrando sobre la rejilla. */}
+        <div
+          className={`w-full lg:w-[280px] shrink-0 mb-6 lg:mb-0 rounded-2xl border p-4 space-y-3.5 ${
+            darkMode ? "bg-zinc-950/40 border-zinc-800" : "bg-slate-50 border-slate-200"
+          }`}
+        >
+          <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-zinc-400 flex items-center gap-1.5">
+            <Paintbrush className="w-3.5 h-3.5 text-primary" />
+            Pincel / Nuevo Horario
+          </h4>
+
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
+              Materia
+            </label>
+            <div className="flex flex-wrap gap-1.5">
+              {materiaOptions.length === 0 ? (
+                <span className="text-[11px] text-zinc-500 italic">Sin materias para cursar</span>
+              ) : (
+                materiaOptions.map((m) => {
+                  const color = colorForMateria(m);
+                  const isActive = selectedMateria === m;
+                  return (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => onSelectMateria(m)}
+                      title={m}
+                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[11px] font-bold border-2 transition-all cursor-pointer ${
+                        isActive ? "text-white shadow-sm" : "bg-transparent hover:bg-slate-100 dark:hover:bg-zinc-800/60"
+                      }`}
+                      style={isActive ? { backgroundColor: color, borderColor: color } : { borderColor: `${color}55`, color }}
+                    >
+                      <span
+                        className="w-1.5 h-1.5 rounded-full shrink-0"
+                        style={{ backgroundColor: isActive ? "#ffffff" : color }}
+                      />
+                      <span className="truncate max-w-[130px]">{m}</span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
           </div>
 
-          <div className="flex items-center gap-4 min-w-0">
-            <div className="min-w-0">
-              <h3 className="font-extrabold text-sm flex items-center gap-2">
-                <Paintbrush className="w-4 h-4 text-primary" />
-                <span>Horario Semanal a Pinceladas</span>
-              </h3>
-              <p className="text-xs text-zinc-500 mt-0.5">
-                Elegí una materia y arrastrá sobre la rejilla para pintarla.
-              </p>
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
+              Día
+            </label>
+            <CustomSelect
+              value={panelDia}
+              onChange={(val) => setPanelDia(val)}
+              options={DIAS.map((d) => ({ value: d, label: d }))}
+              size="sm"
+              className="w-full"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
+                Hora Inicio
+              </label>
+              <input
+                type="time"
+                value={panelHoraInicio}
+                onChange={(e) => setPanelHoraInicio(e.target.value)}
+                className="w-full px-2.5 py-2 rounded-xl bg-white dark:bg-black/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white outline-none text-xs focus:border-primary"
+              />
             </div>
-            <div className="pl-4 border-l border-slate-200 dark:border-zinc-800 shrink-0">
-              <div className="flex items-baseline gap-1 font-extrabold text-2xl text-primary leading-none">
-                <AnimatedNumber
-                  value={totalHoras}
-                  format={(n) => n.toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 1 })}
-                />
-                <span className="text-xs font-bold text-zinc-400">h</span>
-              </div>
-              <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">semanales</span>
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
+                Hora Fin
+              </label>
+              <input
+                type="time"
+                value={panelHoraFin}
+                onChange={(e) => setPanelHoraFin(e.target.value)}
+                className="w-full px-2.5 py-2 rounded-xl bg-white dark:bg-black/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white outline-none text-xs focus:border-primary"
+              />
             </div>
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
+              Aula/s
+            </label>
+            <input
+              type="text"
+              value={panelAulas}
+              onChange={(e) => setPanelAulas(e.target.value)}
+              placeholder="Ej: Aula 5, Laboratorio B"
+              className="w-full px-3 py-2 rounded-xl bg-white dark:bg-black/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-600 outline-none text-xs focus:border-primary"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
+              Profesor/es
+            </label>
+            <input
+              type="text"
+              value={panelProfesores}
+              onChange={(e) => setPanelProfesores(e.target.value)}
+              placeholder="Ej: Ing. Gómez, Lic. Pérez"
+              className="w-full px-3 py-2 rounded-xl bg-white dark:bg-black/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-600 outline-none text-xs focus:border-primary"
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={handleManualAdd}
+            disabled={!canManualAdd}
+            className="w-full flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-white dark:text-blue-950 text-xs font-extrabold shadow-sm transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Check className="w-3.5 h-3.5" />
+            <span>Agregar Horario</span>
+          </button>
+
+          {!selectedMateria && (
+            <p className="text-[10px] text-amber-500 font-semibold">
+              Elegí una materia para poder agregar o pintar horarios.
+            </p>
+          )}
+        </div>
+
+        {/* Columna derecha: título + contador animado + modo pintar/borrar + rejilla */}
+        <div className="flex-1 min-w-0">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-5">
+        <div className="flex items-center gap-4 min-w-0">
+          <div className="min-w-0">
+            <h3 className="font-extrabold text-sm flex items-center gap-2">
+              <Paintbrush className="w-4 h-4 text-primary" />
+              <span>Horario Semanal a Pinceladas</span>
+            </h3>
+            <p className="text-xs text-zinc-500 mt-0.5">
+              Elegí una materia en el panel y arrastrá sobre la rejilla para pintarla.
+            </p>
+          </div>
+          <div className="pl-4 border-l border-slate-200 dark:border-zinc-800 shrink-0">
+            <div className="flex items-baseline gap-1 font-extrabold text-2xl text-primary leading-none">
+              <AnimatedNumber
+                value={totalHoras}
+                format={(n) => n.toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 1 })}
+              />
+              <span className="text-xs font-bold text-zinc-400">h</span>
+            </div>
+            <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">semanales</span>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 w-full lg:w-auto">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
           <div className="flex items-center gap-1 p-1 rounded-full bg-slate-100 dark:bg-zinc-800/80 border border-slate-200 dark:border-zinc-800">
             <button
               type="button"
@@ -388,7 +510,7 @@ export function WeeklyScheduleGrid({
 
       {mode === "pintar" && !selectedMateria && materiaOptions.length > 0 && (
         <p className="text-[11px] text-amber-500 font-semibold mb-3">
-          Elegí una materia arriba para empezar a pintar.
+          Elegí una materia en el panel de la izquierda para empezar a pintar.
         </p>
       )}
 
@@ -544,6 +666,8 @@ export function WeeklyScheduleGrid({
           Arrastrá sobre la rejilla (o tocá una celda) para pintar tu primera clase.
         </p>
       )}
+        </div>
+      </div>
     </div>
   );
 }
