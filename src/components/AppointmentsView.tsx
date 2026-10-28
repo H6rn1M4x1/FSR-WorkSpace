@@ -3974,7 +3974,7 @@ export default function AppointmentsView({
                 exit={{ opacity: 0, scale: 0.95, y: 15 }}
                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
                 onClick={(e) => e.stopPropagation()}
-                className="w-full max-w-lg lg:max-w-4xl max-h-[85vh] flex flex-col bg-white dark:bg-black/85 backdrop-blur-md rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
+                className="w-full max-w-lg lg:max-w-6xl max-h-[85vh] flex flex-col bg-white dark:bg-black/85 backdrop-blur-md rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
               >
               {/* Header */}
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-zinc-800/40 bg-white dark:bg-black/85 backdrop-blur-md">
@@ -3999,7 +3999,7 @@ export default function AppointmentsView({
                   onSubmit={handleAddTurnoCompromiso}
                   className="pb-1"
                 >
-                <div className="lg:grid lg:grid-cols-[1fr_320px] lg:gap-6 lg:items-start">
+                <div className="lg:grid lg:grid-cols-[1fr_460px] lg:gap-8 lg:items-start">
                 <div className="space-y-4 min-w-0">
                   {/* Descripción */}
                   <div>
@@ -4175,6 +4175,53 @@ export default function AppointmentsView({
                             )}
                           </div>
                         )}
+
+                    {/* En mobile el mapa va acá, justo debajo del buscador (igual que antes) — en
+                        >=1024px se oculta esta copia y se ve la de la columna derecha más abajo. */}
+                    <div className="lg:hidden mt-2 space-y-2.5">
+                      <LocationPickerMap
+                        lat={tcLat}
+                        lon={tcLon}
+                        locationName={tcLugar || lugarQuery}
+                        onSelectLocation={(selected) => {
+                          const titleAndAddress = selected.display_name || selected.address || selected.title || `${selected.lat.toFixed(5)}, ${selected.lon.toFixed(5)}`;
+                          setTcLugar(titleAndAddress);
+                          setLugarQuery(titleAndAddress);
+                          setTcLat(selected.lat);
+                          setTcLon(selected.lon);
+                        }}
+                        heightClass="h-48"
+                      />
+
+                      {tcLugar && (
+                        <div className="p-2 bg-primary/10 rounded-xl flex items-center justify-between gap-2 text-xs text-primary dark:text-primary font-bold">
+                          <div className="flex items-center gap-1.5 truncate max-w-[60%]">
+                            <MapPin className="w-3.5 h-3.5 text-primary shrink-0 stroke-[1.75]" />
+                            <span className="truncate">{tcLugar}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => setIsAddressBookOpen(true)}
+                              className="flex items-center gap-1 px-2 py-1 bg-white dark:bg-black/85 backdrop-blur-md border border-primary/30 text-primary rounded-lg text-[10px] font-bold transition-all hover:bg-primary hover:text-white cursor-pointer"
+                              title="Guardar esta ubicación en mi Libro de Direcciones"
+                            >
+                              <BookmarkPlus className="w-3 h-3" />
+                              <span>Guardar</span>
+                            </button>
+                            <a
+                              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(tcLugar)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1 px-2 py-1 bg-primary text-white dark:text-slate-950 rounded-lg text-[10px] font-bold shrink-0"
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                              <span>Abrir Mapa</span>
+                            </a>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                                     {/* Información Personalizada — no aplica a turnos de partido (guardan JSON, no texto libre) */}
@@ -4424,7 +4471,7 @@ export default function AppointmentsView({
                     )}
                 </div>
 
-                <div className="mt-4 lg:mt-0 lg:sticky lg:top-0 space-y-2.5">
+                <div className="hidden lg:block lg:sticky lg:top-0 space-y-2.5">
                   <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest">
                     Ubicación en el mapa
                   </label>
@@ -4439,7 +4486,7 @@ export default function AppointmentsView({
                       setTcLat(selected.lat);
                       setTcLon(selected.lon);
                     }}
-                    heightClass="h-56 lg:h-[420px]"
+                    heightClass="h-[460px]"
                   />
 
                   {tcLugar && (
