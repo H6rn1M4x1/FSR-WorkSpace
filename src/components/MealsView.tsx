@@ -4472,7 +4472,7 @@ export default function MealsView({
                       onClick={toggleCompleted}
                       className={`rounded-xl border p-3.5 cursor-pointer active:scale-[0.98] transition-transform flex items-start gap-3 ${
                         isCompleted ? "opacity-60" : ""
-                      } ${darkMode ? "bg-black/20 border-zinc-800" : "bg-slate-50/50 border-slate-100"}`}
+                      } ${darkMode ? "bg-black/85 border-zinc-800/80" : "bg-white border-slate-100"}`}
                     >
                       <input
                         type="checkbox"

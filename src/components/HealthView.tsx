@@ -4751,7 +4751,7 @@ export default function HealthView({
                                   animate={{ opacity: 1, y: 0 }}
                                   transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.4), ease: [0.22, 1, 0.36, 1] }}
                                   onClick={() => handleEditMedida(m)}
-                                  className={`rounded-xl border p-3.5 cursor-pointer active:scale-[0.98] transition-transform ${darkMode ? "bg-black/20 border-zinc-800" : "bg-slate-50/50 border-slate-100"}`}
+                                  className="rounded-xl border p-3.5 cursor-pointer active:scale-[0.98] transition-transform bg-white dark:bg-black/85 border-slate-100 dark:border-zinc-800/80"
                                 >
                                   <div className="flex items-center justify-between gap-2 mb-2">
                                     <span className="font-bold text-xs">{m.fecha}</span>
@@ -6589,7 +6589,7 @@ export default function HealthView({
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.4), ease: [0.22, 1, 0.36, 1] }}
                             onClick={() => handleOpenEditDisp(disp)}
-                            className={`rounded-xl border p-3.5 cursor-pointer active:scale-[0.98] transition-transform ${darkMode ? "bg-black/20 border-zinc-800" : "bg-slate-50/50 border-slate-100"}`}
+                            className="rounded-xl border p-3.5 cursor-pointer active:scale-[0.98] transition-transform bg-white dark:bg-black/85 border-slate-100 dark:border-zinc-800/80"
                           >
                             <div className="flex items-start justify-between gap-2 mb-2">
                               <div className="min-w-0">
@@ -6870,7 +6870,7 @@ export default function HealthView({
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.4), ease: [0.22, 1, 0.36, 1] }}
                             onClick={() => handleOpenEditBpTableModal(log)}
-                            className={`rounded-xl border p-3.5 cursor-pointer active:scale-[0.98] transition-transform ${darkMode ? "bg-black/20 border-zinc-800" : "bg-slate-50/50 border-slate-100"}`}
+                            className="rounded-xl border p-3.5 cursor-pointer active:scale-[0.98] transition-transform bg-white dark:bg-black/85 border-slate-100 dark:border-zinc-800/80"
                           >
                             <div className="flex items-center justify-between gap-2 mb-2">
                               <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider bg-primary/10 text-primary border border-primary/20">
@@ -7248,7 +7248,7 @@ export default function HealthView({
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.4), ease: [0.22, 1, 0.36, 1] }}
                             onClick={() => handleOpenEditEstudio(record)}
-                            className={`rounded-xl border p-3.5 cursor-pointer active:scale-[0.98] transition-transform ${darkMode ? "bg-black/20 border-zinc-800" : "bg-slate-50/50 border-slate-100"}`}
+                            className="rounded-xl border p-3.5 cursor-pointer active:scale-[0.98] transition-transform bg-white dark:bg-black/85 border-slate-100 dark:border-zinc-800/80"
                           >
                             <div className="flex items-center gap-1.5 mb-2">
                               <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider bg-primary/10 text-primary border border-primary/20">
