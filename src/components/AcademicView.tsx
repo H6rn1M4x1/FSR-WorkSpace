@@ -732,6 +732,19 @@ export default function AcademicView({
   const [mSelectedYear, setMSelectedYear] = useState("Todos");
   const [mSelectedEstado, setMSelectedEstado] = useState("Todos");
 
+  // Mismo filtro que ya usaba la tabla de "Información de Materias" — se extrajo para que la
+  // tarjeta de mobile (md:hidden) filtre exactamente igual sin duplicar la lógica inline.
+  const materiaMatchesFilters = (item: MateriaInfo) => {
+    const matchesSearch =
+      item.materia.toLowerCase().includes(mSearchQuery.toLowerCase()) ||
+      (item.cursadoDebil && item.cursadoDebil.toLowerCase().includes(mSearchQuery.toLowerCase())) ||
+      (item.cursadoFuerte && item.cursadoFuerte.toLowerCase().includes(mSearchQuery.toLowerCase())) ||
+      (item.rendirFuerte && item.rendirFuerte.toLowerCase().includes(mSearchQuery.toLowerCase()));
+    const matchesYear = mSelectedYear === "Todos" || item.anoCursado === mSelectedYear;
+    const matchesEstado = mSelectedEstado === "Todos" || item.estado === mSelectedEstado;
+    return matchesSearch && matchesYear && matchesEstado;
+  };
+
   // Plan de Estudio States
   const [peSearchQuery, setPeSearchQuery] = useState("");
   const [peSelectedMateria, setPeSelectedMateria] = useState("Todos");
@@ -2883,7 +2896,7 @@ export default function AcademicView({
           </div>
 
           {/* Table */}
-          <div className="overflow-x-auto rounded-2xl bg-white dark:bg-black/85 backdrop-blur-md border border-slate-100 dark:border-zinc-800/80">
+          <div className="hidden md:block overflow-x-auto rounded-2xl bg-white dark:bg-black/85 backdrop-blur-md border border-slate-100 dark:border-zinc-800/80">
             <table className="w-full text-left border-collapse min-w-[1200px]">
               <thead className="sticky top-0 z-20">
                 <tr
@@ -2931,31 +2944,7 @@ export default function AcademicView({
                   <TableSkeleton rows={6} columns={11} darkMode={darkMode} />
                 ) : (
                 materiasInfo
-                  .filter((item) => {
-                    const matchesSearch =
-                      item.materia
-                        .toLowerCase()
-                        .includes(mSearchQuery.toLowerCase()) ||
-                      (item.cursadoDebil &&
-                        item.cursadoDebil
-                          .toLowerCase()
-                          .includes(mSearchQuery.toLowerCase())) ||
-                      (item.cursadoFuerte &&
-                        item.cursadoFuerte
-                          .toLowerCase()
-                          .includes(mSearchQuery.toLowerCase())) ||
-                      (item.rendirFuerte &&
-                        item.rendirFuerte
-                          .toLowerCase()
-                          .includes(mSearchQuery.toLowerCase()));
-                    const matchesYear =
-                      mSelectedYear === "Todos" ||
-                      item.anoCursado === mSelectedYear;
-                    const matchesEstado =
-                      mSelectedEstado === "Todos" ||
-                      item.estado === mSelectedEstado;
-                    return matchesSearch && matchesYear && matchesEstado;
-                  })
+                  .filter(materiaMatchesFilters)
                   .map((item) => (
                     <tr
                       key={item.id}
@@ -3040,6 +3029,102 @@ export default function AcademicView({
                 )}
               </tbody>
             </table>
+          </div>
+
+          {/* Vista en tarjetas para mobile — misma idea que el resto de las tablas convertidas: la
+              tabla de 11 columnas con scroll horizontal no es práctica para ver/editar en el
+              celular, acá se ve lo más importante de cada materia a simple vista. */}
+          <div className="md:hidden space-y-3">
+            {materiasTableLoading ? (
+              Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className={`h-28 rounded-2xl animate-pulse ${darkMode ? "bg-zinc-800/60" : "bg-slate-100"}`} />
+              ))
+            ) : (
+              materiasInfo.filter(materiaMatchesFilters).map((item) => {
+                const fechas = [
+                  item.fechaRegularidad && { label: "Regularidad", value: item.fechaRegularidad },
+                  item.fechaVencimiento && { label: "Vencimiento", value: item.fechaVencimiento },
+                  item.fechaAprobado && { label: "Aprobación", value: item.fechaAprobado },
+                ].filter((f): f is { label: string; value: string } => !!f);
+                return (
+                  <div
+                    key={item.id}
+                    onClick={() => handleEditMateriaClick(item)}
+                    className={`rounded-2xl border p-4 cursor-pointer active:scale-[0.98] transition-transform ${darkMode ? "bg-black/85 border-zinc-800/80" : "bg-white border-slate-100"}`}
+                  >
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <span
+                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border ${
+                          item.estado === "Aprobado" || item.estado === "Regularizado"
+                            ? "bg-primary/10 text-primary border-primary/20"
+                            : "bg-zinc-500/10 text-zinc-400 border-zinc-500/20"
+                        }`}
+                      >
+                        {item.estado}
+                      </span>
+                      <span className="text-[10px] font-semibold text-slate-400 dark:text-zinc-500">
+                        {item.anoCursado} · {item.cuatrimestre}
+                      </span>
+                    </div>
+
+                    <p className="font-extrabold text-sm text-slate-900 dark:text-white mb-2">{item.materia}</p>
+
+                    {(item.cursadoDebil || item.cursadoFuerte || item.rendirFuerte) && (
+                      <div className="flex flex-wrap gap-1.5 mb-2">
+                        {item.cursadoDebil && (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400">
+                            Cursar (D): {item.cursadoDebil}
+                          </span>
+                        )}
+                        {item.cursadoFuerte && (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400">
+                            Cursar (F): {item.cursadoFuerte}
+                          </span>
+                        )}
+                        {item.rendirFuerte && (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400">
+                            Rendir (F): {item.rendirFuerte}
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    {fechas.length > 0 && (
+                      <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] font-medium text-slate-500 dark:text-zinc-400 mb-1">
+                        {fechas.map((f) => (
+                          <span key={f.label} className="flex items-center gap-1">
+                            <Calendar className="w-3 h-3 shrink-0" />
+                            {f.label}: {f.value.split("-").reverse().join("/")}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    <div
+                      className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-100 dark:border-zinc-800/60"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => handleEditMateriaClick(item)}
+                        className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold cursor-pointer active:scale-95 transition-all ${darkMode ? "bg-zinc-800 text-zinc-300" : "bg-slate-100 text-slate-600"}`}
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                        Editar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteMateria(item.id)}
+                        className="p-2.5 rounded-xl bg-red-500/10 text-red-500 cursor-pointer active:scale-95 transition-all"
+                        title="Eliminar"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
 
           <div className="mt-4 flex items-center justify-between text-[11px] text-slate-400 dark:text-zinc-500">
