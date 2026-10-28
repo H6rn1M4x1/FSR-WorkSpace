@@ -35,9 +35,13 @@ interface RichTextEditorProps {
    */
   activeMenu?: ToolbarMenu;
   onActiveMenuChange?: (menu: ToolbarMenu) => void;
+  /** Botón(es) extra al final de la barra principal, separados por una línea divisoria —
+   * para acciones del formulario que lo envuelve (p. ej. "Grabar Audio") que deben vivir al
+   * mismo nivel que los íconos del editor en vez de arriba, junto a la etiqueta del campo. */
+  extraToolbarActions?: React.ReactNode;
 }
 
-export function RichTextEditor({ value, onChange, placeholder, onShareClick, shareMenuContent, attachments, onAttachmentsChange, onPreview, darkToolbar = false, activeMenu: controlledMenu, onActiveMenuChange }: RichTextEditorProps) {
+export function RichTextEditor({ value, onChange, placeholder, onShareClick, shareMenuContent, attachments, onAttachmentsChange, onPreview, darkToolbar = false, activeMenu: controlledMenu, onActiveMenuChange, extraToolbarActions }: RichTextEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isControlled = onActiveMenuChange !== undefined;
@@ -292,6 +296,13 @@ export function RichTextEditor({ value, onChange, placeholder, onShareClick, sha
           >
             <Paperclip className="w-4 h-4" />
           </button>
+
+          {extraToolbarActions && (
+            <>
+              <div className={`w-px h-5 mx-1 ${dividerClass}`}></div>
+              {extraToolbarActions}
+            </>
+          )}
         </div>
       </div>
 

@@ -38,6 +38,9 @@ export interface AddressEntry {
   // Posición manual en la lista (menor = primero). Sin definir para entradas que nunca se
   // reordenaron — en ese caso se ordenan al final, en el orden en que llegaron.
   order?: number;
+  // Timestamp (Date.now()) de la última vez que se seleccionó esta dirección para agendar un
+  // turno — permite mostrar "los últimos usados" primero en la fila rápida de Guardados.
+  lastUsedAt?: number;
 }
 
 const sortAddressesByOrder = (list: AddressEntry[]) =>
