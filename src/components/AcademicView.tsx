@@ -3040,15 +3040,18 @@ export default function AcademicView({
                 <div key={i} className={`h-28 rounded-2xl animate-pulse ${darkMode ? "bg-zinc-800/60" : "bg-slate-100"}`} />
               ))
             ) : (
-              materiasInfo.filter(materiaMatchesFilters).map((item) => {
+              materiasInfo.filter(materiaMatchesFilters).map((item, idx) => {
                 const fechas = [
                   item.fechaRegularidad && { label: "Regularidad", value: item.fechaRegularidad },
                   item.fechaVencimiento && { label: "Vencimiento", value: item.fechaVencimiento },
                   item.fechaAprobado && { label: "Aprobación", value: item.fechaAprobado },
                 ].filter((f): f is { label: string; value: string } => !!f);
                 return (
-                  <div
+                  <motion.div
                     key={item.id}
+                    initial={{ opacity: 0, y: 14 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.4), ease: [0.22, 1, 0.36, 1] }}
                     onClick={() => handleEditMateriaClick(item)}
                     className={`rounded-2xl border p-4 cursor-pointer active:scale-[0.98] transition-transform ${darkMode ? "bg-black/85 border-zinc-800/80" : "bg-white border-slate-100"}`}
                   >
@@ -3121,7 +3124,7 @@ export default function AcademicView({
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
-                  </div>
+                  </motion.div>
                 );
               })
             )}
