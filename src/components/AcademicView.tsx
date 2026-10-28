@@ -5,6 +5,7 @@ import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import { useBriefLoading } from "../hooks/useBriefLoading";
 import { TableSkeleton } from "./TableSkeleton";
 import { AnimatedNumber } from "./AnimatedNumber";
+import { WeeklyScheduleGrid, WeeklyScheduleGridBatch } from "./WeeklyScheduleGrid";
 import { AcademicRadarChart, AcademicGaugeChart } from "./AcademicCharts";
 import { CustomSelect, SelectPopoverPosition } from "./CustomSelect";
 import { generateUniqueId } from "../utils/id";
@@ -1565,6 +1566,91 @@ export default function AcademicView({
         } finally {
           setIsDeleting(false);
         }
+      },
+    );
+  };
+
+  // Handlers para WeeklyScheduleGrid (edición visual "a pinceladas" del Horario de Clases) —
+  // reusan el mismo modal/estado de siempre para crear o editar un horario con materia/aula/
+  // profesor, y agregan operaciones en lote (redimensionar, borrar por arrastre, copiar un día
+  // a los demás) que no pasan por ese modal.
+  const handleGridPaintCreate = (dia: string, horaInicio: string, horaFin: string) => {
+    setEditingHorarioId(null);
+    setHDia(dia as HorarioItem["dia"]);
+    setHHoraInicio(horaInicio);
+    setHHoraFin(horaFin);
+    setHMateria("");
+    setHAulas("");
+    setHProfesores("");
+    setShowHorarioModal(true);
+  };
+
+  const handleGridEditBlock = (h: HorarioItem) => {
+    setEditingHorarioId(h.id);
+    setHDia(h.dia);
+    setHHoraInicio(h.horaInicio);
+    setHHoraFin(h.horaFin);
+    setHMateria(h.materia);
+    setHAulas(h.aulas);
+    setHProfesores(h.profesores);
+    setShowHorarioModal(true);
+  };
+
+  const handleHorarioBatchUpdate = async ({ toDelete, toUpsert }: WeeklyScheduleGridBatch) => {
+    if (toDelete.length === 0 && toUpsert.length === 0) return;
+    setHorarios((prev) => {
+      let next = prev.filter((h) => !toDelete.includes(h.id));
+      toUpsert.forEach((item) => {
+        const exists = next.some((h) => h.id === item.id);
+        next = exists ? next.map((h) => (h.id === item.id ? item : h)) : [item, ...next];
+      });
+      return next;
+    });
+    try {
+      await Promise.all([
+        ...toDelete.map((id) => deleteItemFromFirestore(activeUserId, "horarios", id)),
+        ...toUpsert.map((item) => saveItemToFirestore(activeUserId, "horarios", item)),
+      ]);
+    } catch (error) {
+      console.error("[AcademicView] Error en actualización masiva de horarios:", error);
+      showToast("Error al actualizar el horario", "error");
+    }
+  };
+
+  const handleClearWeekHorarios = () => {
+    if (horarios.length === 0) return;
+    askConfirmation(
+      "Vaciar semana",
+      "¿Eliminar todos los horarios de clases de la semana? Esta acción no se puede deshacer.",
+      async () => {
+        const ids = horarios.map((h) => h.id);
+        setHorarios([]);
+        try {
+          await Promise.all(ids.map((id) => deleteItemFromFirestore(activeUserId, "horarios", id)));
+          showToast("Horario semanal vaciado con éxito", "success");
+        } catch (error) {
+          console.error("[AcademicView] Error al vaciar el horario:", error);
+          showToast("Error al vaciar el horario", "error");
+        }
+      },
+    );
+  };
+
+  const handleCopyDayToOthers = (sourceDia: string) => {
+    const sourceItems = horarios.filter((h) => h.dia === sourceDia);
+    if (sourceItems.length === 0) return;
+    const otherDays = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"].filter(
+      (d) => d !== sourceDia,
+    );
+    askConfirmation(
+      `Copiar ${sourceDia} a los demás días`,
+      `El horario de ${sourceDia} va a reemplazar el de Lunes a Sábado en los demás días. Esta acción no se puede deshacer.`,
+      () => {
+        const toDelete = horarios.filter((h) => otherDays.includes(h.dia)).map((h) => h.id);
+        const toUpsert = otherDays.flatMap((d) =>
+          sourceItems.map((h) => ({ ...h, id: generateUniqueId("hor"), dia: d as HorarioItem["dia"] })),
+        );
+        handleHorarioBatchUpdate({ toDelete, toUpsert });
       },
     );
   };
@@ -3589,6 +3675,17 @@ export default function AcademicView({
           });
 
           return (
+            <div className="space-y-6">
+              <WeeklyScheduleGrid
+                horarios={horarios}
+                darkMode={darkMode}
+                onPaintCreate={handleGridPaintCreate}
+                onEditBlock={handleGridEditBlock}
+                onBatchUpdate={handleHorarioBatchUpdate}
+                onClearWeek={handleClearWeekHorarios}
+                onCopyDayToOthers={handleCopyDayToOthers}
+                generateId={generateUniqueId}
+              />
             <div className={`p-6 rounded-3xl border scroll-reveal ${darkMode ? "bg-zinc-900 border-zinc-800 text-white shadow-lg" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"}`}>
               {/* Header Controls */}
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
@@ -3892,6 +3989,7 @@ export default function AcademicView({
                     ))
                 )}
               </div>
+            </div>
             </div>
           );
         })()}
