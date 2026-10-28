@@ -1,5 +1,5 @@
 import React, { useRef, useState, useCallback, useEffect } from "react";
-import { Paintbrush, Eraser, Copy, Trash2, Clock, Check, X } from "lucide-react";
+import { Paintbrush, Eraser, Copy, Trash2, Clock, Check, X, Calendar, Pencil } from "lucide-react";
 import { HorarioItem } from "../types";
 import { AnimatedNumber } from "./AnimatedNumber";
 import { CustomSelect } from "./CustomSelect";
@@ -93,26 +93,35 @@ function getAccentColorHex(): string {
   return raw || "#E09407";
 }
 
-// Variaciones chicas de matiz/saturación/luminosidad sobre el acento base — quedan "en la misma
-// familia" de color pero se distinguen entre sí (de más oscuro/saturado a más claro/suave).
+// Variaciones de matiz/saturación/luminosidad sobre el acento base — 12 pasos (antes 7) para
+// que haya más variedad real entre materias, con matices repartidos en un arco más amplio
+// alrededor del acento (hasta ±60°) así no quedan dos colores casi iguales como antes, pero
+// siguen siendo "la misma familia" en vez de un color cualquiera sin relación con el acento.
 const PALETTE_STEPS: { dh: number; ds: number; dl: number }[] = [
   { dh: 0, ds: 0, dl: 0 },
-  { dh: -16, ds: -8, dl: -10 },
-  { dh: 16, ds: 5, dl: 10 },
-  { dh: -30, ds: -15, dl: 14 },
-  { dh: 26, ds: 0, dl: -14 },
-  { dh: -8, ds: 10, dl: 6 },
-  { dh: 38, ds: -10, dl: -5 },
+  { dh: -48, ds: 0, dl: 2 },
+  { dh: 48, ds: 0, dl: -2 },
+  { dh: -24, ds: -8, dl: -8 },
+  { dh: 24, ds: 8, dl: 8 },
+  { dh: -36, ds: 10, dl: 6 },
+  { dh: 36, ds: -10, dl: -6 },
+  { dh: -12, ds: -15, dl: 4 },
+  { dh: 12, ds: 15, dl: -4 },
+  { dh: -60, ds: 5, dl: 0 },
+  { dh: 60, ds: -5, dl: 0 },
+  { dh: 6, ds: 0, dl: 10 },
 ];
 
 function buildAccentPalette(baseHex: string, darkMode: boolean): string[] {
   const { h, s, l } = hexToHsl(baseHex);
   return PALETTE_STEPS.map(({ dh, ds, dl }) => {
     const hue = (h + dh + 360) % 360;
-    const sat = Math.min(95, Math.max(35, s + ds));
+    // Rango de saturación/luminosidad más angosto que antes (antes podía llegar casi a negro o
+    // casi blanco en algún paso) para que todos los colores se sigan viendo "vivos" y legibles.
+    const sat = Math.min(92, Math.max(55, s + ds));
     // En modo oscuro conviene partir un poco más clara la base para que no se pierda contra el
     // fondo negro — se invierte el sentido de los pasos de luminosidad en vez de sumar lo mismo.
-    const light = Math.min(78, Math.max(26, l + (darkMode ? -dl : dl)));
+    const light = Math.min(66, Math.max(38, l + (darkMode ? -dl : dl)));
     return hslToHex(hue, sat, light);
   });
 }
@@ -459,8 +468,8 @@ export function WeeklyScheduleGrid({
           }`}
         >
           <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-zinc-400 flex items-center gap-1.5">
-            <Paintbrush className="w-3.5 h-3.5 text-primary" />
-            {editingDraftId ? "Editando Horario" : "Pincel / Nuevo Horario"}
+            <Pencil className="w-3.5 h-3.5 text-primary" />
+            {editingDraftId ? "Editando Horario" : "Nuevo Horario"}
           </h4>
 
           <div>
@@ -595,8 +604,8 @@ export function WeeklyScheduleGrid({
         <div className="flex items-center gap-4 min-w-0">
           <div className="min-w-0">
             <h3 className="font-extrabold text-sm flex items-center gap-2">
-              <Paintbrush className="w-4 h-4 text-primary" />
-              <span>Horario Semanal a Pinceladas</span>
+              <Calendar className="w-4 h-4 text-primary" />
+              <span>Horario Semanal</span>
             </h3>
             <p className="text-xs text-zinc-500 mt-0.5">
               Elegí una materia en el panel y arrastrá sobre la rejilla para pintarla.
