@@ -556,7 +556,7 @@ export default function CotizacionesCriptoTable({
         </div>
 
         {/* Table Section */}
-        <div className="overflow-x-auto rounded-2xl bg-white dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800/80 shadow-xs">
+        <div className="hidden md:block overflow-x-auto rounded-2xl bg-white dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800/80 shadow-xs">
           <table className="w-full text-left border-collapse min-w-[1100px]">
             <thead className="sticky top-0 z-20">
               <tr className={`text-xs font-bold uppercase tracking-wider ${ darkMode ?"bg-zinc-950/40 text-zinc-400" : "bg-slate-50 text-slate-500"}`}>
@@ -695,6 +695,91 @@ export default function CotizacionesCriptoTable({
               )}
             </tbody>
           </table>
+        </div>
+
+        <div className="md:hidden space-y-3">
+          {criptoTableLoading ? (
+            Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className={`h-32 rounded-2xl animate-pulse ${darkMode ? "bg-zinc-800/60" : "bg-slate-100"}`} />
+            ))
+          ) : paginatedData.length === 0 ? (
+            <div className="py-12 text-center text-slate-400 dark:text-zinc-500 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800/80">
+              <div className="flex flex-col items-center gap-2">
+                <LineChart className="w-8 h-8 opacity-40 text-primary" />
+                <p className="font-semibold text-xs">No se encontraron criptomonedas.</p>
+              </div>
+            </div>
+          ) : (
+            paginatedData.map((cripto, idx) => (
+              <motion.div
+                key={cripto.id || idx}
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.4), ease: [0.22, 1, 0.36, 1] }}
+                onClick={() => openEditModal(cripto)}
+                className="rounded-2xl border p-4 bg-white dark:bg-zinc-900 border-slate-100 dark:border-zinc-800/80 active:scale-[0.98] transition-transform cursor-pointer"
+              >
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    {cripto.image ? (
+                      <img src={cripto.image} alt={cripto.name} className="w-5 h-5 rounded-full shrink-0" />
+                    ) : (
+                      <Bitcoin className="w-5 h-5 text-slate-400 dark:text-zinc-500 shrink-0" />
+                    )}
+                    <span className="font-black text-sm text-slate-900 dark:text-white truncate">{toTitleCase(cripto.name)}</span>
+                  </div>
+                  <span className="shrink-0 text-xs font-black font-mono px-2 py-1 rounded bg-slate-100 dark:bg-zinc-950/50 text-slate-600 dark:text-zinc-400">
+                    {cripto.symbol || getCriptoSymbol(cripto)}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <span className="font-mono font-bold text-base text-slate-900 dark:text-white">{cripto.price}</span>
+                  <div className={"flex items-center gap-1 font-mono text-xs font-bold " + getPercentColor(cripto.percent24h)}>
+                    {cripto.percent24h > 0 ? <TrendingUp className="w-3.5 h-3.5" /> : cripto.percent24h < 0 ? <TrendingDown className="w-3.5 h-3.5" /> : null}
+                    <span>{Math.abs(cripto.percent24h)}% (24h)</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-2">
+                  <span
+                    className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide ${
+                      cripto.sentiment === "bullish"
+                        ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                        : cripto.sentiment === "bearish"
+                        ? "bg-red-500/10 text-red-600 dark:text-red-400"
+                        : "bg-slate-500/10 text-slate-600 dark:text-slate-400"
+                    }`}
+                  >
+                    {cripto.sentiment}
+                  </span>
+                  <span className="text-[11px] font-semibold text-slate-500 dark:text-zinc-400 font-mono">Cap: {cripto.marketCap}</span>
+                </div>
+
+                <div
+                  className="flex items-center gap-2 mt-3.5 pt-3.5 border-t border-slate-100 dark:border-zinc-800/60"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <button
+                    type="button"
+                    onClick={() => openEditModal(cripto)}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold cursor-pointer active:scale-95 transition-all ${darkMode ? "bg-zinc-800 text-zinc-300" : "bg-slate-100 text-slate-600"}`}
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    Editar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(cripto.id)}
+                    className="p-2.5 rounded-xl bg-red-500/10 text-red-500 cursor-pointer active:scale-95 transition-all"
+                    title="Eliminar"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </motion.div>
+            ))
+          )}
         </div>
 
         {/* PAGINATION FOOTER */}

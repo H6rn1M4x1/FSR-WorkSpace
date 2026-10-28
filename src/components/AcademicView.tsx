@@ -3386,7 +3386,7 @@ export default function AcademicView({
               </div>
 
               {/* Table of Plan de Estudio */}
-                <div className="overflow-x-auto rounded-2xl bg-white dark:bg-black/85 backdrop-blur-md border border-slate-100 dark:border-zinc-800/80">
+                <div className="hidden md:block overflow-x-auto rounded-2xl bg-white dark:bg-black/85 backdrop-blur-md border border-slate-100 dark:border-zinc-800/80">
             <table className="w-full text-left border-collapse min-w-[900px]">
                     <thead className="sticky top-0 z-20">
                 <tr
@@ -3509,6 +3509,58 @@ export default function AcademicView({
                   </table>
                 </div>
 
+                <div className="md:hidden space-y-3">
+                  {planMateriasTableLoading ? (
+                    Array.from({ length: 4 }).map((_, i) => (
+                      <div key={i} className={`h-24 rounded-2xl animate-pulse ${darkMode ? "bg-zinc-800/60" : "bg-slate-100"}`} />
+                    ))
+                  ) : filteredPlanMaterias.length === 0 ? (
+                    <div className="py-8 text-center text-slate-400 dark:text-zinc-500 rounded-2xl bg-white dark:bg-black/85 border border-slate-100 dark:border-zinc-800/80">
+                      Ninguna materia coincide con los filtros aplicados.
+                    </div>
+                  ) : (
+                    filteredPlanMaterias.map((item, idx) => {
+                      const statusObj = getAcademicStatus(item);
+                      const vencimientoText = calculateVencimiento(item.fechaRegularidad, item.fechaVencimiento);
+                      return (
+                        <motion.div
+                          key={item.id}
+                          initial={{ opacity: 0, y: 14 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.4), ease: [0.22, 1, 0.36, 1] }}
+                          onClick={() => handleEditMateriaClick(item)}
+                          className={`rounded-2xl border p-4 cursor-pointer active:scale-[0.98] transition-transform ${darkMode ? "bg-black/85 border-zinc-800/80" : "bg-white border-slate-100"}`}
+                        >
+                          <div className="flex items-center gap-2 mb-2">
+                            <BookOpen className="w-3.5 h-3.5 text-primary shrink-0" />
+                            <span className="font-extrabold text-sm text-slate-900 dark:text-white truncate">{item.materia}</span>
+                          </div>
+                          <p className="text-[11px] font-semibold text-slate-400 dark:text-zinc-500 mb-2">
+                            {item.anoCursado} · {item.cuatrimestre}
+                          </p>
+                          <span
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border max-w-full ${statusObj.color}`}
+                          >
+                            {(statusObj.type === "aprobado" || statusObj.type === "puede_rendir" || statusObj.type === "puede_cursar") && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
+                            )}
+                            {(statusObj.type === "necesito_aprobar" || statusObj.type === "necesito_regularizar") && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shrink-0" />
+                            )}
+                            <span className="truncate">{statusObj.text}</span>
+                          </span>
+                          {item.estado === "Regularizado" && (
+                            <p className="flex items-center gap-1.5 text-xs font-mono text-slate-600 dark:text-zinc-300 mt-2">
+                              <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                              {vencimientoText}
+                            </p>
+                          )}
+                        </motion.div>
+                      );
+                    })
+                  )}
+                </div>
+
                 <div className="mt-4 flex items-center justify-between text-[11px] text-slate-400 dark:text-zinc-500">
                   <span>
                     Total filtrado: {filteredPlanMaterias.length} materias
@@ -3624,7 +3676,7 @@ export default function AcademicView({
                 </div>
               </div>
 
-              <div className="overflow-x-auto rounded-2xl bg-white dark:bg-black/85 backdrop-blur-md border border-slate-100 dark:border-zinc-800/80">
+              <div className="hidden md:block overflow-x-auto rounded-2xl bg-white dark:bg-black/85 backdrop-blur-md border border-slate-100 dark:border-zinc-800/80">
             <table className="w-full text-left border-collapse min-w-[850px]">
                   <thead className="sticky top-0 z-20">
                 <tr
@@ -3744,6 +3796,99 @@ export default function AcademicView({
                   </tbody>
                 </table>
               </div>
+
+              <div className="md:hidden space-y-3">
+                {horariosTableLoading ? (
+                  Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className={`h-24 rounded-2xl animate-pulse ${darkMode ? "bg-zinc-800/60" : "bg-slate-100"}`} />
+                  ))
+                ) : filteredHorarios.length === 0 ? (
+                  <div className="py-8 text-center text-slate-400 dark:text-zinc-500 rounded-2xl bg-white dark:bg-black/85 border border-slate-100 dark:border-zinc-800/80">
+                    No hay horarios programados que coincidan con los filtros. Tocá "Nuevo Horario" para agregar.
+                  </div>
+                ) : (
+                  ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"]
+                    .flatMap((dia) =>
+                      filteredHorarios.filter((h) => h.dia === dia).sort((a, b) => a.horaInicio.localeCompare(b.horaInicio)),
+                    )
+                    .map((h, idx) => (
+                      <motion.div
+                        key={h.id}
+                        initial={{ opacity: 0, y: 14 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.4), ease: [0.22, 1, 0.36, 1] }}
+                        onClick={() => {
+                          setEditingHorarioId(h.id);
+                          setHDia(h.dia);
+                          setHHoraInicio(h.horaInicio);
+                          setHHoraFin(h.horaFin);
+                          setHMateria(h.materia);
+                          setHAulas(h.aulas);
+                          setHProfesores(h.profesores);
+                          setShowHorarioModal(true);
+                        }}
+                        className={`rounded-2xl border p-4 cursor-pointer active:scale-[0.98] transition-transform ${darkMode ? "bg-black/85 border-zinc-800/80" : "bg-white border-slate-100"}`}
+                      >
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <span className="font-extrabold uppercase tracking-wider text-[10px] bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-200 px-2 py-1 rounded-md">
+                            {h.dia}
+                          </span>
+                          <div className="flex items-center gap-1.5 font-mono text-xs font-bold text-slate-600 dark:text-zinc-300">
+                            <Clock className="w-3.5 h-3.5 text-primary shrink-0" />
+                            {h.horaInicio} - {h.horaFin}
+                          </div>
+                        </div>
+                        <p className="font-extrabold text-sm text-slate-900 dark:text-white mb-1.5">{h.materia}</p>
+                        {(h.aulas || h.profesores) && (
+                          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] font-medium text-slate-500 dark:text-zinc-400">
+                            {h.aulas && (
+                              <span className="flex items-center gap-1">
+                                <FolderOpen className="w-3 h-3 shrink-0" />
+                                {h.aulas}
+                              </span>
+                            )}
+                            {h.profesores && (
+                              <span className="flex items-center gap-1">
+                                <GraduationCap className="w-3 h-3 shrink-0" />
+                                {h.profesores}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        <div
+                          className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-100 dark:border-zinc-800/60"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingHorarioId(h.id);
+                              setHDia(h.dia);
+                              setHHoraInicio(h.horaInicio);
+                              setHHoraFin(h.horaFin);
+                              setHMateria(h.materia);
+                              setHAulas(h.aulas);
+                              setHProfesores(h.profesores);
+                              setShowHorarioModal(true);
+                            }}
+                            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold cursor-pointer active:scale-95 transition-all ${darkMode ? "bg-zinc-800 text-zinc-300" : "bg-slate-100 text-slate-600"}`}
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                            Editar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteHorario(h.id)}
+                            className="p-2.5 rounded-xl bg-red-500/10 text-red-500 cursor-pointer active:scale-95 transition-all"
+                            title="Eliminar"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </motion.div>
+                    ))
+                )}
+              </div>
             </div>
           );
         })()}
@@ -3849,7 +3994,7 @@ export default function AcademicView({
                 </div>
               </div>
 
-              <div className="overflow-x-auto rounded-2xl bg-white dark:bg-black/85 backdrop-blur-md border border-slate-100 dark:border-zinc-800/80">
+              <div className="hidden md:block overflow-x-auto rounded-2xl bg-white dark:bg-black/85 backdrop-blur-md border border-slate-100 dark:border-zinc-800/80">
             <table className="w-full text-left border-collapse min-w-[850px]">
                   <thead className="sticky top-0 z-20">
                 <tr
@@ -3962,6 +4107,90 @@ export default function AcademicView({
                     )}
                   </tbody>
                 </table>
+              </div>
+
+              <div className="md:hidden space-y-3">
+                {examenesTableLoading ? (
+                  Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className={`h-24 rounded-2xl animate-pulse ${darkMode ? "bg-zinc-800/60" : "bg-slate-100"}`} />
+                  ))
+                ) : filteredExamenes.length === 0 ? (
+                  <div className="py-8 text-center text-slate-400 dark:text-zinc-500 rounded-2xl bg-white dark:bg-black/85 border border-slate-100 dark:border-zinc-800/80">
+                    No hay registros programados que coincidan con los filtros. Tocá "Nuevo" para agregar.
+                  </div>
+                ) : (
+                  filteredExamenes
+                    .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime())
+                    .map((ex, idx) => (
+                      <motion.div
+                        key={ex.id}
+                        initial={{ opacity: 0, y: 14 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.4), ease: [0.22, 1, 0.36, 1] }}
+                        onClick={() => {
+                          setEditingExamenId(ex.id);
+                          setExMateria(ex.materia);
+                          setExFecha(ex.fecha);
+                          setExEstado(ex.estado);
+                          setExInstancia(ex.instancia || "Primero");
+                          setExAula(ex.aula);
+                          setShowExamenModal(true);
+                        }}
+                        className={`rounded-2xl border p-4 cursor-pointer active:scale-[0.98] transition-transform ${darkMode ? "bg-black/85 border-zinc-800/80" : "bg-white border-slate-100"}`}
+                      >
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <span className="font-bold text-sm text-slate-900 dark:text-white">{ex.estado}</span>
+                          {ex.instancia && (
+                            <span className="text-[10px] text-slate-400 dark:text-zinc-400 uppercase tracking-wider font-semibold">
+                              {ex.instancia}
+                            </span>
+                          )}
+                        </div>
+                        <p className="font-extrabold text-sm text-slate-900 dark:text-white mb-1.5">{ex.materia}</p>
+                        <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] font-medium text-slate-500 dark:text-zinc-400">
+                          <span className="flex items-center gap-1 font-mono">
+                            <Calendar className="w-3 h-3 shrink-0 text-primary" />
+                            {new Date(ex.fecha).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" }).replace(",", "")}
+                          </span>
+                          {ex.aula && (
+                            <span className="flex items-center gap-1">
+                              <FolderOpen className="w-3 h-3 shrink-0" />
+                              {ex.aula}
+                            </span>
+                          )}
+                        </div>
+                        <div
+                          className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-100 dark:border-zinc-800/60"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingExamenId(ex.id);
+                              setExMateria(ex.materia);
+                              setExFecha(ex.fecha);
+                              setExEstado(ex.estado);
+                              setExInstancia(ex.instancia || "Primero");
+                              setExAula(ex.aula);
+                              setShowExamenModal(true);
+                            }}
+                            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold cursor-pointer active:scale-95 transition-all ${darkMode ? "bg-zinc-800 text-zinc-300" : "bg-slate-100 text-slate-600"}`}
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                            Editar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteExamen(ex.id)}
+                            className="p-2.5 rounded-xl bg-red-500/10 text-red-500 cursor-pointer active:scale-95 transition-all"
+                            title="Eliminar"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </motion.div>
+                    ))
+                )}
               </div>
             </div>
           );

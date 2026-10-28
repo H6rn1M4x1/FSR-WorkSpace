@@ -2360,6 +2360,44 @@ export default function AppointmentsView({
 
   const turnosTableLoading = useBriefLoading([sortedTurnosCompromisos]);
 
+  // Mismo filtro (estado + búsqueda) que ya usaba la tabla de Turnos y Compromisos — se extrajo
+  // para que la tarjeta de mobile (md:hidden) filtre exactamente igual sin duplicar la lógica.
+  const turnoMatchesFilters = (tc: TurnoCompromiso) => {
+    const estado = getEstadoLabel(tc.estatus, tc.fecha);
+    const matchesStatus =
+      statusFilter === "Todos" ||
+      (statusFilter === "Pendiente" ? estado === "Pendiente" || estado === "Initinere Diario" : estado === statusFilter);
+    const matchesSearch =
+      !listSearchTerm ||
+      tc.descripcion.toLowerCase().includes(listSearchTerm.toLowerCase()) ||
+      tc.lugar.toLowerCase().includes(listSearchTerm.toLowerCase()) ||
+      (tc.doctor && tc.doctor.toLowerCase().includes(listSearchTerm.toLowerCase()));
+    return matchesStatus && matchesSearch;
+  };
+
+  // Mismo toggle que el checkbox "Listo" de la fila de la tabla — se usa también desde la acción
+  // rápida de la tarjeta en mobile.
+  const toggleTurnoEstatus = async (tc: TurnoCompromiso) => {
+    const newChecked = !tc.estatus;
+    const updatedItem = { ...tc, estatus: newChecked, updatedAt: Date.now() };
+    setTurnosCompromisos((prev) => {
+      const updated = prev.map((item) => (item.id === tc.id ? updatedItem : item));
+      StorageService.setTurnosCompromisos(updated);
+      return updated;
+    });
+    try {
+      await saveItemToFirestore(activeUserId, "turnos_compromisos", updatedItem);
+      showToast(newChecked ? "Marcado como listo y guardado." : "Marcado como pendiente y guardado.", "success");
+    } catch (err: any) {
+      setTurnosCompromisos((prev) => {
+        const reverted = prev.map((item) => (item.id === tc.id ? tc : item));
+        StorageService.setTurnosCompromisos(reverted);
+        return reverted;
+      });
+      showToast(err?.message || "No se pudo guardar el cambio.", "error");
+    }
+  };
+
   const monthNames = [
     "Enero",
     "Febrero",
@@ -3221,7 +3259,7 @@ export default function AppointmentsView({
                   </div>
 
           {/* Turnos y Compromisos Table */}
-          <div className="overflow-x-auto rounded-2xl bg-white dark:bg-black/85 backdrop-blur-md border border-slate-100 dark:border-zinc-800/80">
+          <div className="hidden md:block overflow-x-auto rounded-2xl bg-white dark:bg-black/85 backdrop-blur-md border border-slate-100 dark:border-zinc-800/80">
             <table className="w-full text-left border-collapse min-w-[900px]">
               <thead className="sticky top-0 z-20">
                 <tr
@@ -3262,19 +3300,7 @@ export default function AppointmentsView({
               <tbody className="">
                 {turnosTableLoading ? (
                   <TableSkeleton rows={6} columns={10} darkMode={darkMode} />
-                ) : sortedTurnosCompromisos.filter((tc) => {
-                  const estado = getEstadoLabel(tc.estatus, tc.fecha);
-                  const matchesStatus =
-                    statusFilter === "Todos" ||
-                    (statusFilter === "Pendiente"
-                      ? estado === "Pendiente" || estado === "Initinere Diario"
-                      : estado === statusFilter);
-                  const matchesSearch = !listSearchTerm ||
-                    tc.descripcion.toLowerCase().includes(listSearchTerm.toLowerCase()) ||
-                    tc.lugar.toLowerCase().includes(listSearchTerm.toLowerCase()) ||
-                    (tc.doctor && tc.doctor.toLowerCase().includes(listSearchTerm.toLowerCase()));
-                  return matchesStatus && matchesSearch;
-                }).length === 0 ? (
+                ) : sortedTurnosCompromisos.filter(turnoMatchesFilters).length === 0 ? (
                   <tr>
                     <td
                       colSpan={10}
@@ -3290,19 +3316,7 @@ export default function AppointmentsView({
                   </tr>
                 ) : (
                   sortedTurnosCompromisos
-                    .filter((tc) => {
-                      const estado = getEstadoLabel(tc.estatus, tc.fecha);
-                      const matchesStatus =
-                        statusFilter === "Todos" ||
-                        (statusFilter === "Pendiente"
-                          ? estado === "Pendiente" || estado === "Initinere Diario"
-                          : estado === statusFilter);
-                      const matchesSearch = !listSearchTerm ||
-                        tc.descripcion.toLowerCase().includes(listSearchTerm.toLowerCase()) ||
-                        tc.lugar.toLowerCase().includes(listSearchTerm.toLowerCase()) ||
-                        (tc.doctor && tc.doctor.toLowerCase().includes(listSearchTerm.toLowerCase()));
-                      return matchesStatus && matchesSearch;
-                    })
+                    .filter(turnoMatchesFilters)
                     .map((tc, idx) => {
                       const estado = getEstadoLabel(tc.estatus, tc.fecha);
 
@@ -3316,31 +3330,7 @@ export default function AppointmentsView({
                             <input
                               type="checkbox"
                               checked={tc.estatus}
-                              onChange={async (e) => {
-                                const newChecked = e.target.checked;
-                                const updatedItem = { ...tc, estatus: newChecked, updatedAt: Date.now() };
-                                setTurnosCompromisos((prev) => {
-                                  const updated = prev.map((item) =>
-                                    item.id === tc.id ? updatedItem : item,
-                                  );
-                                  StorageService.setTurnosCompromisos(updated);
-                                  return updated;
-                                });
-                                try {
-                                  await saveItemToFirestore(activeUserId, "turnos_compromisos", updatedItem);
-                                  showToast(
-                                    newChecked ? "Marcado como listo y guardado." : "Marcado como pendiente y guardado.",
-                                    "success",
-                                  );
-                                } catch (err: any) {
-                                  setTurnosCompromisos((prev) => {
-                                    const reverted = prev.map((item) => (item.id === tc.id ? tc : item));
-                                    StorageService.setTurnosCompromisos(reverted);
-                                    return reverted;
-                                  });
-                                  showToast(err?.message || "No se pudo guardar el cambio.", "error");
-                                }
-                              }}
+                              onChange={() => toggleTurnoEstatus(tc)}
                               className="w-4.5 h-4.5 accent-primary rounded cursor-pointer"
                             />
                           </td>
@@ -3644,6 +3634,116 @@ export default function AppointmentsView({
                 )}
               </tbody>
             </table>
+          </div>
+
+          {/* Vista en tarjetas para mobile — misma idea que el resto de las tablas convertidas:
+              la tabla de 10 columnas con scroll horizontal no es práctica para ver/editar en el
+              celular, acá se ve lo más importante de cada turno/compromiso a simple vista. */}
+          <div className="md:hidden space-y-3">
+            {turnosTableLoading ? (
+              Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className={`h-32 rounded-2xl animate-pulse ${darkMode ? "bg-zinc-800/60" : "bg-slate-100"}`} />
+              ))
+            ) : sortedTurnosCompromisos.filter(turnoMatchesFilters).length === 0 ? (
+              <div className="px-4 py-12 text-center text-zinc-500 font-medium italic rounded-2xl bg-white dark:bg-black/85 border border-slate-100 dark:border-zinc-800/80">
+                No hay registros guardados{statusFilter !== "Todos" ? ` con estado "${statusFilter}"` : ""}. Tocá "Cargar Nuevo Turno / Compromiso" para comenzar.
+              </div>
+            ) : (
+              sortedTurnosCompromisos
+                .filter(turnoMatchesFilters)
+                .map((tc, idx) => {
+                  const estado = getEstadoLabel(tc.estatus, tc.fecha);
+                  const tieneLugar =
+                    tc.lugar &&
+                    tc.lugar.trim() &&
+                    tc.lugar.toLowerCase() !== "sin dirección" &&
+                    tc.lugar.toLowerCase() !== "sin direccion" &&
+                    tc.lugar.toLowerCase() !== "sin lugar asignado";
+                  return (
+                    <motion.div
+                      key={`tc-card-${tc.id}-${idx}`}
+                      initial={{ opacity: 0, y: 14 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.4), ease: [0.22, 1, 0.36, 1] }}
+                      onClick={() => handleEditTurnoCompromiso(tc)}
+                      className="rounded-2xl border p-4 cursor-pointer active:scale-[0.98] transition-transform bg-white dark:bg-black/85 border-slate-100 dark:border-zinc-800/80"
+                    >
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-primary/10 text-primary">
+                          {categoryOptions.find((c) => c.value === tc.categoria)?.label || tc.categoria}
+                        </span>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-primary/10 text-primary ${
+                            estado === "Initinere Diario" ? "animate-pulse" : ""
+                          }`}
+                        >
+                          {estado}
+                        </span>
+                      </div>
+
+                      <p className={`font-extrabold text-sm mb-1.5 flex items-center gap-1.5 ${tc.estatus ? "line-through text-zinc-400 dark:text-zinc-500" : "text-slate-900 dark:text-white"}`}>
+                        <span className="break-words">{tc.descripcion}</span>
+                        <SharedBadge item={tc} isSharedOut={isSharedOut("turnos_compromisos", tc.id)} sharedOutWith={sharedOutWith("turnos_compromisos", tc.id)} />
+                      </p>
+
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-medium text-slate-500 dark:text-zinc-400 mb-1">
+                        <span className="flex items-center gap-1">
+                          <Calendar className="w-3 h-3 shrink-0" />
+                          {tc.fecha}
+                        </span>
+                        {tc.doctor && (
+                          <span className="flex items-center gap-1 text-primary font-semibold">
+                            <Stethoscope className="w-3 h-3 shrink-0" />
+                            {tc.doctor}
+                          </span>
+                        )}
+                        {tieneLugar && (
+                          <span className="flex items-center gap-1 truncate">
+                            <MapPin className="w-3 h-3 shrink-0" />
+                            {tc.lugar}
+                          </span>
+                        )}
+                      </div>
+
+                      <div
+                        className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-100 dark:border-zinc-800/60"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => toggleTurnoEstatus(tc)}
+                          className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold cursor-pointer active:scale-95 transition-all ${
+                            tc.estatus
+                              ? darkMode
+                                ? "bg-zinc-800 text-zinc-300"
+                                : "bg-slate-100 text-slate-600"
+                              : "bg-primary text-white dark:text-black"
+                          }`}
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          {tc.estatus ? "Pendiente" : "Marcar listo"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleEditTurnoCompromiso(tc)}
+                          className={`p-2.5 rounded-xl cursor-pointer active:scale-95 transition-all ${darkMode ? "bg-zinc-800 text-zinc-300" : "bg-slate-100 text-slate-600"}`}
+                          title="Editar"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteTurnoCompromiso(tc.id)}
+                          className="p-2.5 rounded-xl bg-red-500/10 text-red-500 cursor-pointer active:scale-95 transition-all"
+                          title="Eliminar"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </motion.div>
+                  );
+                })
+            )}
           </div>
         </div>
       )}
