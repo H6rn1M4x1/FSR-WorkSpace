@@ -18,7 +18,7 @@ import { auth } from "../lib/supabase";
 import { db } from "../lib/firebase"; // TODO Fase 2: migrar a Supabase
 import { LocationPickerMap } from "./LocationPickerMap";
 import { useToast } from "../context/ToastContext";
-import { AddressBookModal, loadSavedAddressBook, AddressEntry } from "./AddressBookModal";
+import { AddressBookModal, loadSavedAddressBook, saveAddressBook, AddressEntry } from "./AddressBookModal";
 import { PillFilterBar } from "./PillFilterBar";
 import { ConfirmationModal } from "./ConfirmationModal";
 import { DetailModal } from "./DetailModal";
@@ -825,6 +825,41 @@ const SavedAddressesScrollRow: React.FC<{
     scrollLeft: 0,
     hasMoved: false,
   });
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  // Los usados más recientemente van primero; el resto conserva su orden original al final.
+  const orderedAddresses = useMemo(
+    () =>
+      [...savedAddresses].sort((a, b) => (b.lastUsedAt ?? 0) - (a.lastUsedAt ?? 0)),
+    [savedAddresses],
+  );
+
+  const updateScrollState = useCallback(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 4);
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  }, []);
+
+  useEffect(() => {
+    updateScrollState();
+    const el = containerRef.current;
+    if (!el) return;
+    el.addEventListener("scroll", updateScrollState, { passive: true });
+    window.addEventListener("resize", updateScrollState);
+    return () => {
+      el.removeEventListener("scroll", updateScrollState);
+      window.removeEventListener("resize", updateScrollState);
+    };
+  }, [updateScrollState, orderedAddresses.length]);
+
+  const scrollByAmount = (direction: "left" | "right") => {
+    containerRef.current?.scrollBy({
+      left: direction === "left" ? -140 : 140,
+      behavior: "smooth",
+    });
+  };
 
   const handlePointerDown = (e: React.PointerEvent) => {
     if (!containerRef.current) return;
@@ -861,31 +896,71 @@ const SavedAddressesScrollRow: React.FC<{
   };
 
   return (
-    <div
-      ref={containerRef}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
-      className="mt-2 flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none cursor-grab active:cursor-grabbing select-none touch-pan-x"
-      style={{ WebkitOverflowScrolling: "touch" }}
-    >
+    <div className="mt-2 relative flex items-center gap-1">
       <span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 shrink-0 uppercase tracking-wider flex items-center gap-1 pointer-events-none">
         <BookMarked className="w-3 h-3 text-primary" />
-        <span>Guardados:</span>
+        <span className="hidden sm:inline">Guardados:</span>
       </span>
-      {savedAddresses.slice(0, 8).map((addr) => (
-        <button
-          key={addr.id}
-          type="button"
-          onClick={(e) => handlePillClick(addr, e)}
-          title={`Seleccionar ${addr.name}`}
-          className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-primary/15 dark:bg-zinc-800/80 dark:hover:bg-primary/20 text-black dark:text-zinc-200 text-[11px] font-bold whitespace-nowrap flex items-center gap-1 border border-slate-200/80 dark:border-zinc-700 transition-all cursor-pointer shrink-0 group select-none active:scale-95 active:bg-primary active:text-white dark:active:text-slate-950"
+
+      <button
+        type="button"
+        onClick={() => scrollByAmount("left")}
+        title="Desplazar a la izquierda"
+        className={`shrink-0 p-1 rounded-full bg-slate-100 dark:bg-zinc-800/80 text-slate-500 dark:text-zinc-400 hover:text-primary hover:bg-primary/10 transition-all cursor-pointer ${
+          canScrollLeft ? "opacity-100" : "opacity-0 pointer-events-none"
+        }`}
+      >
+        <ChevronLeft className="w-3.5 h-3.5" />
+      </button>
+
+      <div className="relative flex-1 min-w-0">
+        {/* Difuminado en los bordes — solo visible del lado hacia el que todavía se puede
+            scrollear, para que el corte de la última píldora no se vea abrupto. */}
+        <div
+          className={`pointer-events-none absolute inset-y-0 left-0 w-6 z-10 bg-gradient-to-r from-white dark:from-black/85 to-transparent transition-opacity duration-200 ${
+            canScrollLeft ? "opacity-100" : "opacity-0"
+          }`}
+        />
+        <div
+          className={`pointer-events-none absolute inset-y-0 right-0 w-6 z-10 bg-gradient-to-l from-white dark:from-black/85 to-transparent transition-opacity duration-200 ${
+            canScrollRight ? "opacity-100" : "opacity-0"
+          }`}
+        />
+        <div
+          ref={containerRef}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+          className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none cursor-grab active:cursor-grabbing select-none touch-pan-x"
+          style={{ WebkitOverflowScrolling: "touch" }}
         >
-          <MapPin className="w-3 h-3 text-primary group-hover:scale-110 transition-transform" />
-          <span>{addr.name}</span>
-        </button>
-      ))}
+          {orderedAddresses.slice(0, 8).map((addr) => (
+            <motion.button
+              key={addr.id}
+              type="button"
+              whileTap={{ scale: 0.95 }}
+              onClick={(e) => handlePillClick(addr, e)}
+              title={`Seleccionar ${addr.name}`}
+              className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-primary/15 dark:bg-zinc-800/80 dark:hover:bg-primary/20 text-black dark:text-zinc-200 text-[11px] font-bold whitespace-nowrap flex items-center gap-1 border border-slate-200/80 dark:border-zinc-700 transition-all cursor-pointer shrink-0 group select-none active:bg-primary active:text-white dark:active:text-slate-950"
+            >
+              <MapPin className="w-3 h-3 text-primary group-hover:scale-110 transition-transform" />
+              <span>{addr.name}</span>
+            </motion.button>
+          ))}
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => scrollByAmount("right")}
+        title="Desplazar a la derecha"
+        className={`shrink-0 p-1 rounded-full bg-slate-100 dark:bg-zinc-800/80 text-slate-500 dark:text-zinc-400 hover:text-primary hover:bg-primary/10 transition-all cursor-pointer ${
+          canScrollRight ? "opacity-100" : "opacity-0 pointer-events-none"
+        }`}
+      >
+        <ChevronRight className="w-3.5 h-3.5" />
+      </button>
     </div>
   );
 };
@@ -1346,6 +1421,17 @@ export default function AppointmentsView({
     setLugarQuery(entry.name);
     setTcLat(entry.lat);
     setTcLon(entry.lon);
+
+    // Registra el uso para que la fila rápida de "Guardados" pueda mostrar los últimos
+    // seleccionados primero, tanto si se eligió desde esa fila como desde el Libro de
+    // Direcciones completo (ambos caminos pasan por acá).
+    const usedEntry: AddressEntry = { ...entry, lastUsedAt: Date.now() };
+    setSavedAddresses((prev) => {
+      const updated = prev.map((a) => (a.id === entry.id ? usedEntry : a));
+      saveAddressBook(updated);
+      return updated;
+    });
+    saveItemToFirestore(activeUserId, "address_book", usedEntry).catch(() => {});
   };
 
   useEffect(() => {
@@ -3992,13 +4078,17 @@ export default function AppointmentsView({
                 </button>
               </div>
 
-              {/* Scrollable Content */}
-              <div className="flex-1 overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-zinc-200 dark:scrollbar-thumb-zinc-800">
-                <form
-                  noValidate
-                  onSubmit={handleAddTurnoCompromiso}
-                  className="pb-1"
-                >
+              {/* El form envuelve tanto el área con scroll como el footer de acciones, para que
+                  los botones de Cancelar/Guardar sigan siendo type="submit" dentro del mismo
+                  form sin tener que vivir dentro del contenedor que scrollea. */}
+              <form
+                noValidate
+                onSubmit={handleAddTurnoCompromiso}
+                className="flex-1 flex flex-col min-h-0"
+              >
+              {/* Scrollable Content — único contenedor que scrollea; el mapa (sticky) y el
+                  footer de acciones de abajo quedan siempre visibles sin necesidad de scrollear. */}
+              <div className="flex-1 overflow-y-auto p-6 pb-1 scrollbar-thin scrollbar-thumb-zinc-200 dark:scrollbar-thumb-zinc-800">
                 <div className="lg:grid lg:grid-cols-[1fr_460px] lg:gap-8 lg:items-start">
                 <div className="space-y-4 min-w-0">
                   {/* Descripción */}
@@ -4227,48 +4317,39 @@ export default function AppointmentsView({
                                     {/* Información Personalizada — no aplica a turnos de partido (guardan JSON, no texto libre) */}
                   {!isAutoScheduledMatchTurno(editingTurnoComp?.id) && (
                   <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest">
-                        Información Personalizada (Opcional)
-                      </label>
-                      <button
-                        type="button"
-                        onClick={isRecording ? stopRecording : startRecording}
-                        disabled={isTranscribing}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-extrabold transition-all shadow-sm ${
-                          isRecording
-                            ? 'bg-primary text-white dark:text-blue-950 animate-pulse shadow-md shadow-primary/20 cursor-pointer'
-                            : isTranscribing
-                            ? 'bg-primary/20 text-primary border border-primary/30 cursor-wait'
-                            : 'bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20 cursor-pointer'
-                        }`}
-                      >
-                        {isTranscribing ? (
-                          <>
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                            <span>Transcribiendo...</span>
-                          </>
-                        ) : isRecording ? (
-                          <>
-                            <Square className="w-3 h-3 fill-current" />
-                            <span>Detener Grabación</span>
-                          </>
-                        ) : (
-                          <>
-                            <Mic className="w-3 h-3" />
-                            <span>Grabar Audio</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
+                    <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
+                      Información Personalizada (Opcional)
+                    </label>
                     <RichTextEditor
                       value={tcInformacionPersonalizada}
                       onChange={setTcInformacionPersonalizada}
                       attachments={tcArchivosNecesarios}
                       onAttachmentsChange={setTcArchivosNecesarios}
                       onPreview={(url, name) => { setPreviewFileUrl(url); setPreviewFileName(name); }}
-                      
                       placeholder="Agrega notas, indicaciones especiales, recordatorios..."
+                      extraToolbarActions={
+                        <button
+                          type="button"
+                          onClick={isRecording ? stopRecording : startRecording}
+                          disabled={isTranscribing}
+                          title={isTranscribing ? "Transcribiendo..." : isRecording ? "Detener grabación" : "Grabar audio"}
+                          className={`p-2 rounded-lg transition-colors ${
+                            isRecording
+                              ? "bg-primary/20 text-primary animate-pulse"
+                              : isTranscribing
+                              ? "text-primary/60 cursor-wait"
+                              : "text-slate-700 dark:text-zinc-300 hover:bg-slate-200 dark:hover:bg-zinc-800"
+                          }`}
+                        >
+                          {isTranscribing ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : isRecording ? (
+                            <Square className="w-4 h-4 fill-current" />
+                          ) : (
+                            <Mic className="w-4 h-4" />
+                          )}
+                        </button>
+                      }
                     />
                   </div>
                   )}
@@ -4519,9 +4600,10 @@ export default function AppointmentsView({
                   )}
                 </div>
                 </div>
+              </div>
 
-                  {/* Actions */}
-                  <div className="flex items-center justify-center sm:justify-end gap-3 pt-4 border-t border-slate-100 dark:border-zinc-800/40">
+                  {/* Actions — footer fijo fuera del área con scroll, siempre visible */}
+                  <div className="shrink-0 flex items-center justify-center sm:justify-end gap-3 px-6 py-4 border-t border-slate-100 dark:border-zinc-800/40">
                     <button
                       type="button"
                       disabled={isSaving}
@@ -4547,8 +4629,7 @@ export default function AppointmentsView({
                       )}
                     </button>
                   </div>
-                </form>
-              </div>
+              </form>
             </motion.div>
           </motion.div>
         )}
