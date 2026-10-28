@@ -978,7 +978,7 @@ export default function CotizacionesAccionesTable({
         </div>
 
         {/* Cotizaciones Table */}
-        <div className="overflow-x-auto rounded-2xl bg-white dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800/80 shadow-xs">
+        <div className="hidden md:block overflow-x-auto rounded-2xl bg-white dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800/80 shadow-xs">
           <table className="w-full text-left border-collapse min-w-[1300px]">
             <thead className="sticky top-0 z-20">
               <tr
@@ -1157,6 +1157,94 @@ export default function CotizacionesAccionesTable({
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Vista en tarjetas para mobile — mismo patrón que el resto: lo más importante de cada
+            instrumento a simple vista, tocar abre el detalle. */}
+        <div className="md:hidden space-y-3">
+          {cotizacionesTableLoading ? (
+            Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className={`h-32 rounded-2xl animate-pulse ${darkMode ? "bg-zinc-800/60" : "bg-slate-100"}`} />
+            ))
+          ) : paginatedData.length === 0 ? (
+            <div className="py-12 text-center text-slate-400 dark:text-zinc-500 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800/80">
+              <div className="flex flex-col items-center gap-2">
+                <LineChart className="w-8 h-8 opacity-40 text-primary" />
+                <p className="font-semibold text-xs">No se encontraron instrumentos con los filtros seleccionados.</p>
+              </div>
+            </div>
+          ) : (
+            paginatedData.map((item, idx) => {
+              const isPositive = item.variacion > 0;
+              const isNegative = item.variacion < 0;
+              const isUSD = (item.moneda || "ARS") === "USD";
+              return (
+                <motion.div
+                  key={item.id || `${item.simbolo}-${idx}`}
+                  initial={{ opacity: 0, y: 14 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.4), ease: [0.22, 1, 0.36, 1] }}
+                  onClick={() => setViewingItem(item)}
+                  className="rounded-2xl border p-4 bg-white dark:bg-zinc-900 border-slate-100 dark:border-zinc-800/80 active:scale-[0.98] transition-transform cursor-pointer"
+                >
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <span className="inline-block px-2.5 py-1 rounded-md bg-primary/10 text-primary border border-primary/20 font-black tracking-wider text-[11px]">
+                      {item.simbolo}
+                    </span>
+                    <span
+                      className={`inline-flex items-center justify-center gap-0.5 px-2.5 py-0.5 rounded-full text-[10px] font-black ${
+                        isPositive
+                          ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20"
+                          : isNegative
+                          ? "bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-500/20"
+                          : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700"
+                      }`}
+                    >
+                      {isPositive && <ArrowUpRight className="w-3 h-3" />}
+                      {isNegative && <ArrowDownRight className="w-3 h-3" />}
+                      {item.variacionTexto}
+                    </span>
+                  </div>
+
+                  <p className="font-bold text-sm text-slate-900 dark:text-white mb-2 truncate" title={item.descripcion}>
+                    {item.descripcion}
+                  </p>
+
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400 border border-slate-200 dark:border-zinc-700">
+                      {item.panel}
+                    </span>
+                    <span className="font-black font-mono text-slate-900 dark:text-white text-base">
+                      {isUSD ? "US$ " : "$ "}
+                      {item.ultimoPrecio}
+                    </span>
+                  </div>
+
+                  <div
+                    className="flex items-center gap-2 mt-3.5 pt-3.5 border-t border-slate-100 dark:border-zinc-800/60"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEdit(item)}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold cursor-pointer active:scale-95 transition-all ${darkMode ? "bg-zinc-800 text-zinc-300" : "bg-slate-100 text-slate-600"}`}
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                      Editar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeleteConfirmId(item.id)}
+                      className="p-2.5 rounded-xl bg-red-500/10 text-red-500 cursor-pointer active:scale-95 transition-all"
+                      title="Eliminar"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </motion.div>
+              );
+            })
+          )}
         </div>
 
         {/* PAGINATION FOOTER */}

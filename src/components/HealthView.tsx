@@ -4682,7 +4682,7 @@ export default function HealthView({
                         )}
 
                         <div>
-                          <div className="overflow-x-auto rounded-xl border border-slate-100 dark:border-zinc-800 bg-slate-50/50 dark:bg-black/20">
+                          <div className="hidden md:block overflow-x-auto rounded-xl border border-slate-100 dark:border-zinc-800 bg-slate-50/50 dark:bg-black/20">
                             <table className="w-full text-left text-[11px] border-collapse">
                               <thead>
                                 <tr className="border-b border-slate-100 dark:border-zinc-800 text-zinc-400 font-bold uppercase bg-slate-50 dark:bg-black">
@@ -4734,6 +4734,62 @@ export default function HealthView({
                                 )}
                               </tbody>
                             </table>
+                          </div>
+
+                          {/* Tarjetas para mobile — misma idea que el resto de tablas convertidas: lo más
+                              importante de cada medición a simple vista, tocar abre edición. */}
+                          <div className="md:hidden space-y-2.5">
+                            {medidasTableLoading ? (
+                              Array.from({ length: 3 }).map((_, i) => (
+                                <div key={i} className={`h-20 rounded-xl animate-pulse ${darkMode ? "bg-zinc-800/60" : "bg-slate-100"}`} />
+                              ))
+                            ) : paginatedMedidas.length > 0 ? (
+                              paginatedMedidas.map((m, idx) => (
+                                <motion.div
+                                  key={m.id}
+                                  initial={{ opacity: 0, y: 14 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.4), ease: [0.22, 1, 0.36, 1] }}
+                                  onClick={() => handleEditMedida(m)}
+                                  className={`rounded-xl border p-3.5 cursor-pointer active:scale-[0.98] transition-transform ${darkMode ? "bg-black/20 border-zinc-800" : "bg-slate-50/50 border-slate-100"}`}
+                                >
+                                  <div className="flex items-center justify-between gap-2 mb-2">
+                                    <span className="font-bold text-xs">{m.fecha}</span>
+                                    <span className="font-mono text-primary font-bold text-sm">{m.peso} kg</span>
+                                  </div>
+                                  <div className="flex flex-wrap gap-3 text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
+                                    {m.cintura && <span>Cintura: {m.cintura} cm</span>}
+                                    {m.cadera && <span>Cadera: {m.cadera} cm</span>}
+                                    {m.cuello && <span>Cuello: {m.cuello} cm</span>}
+                                  </div>
+                                  <div
+                                    className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-100 dark:border-zinc-800/60"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <button
+                                      type="button"
+                                      onClick={() => handleEditMedida(m)}
+                                      className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer active:scale-95 transition-all ${darkMode ? "bg-zinc-800 text-zinc-300" : "bg-slate-100 text-slate-600"}`}
+                                    >
+                                      <Edit className="w-3 h-3" />
+                                      Editar
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteMedida(m.id)}
+                                      className="p-2 rounded-lg bg-red-500/10 text-red-500 cursor-pointer active:scale-95 transition-all"
+                                      title="Eliminar"
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                </motion.div>
+                              ))
+                            ) : (
+                              <div className="p-4 text-center text-zinc-500 text-xs rounded-xl border border-dashed border-slate-200 dark:border-zinc-800">
+                                No hay registros de mediciones guardados. Se está utilizando el peso base configurado en <span className="font-semibold text-primary">Ajustes &gt; Salud y Datos Físicos ({pesoConfiguracion} kg)</span>.
+                              </div>
+                            )}
                           </div>
 
                           {medidasHistory.length > itemsPerPage && (
@@ -5762,7 +5818,7 @@ export default function HealthView({
                   </div>
 
                   {/* Interactive Table */}
-                  <div className="overflow-x-auto rounded-2xl bg-white dark:bg-black/85 backdrop-blur-md border border-slate-100 dark:border-zinc-800/80">
+                  <div className="hidden md:block overflow-x-auto rounded-2xl bg-white dark:bg-black/85 backdrop-blur-md border border-slate-100 dark:border-zinc-800/80">
                     <table className="w-full text-left border-collapse min-w-[850px]">
                       <thead className="sticky top-0 z-20">
                         <tr
@@ -5855,6 +5911,62 @@ export default function HealthView({
                         )}
                       </tbody>
                     </table>
+                  </div>
+
+                  <div className="md:hidden space-y-2.5">
+                    {doctorsTableLoading ? (
+                      Array.from({ length: 3 }).map((_, i) => (
+                        <div key={i} className={`h-24 rounded-2xl animate-pulse ${darkMode ? "bg-zinc-800/60" : "bg-slate-100"}`} />
+                      ))
+                    ) : filteredDoctors.length === 0 ? (
+                      <div className="px-6 py-12 text-center rounded-2xl bg-white dark:bg-black/85 border border-slate-100 dark:border-zinc-800/80">
+                        <div className="flex flex-col items-center justify-center space-y-2">
+                          <Stethoscope className="w-8 h-8 text-slate-300 dark:text-zinc-700" />
+                          <p className="font-semibold text-slate-700 dark:text-zinc-300 text-sm">No se encontraron doctores registrados</p>
+                          <p className="text-[11px] text-slate-400 dark:text-zinc-600">Comienza registrando a tus profesionales médicos para tenerlos a mano.</p>
+                        </div>
+                      </div>
+                    ) : (
+                      filteredDoctors.map((doc, idx) => (
+                        <motion.div
+                          key={doc.id}
+                          initial={{ opacity: 0, y: 14 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.4), ease: [0.22, 1, 0.36, 1] }}
+                          onClick={() => handleOpenEditDoctorModal(doc)}
+                          className="rounded-2xl border p-4 cursor-pointer active:scale-[0.98] transition-transform bg-white dark:bg-black/85 border-slate-100 dark:border-zinc-800/80"
+                        >
+                          <div className="flex items-center justify-between gap-2 mb-2">
+                            <p className="font-bold text-sm text-slate-900 dark:text-zinc-100 truncate">{doc.name}</p>
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-primary/10 text-primary border border-primary/20 shrink-0">
+                              {doc.specialty}
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] font-medium text-slate-500 dark:text-zinc-400">
+                            <span className="flex items-center gap-1"><MapPin className="w-3 h-3 shrink-0" />{doc.address || "No asignado"}</span>
+                            {doc.phone && <span className="flex items-center gap-1 font-mono"><Phone className="w-3 h-3 shrink-0" />{doc.phone}</span>}
+                          </div>
+                          <div className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-100 dark:border-zinc-800/60" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditDoctorModal(doc)}
+                              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold cursor-pointer active:scale-95 transition-all ${darkMode ? "bg-zinc-800 text-zinc-300" : "bg-slate-100 text-slate-600"}`}
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                              Editar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteDoctor(doc.id)}
+                              className="p-2.5 rounded-xl bg-red-500/10 text-red-500 cursor-pointer active:scale-95 transition-all"
+                              title="Eliminar"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </motion.div>
+                      ))
+                    )}
                   </div>
 
                   <div className="mt-4 flex items-center justify-between text-[11px] text-slate-400 dark:text-zinc-500">
@@ -5991,7 +6103,7 @@ export default function HealthView({
                   </div>
 
                   {/* Interactive Table */}
-                  <div className="overflow-x-auto rounded-2xl bg-white dark:bg-black/85 backdrop-blur-md border border-slate-100 dark:border-zinc-800/80">
+                  <div className="hidden md:block overflow-x-auto rounded-2xl bg-white dark:bg-black/85 backdrop-blur-md border border-slate-100 dark:border-zinc-800/80">
                     <table className="w-full text-left border-collapse min-w-[850px]">
                       <thead className="sticky top-0 z-20">
                         <tr
@@ -6145,6 +6257,83 @@ export default function HealthView({
                     </table>
                   </div>
 
+                  <div className="md:hidden space-y-2.5">
+                    {medsTableLoading ? (
+                      Array.from({ length: 3 }).map((_, i) => (
+                        <div key={i} className={`h-28 rounded-2xl animate-pulse ${darkMode ? "bg-zinc-800/60" : "bg-slate-100"}`} />
+                      ))
+                    ) : filteredMeds.length === 0 ? (
+                      <div className="px-6 py-12 text-center rounded-2xl bg-white dark:bg-black/85 border border-slate-100 dark:border-zinc-800/80">
+                        <div className="flex flex-col items-center justify-center space-y-2">
+                          <Pill className="w-8 h-8 text-slate-300 dark:text-zinc-700" />
+                          <p className="font-semibold text-slate-700 dark:text-zinc-300 text-sm">No se encontraron medicamentos</p>
+                          <p className="text-[11px] text-slate-400 dark:text-zinc-600">Prueba ajustando los filtros o agrega un medicamento nuevo.</p>
+                        </div>
+                      </div>
+                    ) : (
+                      filteredMeds.map((med, idx) => (
+                        <motion.div
+                          key={med.id}
+                          initial={{ opacity: 0, y: 14 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.4), ease: [0.22, 1, 0.36, 1] }}
+                          onClick={() => openEditModal(med)}
+                          className="rounded-2xl border p-4 cursor-pointer active:scale-[0.98] transition-transform bg-white dark:bg-black/85 border-slate-100 dark:border-zinc-800/80"
+                        >
+                          <div className="flex items-start gap-3 mb-2.5">
+                            {med.imagen ? (
+                              <img src={med.imagen} alt={med.marca} className="w-11 h-11 object-cover rounded-lg border border-slate-200/60 dark:border-zinc-800/60 shadow-xs shrink-0" referrerPolicy="no-referrer" />
+                            ) : (
+                              <div className="w-11 h-11 bg-slate-100 dark:bg-zinc-800 rounded-lg flex items-center justify-center border border-slate-200/50 dark:border-zinc-700/50 shrink-0">
+                                <ImageIcon className="w-5 h-5 text-slate-400 dark:text-zinc-500" />
+                              </div>
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="font-bold text-sm text-slate-900 dark:text-zinc-100 truncate">{med.marca}</p>
+                                <span
+                                  className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider shrink-0 ${
+                                    med.estado === "Consumiendo"
+                                      ? darkMode ? "bg-primary/10 text-primary" : "bg-primary-container text-primary"
+                                      : med.estado === "Dejo de Consumir"
+                                        ? darkMode ? "bg-red-500/10 text-red-400" : "bg-red-50 text-red-600"
+                                        : darkMode ? "bg-zinc-800/80 text-zinc-400" : "bg-zinc-100 text-zinc-500"
+                                  }`}
+                                >
+                                  {med.estado}
+                                </span>
+                              </div>
+                              <p className="text-[11px] font-medium text-slate-500 dark:text-zinc-400 truncate">{med.droga}</p>
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] font-medium text-slate-500 dark:text-zinc-400">
+                            <span className="font-mono font-bold text-slate-700 dark:text-zinc-300">{med.mg} mg</span>
+                            <span>Cant.: {med.cantidad ?? 0} {med.unidadMedida}</span>
+                            <span className="font-bold text-primary">Diario: {med.consumoDiario}</span>
+                          </div>
+                          <div className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-100 dark:border-zinc-800/60" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              type="button"
+                              onClick={() => openEditModal(med)}
+                              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold cursor-pointer active:scale-95 transition-all ${darkMode ? "bg-zinc-800 text-zinc-300" : "bg-slate-100 text-slate-600"}`}
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                              Editar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteDetailedMed(med.id)}
+                              className="p-2.5 rounded-xl bg-red-500/10 text-red-500 cursor-pointer active:scale-95 transition-all"
+                              title="Eliminar"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </motion.div>
+                      ))
+                    )}
+                  </div>
+
                         <div className="mt-4 flex items-center justify-between text-[11px] text-slate-400 dark:text-zinc-500">
                           <span>Total de registros: {filteredMeds.length}</span>
                         </div>
@@ -6209,7 +6398,7 @@ export default function HealthView({
                   </div>
 
                   {/* Interactive Table */}
-                  <div className="overflow-x-auto rounded-2xl bg-white dark:bg-black border border-slate-100 dark:border-zinc-800/80">
+                  <div className="hidden md:block overflow-x-auto rounded-2xl bg-white dark:bg-black border border-slate-100 dark:border-zinc-800/80">
                     <table className="w-full text-left border-collapse min-w-[1050px]">
                       <thead className="sticky top-0 z-20">
                         <tr
@@ -6381,6 +6570,85 @@ export default function HealthView({
                     </table>
                   </div>
 
+                  <div className="md:hidden space-y-2.5">
+                    {dispTableLoading ? (
+                      Array.from({ length: 3 }).map((_, i) => (
+                        <div key={i} className={`h-28 rounded-xl animate-pulse ${darkMode ? "bg-zinc-800/60" : "bg-slate-100"}`} />
+                      ))
+                    ) : filteredDisp.length === 0 ? (
+                      <div className="px-6 py-12 text-center text-slate-500 dark:text-zinc-500 rounded-xl border border-dashed border-slate-200 dark:border-zinc-800">
+                        No se encontraron registros de disponibilidad.
+                      </div>
+                    ) : (
+                      filteredDisp.map((disp, idx) => {
+                        const d = calculateDispDetails(disp);
+                        return (
+                          <motion.div
+                            key={disp.id}
+                            initial={{ opacity: 0, y: 14 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.4), ease: [0.22, 1, 0.36, 1] }}
+                            onClick={() => handleOpenEditDisp(disp)}
+                            className={`rounded-xl border p-3.5 cursor-pointer active:scale-[0.98] transition-transform ${darkMode ? "bg-black/20 border-zinc-800" : "bg-slate-50/50 border-slate-100"}`}
+                          >
+                            <div className="flex items-start justify-between gap-2 mb-2">
+                              <div className="min-w-0">
+                                <p className="font-bold text-slate-900 dark:text-zinc-100 truncate">{d.marca}</p>
+                                <p className="text-[10px] text-slate-500 dark:text-zinc-400 truncate">{d.droga}</p>
+                              </div>
+                              <span
+                                className={`shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider ${
+                                  d.estado === "Comprar Medicamento"
+                                    ? darkMode
+                                      ? "bg-red-500/15 text-red-400 border border-red-500/10"
+                                      : "bg-red-50 text-red-600 border border-red-100"
+                                    : darkMode
+                                      ? "bg-primary/10 text-primary border border-primary/20"
+                                      : "bg-primary-container text-primary border border-primary"
+                                }`}
+                              >
+                                {d.estado}
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] font-medium text-zinc-500 dark:text-zinc-400 mb-2">
+                              <span>Disponible: <strong className="text-slate-900 dark:text-white font-mono">{Number(d.cantidadDisponible.toFixed(1))}</strong></span>
+                              <span>({Number(d.disponibleParaDias.toFixed(1))} días)</span>
+                              <span>Hasta: <strong className="font-mono">{formatFechaDMY(d.disponibleHasta)}</strong></span>
+                            </div>
+                            <span
+                              className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider ${
+                                darkMode ? "bg-primary/10 text-primary border border-primary/20" : "bg-primary-container text-primary border border-primary"
+                              }`}
+                            >
+                              {d.funcionTratamiento}
+                            </span>
+                            <div
+                              className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-100 dark:border-zinc-800/60"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditDisp(disp)}
+                                className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer active:scale-95 transition-all ${darkMode ? "bg-zinc-800 text-zinc-300" : "bg-slate-100 text-slate-600"}`}
+                              >
+                                <Edit className="w-3 h-3" />
+                                Editar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteDisp(disp.id)}
+                                className="p-2 rounded-lg bg-red-500/10 text-red-500 cursor-pointer active:scale-95 transition-all"
+                                title="Eliminar"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </motion.div>
+                        );
+                      })
+                    )}
+                  </div>
+
                         <div className="mt-4 flex items-center justify-between text-[11px] text-slate-400 dark:text-zinc-500">
                           <span>Total de registros: {filteredDisp.length}</span>
                         </div>
@@ -6457,7 +6725,7 @@ export default function HealthView({
                   </div>
 
                   {/* Interactive Table */}
-                  <div className="overflow-x-auto rounded-2xl bg-white dark:bg-black/85 backdrop-blur-md border border-slate-100 dark:border-zinc-800/80">
+                  <div className="hidden md:block overflow-x-auto rounded-2xl bg-white dark:bg-black/85 backdrop-blur-md border border-slate-100 dark:border-zinc-800/80">
                     <table className="w-full text-left border-collapse min-w-[850px]">
                       <thead className="sticky top-0 z-20">
                         <tr
@@ -6583,6 +6851,71 @@ export default function HealthView({
                     </table>
                   </div>
 
+                  <div className="md:hidden space-y-2.5">
+                    {bpLogsTableLoading ? (
+                      Array.from({ length: 3 }).map((_, i) => (
+                        <div key={i} className={`h-24 rounded-xl animate-pulse ${darkMode ? "bg-zinc-800/60" : "bg-slate-100"}`} />
+                      ))
+                    ) : filteredBpLogs.length === 0 ? (
+                      <div className="px-6 py-12 text-center text-slate-500 dark:text-zinc-500 rounded-xl border border-dashed border-slate-200 dark:border-zinc-800">
+                        No se encontraron registros de presión.
+                      </div>
+                    ) : (
+                      filteredBpLogs.map((log, idx) => {
+                        const patientName = log.patient || "Hernan";
+                        return (
+                          <motion.div
+                            key={log.id}
+                            initial={{ opacity: 0, y: 14 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.4), ease: [0.22, 1, 0.36, 1] }}
+                            onClick={() => handleOpenEditBpTableModal(log)}
+                            className={`rounded-xl border p-3.5 cursor-pointer active:scale-[0.98] transition-transform ${darkMode ? "bg-black/20 border-zinc-800" : "bg-slate-50/50 border-slate-100"}`}
+                          >
+                            <div className="flex items-center justify-between gap-2 mb-2">
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider bg-primary/10 text-primary border border-primary/20">
+                                {patientName}
+                              </span>
+                              <span className="text-[10px] font-semibold text-slate-500 dark:text-zinc-400">
+                                {log.date ? log.date.replace("T", " ").replace("Z", "").split(":").slice(0, 2).join(":") : ""}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5 mb-1.5">
+                              <span className="font-extrabold font-mono text-primary text-sm">
+                                {log.systolic}/{log.diastolic} <span className="text-[10px] text-zinc-500 font-normal">mmHg</span>
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] font-semibold text-slate-600 dark:text-zinc-300">
+                              {log.temperature !== undefined && <span>{log.temperature} °C</span>}
+                              {log.oxygen !== undefined && <span>{log.oxygen}% O₂</span>}
+                            </div>
+                            <div
+                              className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-100 dark:border-zinc-800/60"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditBpTableModal(log)}
+                                className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer active:scale-95 transition-all ${darkMode ? "bg-zinc-800 text-zinc-300" : "bg-slate-100 text-slate-600"}`}
+                              >
+                                <Edit className="w-3 h-3" />
+                                Editar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteBpLog(log.id)}
+                                className="p-2 rounded-lg bg-red-500/10 text-red-500 cursor-pointer active:scale-95 transition-all"
+                                title="Eliminar"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </motion.div>
+                        );
+                      })
+                    )}
+                  </div>
+
                   <div className="mt-4 flex items-center justify-between text-[11px] text-slate-400 dark:text-zinc-500">
                     <span>Total de registros: {filteredBpLogs.length}</span>
                   </div>
@@ -6675,7 +7008,7 @@ export default function HealthView({
                   </div>
 
                   {/* Interactive Table */}
-                  <div className="overflow-x-auto rounded-2xl bg-white dark:bg-black/85 backdrop-blur-md border border-slate-100 dark:border-zinc-800/80">
+                  <div className="hidden md:block overflow-x-auto rounded-2xl bg-white dark:bg-black/85 backdrop-blur-md border border-slate-100 dark:border-zinc-800/80">
                     <table className="w-full text-left border-collapse min-w-[1250px]">
                       <thead className="sticky top-0 z-20">
                         <tr
@@ -6881,6 +7214,105 @@ export default function HealthView({
                         )}
                       </tbody>
                     </table>
+                  </div>
+
+                  <div className="md:hidden space-y-2.5">
+                    {recordsTableLoading ? (
+                      Array.from({ length: 3 }).map((_, i) => (
+                        <div key={i} className={`h-32 rounded-xl animate-pulse ${darkMode ? "bg-zinc-800/60" : "bg-slate-100"}`} />
+                      ))
+                    ) : (() => {
+                      const filteredRecords = medicalRecords.filter((record) => {
+                        const matchesSearch =
+                          record.info.toLowerCase().includes(estudioSearchQuery.toLowerCase()) ||
+                          record.report.toLowerCase().includes(estudioSearchQuery.toLowerCase());
+                        const matchesPatient = estudioFilterPatient === "Todos" || record.patient === estudioFilterPatient;
+                        const matchesType = estudioFilterType === "Todos" || record.type === estudioFilterType;
+                        return matchesSearch && matchesPatient && matchesType;
+                      });
+                      if (filteredRecords.length === 0) {
+                        return (
+                          <div className="px-6 py-12 text-center text-slate-500 dark:text-zinc-500 rounded-xl border border-dashed border-slate-200 dark:border-zinc-800">
+                            No se encontraron registros clínicos.
+                          </div>
+                        );
+                      }
+                      return filteredRecords.map((record, idx) => {
+                        const patientName = record.patient || "Hernan";
+                        const doc = doctors.find((d) => d.id === record.doctorId);
+                        const docDisplay = doc ? `${doc.name} (${doc.specialty})` : "No especificado";
+                        return (
+                          <motion.div
+                            key={record.id}
+                            initial={{ opacity: 0, y: 14 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.4), ease: [0.22, 1, 0.36, 1] }}
+                            onClick={() => handleOpenEditEstudio(record)}
+                            className={`rounded-xl border p-3.5 cursor-pointer active:scale-[0.98] transition-transform ${darkMode ? "bg-black/20 border-zinc-800" : "bg-slate-50/50 border-slate-100"}`}
+                          >
+                            <div className="flex items-center gap-1.5 mb-2">
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider bg-primary/10 text-primary border border-primary/20">
+                                {patientName}
+                              </span>
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider bg-primary/10 text-primary border border-primary/20">
+                                {record.type}
+                              </span>
+                              <span className="ml-auto text-[10px] font-semibold text-slate-500 dark:text-zinc-400 shrink-0">
+                                {record.studyDate}
+                              </span>
+                            </div>
+                            <p className="font-bold text-sm text-slate-900 dark:text-zinc-100 mb-1">{record.info || "-"}</p>
+                            <p className="text-[11px] font-medium text-slate-500 dark:text-zinc-400 mb-1.5">
+                              {record.location} {docDisplay !== "No especificado" && `· ${docDisplay}`}
+                            </p>
+                            {record.type === "Internacion" && (
+                              <p className="text-[11px] font-medium text-slate-500 dark:text-zinc-400 mb-1.5">
+                                Ingreso: {record.entryDate} · Egreso: {record.exitDate} ·{" "}
+                                <span className="font-extrabold text-primary font-mono">{record.daysCount} días</span>
+                              </p>
+                            )}
+                            {record.report && (
+                              <p className="text-[11px] italic text-slate-500 dark:text-zinc-400 line-clamp-2">{record.report}</p>
+                            )}
+                            {record.fileName && (
+                              <a
+                                href={record.fileData || "#"}
+                                download={record.fileName}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (!record.fileData) e.preventDefault();
+                                }}
+                                className="flex items-center gap-1 text-[11px] text-primary font-semibold hover:underline mt-1.5"
+                              >
+                                <FileText className="w-3 h-3 shrink-0" />
+                                <span className="truncate">{record.fileName}</span>
+                              </a>
+                            )}
+                            <div
+                              className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-100 dark:border-zinc-800/60"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditEstudio(record)}
+                                className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer active:scale-95 transition-all ${darkMode ? "bg-zinc-800 text-zinc-300" : "bg-slate-100 text-slate-600"}`}
+                              >
+                                <Edit className="w-3 h-3" />
+                                Editar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteEstudio(record.id)}
+                                className="p-2 rounded-lg bg-red-500/10 text-red-500 cursor-pointer active:scale-95 transition-all"
+                                title="Eliminar"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </motion.div>
+                        );
+                      });
+                    })()}
                   </div>
 
                   <div className="mt-4 flex items-center justify-between text-[11px] text-slate-400 dark:text-zinc-500">
