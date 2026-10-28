@@ -232,13 +232,7 @@ function PinnedFolderCard({
             onTreeClick();
           }}
           title={hasTree ? "Ver el árbol de materias" : "Crear el árbol de materias con IA"}
-          className={`shrink-0 h-9 px-3 flex items-center justify-center gap-1.5 rounded-full text-[11px] font-bold transition-all cursor-pointer ${
-            hasTree
-              ? "bg-primary/10 text-primary hover:bg-primary hover:text-white dark:hover:text-black"
-              : darkMode
-                ? "bg-zinc-800 text-zinc-300 hover:bg-primary hover:text-white"
-                : "bg-zinc-100 text-zinc-600 hover:bg-primary hover:text-white"
-          }`}
+          className="shrink-0 h-9 px-3 flex items-center justify-center gap-1.5 rounded-full text-[11px] font-bold transition-all cursor-pointer bg-primary text-white dark:text-black hover:brightness-110 active:brightness-95"
         >
           {hasTree ? <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> : <Network className="w-3.5 h-3.5 shrink-0" />}
           <span className="hidden sm:inline truncate">{hasTree ? "Ver Árbol" : "Crear Árbol"}</span>

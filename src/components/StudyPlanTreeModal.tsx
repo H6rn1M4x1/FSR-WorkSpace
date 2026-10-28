@@ -245,7 +245,8 @@ export function StudyPlanTreeModal({
       </motion.div>
       {examModalOpen && (
         <ExamModal
-          open={examModalOpen}
+          key="create-exam"
+          open
           onClose={() => setExamModalOpen(false)}
           darkMode={darkMode}
           userId={userId}

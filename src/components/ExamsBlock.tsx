@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { AnimatePresence } from "motion/react";
 import { GraduationCap, Clock, RotateCcw, Trash2, Combine, Check } from "lucide-react";
 import { Exam, EXAM_INSTANCIAS, ExamInstancia } from "../types";
 import { getAccessTokenSync } from "../lib/supabase";
@@ -161,11 +162,7 @@ export function ExamsBlock({
               setCombineSelected(new Set());
               setCombineError(null);
             }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all cursor-pointer ${
-              combineMode
-                ? "bg-primary text-white dark:text-black"
-                : "bg-primary/10 text-primary hover:bg-primary hover:text-white dark:hover:text-black"
-            }`}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all cursor-pointer bg-primary text-white dark:text-black hover:brightness-110 active:brightness-95`}
           >
             <Combine className="w-3.5 h-3.5" />
             {combineMode ? "Cancelar" : "Combinar"}
@@ -286,26 +283,29 @@ export function ExamsBlock({
         })}
       </div>
 
-      {openExam && (
-        <ExamModal
-          open={!!openExam}
-          onClose={() => setOpenExam(null)}
-          darkMode={darkMode}
-          userId={userId}
-          accessToken={accessToken}
-          folderId={openExam.folderId}
-          folderName={openExam.folderName}
-          quickPickFiles={[]}
-          setExams={setExams}
-          existingExam={openExam}
-          onOpenInFacultad={onOpenInFacultad}
-          onDeleteExam={() => {
-            const target = openExam;
-            setOpenExam(null);
-            setConfirmTarget({ exam: target, action: "delete" });
-          }}
-        />
-      )}
+      <AnimatePresence>
+        {openExam && (
+          <ExamModal
+            key={openExam.id}
+            open
+            onClose={() => setOpenExam(null)}
+            darkMode={darkMode}
+            userId={userId}
+            accessToken={accessToken}
+            folderId={openExam.folderId}
+            folderName={openExam.folderName}
+            quickPickFiles={[]}
+            setExams={setExams}
+            existingExam={openExam}
+            onOpenInFacultad={onOpenInFacultad}
+            onDeleteExam={() => {
+              const target = openExam;
+              setOpenExam(null);
+              setConfirmTarget({ exam: target, action: "delete" });
+            }}
+          />
+        )}
+      </AnimatePresence>
 
       <ConfirmationModal
         isOpen={!!confirmTarget}

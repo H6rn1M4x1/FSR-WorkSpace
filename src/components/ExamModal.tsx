@@ -104,9 +104,10 @@ export function ExamModal({
   // Si se abre desde el bloque "Exámenes Creados" para responder o revisar uno ya generado, en vez
   // de crear uno nuevo desde cero.
   existingExam?: Exam | null;
-  // Para "Ver en el material" en la corrección — si el archivo fuente de la cita no es un PDF (no
-  // se puede resaltar con el visor propio), cae a abrirlo en Facultad como el resto de la app.
-  onOpenInFacultad: (folderId: string, folderName: string, fileId?: string) => void;
+  // Para "Ver en el material" en la corrección — navega a Facultad con ese archivo abierto, y si
+  // es un PDF le pide además ubicar y resaltar sola la cita exacta que respalda la respuesta (si
+  // no es PDF, o no se encuentra la cita, Facultad simplemente lo muestra completo).
+  onOpenInFacultad: (folderId: string, folderName: string, fileId?: string, highlightQuote?: string) => void;
   // Botón de eliminar en el encabezado — además del ícono chico en la tarjeta de "Exámenes
   // Creados" (fácil de pasar por alto, en especial en un examen sin corregir todavía, que no
   // tiene más que un reloj) hay una forma clara de borrar el examen que se está mirando en este
@@ -149,8 +150,6 @@ export function ExamModal({
   });
 
   useLockBodyScroll(open);
-
-  if (!open) return null;
 
   const allSelectedFiles: SourceFile[] = [
     ...quickPickFiles.filter((f) => selectedQuickFiles.has(f.fileId)),
@@ -299,14 +298,14 @@ export function ExamModal({
   };
 
   // Navega de verdad a Facultad (cierra este modal) con ese archivo abierto en su carpeta real —
-  // mismo mecanismo que el resto de la app usa para "Abrir en Facultad", en vez de un visor propio
-  // flotando arriba del examen.
+  // mismo mecanismo que el resto de la app usa para "Abrir en Facultad" — y le pasa la cita exacta
+  // para que, si es un PDF, se ubique y resalte sola en vez de mostrar el documento entero.
   const handleViewSource = (grade: ExamQuestionGrade) => {
     const file = resolveSourceFile(grade);
     if (!file) return;
     uiSounds.click();
     onClose();
-    onOpenInFacultad(folderId, folderName, file.fileId);
+    onOpenInFacultad(folderId, folderName, file.fileId, grade.sourceQuote);
   };
 
   const inputClass = `w-full px-3.5 py-2.5 rounded-xl border text-sm font-semibold outline-none transition-colors ${
@@ -316,21 +315,21 @@ export function ExamModal({
   }`;
 
   return createPortal(
-    <AnimatePresence>
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
       <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-        onClick={onClose}
-      >
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 10 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 10 }}
-          transition={{ duration: 0.2 }}
-          onClick={(e) => e.stopPropagation()}
-          className={`w-full max-w-3xl h-[85vh] rounded-3xl border shadow-2xl flex flex-col overflow-hidden ${
+        initial={{ opacity: 0, scale: 0.92, y: 16 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.94, y: 10 }}
+        transition={{ type: "spring", stiffness: 420, damping: 32, mass: 0.7 }}
+        onClick={(e) => e.stopPropagation()}
+        className={`w-full max-w-3xl h-[85vh] rounded-3xl border shadow-2xl flex flex-col overflow-hidden ${
             darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-white border-zinc-200 text-zinc-800"
           }`}
         >
@@ -778,8 +777,7 @@ export function ExamModal({
             </div>
           )}
         </motion.div>
-      </motion.div>
-    </AnimatePresence>,
+    </motion.div>,
     document.body,
   );
 }

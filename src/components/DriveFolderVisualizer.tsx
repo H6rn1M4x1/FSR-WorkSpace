@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useContext, useMemo } from "react";
 import AnimatedFolder from "./AnimatedFolder";
+import { PdfHighlightViewer } from "./PdfHighlightViewer";
 import { createPortal } from "react-dom";
 import {
   Folder,
@@ -396,7 +397,10 @@ interface DriveFolderVisualizerProps {
   // pedido con onJumpHandled. `fileId`, si viene, además deja seleccionado ese archivo puntual en
   // cuanto termina de cargar el listado de la carpeta (el listado todavía no está disponible en el
   // mismo instante en que se resuelve la navegación de carpeta).
-  jumpToFolder?: { id: string; name: string; fileId?: string } | null;
+  // `highlightQuote`, si viene (desde "Ver en el material" de la corrección de exámenes), pide
+  // además ubicar y resaltar esa cita textual dentro del PDF en cuanto se abre, en vez de mostrar
+  // el archivo completo sin marcar nada.
+  jumpToFolder?: { id: string; name: string; fileId?: string; highlightQuote?: string } | null;
   onJumpHandled?: () => void;
 }
 
@@ -1539,6 +1543,14 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
   // a la que se acaba de saltar (ver `jumpToFolder.fileId` y el efecto de más abajo que lo
   // consume cuando `files` se actualiza).
   const pendingFileSelectIdRef = useRef<string | null>(null);
+  // Cita textual pendiente de ubicar y resaltar en ese mismo archivo (ver `jumpToFolder.highlightQuote`)
+  // — se consume junto con `pendingFileSelectIdRef`, nunca sola.
+  const pendingHighlightQuoteRef = useRef<string | null>(null);
+  // Archivo + cita que el visor de PDF propio (en vez del iframe de Drive) tiene que ubicar y
+  // resaltar solo al mostrarse — "Ver en el material" de la corrección de exámenes. Se compara por
+  // `fileId` contra `selectedFile` así que deja de aplicar en cuanto el usuario elige otro archivo.
+  const [highlightQuoteTarget, setHighlightQuoteTarget] = useState<{ fileId: string; quote: string } | null>(null);
+  const [locateStatus, setLocateStatus] = useState<"searching" | "found" | "not-found" | null>(null);
 
   // "Material de Estudio" (o el Árbol de Materias) manda a abrir acá una carpeta ya fijada (las
   // carpetas ahí son solo visuales). Espera a que facultadFolderId ya esté resuelto para no pisar
@@ -1547,7 +1559,10 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
   // intermedias.
   useEffect(() => {
     if (!jumpToFolder || !accessToken || !facultadFolderId) return;
-    if (jumpToFolder.fileId) pendingFileSelectIdRef.current = jumpToFolder.fileId;
+    if (jumpToFolder.fileId) {
+      pendingFileSelectIdRef.current = jumpToFolder.fileId;
+      pendingHighlightQuoteRef.current = jumpToFolder.highlightQuote || null;
+    }
     if (currentFolderId === jumpToFolder.id) {
       // Ya está en esa carpeta — si el listado de archivos ya estaba cargado de antes, el efecto
       // de selección de archivo no se va a volver a disparar solo (no cambia `files`), así que acá
@@ -1556,7 +1571,15 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
         const match = files.find((f) => f.id === pendingFileSelectIdRef.current);
         if (match) {
           setSelectedFile(match);
+          if (pendingHighlightQuoteRef.current) {
+            setHighlightQuoteTarget({ fileId: match.id, quote: pendingHighlightQuoteRef.current });
+            setLocateStatus("searching");
+          } else {
+            setHighlightQuoteTarget(null);
+            setLocateStatus(null);
+          }
           pendingFileSelectIdRef.current = null;
+          pendingHighlightQuoteRef.current = null;
         }
       }
       onJumpHandled?.();
@@ -1582,7 +1605,15 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
     const match = files.find((f) => f.id === pendingFileSelectIdRef.current);
     if (match) {
       setSelectedFile(match);
+      if (pendingHighlightQuoteRef.current) {
+        setHighlightQuoteTarget({ fileId: match.id, quote: pendingHighlightQuoteRef.current });
+        setLocateStatus("searching");
+      } else {
+        setHighlightQuoteTarget(null);
+        setLocateStatus(null);
+      }
       pendingFileSelectIdRef.current = null;
+      pendingHighlightQuoteRef.current = null;
     }
   }, [files]);
 
@@ -3437,6 +3468,46 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
                     </div>
                   </>
                 )}
+              </div>
+            ) : selectedFile.mimeType === "application/pdf" &&
+              viewerMode === "preview" &&
+              highlightQuoteTarget?.fileId === selectedFile.id ? (
+              <div className="flex-1 flex flex-col min-h-0">
+                <div
+                  className={`shrink-0 flex items-center gap-1.5 px-3.5 py-2 text-[10px] font-bold ${
+                    locateStatus === "searching"
+                      ? "bg-primary/10 text-primary"
+                      : locateStatus === "found"
+                        ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                        : "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                  }`}
+                >
+                  {locateStatus === "searching" && <Loader2 className="w-3 h-3 animate-spin shrink-0" />}
+                  <span className="truncate">
+                    {locateStatus === "found"
+                      ? "Encontramos la respuesta — resaltada en el documento."
+                      : locateStatus === "not-found"
+                        ? "No encontramos el texto exacto, mostrando el documento completo."
+                        : "Buscando la respuesta exacta en el documento…"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setHighlightQuoteTarget(null)}
+                    className="ml-auto underline cursor-pointer shrink-0"
+                  >
+                    Ver sin resaltar
+                  </button>
+                </div>
+                <div className="flex-1 min-h-0">
+                  <PdfHighlightViewer
+                    fileId={selectedFile.id}
+                    accessToken={accessToken}
+                    darkMode={darkMode}
+                    mode="view"
+                    locateQuote={highlightQuoteTarget.quote}
+                    onLocateStatusChange={setLocateStatus}
+                  />
+                </div>
               </div>
             ) : (
               <iframe
