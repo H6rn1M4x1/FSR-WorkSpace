@@ -4748,8 +4748,9 @@ export default function HealthView({
                                 <motion.div
                                   key={m.id}
                                   initial={{ opacity: 0, y: 14 }}
-                                  animate={{ opacity: 1, y: 0 }}
-                                  transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.4), ease: [0.22, 1, 0.36, 1] }}
+                                  whileInView={{ opacity: 1, y: 0 }}
+                                  viewport={{ once: true, margin: "0px 0px -60px 0px" }}
+                                  transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.15), ease: [0.22, 1, 0.36, 1] }}
                                   onClick={() => handleEditMedida(m)}
                                   className="rounded-xl border p-3.5 cursor-pointer active:scale-[0.98] transition-transform bg-white dark:bg-black/85 border-slate-100 dark:border-zinc-800/80"
                                 >
@@ -5931,8 +5932,9 @@ export default function HealthView({
                         <motion.div
                           key={doc.id}
                           initial={{ opacity: 0, y: 14 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.4), ease: [0.22, 1, 0.36, 1] }}
+                          whileInView={{ opacity: 1, y: 0 }}
+                          viewport={{ once: true, margin: "0px 0px -60px 0px" }}
+                          transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.15), ease: [0.22, 1, 0.36, 1] }}
                           onClick={() => handleOpenEditDoctorModal(doc)}
                           className="rounded-2xl border p-4 cursor-pointer active:scale-[0.98] transition-transform bg-white dark:bg-black/85 border-slate-100 dark:border-zinc-800/80"
                         >
@@ -6275,8 +6277,9 @@ export default function HealthView({
                         <motion.div
                           key={med.id}
                           initial={{ opacity: 0, y: 14 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.4), ease: [0.22, 1, 0.36, 1] }}
+                          whileInView={{ opacity: 1, y: 0 }}
+                          viewport={{ once: true, margin: "0px 0px -60px 0px" }}
+                          transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.15), ease: [0.22, 1, 0.36, 1] }}
                           onClick={() => openEditModal(med)}
                           className="rounded-2xl border p-4 cursor-pointer active:scale-[0.98] transition-transform bg-white dark:bg-black/85 border-slate-100 dark:border-zinc-800/80"
                         >
@@ -6586,8 +6589,9 @@ export default function HealthView({
                           <motion.div
                             key={disp.id}
                             initial={{ opacity: 0, y: 14 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.4), ease: [0.22, 1, 0.36, 1] }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true, margin: "0px 0px -60px 0px" }}
+                            transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.15), ease: [0.22, 1, 0.36, 1] }}
                             onClick={() => handleOpenEditDisp(disp)}
                             className="rounded-xl border p-3.5 cursor-pointer active:scale-[0.98] transition-transform bg-white dark:bg-black/85 border-slate-100 dark:border-zinc-800/80"
                           >
@@ -6867,8 +6871,9 @@ export default function HealthView({
                           <motion.div
                             key={log.id}
                             initial={{ opacity: 0, y: 14 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.4), ease: [0.22, 1, 0.36, 1] }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true, margin: "0px 0px -60px 0px" }}
+                            transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.15), ease: [0.22, 1, 0.36, 1] }}
                             onClick={() => handleOpenEditBpTableModal(log)}
                             className="rounded-xl border p-3.5 cursor-pointer active:scale-[0.98] transition-transform bg-white dark:bg-black/85 border-slate-100 dark:border-zinc-800/80"
                           >
@@ -7245,8 +7250,9 @@ export default function HealthView({
                           <motion.div
                             key={record.id}
                             initial={{ opacity: 0, y: 14 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.4), ease: [0.22, 1, 0.36, 1] }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true, margin: "0px 0px -60px 0px" }}
+                            transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.15), ease: [0.22, 1, 0.36, 1] }}
                             onClick={() => handleOpenEditEstudio(record)}
                             className="rounded-xl border p-3.5 cursor-pointer active:scale-[0.98] transition-transform bg-white dark:bg-black/85 border-slate-100 dark:border-zinc-800/80"
                           >
