@@ -23,6 +23,7 @@ import {
   generateExamQuestions,
   gradeExam,
   resolveFileMeta,
+  resolveFileParentFolder,
   prepareFileParts,
   MAX_EXAM_SOURCE_FILE_BYTES,
   MAX_EXAM_SOURCE_TOTAL_BYTES,
@@ -120,6 +121,9 @@ export function ExamModal({
   const [retryMode, setRetryMode] = useState<Mode>("creating");
   const [error, setError] = useState<string | null>(null);
   const [exam, setExam] = useState<Exam | null>(existingExam || null);
+  // questionId de "Ver en el material" mientras resuelve la carpeta real del archivo citado (ver
+  // handleViewSource) — para mostrar un spinner corto en ESE botón en vez de que parezca trabado.
+  const [resolvingSourceFor, setResolvingSourceFor] = useState<string | null>(null);
 
   const [examName, setExamName] = useState("");
   const [examInstancia, setExamInstancia] = useState<ExamInstancia | "">(existingExam?.instancia || "");
@@ -297,15 +301,21 @@ export function ExamModal({
     return exam.sourceFiles[idx] || null;
   };
 
-  // Navega de verdad a Facultad (cierra este modal) con ese archivo abierto en su carpeta real —
-  // mismo mecanismo que el resto de la app usa para "Abrir en Facultad" — y le pasa la cita exacta
-  // para que, si es un PDF, se ubique y resalte sola en vez de mostrar el documento entero.
-  const handleViewSource = (grade: ExamQuestionGrade) => {
+  // Navega de verdad a Facultad (cierra este modal) con ese archivo YA ABIERTO (no solo la carpeta
+  // del examen) — la carpeta real del archivo puede no ser la carpeta desde la que se creó el
+  // examen (p.ej. si se agregó con "Buscar en Facultad" desde otra subcarpeta, o el examen es de
+  // una carpeta raíz con el archivo varios niveles más abajo), así que primero se resuelve la
+  // carpeta que de verdad lo contiene antes de navegar — si no se puede resolver, cae a la carpeta
+  // del examen como antes (mejor eso que no navegar a nada).
+  const handleViewSource = async (grade: ExamQuestionGrade) => {
     const file = resolveSourceFile(grade);
     if (!file) return;
     uiSounds.click();
+    setResolvingSourceFor(grade.questionId);
+    const realParent = accessToken ? await resolveFileParentFolder(file.fileId, accessToken).catch(() => null) : null;
+    setResolvingSourceFor(null);
     onClose();
-    onOpenInFacultad(folderId, folderName, file.fileId, grade.sourceQuote);
+    onOpenInFacultad(realParent?.folderId || folderId, realParent?.folderName || folderName, file.fileId, grade.sourceQuote);
   };
 
   const inputClass = `w-full px-3.5 py-2.5 rounded-xl border text-sm font-semibold outline-none transition-colors ${
@@ -700,11 +710,16 @@ export function ExamModal({
                       {q.type === "essay" && grade && resolveSourceFile(grade) && (
                         <button
                           type="button"
+                          disabled={resolvingSourceFor === grade.questionId}
                           onClick={() => handleViewSource(grade)}
-                          className="mt-2 flex items-center gap-1.5 text-[10px] font-bold text-primary hover:underline cursor-pointer"
+                          className="mt-2 flex items-center gap-1.5 text-[10px] font-bold text-primary hover:underline cursor-pointer disabled:opacity-60 disabled:no-underline disabled:cursor-wait"
                         >
-                          <BookOpenCheck className="w-3 h-3" />
-                          Ver en el material
+                          {resolvingSourceFor === grade.questionId ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <BookOpenCheck className="w-3 h-3" />
+                          )}
+                          {resolvingSourceFor === grade.questionId ? "Buscando el archivo…" : "Ver en el material"}
                         </button>
                       )}
                     </div>

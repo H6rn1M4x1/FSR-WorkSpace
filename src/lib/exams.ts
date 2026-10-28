@@ -78,6 +78,31 @@ export async function resolveFileMeta(
   };
 }
 
+// Carpeta real donde vive un archivo puntual de Drive — "Ver en el material" antes navegaba a la
+// carpeta DESDE LA QUE SE CREÓ EL EXAMEN, no a la carpeta real del archivo citado (si se había
+// agregado con "Buscar en Facultad" desde una subcarpeta distinta, o el examen es de una carpeta
+// raíz con el archivo real varios niveles más abajo, nunca lo encontraba ahí y solo se veía la
+// carpeta sin nada seleccionado). Se resuelve antes de navegar para abrir siempre la carpeta que
+// de verdad lo contiene.
+export async function resolveFileParentFolder(
+  fileId: string,
+  accessToken: string,
+): Promise<{ folderId: string; folderName: string } | null> {
+  const fileRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=parents`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!fileRes.ok) return null;
+  const fileData = await fileRes.json();
+  const parentId: string | undefined = (fileData.parents || [])[0];
+  if (!parentId) return null;
+  const folderRes = await fetch(`https://www.googleapis.com/drive/v3/files/${parentId}?fields=name`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!folderRes.ok) return null;
+  const folderData = await folderRes.json();
+  return { folderId: parentId, folderName: folderData.name || "" };
+}
+
 // Descarga un archivo de Drive y lo deja listo para mandar a Gemini — si es un Word/Excel/
 // PowerPoint, lo convierte a texto plano del lado del cliente primero (Gemini no sabe leer esos
 // formatos como `inlineData`, ver `officeTextExtract.ts`); cualquier otro formato (PDF, imagen,
