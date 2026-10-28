@@ -1034,6 +1034,27 @@ html:not(.dark) .location-picker-map-tiles .leaflet-tile-pane {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
 }
 
+/* Atribución de OpenStreetMap: Leaflet exige mostrarla para poder usar sus baldosas gratis, pero
+   acá se la achica y se le baja el contraste para que no compita visualmente con el resto de los
+   controles flotantes del mapa (antes chocaba con el botón "Mi GPS"). */
+.location-picker-map-tiles .leaflet-control-attribution {
+  background: rgba(255, 255, 255, 0.55) !important;
+  color: rgba(0, 0, 0, 0.45) !important;
+  font-size: 8px !important;
+  line-height: 1.3 !important;
+  padding: 1px 4px !important;
+  border-radius: 6px !important;
+}
+
+.dark .location-picker-map-tiles .leaflet-control-attribution {
+  background: rgba(0, 0, 0, 0.45) !important;
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+
+.location-picker-map-tiles .leaflet-control-attribution a {
+  color: inherit !important;
+}
+
 /* Leaflet Zoom Controls */
 .dark .leaflet-control-zoom a {
   background-color: #18181b !important;
