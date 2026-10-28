@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import L from "leaflet";
-import { MapPin, Navigation, ExternalLink, Locate, RefreshCw } from "lucide-react";
+import { Navigation, Locate, RefreshCw } from "lucide-react";
 
 interface LocationPickerMapProps {
   lat?: number;
@@ -284,52 +284,11 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
   };
 
   return (
-    <div className="w-full rounded-2xl overflow-hidden border border-primary/30 dark:border-primary/20 bg-slate-50 dark:bg-zinc-900/80 shadow-sm transition-all mt-2 ring-1 ring-primary/10">
-      {/* Map Header & Toolbar */}
-      <div className="px-3 py-2 bg-primary/10 dark:bg-primary/15 border-b border-primary/20 flex flex-wrap items-center justify-between gap-2 text-xs">
-        <div className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-zinc-200">
-          <MapPin className="w-3.5 h-3.5 text-primary fill-primary/20" />
-          <span className="font-bold text-primary dark:text-primary">OpenStreetMap</span>
-          {loading && (
-            <span className="flex items-center gap-1 text-[10px] text-primary font-normal animate-pulse">
-              <RefreshCw className="w-3 h-3 animate-spin" />
-              Obteniendo dirección...
-            </span>
-          )}
-        </div>
-
-        {/* Map Controls */}
-        <div className="flex items-center gap-1.5">
-          {!readOnly && (
-            <button
-              type="button"
-              onClick={handleGpsLocation}
-              disabled={locatingGps}
-              title="Mi Ubicación GPS Actual"
-              className="flex items-center gap-1 px-2.5 py-1 bg-white dark:bg-zinc-900 border border-primary/30 text-primary hover:bg-primary hover:text-white rounded-lg text-[10px] font-bold shadow-xs transition-all cursor-pointer disabled:opacity-50"
-            >
-              <Locate className={`w-3.5 h-3.5 ${locatingGps ? "animate-spin text-primary" : "text-primary"}`} />
-              <span>Mi GPS</span>
-            </button>
-          )}
-
-          {lat && lon && (
-            <a
-              href={`https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=16/${lat}/${lon}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              title="Abrir en OpenStreetMap Oficial"
-              className="flex items-center gap-1 px-2.5 py-1 bg-primary text-white dark:text-slate-950 hover:bg-primary-hover rounded-lg text-[10px] font-bold shadow-xs transition-all"
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-              <span>Abrir OpenStreetMap</span>
-            </a>
-          )}
-        </div>
-      </div>
-
-      {/* Map Canvas / View */}
-      <div className="relative w-full">
+    <div className="w-full rounded-2xl border border-primary/30 dark:border-primary/20 bg-slate-50 dark:bg-zinc-900/80 shadow-sm transition-all mt-2 ring-1 ring-primary/10 p-2">
+      {/* Map Canvas / View — con este padding alrededor, el mapa queda "enmarcado" dentro de la
+          cápsula en vez de pegado a su borde redondeado (antes los controles de zoom, pegados a
+          la esquina, se veían cortados por el redondeo exterior). */}
+      <div className="relative w-full rounded-xl overflow-hidden">
         {embedMode ? (
           <div className={`w-full ${heightClass} bg-slate-100 dark:bg-zinc-900`}>
             <iframe
@@ -344,6 +303,29 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
           </div>
         ) : (
           <div ref={mapContainerRef} className={`location-picker-map-tiles w-full ${heightClass} z-10 ${readOnly ? "" : "cursor-crosshair"}`} />
+        )}
+
+        {/* "Mi GPS" flota sobre el mapa (antes vivía en una barra de herramientas arriba, ahora
+            removida junto con la etiqueta "OpenStreetMap" y el botón "Abrir OpenStreetMap"). */}
+        {!embedMode && !readOnly && (
+          <button
+            type="button"
+            onClick={handleGpsLocation}
+            disabled={locatingGps}
+            title="Mi Ubicación GPS Actual"
+            className="absolute bottom-2 right-2 z-20 flex items-center gap-1.5 px-3 py-2 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-primary/30 dark:border-primary/20 text-primary hover:bg-primary hover:text-white rounded-full text-[11px] font-bold shadow-md transition-all cursor-pointer disabled:opacity-50 ring-1 ring-primary/10"
+          >
+            <Locate className={`w-3.5 h-3.5 ${locatingGps ? "animate-spin" : ""}`} />
+            <span>Mi GPS</span>
+          </button>
+        )}
+
+        {/* Indicador de carga (geocodificación inversa al mover el marcador) */}
+        {!embedMode && loading && (
+          <div className="absolute top-2 left-2 z-20 flex items-center gap-1.5 px-2.5 py-1.5 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-primary/30 dark:border-primary/20 rounded-full text-[10px] text-primary font-bold shadow-md animate-pulse">
+            <RefreshCw className="w-3 h-3 animate-spin" />
+            <span>Obteniendo dirección...</span>
+          </div>
         )}
 
         {/* Floating Instruction Banner */}

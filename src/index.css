@@ -1013,6 +1013,27 @@ html:not(.dark) .location-picker-map-tiles .leaflet-tile-pane {
   filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(88%) saturate(0.6) brightness(1.05);
 }
 
+/* Controles de zoom de LocationPickerMap.tsx: círculos sueltos con un poco de aire entre ellos,
+   en vez de la barra rectangular pegada que trae Leaflet por default (que se veía "cortada" al
+   apoyarse justo en la esquina redondeada del mapa). Scopeado a esta clase para no afectar algún
+   otro mapa Leaflet de la app que no pase por este componente. */
+.location-picker-map-tiles .leaflet-control-zoom {
+  border: none !important;
+  background: transparent !important;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.location-picker-map-tiles .leaflet-control-zoom a {
+  border-radius: 50% !important;
+  width: 30px !important;
+  height: 30px !important;
+  line-height: 30px !important;
+  border: none !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+
 /* Leaflet Zoom Controls */
 .dark .leaflet-control-zoom a {
   background-color: #18181b !important;
