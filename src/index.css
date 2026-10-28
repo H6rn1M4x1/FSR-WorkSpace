@@ -998,6 +998,21 @@ html:not(.dark) .leaflet-tile-pane {
   transition: filter 0.2s ease-in-out;
 }
 
+/* LocationPickerMap.tsx (buscador/mapa compartido en Turnos, Salud, Inicio, Ajustes): además del
+   invertido de tema de arriba, esta instancia puntual recibe un filtro extra para verse más
+   clara/calma que las baldosas estándar de OpenStreetMap — no hay ningún proveedor de baldosas
+   realmente gratis y sin API key con ese estilo (CARTO, que se había probado, ahora exige key;
+   las alternativas sin key son vectoriales, no raster), así que el efecto se logra con un filtro
+   CSS en vez de cambiar de proveedor. Más específico que las reglas de arriba, así que gana en la
+   cascada sin pisar el resto de los mapas Leaflet de la app. */
+html:not(.dark) .location-picker-map-tiles .leaflet-tile-pane {
+  filter: saturate(0.45) brightness(1.12) contrast(0.92) !important;
+}
+
+.dark .location-picker-map-tiles .leaflet-tile-pane {
+  filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(88%) saturate(0.6) brightness(1.05);
+}
+
 /* Leaflet Zoom Controls */
 .dark .leaflet-control-zoom a {
   background-color: #18181b !important;

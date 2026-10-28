@@ -68,11 +68,16 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
   const currentLat = lat && !isNaN(lat) ? lat : defaultLat;
   const currentLon = lon && !isNaN(lon) ? lon : defaultLon;
 
-  // OSM-based Tile URLs based on selected mapType — "roadmap" usa el estilo claro de CARTO
-  // (Voyager, gratuito y sin API key) en vez de las baldosas estándar de OSM, que se ven más
-  // recargadas: fondo crema, calles finas y colores suaves, en línea con el estilo de mapa que
-  // pidió el usuario (más parecido a Apple Maps / mapas de producto modernos que a un mapa de
-  // navegación clásico).
+  // OSM-based Tile URLs based on selected mapType. "roadmap" había pasado a usar las baldosas de
+  // CARTO Voyager para un estilo más claro, pero CARTO ahora exige una API key incluso para ese
+  // endpoint (antes era gratis y sin key) — sin key, las baldosas llegan con un watermark enorme
+  // de "API KEY REQUIRED" tapando el mapa entero. Investigado a fondo (ver github.com/CartoDB/
+  // basemap-styles y docs de Stadia Maps/OpenFreeMap): no hay ningún proveedor de baldosas
+  // RASTER realmente gratuito y sin key con estilo claro — las únicas alternativas gratis y sin
+  // key sin API key son vectoriales (OpenFreeMap), que requerirían sumar MapLibre GL como
+  // dependencia nueva. Por ahora se vuelve a las baldosas estándar de OSM (gratis, sin key, ya
+  // probadas en producción) y el aclarado visual se logra con un filtro CSS en vez de cambiar de
+  // proveedor — ver la clase "location-picker-map-tiles" en index.css.
   const getOSMTileUrl = (type: "roadmap" | "satellite" | "terrain") => {
     switch (type) {
       case "satellite":
@@ -81,7 +86,7 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
         return "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png";
       case "roadmap":
       default:
-        return "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
+        return "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
     }
   };
 
@@ -93,7 +98,7 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
         return "Map data: &copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors, <a href=\"http://viewfinderpanoramas.org\">SRTM</a> | Map style: &copy; <a href=\"https://opentopomap.org\">OpenTopoMap</a> (<a href=\"https://creativecommons.org/licenses/by-sa/3.0/\">CC-BY-SA</a>)";
       case "roadmap":
       default:
-        return '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
+        return '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
     }
   };
 
@@ -338,7 +343,7 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
             />
           </div>
         ) : (
-          <div ref={mapContainerRef} className={`w-full ${heightClass} z-10 ${readOnly ? "" : "cursor-crosshair"}`} />
+          <div ref={mapContainerRef} className={`location-picker-map-tiles w-full ${heightClass} z-10 ${readOnly ? "" : "cursor-crosshair"}`} />
         )}
 
         {/* Floating Instruction Banner */}
