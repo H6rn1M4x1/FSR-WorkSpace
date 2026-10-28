@@ -28,17 +28,16 @@ const MIN_BLOCK_MIN = 30;
 const DEFAULT_CLICK_DURATION_MIN = 60;
 const CLICK_THRESHOLD_PX = 6;
 
+// Misma paleta de colores de acento que usan los gráficos de la app (ver chartColors en
+// FinanceView.tsx), para que los bloques pintados se sientan parte del mismo sistema visual.
 const MATERIA_PALETTE = [
-  "#3b82f6",
-  "#8b5cf6",
-  "#10b981",
-  "#f59e0b",
-  "#ef4444",
-  "#06b6d4",
-  "#ec4899",
-  "#84cc16",
-  "#f97316",
-  "#6366f1",
+  "#3B82F6", // blue
+  "#10B981", // emerald
+  "#EF4444", // red
+  "#F59E0B", // amber
+  "#8B5CF6", // purple
+  "#EC4899", // pink
+  "#14B8A6", // teal
 ];
 
 function colorForMateria(materia: string): string {
@@ -76,7 +75,13 @@ export interface WeeklyScheduleGridBatch {
 interface WeeklyScheduleGridProps {
   horarios: HorarioItem[];
   darkMode: boolean;
-  onPaintCreate: (dia: string, horaInicio: string, horaFin: string) => void;
+  /** Materias disponibles para el pincel, ya ordenadas — se eligen con un clic, nunca abriendo un menú. */
+  materiaOptions: string[];
+  /** Materia actualmente activa en el pincel; "" si no hay ninguna (no se puede pintar). */
+  selectedMateria: string;
+  onSelectMateria: (materia: string) => void;
+  /** Pintar crea el horario directo con la materia activa — no pasa por ningún modal. */
+  onDirectCreate: (dia: string, horaInicio: string, horaFin: string, materia: string) => void;
   onEditBlock: (horario: HorarioItem) => void;
   onBatchUpdate: (batch: WeeklyScheduleGridBatch) => void;
   onClearWeek: () => void;
@@ -87,7 +92,10 @@ interface WeeklyScheduleGridProps {
 export function WeeklyScheduleGrid({
   horarios,
   darkMode,
-  onPaintCreate,
+  materiaOptions,
+  selectedMateria,
+  onSelectMateria,
+  onDirectCreate,
   onEditBlock,
   onBatchUpdate,
   onClearWeek,
@@ -114,8 +122,6 @@ export function WeeklyScheduleGrid({
     0,
   );
 
-  const materiasDistintas = Array.from(new Set(horarios.map((h) => h.materia).filter(Boolean))).sort();
-
   const minutesFromClientY = useCallback(
     (clientY: number, rectTop: number) => {
       const offsetY = clientY - rectTop;
@@ -128,6 +134,7 @@ export function WeeklyScheduleGrid({
 
   const commitCreate = useCallback(
     (dia: string, anchorMin: number, currentMin: number, startClientY: number, lastClientY: number) => {
+      if (!selectedMateria) return;
       const movedPx = Math.abs(lastClientY - startClientY);
       let lo = Math.min(anchorMin, currentMin);
       let hi = Math.max(anchorMin, currentMin);
@@ -135,9 +142,9 @@ export function WeeklyScheduleGrid({
         hi = Math.min(gridEndMin, lo + DEFAULT_CLICK_DURATION_MIN);
       }
       if (hi - lo < MIN_BLOCK_MIN) return;
-      onPaintCreate(dia, minToTime(lo), minToTime(hi));
+      onDirectCreate(dia, minToTime(lo), minToTime(hi), selectedMateria);
     },
-    [gridEndMin, onPaintCreate],
+    [gridEndMin, onDirectCreate, selectedMateria],
   );
 
   const commitErase = useCallback(
@@ -244,6 +251,7 @@ export function WeeklyScheduleGrid({
   }, [drag]);
 
   const startColumnDrag = (e: React.PointerEvent, dia: string) => {
+    if (mode === "pintar" && !selectedMateria) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const startMin = minutesFromClientY(e.clientY, rect.top);
     const next: DragState = {
@@ -283,27 +291,59 @@ export function WeeklyScheduleGrid({
         darkMode ? "bg-black/85 backdrop-blur-md border-zinc-800 text-white shadow-lg" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
       }`}
     >
-      {/* Header: título + contador animado + modo pintar/borrar */}
-      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 mb-5">
-        <div className="flex items-center gap-4">
-          <div>
-            <h3 className="font-extrabold text-sm flex items-center gap-2">
-              <Paintbrush className="w-4 h-4 text-primary" />
-              <span>Horario Semanal a Pinceladas</span>
-            </h3>
-            <p className="text-xs text-zinc-500 mt-0.5">
-              Arrastrá sobre la rejilla para pintar tus horarios de clase.
-            </p>
+      {/* Header: pincel de materia + título + contador animado + modo pintar/borrar */}
+      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 mb-2">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 lg:gap-4 w-full lg:w-auto min-w-0">
+          {/* Selector de materia (pincel) — se elige con un clic, nunca abre un menú */}
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-1 sm:pb-0 shrink-0 max-w-full sm:max-w-[240px]">
+            {materiaOptions.length === 0 ? (
+              <span className="text-[11px] text-zinc-500 italic whitespace-nowrap">Sin materias para cursar</span>
+            ) : (
+              materiaOptions.map((m) => {
+                const color = colorForMateria(m);
+                const isActive = selectedMateria === m;
+                return (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => onSelectMateria(m)}
+                    title={m}
+                    className={`shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[11px] font-bold border-2 transition-all cursor-pointer whitespace-nowrap ${
+                      isActive ? "text-white shadow-sm" : "bg-transparent hover:bg-slate-100 dark:hover:bg-zinc-800/60"
+                    }`}
+                    style={isActive ? { backgroundColor: color, borderColor: color } : { borderColor: `${color}55`, color }}
+                  >
+                    <span
+                      className="w-1.5 h-1.5 rounded-full shrink-0"
+                      style={{ backgroundColor: isActive ? "#ffffff" : color }}
+                    />
+                    <span className="truncate max-w-[88px]">{m}</span>
+                  </button>
+                );
+              })
+            )}
           </div>
-          <div className="pl-4 border-l border-slate-200 dark:border-zinc-800 shrink-0">
-            <div className="flex items-baseline gap-1 font-extrabold text-2xl text-primary leading-none">
-              <AnimatedNumber
-                value={totalHoras}
-                format={(n) => n.toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 1 })}
-              />
-              <span className="text-xs font-bold text-zinc-400">h</span>
+
+          <div className="flex items-center gap-4 min-w-0">
+            <div className="min-w-0">
+              <h3 className="font-extrabold text-sm flex items-center gap-2">
+                <Paintbrush className="w-4 h-4 text-primary" />
+                <span>Horario Semanal a Pinceladas</span>
+              </h3>
+              <p className="text-xs text-zinc-500 mt-0.5">
+                Elegí una materia y arrastrá sobre la rejilla para pintarla.
+              </p>
             </div>
-            <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">semanales</span>
+            <div className="pl-4 border-l border-slate-200 dark:border-zinc-800 shrink-0">
+              <div className="flex items-baseline gap-1 font-extrabold text-2xl text-primary leading-none">
+                <AnimatedNumber
+                  value={totalHoras}
+                  format={(n) => n.toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 1 })}
+                />
+                <span className="text-xs font-bold text-zinc-400">h</span>
+              </div>
+              <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">semanales</span>
+            </div>
           </div>
         </div>
 
@@ -346,24 +386,10 @@ export function WeeklyScheduleGrid({
         </div>
       </div>
 
-      {/* Leyenda de materias */}
-      {materiasDistintas.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5 mb-4">
-          {materiasDistintas.map((m) => (
-            <span
-              key={m}
-              className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-bold border"
-              style={{
-                backgroundColor: `${colorForMateria(m)}1a`,
-                borderColor: `${colorForMateria(m)}55`,
-                color: colorForMateria(m),
-              }}
-            >
-              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: colorForMateria(m) }} />
-              <span className="truncate max-w-[140px]">{m}</span>
-            </span>
-          ))}
-        </div>
+      {mode === "pintar" && !selectedMateria && materiaOptions.length > 0 && (
+        <p className="text-[11px] text-amber-500 font-semibold mb-3">
+          Elegí una materia arriba para empezar a pintar.
+        </p>
       )}
 
       {/* Rejilla */}
@@ -411,7 +437,7 @@ export function WeeklyScheduleGrid({
                   data-day-column
                   onPointerDown={(e) => startColumnDrag(e, dia)}
                   className={`relative border-l border-slate-200/70 dark:border-zinc-800/70 touch-none select-none ${
-                    mode === "pintar" ? "cursor-cell" : "cursor-crosshair"
+                    mode === "pintar" ? (selectedMateria ? "cursor-cell" : "cursor-not-allowed") : "cursor-crosshair"
                   }`}
                   style={{
                     height: totalHeight,
@@ -486,8 +512,8 @@ export function WeeklyScheduleGrid({
                         ),
                         ...(drag.type === "create"
                           ? {
-                              backgroundColor: "color-mix(in srgb, var(--color-primary) 25%, transparent)",
-                              borderColor: "var(--color-primary)",
+                              backgroundColor: `${colorForMateria(selectedMateria)}40`,
+                              borderColor: colorForMateria(selectedMateria),
                               borderStyle: "dashed",
                             }
                           : {
