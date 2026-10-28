@@ -272,11 +272,14 @@ const MapComponent = ({
       const map = L.map(mapContainerRef.current, {
         center: [-31.5375, -68.5364],
         zoom: 13,
-        zoomControl: true,
+        zoomControl: false,
+        attributionControl: false,
         scrollWheelZoom: true,
       });
 
       map.scrollWheelZoom.enable();
+      L.control.zoom({ position: "topleft" }).addTo(map);
+      L.control.attribution({ position: "bottomleft", prefix: false }).addTo(map);
 
       // Standard OpenStreetMap Tile Layer
       const osmTileUrl = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
@@ -563,7 +566,7 @@ const MapComponent = ({
     <div className="relative w-full h-[380px] min-h-[380px] rounded-3xl overflow-hidden border border-slate-200/80 dark:border-zinc-800 shadow-md">
       <div
         ref={mapContainerRef}
-        className="w-full h-full min-h-[380px]"
+        className="scheduled-locations-map-tiles w-full h-full min-h-[380px]"
         style={{ zIndex: 1 }}
       />
     </div>
@@ -3249,10 +3252,6 @@ export default function AppointmentsView({
                 <h3 className="font-extrabold text-sm">
                   Mapa de Localizaciones Programadas
                 </h3>
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
-                  <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
-                  OpenStreetMap
-                </span>
                 <span className="text-xs text-zinc-500">
                   ({validLocationsCount} {validLocationsCount === 1 ? "localización guardada" : "localizaciones guardadas"})
                 </span>

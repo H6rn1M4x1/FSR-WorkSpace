@@ -1055,6 +1055,45 @@ html:not(.dark) .location-picker-map-tiles .leaflet-tile-pane {
   color: inherit !important;
 }
 
+/* MapComponent dentro de AppointmentsView.tsx ("Mapa de Localizaciones Programadas"): mismos
+   controles de zoom redondeados y atribución achicada que LocationPickerMap.tsx, para que los
+   dos mapas de la app se vean consistentes. Clase propia (no location-picker-map-tiles) porque
+   es un componente Leaflet totalmente aparte, sin el filtro de color de ese otro mapa. */
+.scheduled-locations-map-tiles .leaflet-control-zoom {
+  border: none !important;
+  background: transparent !important;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.scheduled-locations-map-tiles .leaflet-control-zoom a {
+  border-radius: 50% !important;
+  width: 30px !important;
+  height: 30px !important;
+  line-height: 30px !important;
+  border: none !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+
+.scheduled-locations-map-tiles .leaflet-control-attribution {
+  background: rgba(255, 255, 255, 0.55) !important;
+  color: rgba(0, 0, 0, 0.45) !important;
+  font-size: 8px !important;
+  line-height: 1.3 !important;
+  padding: 1px 4px !important;
+  border-radius: 6px !important;
+}
+
+.dark .scheduled-locations-map-tiles .leaflet-control-attribution {
+  background: rgba(0, 0, 0, 0.45) !important;
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+
+.scheduled-locations-map-tiles .leaflet-control-attribution a {
+  color: inherit !important;
+}
+
 /* Leaflet Zoom Controls */
 .dark .leaflet-control-zoom a {
   background-color: #18181b !important;
