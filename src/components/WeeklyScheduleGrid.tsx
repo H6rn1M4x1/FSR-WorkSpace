@@ -160,7 +160,17 @@ interface WeeklyScheduleGridProps {
     aulas: string,
     profesores: string,
   ) => void;
-  onEditBlock: (horario: HorarioItem) => void;
+  /** Confirma la edición de un bloque existente (clic en el bloque → panel precargado →
+   * "Guardar Cambios") — tampoco pasa por ningún modal. */
+  onConfirmEdit: (
+    id: string,
+    dia: string,
+    horaInicio: string,
+    horaFin: string,
+    materia: string,
+    aulas: string,
+    profesores: string,
+  ) => void;
   onBatchUpdate: (batch: WeeklyScheduleGridBatch) => void;
   onClearWeek: () => void;
   onCopyDayToOthers: (dia: string) => void;
@@ -174,7 +184,7 @@ export function WeeklyScheduleGrid({
   selectedMateria,
   onSelectMateria,
   onDirectCreate,
-  onEditBlock,
+  onConfirmEdit,
   onBatchUpdate,
   onClearWeek,
   onCopyDayToOthers,
@@ -206,6 +216,10 @@ export function WeeklyScheduleGrid({
   // que marcan panelDia/panelHoraInicio/panelHoraFin, que se van completando en vivo mientras se
   // arrastra) hasta que se confirma con el botón "Agregar Horario" del panel.
   const [hasPendingDraft, setHasPendingDraft] = useState(false);
+  // Si no es null, el borrador en curso es la EDICIÓN de este horario ya guardado (un clic sobre
+  // su bloque lo carga acá) en vez de uno nuevo — confirmar actualiza ese id en vez de crear otro,
+  // y mientras tanto el bloque original se oculta para no duplicarse con el borrador titilando.
+  const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
 
   const gridStartMin = horarios.reduce(
     (min, h) => Math.min(min, Math.floor(parseTimeMin(h.horaInicio) / 60) * 60),
@@ -400,16 +414,33 @@ export function WeeklyScheduleGrid({
   const hourMarks: number[] = [];
   for (let m = gridStartMin; m <= gridEndMin; m += 60) hourMarks.push(m);
 
-  const canManualAdd = Boolean(selectedMateria && panelHoraInicio && panelHoraFin && panelHoraFin > panelHoraInicio);
+  const canConfirmDraft = Boolean(selectedMateria && panelHoraInicio && panelHoraFin && panelHoraFin > panelHoraInicio);
 
-  const handleManualAdd = () => {
-    if (!canManualAdd) return;
-    onDirectCreate(panelDia, panelHoraInicio, panelHoraFin, selectedMateria, panelAulas, panelProfesores);
+  const handleConfirmDraft = () => {
+    if (!canConfirmDraft) return;
+    if (editingDraftId) {
+      onConfirmEdit(editingDraftId, panelDia, panelHoraInicio, panelHoraFin, selectedMateria, panelAulas, panelProfesores);
+    } else {
+      onDirectCreate(panelDia, panelHoraInicio, panelHoraFin, selectedMateria, panelAulas, panelProfesores);
+    }
     setHasPendingDraft(false);
+    setEditingDraftId(null);
   };
 
   const handleCancelDraft = () => {
     setHasPendingDraft(false);
+    setEditingDraftId(null);
+  };
+
+  const startEditingBlock = (h: HorarioItem) => {
+    setEditingDraftId(h.id);
+    setPanelDia(h.dia);
+    setPanelHoraInicio(h.horaInicio);
+    setPanelHoraFin(h.horaFin);
+    setPanelAulas(h.aulas);
+    setPanelProfesores(h.profesores);
+    onSelectMateria(h.materia);
+    setHasPendingDraft(true);
   };
 
   return (
@@ -429,7 +460,7 @@ export function WeeklyScheduleGrid({
         >
           <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-zinc-400 flex items-center gap-1.5">
             <Paintbrush className="w-3.5 h-3.5 text-primary" />
-            Pincel / Nuevo Horario
+            {editingDraftId ? "Editando Horario" : "Pincel / Nuevo Horario"}
           </h4>
 
           <div>
@@ -530,15 +561,26 @@ export function WeeklyScheduleGrid({
             />
           </div>
 
-          <button
-            type="button"
-            onClick={handleManualAdd}
-            disabled={!canManualAdd}
-            className="w-full flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-white dark:text-blue-950 text-xs font-extrabold shadow-sm transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <Check className="w-3.5 h-3.5" />
-            <span>Agregar Horario</span>
-          </button>
+          <div className="flex items-center gap-2">
+            {hasPendingDraft && (
+              <button
+                type="button"
+                onClick={handleCancelDraft}
+                className="shrink-0 px-3 py-2.5 rounded-xl text-xs font-bold text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white transition-all cursor-pointer"
+              >
+                Cancelar
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleConfirmDraft}
+              disabled={!canConfirmDraft}
+              className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-white dark:text-blue-950 text-xs font-extrabold shadow-sm transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Check className="w-3.5 h-3.5" />
+              <span>{editingDraftId ? "Guardar Cambios" : "Agregar Horario"}</span>
+            </button>
+          </div>
 
           {!selectedMateria && (
             <p className="text-[10px] text-amber-500 font-semibold">
@@ -674,7 +716,9 @@ export function WeeklyScheduleGrid({
                     } ${ROW_PX * 2 - 1}px, ${darkMode ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.035)"} ${ROW_PX * 2}px)`,
                   }}
                 >
-                  {dayHorarios.map((h) => {
+                  {dayHorarios
+                    .filter((h) => h.id !== editingDraftId)
+                    .map((h) => {
                     const isBeingResized = Boolean(drag && drag.type === "resize" && drag.id === h.id);
                     const startMin = parseTimeMin(h.horaInicio);
                     let endMin = parseTimeMin(h.horaFin);
@@ -695,7 +739,7 @@ export function WeeklyScheduleGrid({
                         onClick={(e) => {
                           if (mode !== "pintar") return;
                           e.stopPropagation();
-                          onEditBlock(h);
+                          startEditingBlock(h);
                         }}
                         className={`absolute left-0.5 right-0.5 rounded-lg overflow-hidden px-1.5 py-1 shadow-sm transition-shadow ${
                           mode === "pintar" ? "cursor-pointer hover:shadow-md" : ""
