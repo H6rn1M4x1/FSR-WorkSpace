@@ -1182,8 +1182,9 @@ export default function CotizacionesAccionesTable({
                 <motion.div
                   key={item.id || `${item.simbolo}-${idx}`}
                   initial={{ opacity: 0, y: 14 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.4), ease: [0.22, 1, 0.36, 1] }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: "0px 0px -60px 0px" }}
+                  transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.15), ease: [0.22, 1, 0.36, 1] }}
                   onClick={() => setViewingItem(item)}
                   className="rounded-2xl border p-4 bg-white dark:bg-zinc-900 border-slate-100 dark:border-zinc-800/80 active:scale-[0.98] transition-transform cursor-pointer"
                 >

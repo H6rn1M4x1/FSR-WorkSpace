@@ -3137,8 +3137,9 @@ export default function MealsView({
                 <motion.div
                   key={item.id}
                   initial={{ opacity: 0, y: 14 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.4), ease: [0.22, 1, 0.36, 1] }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: "0px 0px -60px 0px" }}
+                  transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.15), ease: [0.22, 1, 0.36, 1] }}
                   onClick={() => handleEditClick(item)}
                   className={`rounded-2xl border p-4 cursor-pointer active:scale-[0.98] transition-transform ${darkMode ? "bg-black/85 border-zinc-800/80" : "bg-white border-slate-100"}`}
                 >
@@ -3542,8 +3543,9 @@ export default function MealsView({
                   <motion.div
                     key={item.id}
                     initial={{ opacity: 0, y: 14 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.4), ease: [0.22, 1, 0.36, 1] }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: "0px 0px -60px 0px" }}
+                    transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.15), ease: [0.22, 1, 0.36, 1] }}
                     onClick={() => handleEditAlimentoClick(item)}
                     className={`rounded-2xl border p-4 cursor-pointer active:scale-[0.98] transition-transform ${darkMode ? "bg-black/85 border-zinc-800/80" : "bg-white border-slate-100"}`}
                   >
@@ -3894,8 +3896,9 @@ export default function MealsView({
                   <motion.div
                     key={item.id}
                     initial={{ opacity: 0, y: 14 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.4), ease: [0.22, 1, 0.36, 1] }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: "0px 0px -60px 0px" }}
+                    transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.15), ease: [0.22, 1, 0.36, 1] }}
                     onClick={() => handleEditPlatoClick(item)}
                     className={`rounded-2xl border p-4 cursor-pointer active:scale-[0.98] transition-transform ${darkMode ? "bg-black/85 border-zinc-800/80" : "bg-white border-slate-100"}`}
                   >
@@ -4164,8 +4167,9 @@ export default function MealsView({
                     <motion.div
                       key={item.id}
                       initial={{ opacity: 0, y: 14 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.4), ease: [0.22, 1, 0.36, 1] }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true, margin: "0px 0px -60px 0px" }}
+                      transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.15), ease: [0.22, 1, 0.36, 1] }}
                       onClick={() => handleEditOrgClick(item)}
                       className={`rounded-2xl border p-4 cursor-pointer active:scale-[0.98] transition-transform ${darkMode ? "bg-black/85 border-zinc-800/80" : "bg-white border-slate-100"}`}
                     >
@@ -4467,8 +4471,9 @@ export default function MealsView({
                     <motion.div
                       key={idx}
                       initial={{ opacity: 0, y: 14 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.4), ease: [0.22, 1, 0.36, 1] }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true, margin: "0px 0px -60px 0px" }}
+                      transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.15), ease: [0.22, 1, 0.36, 1] }}
                       onClick={toggleCompleted}
                       className={`rounded-xl border p-3.5 cursor-pointer active:scale-[0.98] transition-transform flex items-start gap-3 ${
                         isCompleted ? "opacity-60" : ""

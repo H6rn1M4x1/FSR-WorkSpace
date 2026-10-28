@@ -3050,8 +3050,9 @@ export default function AcademicView({
                   <motion.div
                     key={item.id}
                     initial={{ opacity: 0, y: 14 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.4), ease: [0.22, 1, 0.36, 1] }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: "0px 0px -60px 0px" }}
+                    transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.15), ease: [0.22, 1, 0.36, 1] }}
                     onClick={() => handleEditMateriaClick(item)}
                     className={`rounded-2xl border p-4 cursor-pointer active:scale-[0.98] transition-transform ${darkMode ? "bg-black/85 border-zinc-800/80" : "bg-white border-slate-100"}`}
                   >
@@ -3526,8 +3527,9 @@ export default function AcademicView({
                         <motion.div
                           key={item.id}
                           initial={{ opacity: 0, y: 14 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.4), ease: [0.22, 1, 0.36, 1] }}
+                          whileInView={{ opacity: 1, y: 0 }}
+                          viewport={{ once: true, margin: "0px 0px -60px 0px" }}
+                          transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.15), ease: [0.22, 1, 0.36, 1] }}
                           onClick={() => handleEditMateriaClick(item)}
                           className={`rounded-2xl border p-4 cursor-pointer active:scale-[0.98] transition-transform ${darkMode ? "bg-black/85 border-zinc-800/80" : "bg-white border-slate-100"}`}
                         >
@@ -3815,8 +3817,9 @@ export default function AcademicView({
                       <motion.div
                         key={h.id}
                         initial={{ opacity: 0, y: 14 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.4), ease: [0.22, 1, 0.36, 1] }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ once: true, margin: "0px 0px -60px 0px" }}
+                        transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.15), ease: [0.22, 1, 0.36, 1] }}
                         onClick={() => {
                           setEditingHorarioId(h.id);
                           setHDia(h.dia);
@@ -4125,8 +4128,9 @@ export default function AcademicView({
                       <motion.div
                         key={ex.id}
                         initial={{ opacity: 0, y: 14 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.4), ease: [0.22, 1, 0.36, 1] }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ once: true, margin: "0px 0px -60px 0px" }}
+                        transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.15), ease: [0.22, 1, 0.36, 1] }}
                         onClick={() => {
                           setEditingExamenId(ex.id);
                           setExMateria(ex.materia);
