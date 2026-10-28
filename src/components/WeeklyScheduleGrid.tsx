@@ -22,69 +22,41 @@ const DIAS_CORTO: Record<string, string> = {
 };
 
 const SLOT_MIN = 30;
-const ROW_PX = 22;
+// Filas más altas (antes 22px) para que el texto entre más cómodo, y el techo por defecto baja
+// de las 22:00 a las 19:00 — antes la rejilla siempre reservaba horas vacías hasta esa hora
+// aunque no hubiera nada agendado, lo que sumaba un scroll chico e incómodo dentro de la página
+// para llegar a ver el final del bloque. Si se carga (a mano, desde el panel) un horario que
+// termina después de las 19:00, la rejilla se extiende igual para mostrarlo.
+const ROW_PX = 26;
 const DEFAULT_START_MIN = 7 * 60;
-const DEFAULT_END_MIN = 22 * 60;
+const DEFAULT_END_MIN = 19 * 60;
 const MIN_BLOCK_MIN = 30;
 const DEFAULT_CLICK_DURATION_MIN = 60;
 const CLICK_THRESHOLD_PX = 6;
 
-// La paleta de materias se arma en tiempo real a partir de var(--color-primary) (el color de
-// acento que el usuario eligió en Ajustes, no un color fijo) — así cada materia tiene un tono
-// distinto pero todos quedan "en escala" del mismo acento, en vez de un arcoíris de colores sin
-// relación entre sí.
-function hexToHsl(hex: string): { h: number; s: number; l: number } {
+// Mismo esquema de color que "Distribución por Categoria" (ver buildPalette/useAccentHex en
+// FinanceCharts.tsx): un degradé que arranca en el acento puro y se va mezclando con gris a
+// medida que avanza el índice — acá reimplementado con aritmética RGB (en vez de la cadena CSS
+// color-mix() que usa ese archivo) para poder calcular además el color de texto legible de cada
+// bloque sin depender de poder "leer" un color-mix ya resuelto.
+function hexToRgb(hex: string): [number, number, number] {
   const clean = hex.replace("#", "").trim();
-  let r = 0;
-  let g = 0;
-  let b = 0;
-  if (clean.length === 3) {
-    r = parseInt(clean[0] + clean[0], 16);
-    g = parseInt(clean[1] + clean[1], 16);
-    b = parseInt(clean[2] + clean[2], 16);
-  } else if (clean.length >= 6) {
-    r = parseInt(clean.slice(0, 2), 16);
-    g = parseInt(clean.slice(2, 4), 16);
-    b = parseInt(clean.slice(4, 6), 16);
-  }
-  if ([r, g, b].some((n) => isNaN(n))) return { h: 32, s: 85, l: 48 }; // fallback naranja/acento por defecto
-  r /= 255;
-  g /= 255;
-  b /= 255;
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  const l = (max + min) / 2;
-  let h = 0;
-  let s = 0;
-  const d = max - min;
-  if (d !== 0) {
-    s = d / (1 - Math.abs(2 * l - 1));
-    if (max === r) h = ((g - b) / d) % 6;
-    else if (max === g) h = (b - r) / d + 2;
-    else h = (r - g) / d + 4;
-    h *= 60;
-    if (h < 0) h += 360;
-  }
-  return { h, s: s * 100, l: l * 100 };
+  const full = clean.length === 3 ? clean.split("").map((c) => c + c).join("") : clean;
+  const n = parseInt(full, 16);
+  if (isNaN(n)) return [224, 148, 7]; // fallback acento naranja por defecto
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
-function hslToHex(h: number, s: number, l: number): string {
-  const sN = s / 100;
-  const lN = l / 100;
-  const c = (1 - Math.abs(2 * lN - 1)) * sN;
-  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
-  const m = lN - c / 2;
-  let r = 0;
-  let g = 0;
-  let b = 0;
-  if (h < 60) { r = c; g = x; b = 0; }
-  else if (h < 120) { r = x; g = c; b = 0; }
-  else if (h < 180) { r = 0; g = c; b = x; }
-  else if (h < 240) { r = 0; g = x; b = c; }
-  else if (h < 300) { r = x; g = 0; b = c; }
-  else { r = c; g = 0; b = x; }
-  const toHex = (n: number) => Math.round(Math.max(0, Math.min(255, (n + m) * 255))).toString(16).padStart(2, "0");
+function rgbToHex(r: number, g: number, b: number): string {
+  const toHex = (n: number) => Math.round(Math.max(0, Math.min(255, n))).toString(16).padStart(2, "0");
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+function mixHex(colorHex: string, percent: number, mixWithHex: string): string {
+  const [r1, g1, b1] = hexToRgb(colorHex);
+  const [r2, g2, b2] = hexToRgb(mixWithHex);
+  const t = percent / 100;
+  return rgbToHex(r1 * t + r2 * (1 - t), g1 * t + g2 * (1 - t), b1 * t + b2 * (1 - t));
 }
 
 function getAccentColorHex(): string {
@@ -93,37 +65,21 @@ function getAccentColorHex(): string {
   return raw || "#E09407";
 }
 
-// Variaciones de matiz/saturación/luminosidad sobre el acento base — 12 pasos (antes 7) para
-// que haya más variedad real entre materias, con matices repartidos en un arco más amplio
-// alrededor del acento (hasta ±60°) así no quedan dos colores casi iguales como antes, pero
-// siguen siendo "la misma familia" en vez de un color cualquiera sin relación con el acento.
-const PALETTE_STEPS: { dh: number; ds: number; dl: number }[] = [
-  { dh: 0, ds: 0, dl: 0 },
-  { dh: -48, ds: 0, dl: 2 },
-  { dh: 48, ds: 0, dl: -2 },
-  { dh: -24, ds: -8, dl: -8 },
-  { dh: 24, ds: 8, dl: 8 },
-  { dh: -36, ds: 10, dl: 6 },
-  { dh: 36, ds: -10, dl: -6 },
-  { dh: -12, ds: -15, dl: 4 },
-  { dh: 12, ds: 15, dl: -4 },
-  { dh: -60, ds: 5, dl: 0 },
-  { dh: 60, ds: -5, dl: 0 },
-  { dh: 6, ds: 0, dl: 10 },
-];
-
-function buildAccentPalette(baseHex: string, darkMode: boolean): string[] {
-  const { h, s, l } = hexToHsl(baseHex);
-  return PALETTE_STEPS.map(({ dh, ds, dl }) => {
-    const hue = (h + dh + 360) % 360;
-    // Rango de saturación/luminosidad más angosto que antes (antes podía llegar casi a negro o
-    // casi blanco en algún paso) para que todos los colores se sigan viendo "vivos" y legibles.
-    const sat = Math.min(92, Math.max(55, s + ds));
-    // En modo oscuro conviene partir un poco más clara la base para que no se pierda contra el
-    // fondo negro — se invierte el sentido de los pasos de luminosidad en vez de sumar lo mismo.
-    const light = Math.min(66, Math.max(38, l + (darkMode ? -dl : dl)));
-    return hslToHex(hue, sat, light);
+function buildPalette(accentHex: string, count: number, darkMode: boolean): string[] {
+  const total = Math.max(count, 1);
+  const mixBase = darkMode ? "#27272a" : "#cbd5e1";
+  return Array.from({ length: total }, (_, index) => {
+    const opacityPercent = Math.max(30, Math.round(100 - (index * 65) / Math.max(total - 1, 1)));
+    return mixHex(accentHex, opacityPercent, mixBase);
   });
+}
+
+// Blanco o un gris casi negro según qué tan clara sea la mezcla — los últimos colores del
+// degradé (muy mezclados con gris claro en modo claro) quedaban con texto blanco casi invisible.
+function getReadableTextColor(hex: string): string {
+  const [r, g, b] = hexToRgb(hex);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.58 ? "#1c1917" : "#ffffff";
 }
 
 const parseTimeMin = (t: string): number => {
@@ -203,14 +159,15 @@ export function WeeklyScheduleGrid({
   const [drag, setDrag] = useState<DragState | null>(null);
   const dragRef = useRef<DragState | null>(null);
 
-  // Paleta de colores "en escala" del acento actual (recalculada en cada render — es barato y
-  // así sigue el color de acento si el usuario lo cambia en Ajustes mientras ve esta pantalla).
-  const accentPalette = buildAccentPalette(getAccentColorHex(), darkMode);
+  // Mismo degradé que "Distribución por Categoria" (recalculado en cada render — es barato y así
+  // sigue el color de acento si el usuario lo cambia en Ajustes mientras ve esta pantalla). Se
+  // asigna por posición en materiaOptions (ya ordenado alfabéticamente), igual que ese gráfico
+  // asigna sus colores por índice dentro de la lista de categorías.
+  const accentPalette = buildPalette(getAccentColorHex(), materiaOptions.length, darkMode);
   const colorForMateria = (materia: string): string => {
     if (!materia) return accentPalette[0];
-    let h = 0;
-    for (let i = 0; i < materia.length; i++) h = (h * 31 + materia.charCodeAt(i)) >>> 0;
-    return accentPalette[h % accentPalette.length];
+    const idx = materiaOptions.indexOf(materia);
+    return accentPalette[idx >= 0 ? idx % accentPalette.length : 0];
   };
 
   // Panel izquierdo: mismos campos que tenía el modal "Nuevo Horario" (Día/Hora Inicio/Hora
@@ -483,6 +440,7 @@ export function WeeklyScheduleGrid({
                 materiaOptions.map((m) => {
                   const color = colorForMateria(m);
                   const isActive = selectedMateria === m;
+                  const activeTextColor = getReadableTextColor(color);
                   return (
                     <button
                       key={m}
@@ -490,13 +448,17 @@ export function WeeklyScheduleGrid({
                       onClick={() => onSelectMateria(m)}
                       title={m}
                       className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[11px] font-bold border-2 transition-all cursor-pointer ${
-                        isActive ? "text-white shadow-sm" : "bg-transparent hover:bg-slate-100 dark:hover:bg-zinc-800/60"
+                        isActive ? "shadow-sm" : "bg-transparent hover:bg-slate-100 dark:hover:bg-zinc-800/60"
                       }`}
-                      style={isActive ? { backgroundColor: color, borderColor: color } : { borderColor: `${color}55`, color }}
+                      style={
+                        isActive
+                          ? { backgroundColor: color, borderColor: color, color: activeTextColor }
+                          : { borderColor: `color-mix(in srgb, ${color} 55%, transparent)`, color }
+                      }
                     >
                       <span
                         className="w-1.5 h-1.5 rounded-full shrink-0"
-                        style={{ backgroundColor: isActive ? "#ffffff" : color }}
+                        style={{ backgroundColor: isActive ? activeTextColor : color }}
                       />
                       <span className="truncate max-w-[130px]">{m}</span>
                     </button>
@@ -737,6 +699,7 @@ export function WeeklyScheduleGrid({
                     const top = ((startMin - gridStartMin) / SLOT_MIN) * ROW_PX;
                     const height = Math.max(ROW_PX, ((endMin - startMin) / SLOT_MIN) * ROW_PX);
                     const color = colorForMateria(h.materia);
+                    const textColor = getReadableTextColor(color);
 
                     return (
                       <div
@@ -762,18 +725,23 @@ export function WeeklyScheduleGrid({
                         }}
                         title={`${h.materia} · ${h.horaInicio} - ${h.horaFin}${h.aulas ? ` · ${h.aulas}` : ""}`}
                       >
-                        <p className="text-[9px] font-extrabold text-white leading-tight truncate">{h.materia}</p>
-                        <p className="text-[8px] text-white/85 leading-tight truncate">
+                        <p className="text-[9px] font-extrabold leading-tight truncate" style={{ color: textColor }}>
+                          {h.materia}
+                        </p>
+                        <p className="text-[8px] leading-tight truncate" style={{ color: textColor, opacity: 0.85 }}>
                           {h.horaInicio}–{h.horaFin}
                         </p>
                         {height > 42 && h.aulas && (
-                          <p className="text-[8px] text-white/70 leading-tight truncate">{h.aulas}</p>
+                          <p className="text-[8px] leading-tight truncate" style={{ color: textColor, opacity: 0.7 }}>
+                            {h.aulas}
+                          </p>
                         )}
 
                         {mode === "pintar" && (
                           <div
                             onPointerDown={(e) => startResizeDrag(e, dia, h)}
-                            className="absolute left-1/2 -translate-x-1/2 bottom-0.5 w-6 h-1.5 rounded-full bg-white/70 cursor-ns-resize"
+                            className="absolute left-1/2 -translate-x-1/2 bottom-0.5 w-6 h-1.5 rounded-full cursor-ns-resize"
+                            style={{ backgroundColor: textColor, opacity: 0.7 }}
                             title="Arrastrá para cambiar la hora de fin"
                           />
                         )}
@@ -793,7 +761,7 @@ export function WeeklyScheduleGrid({
                         ),
                         ...(drag.type === "create"
                           ? {
-                              backgroundColor: `${colorForMateria(selectedMateria)}40`,
+                              backgroundColor: `color-mix(in srgb, ${colorForMateria(selectedMateria)} 40%, transparent)`,
                               borderColor: colorForMateria(selectedMateria),
                               borderStyle: "dashed",
                             }
@@ -815,7 +783,10 @@ export function WeeklyScheduleGrid({
 
                   {/* Trazo recién pintado, todavía sin guardar — titila hasta que se confirma
                       con "Agregar Horario" en el panel (o se cancela con la X). */}
-                  {!drag && hasPendingDraft && mode === "pintar" && panelDia === dia && (
+                  {!drag && hasPendingDraft && mode === "pintar" && panelDia === dia && (() => {
+                    const draftColor = colorForMateria(selectedMateria);
+                    const draftTextColor = getReadableTextColor(draftColor);
+                    return (
                     <div
                       onPointerDown={(e) => e.stopPropagation()}
                       className="absolute left-0.5 right-0.5 rounded-lg border-2 border-dashed animate-pulse z-10 overflow-hidden px-1.5 py-1"
@@ -825,8 +796,8 @@ export function WeeklyScheduleGrid({
                           ROW_PX,
                           ((parseTimeMin(panelHoraFin) - parseTimeMin(panelHoraInicio)) / SLOT_MIN) * ROW_PX,
                         ),
-                        backgroundColor: `${colorForMateria(selectedMateria)}70`,
-                        borderColor: colorForMateria(selectedMateria),
+                        backgroundColor: `color-mix(in srgb, ${draftColor} 70%, transparent)`,
+                        borderColor: draftColor,
                       }}
                     >
                       <button
@@ -837,14 +808,15 @@ export function WeeklyScheduleGrid({
                       >
                         <X className="w-2.5 h-2.5" />
                       </button>
-                      <p className="text-[9px] font-extrabold text-white leading-tight truncate pr-3">
+                      <p className="text-[9px] font-extrabold leading-tight truncate pr-3" style={{ color: draftTextColor }}>
                         {selectedMateria || "Sin confirmar"}
                       </p>
-                      <p className="text-[8px] text-white/85 leading-tight truncate">
+                      <p className="text-[8px] leading-tight truncate" style={{ color: draftTextColor, opacity: 0.85 }}>
                         {panelHoraInicio}–{panelHoraFin}
                       </p>
                     </div>
-                  )}
+                    );
+                  })()}
                 </div>
               </div>
             );
