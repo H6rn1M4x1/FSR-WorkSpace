@@ -68,7 +68,11 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
   const currentLat = lat && !isNaN(lat) ? lat : defaultLat;
   const currentLon = lon && !isNaN(lon) ? lon : defaultLon;
 
-  // OpenStreetMap/OSM-based Tile URLs based on selected mapType
+  // OSM-based Tile URLs based on selected mapType — "roadmap" usa el estilo claro de CARTO
+  // (Voyager, gratuito y sin API key) en vez de las baldosas estándar de OSM, que se ven más
+  // recargadas: fondo crema, calles finas y colores suaves, en línea con el estilo de mapa que
+  // pidió el usuario (más parecido a Apple Maps / mapas de producto modernos que a un mapa de
+  // navegación clásico).
   const getOSMTileUrl = (type: "roadmap" | "satellite" | "terrain") => {
     switch (type) {
       case "satellite":
@@ -77,7 +81,7 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
         return "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png";
       case "roadmap":
       default:
-        return "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+        return "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
     }
   };
 
@@ -89,7 +93,7 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
         return "Map data: &copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors, <a href=\"http://viewfinderpanoramas.org\">SRTM</a> | Map style: &copy; <a href=\"https://opentopomap.org\">OpenTopoMap</a> (<a href=\"https://creativecommons.org/licenses/by-sa/3.0/\">CC-BY-SA</a>)";
       case "roadmap":
       default:
-        return '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+        return '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
     }
   };
 
