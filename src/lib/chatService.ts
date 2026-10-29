@@ -343,6 +343,81 @@ export async function compressImageFile(file: File, maxDimension = 1600, quality
   }
 }
 
+// ffmpeg.wasm (https://github.com/ffmpegwasm/ffmpeg.wasm) solo se carga cuando hace falta
+// comprimir el primer video — es pesado (~30MB de wasm) así que no tiene sentido sumarlo al
+// bundle principal ni descargarlo si el usuario nunca manda un video. El núcleo (ffmpeg-core)
+// se trae de un CDN en vez de empaquetarlo, siguiendo la forma recomendada por el propio proyecto
+// para no inflar el build de la app con un binario que el navegador puede cachear aparte.
+let ffmpegInstance: import("@ffmpeg/ffmpeg").FFmpeg | null = null;
+let ffmpegLoadPromise: Promise<import("@ffmpeg/ffmpeg").FFmpeg> | null = null;
+
+async function getFFmpeg(): Promise<import("@ffmpeg/ffmpeg").FFmpeg> {
+  if (ffmpegInstance) return ffmpegInstance;
+  if (ffmpegLoadPromise) return ffmpegLoadPromise;
+  ffmpegLoadPromise = (async () => {
+    const { FFmpeg } = await import("@ffmpeg/ffmpeg");
+    const { toBlobURL } = await import("@ffmpeg/util");
+    const ffmpeg = new FFmpeg();
+    const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm";
+    await ffmpeg.load({
+      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
+      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
+    });
+    ffmpegInstance = ffmpeg;
+    return ffmpeg;
+  })();
+  return ffmpegLoadPromise;
+}
+
+/**
+ * Recomprime un video client-side con ffmpeg.wasm (achica resolución a 854px de ancho máximo y
+ * baja el bitrate de video/audio a algo razonable para chat) antes de subirlo — un video de
+ * celular de 50-100MB puede terminar pesando unos pocos MB. Si falla por cualquier motivo (poca
+ * memoria, formato raro, el núcleo no carga) devuelve el archivo original tal cual, nunca bloquea
+ * el envío por esto.
+ */
+export async function compressVideoFile(file: File, onProgress?: (ratio: number) => void): Promise<File> {
+  if (!file.type.startsWith("video/")) return file;
+  try {
+    const ffmpeg = await getFFmpeg();
+    const inputExt = file.name.match(/\.[^.]+$/)?.[0] || ".mp4";
+    const inputName = `input${inputExt}`;
+    const outputName = "output.mp4";
+
+    const onProgressEvent = ({ progress }: { progress: number }) => {
+      if (onProgress) onProgress(Math.min(1, Math.max(0, progress)));
+    };
+    ffmpeg.on("progress", onProgressEvent);
+
+    try {
+      const { fetchFile } = await import("@ffmpeg/util");
+      await ffmpeg.writeFile(inputName, await fetchFile(file));
+      await ffmpeg.exec([
+        "-i", inputName,
+        "-vf", "scale='min(854,iw)':-2",
+        "-c:v", "libx264",
+        "-crf", "28",
+        "-preset", "veryfast",
+        "-c:a", "aac",
+        "-b:a", "96k",
+        outputName,
+      ]);
+      const data = await ffmpeg.readFile(outputName);
+      const blob = new Blob([data as Uint8Array], { type: "video/mp4" });
+      if (blob.size >= file.size) return file;
+      const newName = file.name.replace(/\.[^.]+$/, "") + ".mp4";
+      return new File([blob], newName, { type: "video/mp4" });
+    } finally {
+      ffmpeg.off("progress", onProgressEvent);
+      try { await ffmpeg.deleteFile(inputName); } catch (_) {}
+      try { await ffmpeg.deleteFile(outputName); } catch (_) {}
+    }
+  } catch (err) {
+    console.warn("[Chat] No se pudo comprimir el video, se sube el original:", err);
+    return file;
+  }
+}
+
 /**
  * Subscribes to unread message counts grouped by sender, for the unread badge system.
  */
