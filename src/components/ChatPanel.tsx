@@ -23,6 +23,7 @@ import {
   Square,
   Pencil,
   Download,
+  Video,
 } from "lucide-react";
 import { ChatContact, ChatMessage, ChatAttachmentType } from "../types";
 import {
@@ -94,6 +95,7 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
   } | null>(null);
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
   const [compressionProgress, setCompressionProgress] = useState<number | null>(null);
+  const [justSent, setJustSent] = useState(false);
   const imageVideoInputRef = useRef<HTMLInputElement>(null);
   const documentInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -293,6 +295,10 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
     setShowMobileConversation(true);
   };
 
+  const vibrateOnSend = () => {
+    try { navigator.vibrate?.(12); } catch (_) {}
+  };
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedEmail) return;
@@ -303,6 +309,9 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
     if (!messageText.trim()) return;
     const text = messageText;
     setMessageText("");
+    setJustSent(true);
+    setTimeout(() => setJustSent(false), 400);
+    vibrateOnSend();
     await sendChatMessage(normalizedUserEmail, selectedEmail, text);
   };
 
@@ -329,6 +338,9 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
       setMessageText("");
       setPendingAttachment(null);
       URL.revokeObjectURL(previewUrl);
+      setJustSent(true);
+      setTimeout(() => setJustSent(false), 400);
+      vibrateOnSend();
     } catch (err: any) {
       showToast(err?.message || "No se pudo subir el adjunto. Probá de nuevo.", "error");
     } finally {
@@ -379,15 +391,35 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
   const getDisplayName = (email: string) => customNameFor(email);
   const getInitial = (email: string) => customNameFor(email).charAt(0).toUpperCase();
 
-  const previewTextFor = (msg: ChatMessage): string => {
-    if (msg.text) return msg.text;
-    switch (msg.attachmentType) {
-      case "image": return "📷 Foto";
-      case "video": return "🎥 Video";
-      case "document": return `📄 ${msg.attachmentName || "Documento"}`;
-      case "audio": return "🎤 Audio";
-      default: return "";
-    }
+  const ATTACHMENT_PREVIEW_ICON: Record<ChatAttachmentType, React.ComponentType<{ className?: string }>> = {
+    image: ImageIcon,
+    video: Video,
+    document: FileText,
+    audio: Mic,
+  };
+
+  const renderLastMessagePreview = (email: string) => {
+    const msg = lastMessageByContact[email];
+    if (!msg) return email;
+    const prefix = msg.fromEmail === normalizedUserEmail ? "Vos: " : "";
+    if (msg.text) return `${prefix}${msg.text}`;
+    if (!msg.attachmentType) return prefix || "";
+    const Icon = ATTACHMENT_PREVIEW_ICON[msg.attachmentType];
+    const label =
+      msg.attachmentType === "image"
+        ? "Foto"
+        : msg.attachmentType === "video"
+        ? "Video"
+        : msg.attachmentType === "audio"
+        ? "Audio"
+        : msg.attachmentName || "Documento";
+    return (
+      <span className="flex items-center gap-1">
+        {prefix && <span className="shrink-0">{prefix}</span>}
+        <Icon className="w-3 h-3 text-primary shrink-0" />
+        <span className="truncate">{label}</span>
+      </span>
+    );
   };
 
   useEffect(() => {
@@ -450,6 +482,9 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
       const conversationId = getConversationId(normalizedUserEmail, selectedEmail);
       const url = await uploadChatAttachment(conversationId, blob, `audio_${Date.now()}.webm`);
       await sendChatMessage(normalizedUserEmail, selectedEmail, "", { url, type: "audio", durationSec: seconds });
+      setJustSent(true);
+      setTimeout(() => setJustSent(false), 400);
+      vibrateOnSend();
     } catch (err: any) {
       showToast(err?.message || "No se pudo enviar el audio.", "error");
     } finally {
@@ -759,7 +794,6 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                       const contact = active.find((c) => c.fromEmail === email || c.toEmail === email);
                       const revealed = longPressRevealedEmail === email;
                       const photoURL = profiles[email]?.photoURL;
-                      const lastMsg = lastMessageByContact[email];
                       return (
                         <motion.div
                           key={email}
@@ -818,7 +852,7 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                               </span>
                             )}
                             <span className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate block">
-                              {lastMsg ? `${lastMsg.fromEmail === normalizedUserEmail ? "Vos: " : ""}${previewTextFor(lastMsg)}` : email}
+                              {renderLastMessagePreview(email)}
                             </span>
                           </div>
                           {unread > 0 && (
@@ -914,8 +948,10 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                           return (
                             <motion.div
                               key={msg.id}
-                              initial={{ opacity: 0, y: 6 }}
-                              animate={{ opacity: 1, y: 0 }}
+                              initial={{ opacity: 0, y: 14, scale: 0.96 }}
+                              whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                              viewport={{ root: messagesContainerRef, once: true, margin: "0px 0px -40px 0px" }}
+                              transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
                               className={`flex ${isOwn ? "justify-end" : "justify-start"}`}
                             >
                               <div
@@ -1224,6 +1260,8 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                               type="submit"
                               whileHover={{ scale: 1.05 }}
                               whileTap={{ scale: 0.9 }}
+                              animate={justSent ? { scale: [1, 1.25, 1], rotate: [0, -18, 0] } : { scale: 1, rotate: 0 }}
+                              transition={{ duration: 0.35, ease: "easeOut" }}
                               disabled={isUploadingAttachment}
                               className="p-2.5 rounded-full bg-primary hover:bg-primary-hover text-white dark:text-blue-950 cursor-pointer disabled:opacity-50 shrink-0"
                             >
