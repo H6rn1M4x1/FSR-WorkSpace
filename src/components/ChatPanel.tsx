@@ -100,6 +100,7 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const suppressNextRowClickRef = useRef(false);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const eventPickerListRef = useRef<HTMLDivElement>(null);
   const { showToast } = useToast();
 
   // --- Adjuntos (imágenes/videos/documentos/cámara) ---
@@ -1262,10 +1263,13 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                 <AnimatePresence>
                   {showEventPicker && (
                     <motion.div
-                      initial={{ opacity: 0, y: 16, scale: 0.97 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 10, scale: 0.97 }}
-                      transition={{ type: "spring", stiffness: 340, damping: 30 }}
+                      // Misma curva "premium" (spring) que el resto de los modales de la app
+                      // (ConfirmationModal, TurnoCategoryManagerModal), para que la apertura y el
+                      // cierre se sientan consistentes con el resto de la página.
+                      initial={{ opacity: 0, scale: 0.96, y: 14 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.97, y: 10 }}
+                      transition={{ type: "spring", stiffness: 420, damping: 30, mass: 0.7 }}
                       className={`absolute inset-0 z-20 flex flex-col ${darkMode ? "bg-zinc-950" : "bg-white"}`}
                     >
                       <div className="flex items-center gap-2 p-2.5 border-b border-zinc-200/60 dark:border-white/10 shrink-0">
@@ -1390,7 +1394,7 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                                   ) : null
                                 }
                               />
-                              <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5">
+                              <div ref={eventPickerListRef} className="flex-1 min-h-0 overflow-y-auto space-y-1.5">
                                 {eventPickerFilteredItems.length === 0 ? (
                                   <div className="py-8 text-center text-xs text-zinc-500 font-medium bg-zinc-500/5 rounded-xl border border-dashed border-zinc-300 dark:border-zinc-800">
                                     No hay registros para mostrar acá.
@@ -1399,8 +1403,18 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                                   eventPickerFilteredItems.map((item) => {
                                     const ItemIcon = SHARED_EVENT_ICON[item.category];
                                     return (
-                                      <motion.button
+                                      // El envoltorio maneja la animación de aparición al scrollear
+                                      // (whileInView, igual que los mensajes de la conversación); el
+                                      // botón de adentro queda libre para su propia animación de
+                                      // envío (animate), sin que una pise a la otra.
+                                      <motion.div
                                         key={`${item.category}-${item.id}`}
+                                        initial={{ opacity: 0, y: 14, scale: 0.96 }}
+                                        whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                                        viewport={{ root: eventPickerListRef, once: true, margin: "0px 0px -40px 0px" }}
+                                        transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                                      >
+                                      <motion.button
                                         type="button"
                                         whileHover={{ scale: 1.01 }}
                                         whileTap={{ scale: 0.98 }}
@@ -1424,6 +1438,7 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                                           )}
                                         </div>
                                       </motion.button>
+                                      </motion.div>
                                     );
                                   })
                                 )}
@@ -1577,7 +1592,7 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                                     onClick={() => imageVideoInputRef.current?.click()}
                                     className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl hover:bg-primary/10 text-left text-xs font-semibold cursor-pointer"
                                   >
-                                    <span className="p-1.5 rounded-lg bg-purple-500/10 text-purple-500 shrink-0">
+                                    <span className="p-1.5 rounded-lg bg-primary/10 text-primary shrink-0">
                                       <ImageIcon className="w-3.5 h-3.5" />
                                     </span>
                                     Imágenes y Videos
@@ -1587,7 +1602,7 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                                     onClick={() => documentInputRef.current?.click()}
                                     className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl hover:bg-primary/10 text-left text-xs font-semibold cursor-pointer"
                                   >
-                                    <span className="p-1.5 rounded-lg bg-blue-500/10 text-blue-500 shrink-0">
+                                    <span className="p-1.5 rounded-lg bg-primary/10 text-primary shrink-0">
                                       <FileText className="w-3.5 h-3.5" />
                                     </span>
                                     Documentos
@@ -1597,7 +1612,7 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                                     onClick={() => cameraInputRef.current?.click()}
                                     className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl hover:bg-primary/10 text-left text-xs font-semibold cursor-pointer"
                                   >
-                                    <span className="p-1.5 rounded-lg bg-rose-500/10 text-rose-500 shrink-0">
+                                    <span className="p-1.5 rounded-lg bg-primary/10 text-primary shrink-0">
                                       <Camera className="w-3.5 h-3.5" />
                                     </span>
                                     Abrir Cámara
@@ -1608,7 +1623,7 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                                     onClick={openEventPicker}
                                     className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl hover:bg-primary/10 text-left text-xs font-semibold cursor-pointer"
                                   >
-                                    <span className="p-1.5 rounded-lg bg-amber-500/10 text-amber-500 shrink-0">
+                                    <span className="p-1.5 rounded-lg bg-primary/10 text-primary shrink-0">
                                       <CalendarPlus className="w-3.5 h-3.5" />
                                     </span>
                                     Evento
