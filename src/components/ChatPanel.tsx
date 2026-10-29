@@ -41,6 +41,7 @@ import {
   getConversationId,
   uploadChatAttachment,
   compressImageFile,
+  compressVideoFile,
 } from "../lib/chatService";
 import { VoiceMessageBubble } from "./VoiceMessageBubble";
 import { useToast } from "../context/ToastContext";
@@ -84,6 +85,7 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
     type: ChatAttachmentType;
   } | null>(null);
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
+  const [compressionProgress, setCompressionProgress] = useState<number | null>(null);
   const imageVideoInputRef = useRef<HTMLInputElement>(null);
   const documentInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -101,7 +103,6 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const dragStartYRef = useRef<number | null>(null);
   const barRefs = useRef<Array<HTMLDivElement | null>>([]);
   const rafRef = useRef<number | null>(null);
   const isTouchDevice = typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)")?.matches;
@@ -241,7 +242,14 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
     const { file, type, previewUrl } = pendingAttachment;
     setIsUploadingAttachment(true);
     try {
-      const fileToUpload = type === "image" ? await compressImageFile(file) : file;
+      let fileToUpload = file;
+      if (type === "image") {
+        fileToUpload = await compressImageFile(file);
+      } else if (type === "video") {
+        setCompressionProgress(0);
+        fileToUpload = await compressVideoFile(file, setCompressionProgress);
+        setCompressionProgress(null);
+      }
       const conversationId = getConversationId(normalizedUserEmail, selectedEmail);
       const url = await uploadChatAttachment(conversationId, fileToUpload, file.name);
       await sendChatMessage(normalizedUserEmail, selectedEmail, caption, {
@@ -256,10 +264,19 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
       showToast(err?.message || "No se pudo subir el adjunto. Probá de nuevo.", "error");
     } finally {
       setIsUploadingAttachment(false);
+      setCompressionProgress(null);
     }
   };
 
-  const handleOpenDocument = async (url: string, name?: string) => {
+  // Tocar el documento solo lo ABRE en una pestaña nueva (el navegador decide si lo muestra
+  // inline, como un PDF, o lo descarga él solo si no sabe renderizarlo) — nunca fuerza la
+  // descarga. Esa acción queda reservada al ícono de descarga, en handleDownloadDocument.
+  const handleViewDocument = (url: string) => {
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  const handleDownloadDocument = async (e: React.MouseEvent, url: string, name?: string) => {
+    e.stopPropagation();
     try {
       const res = await fetch(url);
       const blob = await res.blob();
@@ -270,7 +287,6 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
       document.body.appendChild(a);
       a.click();
       a.remove();
-      window.open(objectUrl, "_blank");
       setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
     } catch (_) {
       window.open(url, "_blank");
@@ -455,23 +471,43 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
     await sendRecordedAudio(blob, seconds);
   };
 
+  // El botón de micrófono deja de existir en el DOM apenas arranca a grabar (la UI cambia
+  // entera a la barra de "grabando..."), así que capturar el puntero en ESE botón no sirve:
+  // en cuanto React lo desmonta, el navegador deja de entregarle los eventos de move/up y el
+  // gesto de "deslizar para bloquear" y "soltar para enviar" quedaban muertos. En vez de eso,
+  // se escuchan move/up a nivel window durante todo el gesto, que sobreviven cualquier cambio
+  // de UI — y como son listeners imperativos (fuera del ciclo de React), leen el estado actual
+  // desde un ref en vez del valor de closure, que quedaría pegado en "idle".
+  const recordingStateRef = useRef<RecordingState>("idle");
+  useEffect(() => {
+    recordingStateRef.current = recordingState;
+  }, [recordingState]);
+
   const handleMicPointerDown = (e: React.PointerEvent) => {
     if (!isTouchDevice || recordingState !== "idle") return;
-    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch (_) {}
-    dragStartYRef.current = e.clientY;
+    e.preventDefault();
+    const startY = e.clientY;
     startRecording();
-  };
 
-  const handleMicPointerMove = (e: React.PointerEvent) => {
-    if (!isTouchDevice || recordingState !== "recording" || dragStartYRef.current == null) return;
-    if (dragStartYRef.current - e.clientY > 60) {
-      setRecordingState("locked");
-    }
-  };
-
-  const handleMicPointerUp = () => {
-    if (!isTouchDevice) return;
-    if (recordingState === "recording") stopRecording("send");
+    const onMove = (ev: PointerEvent) => {
+      if (recordingStateRef.current !== "recording") return;
+      if (startY - ev.clientY > 60) {
+        setRecordingState("locked");
+      }
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      if (recordingStateRef.current === "recording") {
+        stopRecording("send");
+      }
+      // Si ya está "locked", soltar el dedo no hace nada — queda grabando manos libres hasta
+      // que se toque el botón de enviar o el de cancelar.
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
   };
 
   const handleMicClick = () => {
@@ -491,7 +527,10 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
           className="w-full overflow-hidden"
         >
           <div className="w-full border-t border-zinc-200/60 dark:border-white/10 pt-3 mt-2">
-            <div className="w-full flex flex-col md:flex-row items-stretch gap-3 h-[420px] md:h-[440px]">
+            {/* En mobile ocupa casi toda la altura disponible debajo del navbar (en vez de una
+                cajita chica) — 130px cubre la fila de navegación + los paddings del capsule de
+                arriba. En desktop vuelve al alto fijo de siempre. */}
+            <div className="w-full flex flex-col md:flex-row items-stretch gap-3 h-[calc(100dvh-130px)] max-h-[720px] md:h-[440px] md:max-h-none">
               {/* LEFT: Contacts */}
               <div className={`w-full md:w-72 shrink-0 flex flex-col min-h-0 ${showMobileConversation ? "hidden md:flex" : "flex"}`}>
                 <div className="flex items-center justify-between px-1 pb-2 shrink-0">
@@ -821,14 +860,22 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                                 {msg.attachmentType === "document" && msg.attachmentUrl && (
                                   <button
                                     type="button"
-                                    onClick={() => handleOpenDocument(msg.attachmentUrl!, msg.attachmentName)}
+                                    onClick={() => handleViewDocument(msg.attachmentUrl!)}
+                                    title="Ver documento"
                                     className={`w-full flex items-center gap-2 p-2 rounded-xl mb-1 cursor-pointer ${
                                       isOwn ? "bg-black/10 dark:bg-white/15" : darkMode ? "bg-black/20" : "bg-white"
                                     }`}
                                   >
                                     <FileText className="w-5 h-5 shrink-0" />
                                     <span className="text-[11px] font-semibold truncate">{msg.attachmentName || "Documento"}</span>
-                                    <Download className="w-3.5 h-3.5 shrink-0 opacity-70" />
+                                    <span
+                                      role="button"
+                                      onClick={(e) => handleDownloadDocument(e, msg.attachmentUrl!, msg.attachmentName)}
+                                      title="Descargar"
+                                      className="p-1 -m-1 rounded-full hover:bg-black/10 dark:hover:bg-white/10 shrink-0 cursor-pointer"
+                                    >
+                                      <Download className="w-3.5 h-3.5 opacity-70" />
+                                    </span>
                                   </button>
                                 )}
                                 {msg.attachmentType === "audio" && msg.attachmentUrl && (
@@ -878,7 +925,15 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                                 />
                               )}
                               {pendingAttachment.type === "video" && (
-                                <video src={pendingAttachment.previewUrl} className="h-16 w-16 object-cover rounded-lg border border-zinc-200 dark:border-zinc-700" />
+                                <div className="relative h-16 w-16">
+                                  <video src={pendingAttachment.previewUrl} className="h-16 w-16 object-cover rounded-lg border border-zinc-200 dark:border-zinc-700" />
+                                  {compressionProgress !== null && (
+                                    <div className="absolute inset-0 rounded-lg bg-black/60 flex flex-col items-center justify-center gap-0.5">
+                                      <RefreshCw className="w-3.5 h-3.5 text-white animate-spin" />
+                                      <span className="text-[8.5px] font-bold text-white">{Math.round(compressionProgress * 100)}%</span>
+                                    </div>
+                                  )}
+                                </div>
                               )}
                               {pendingAttachment.type === "document" && (
                                 <div className="h-16 w-28 flex flex-col items-center justify-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 px-1.5">
@@ -886,16 +941,18 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                                   <span className="text-[9px] font-medium truncate w-full text-center">{pendingAttachment.file.name}</span>
                                 </div>
                               )}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  URL.revokeObjectURL(pendingAttachment.previewUrl);
-                                  setPendingAttachment(null);
-                                }}
-                                className="absolute -top-1.5 -right-1.5 p-1 rounded-full bg-zinc-900 text-white shadow cursor-pointer"
-                              >
-                                <X className="w-3 h-3" />
-                              </button>
+                              {!isUploadingAttachment && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    URL.revokeObjectURL(pendingAttachment.previewUrl);
+                                    setPendingAttachment(null);
+                                  }}
+                                  className="absolute -top-1.5 -right-1.5 p-1 rounded-full bg-zinc-900 text-white shadow cursor-pointer"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              )}
                             </div>
                           </motion.div>
                         )}
@@ -1063,6 +1120,7 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                             <input
                               ref={documentInputRef}
                               type="file"
+                              accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.rtf,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/csv"
                               className="hidden"
                               onChange={(e) => {
                                 const file = e.target.files?.[0];
@@ -1108,8 +1166,6 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                               whileTap={{ scale: 0.9 }}
                               onClick={handleMicClick}
                               onPointerDown={handleMicPointerDown}
-                              onPointerMove={handleMicPointerMove}
-                              onPointerUp={handleMicPointerUp}
                               className="p-2.5 rounded-full bg-primary hover:bg-primary-hover text-white dark:text-blue-950 cursor-pointer shrink-0 touch-none"
                               title="Grabar audio"
                             >
