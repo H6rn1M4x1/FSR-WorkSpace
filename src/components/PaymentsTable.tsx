@@ -48,8 +48,8 @@ import {
   Repeat,
   CalendarClock,
 } from "lucide-react";
-import { WorkspaceService } from "../lib/workspace";
 import { uiSounds } from "../lib/sounds";
+import { uploadPaymentDocument } from "../lib/paymentDocumentsService";
 
 interface PaymentsTableProps {
   payments: DetailedPayment[];
@@ -309,43 +309,45 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
     </div>
   );
 };
-// --- Toggle "Recurrente / Único" del panel de vista previa de Agregar Pago ---------------------
+// --- Switches "Pagado/Impago" y "Recurrente/Único" del panel de vista previa de Agregar Pago ---
 // Mismo mecanismo visual que el switch "Activos/Pausados" del diseño de referencia (recurso
-// "Cobranza" de Moxen): un pill con el texto del estado actual + un círculo que desliza con
-// spring, en vez del checkbox plano que había antes.
-const RecurrenceToggle: React.FC<{ checked: boolean; onChange: (v: boolean) => void }> = ({
-  checked,
-  onChange,
-}) => {
+// "Cobranza" de Moxen): un círculo que desliza con spring + texto del estado actual — acá
+// agrandado para que los dos switches, uno al lado del otro, ocupen todo el ancho de la tarjeta.
+const BigToggle: React.FC<{
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  onLabel: string;
+  offLabel: string;
+  icon: React.ComponentType<{ className?: string }>;
+}> = ({ checked, onChange, onLabel, offLabel, icon: Icon }) => {
   return (
     <button
       type="button"
       data-sound="toggle"
       onClick={() => onChange(!checked)}
-      className={`flex items-center gap-2 pl-3 pr-1 py-1 rounded-full border transition-colors cursor-pointer ${
+      className={`flex-1 flex items-center justify-between gap-2 px-3.5 py-3 rounded-2xl border transition-colors cursor-pointer ${
         checked
           ? "bg-primary/10 border-primary/30"
           : "bg-slate-100 dark:bg-zinc-800 border-slate-200 dark:border-zinc-700"
       }`}
-      title="Pago recurrente o único"
     >
       <span
-        className={`flex items-center gap-1 text-[10.5px] font-bold uppercase tracking-wide ${
+        className={`flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide ${
           checked ? "text-primary" : "text-slate-500 dark:text-zinc-400"
         }`}
       >
-        {checked && <Repeat className="w-3 h-3" />}
-        {checked ? "Recurrente" : "Único"}
+        {checked && <Icon className="w-3.5 h-3.5" />}
+        {checked ? onLabel : offLabel}
       </span>
       <span
-        className={`relative w-9 h-5 rounded-full transition-colors shrink-0 ${
+        className={`relative w-10 h-6 rounded-full transition-colors shrink-0 ${
           checked ? "bg-primary" : "bg-slate-300 dark:bg-zinc-600"
         }`}
       >
         <motion.span
-          animate={{ x: checked ? 16 : 0 }}
+          animate={{ x: checked ? 18 : 2 }}
           transition={{ type: "spring", stiffness: 500, damping: 32 }}
-          className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm"
+          className="absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm"
         />
       </span>
     </button>
@@ -376,7 +378,7 @@ const PaymentUploadCard: React.FC<{
     >
       <span
         className={`p-2 rounded-xl ${
-          hasFile ? "bg-primary text-white dark:text-blue-950" : "bg-slate-100 dark:bg-zinc-800 text-slate-400 dark:text-zinc-500"
+          hasFile ? "bg-primary text-white dark:text-black" : "bg-slate-100 dark:bg-zinc-800 text-slate-400 dark:text-zinc-500"
         }`}
       >
         {hasFile ? <Check className="w-4 h-4" /> : <Icon className="w-4 h-4" />}
@@ -565,32 +567,6 @@ export default function PaymentsTable({
     return filteredPayments.slice(start, start + pageSize);
   }, [filteredPayments, currentPage, pageSize]);
 
-  // Uploads a file to Google Drive if logged in (returns the Drive link), or falls back
-  // to a base64 data URL stored directly in the record. Used by both the table's inline
-  // "Subir" buttons and the Add/Edit Pago form.
-  const uploadFileGetUrl = async (file: File): Promise<{ url: string; viaGoogleDrive: boolean }> => {
-    const reader = new FileReader();
-    const base64Data = await new Promise<string>((resolve, reject) => {
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-
-    if (token) {
-      const result = await WorkspaceService.uploadFileToDrive(
-        file.name,
-        file.type || "application/octet-stream",
-        base64Data,
-        token,
-      );
-      if (result.success && result.webViewLink) {
-        return { url: result.webViewLink, viaGoogleDrive: true };
-      }
-      throw new Error(result.error || "Error desconocido al subir a Google Drive");
-    }
-    return { url: base64Data, viaGoogleDrive: false };
-  };
-
   // Opens a stored file. Plain http(s) links (Google Drive) open directly, but base64
   // data: URLs often show a blank tab if opened via a normal link — browsers restrict
   // navigating to long data: URIs. Converting to a Blob object URL first fixes that.
@@ -627,7 +603,10 @@ export default function PaymentsTable({
 
     try {
       const userId = userEmail || "hernanmaximiliano10@gmail.com";
-      const { url, viaGoogleDrive } = await uploadFileGetUrl(file);
+      const url = await uploadPaymentDocument(
+        field === "facturaEmitida" ? "facturas" : "comprobantes",
+        file,
+      );
 
       const updatedPayment = payments.find((p) => p.id === paymentId);
       if (updatedPayment) {
@@ -637,12 +616,7 @@ export default function PaymentsTable({
         );
         await saveItemToFirestore(userId, "detailed_payments", toSave);
       }
-      showToast(
-        viaGoogleDrive
-          ? `Archivo "${file.name}" subido y guardado con éxito.`
-          : `Archivo "${file.name}" guardado (iniciá sesión con Google para subirlo también a Drive).`,
-        "success",
-      );
+      showToast(`Archivo "${file.name}" subido y guardado con éxito.`, "success");
     } catch (err: any) {
       console.error("Error uploading file:", err);
       showToast("Error al procesar el archivo: " + err.message, "error");
@@ -733,12 +707,10 @@ export default function PaymentsTable({
       let comprobantePago = existingPayment?.comprobantePago;
 
       if (facturaFile) {
-        const { url } = await uploadFileGetUrl(facturaFile);
-        facturaEmitida = url;
+        facturaEmitida = await uploadPaymentDocument("facturas", facturaFile);
       }
       if (comprobanteFile) {
-        const { url } = await uploadFileGetUrl(comprobanteFile);
-        comprobantePago = url;
+        comprobantePago = await uploadPaymentDocument("comprobantes", comprobanteFile);
       }
 
       const paymentData: DetailedPayment = {
@@ -1501,22 +1473,6 @@ export default function PaymentsTable({
                       transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
                       className="space-y-4"
                     >
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          id="pago-checkbox"
-                          checked={pago}
-                          onChange={(e) => setPago(e.target.checked)}
-                          className="w-4 h-4 accent-primary"
-                        />
-                        <label
-                          htmlFor="pago-checkbox"
-                          className="text-sm font-bold text-slate-700 dark:text-zinc-300 cursor-pointer"
-                        >
-                          ¿Está Pagado?
-                        </label>
-                      </div>
-
                       <div>
                         <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
                           Descripción
@@ -1701,30 +1657,34 @@ export default function PaymentsTable({
                           </motion.button>
                         </div>
 
-                        <div className="flex items-center justify-between gap-2 flex-wrap">
-                          <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white dark:bg-black/30 border border-slate-200 dark:border-zinc-800">
-                            <button
-                              type="button"
-                              onClick={() => shiftFechaVencimiento(-1)}
-                              className="p-0.5 rounded-md hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-400 dark:text-zinc-500 cursor-pointer"
-                              title="Un día antes"
-                            >
-                              <ChevronLeft className="w-3.5 h-3.5" />
-                            </button>
-                            <span className="flex items-center gap-1 px-1 text-[10.5px] font-bold text-slate-700 dark:text-zinc-200">
-                              <CalendarClock className="w-3 h-3 text-primary" />
-                              Vence {formatVenceShort(fechaVencimiento) || "—"}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => shiftFechaVencimiento(1)}
-                              className="p-0.5 rounded-md hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-400 dark:text-zinc-500 cursor-pointer"
-                              title="Un día después"
-                            >
-                              <ChevronRight className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                          <RecurrenceToggle checked={pagoRecurrente} onChange={setPagoRecurrente} />
+                        <div className="flex items-center gap-1 mb-3">
+                          <button
+                            type="button"
+                            onClick={() => shiftFechaVencimiento(-1)}
+                            className="p-0.5 rounded-md hover:bg-slate-200/60 dark:hover:bg-zinc-800 text-slate-400 dark:text-zinc-500 cursor-pointer"
+                            title="Un día antes"
+                          >
+                            <ChevronLeft className="w-3.5 h-3.5" />
+                          </button>
+                          <span className="flex items-center gap-1 px-1 text-[10.5px] font-bold text-slate-500 dark:text-zinc-400">
+                            <CalendarClock className="w-3 h-3 text-primary" />
+                            Vence {formatVenceShort(fechaVencimiento) || "—"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => shiftFechaVencimiento(1)}
+                            className="p-0.5 rounded-md hover:bg-slate-200/60 dark:hover:bg-zinc-800 text-slate-400 dark:text-zinc-500 cursor-pointer"
+                            title="Un día después"
+                          >
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        {/* Pagado/Impago y Recurrente/Único: mismo tamaño, ocupando todo el
+                            ancho de la tarjeta entre los dos. */}
+                        <div className="flex items-stretch gap-2">
+                          <BigToggle checked={pago} onChange={setPago} onLabel="Pagado" offLabel="Impago" icon={CheckSquare} />
+                          <BigToggle checked={pagoRecurrente} onChange={setPagoRecurrente} onLabel="Recurrente" offLabel="Único" icon={Repeat} />
                         </div>
                       </div>
 
