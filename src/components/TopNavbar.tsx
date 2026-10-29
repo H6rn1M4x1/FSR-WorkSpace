@@ -661,7 +661,9 @@ export default function TopNavbar({
               >
                 <MessageCircle className="w-4 h-4" />
                 {chatUnreadCount > 0 && (
-                  <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-primary ring-1 ring-white dark:ring-zinc-950 animate-pulse" />
+                  <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-primary text-white dark:text-blue-950 text-[9.5px] font-black flex items-center justify-center ring-1 ring-white dark:ring-zinc-950">
+                    {chatUnreadCount > 9 ? "9+" : chatUnreadCount}
+                  </span>
                 )}
               </motion.button>
             </div>
