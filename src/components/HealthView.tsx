@@ -3158,7 +3158,7 @@ export default function HealthView({
                   </div>
 
                   {/* Month Selector */}
-                  <div className="flex items-center justify-between px-1 shrink-0">
+                  <div className="flex items-center justify-between px-1 py-1 shrink-0 bg-slate-50 dark:bg-black/40 rounded-xl">
                     <button
                       onClick={() =>
                         setMedicalCalendarDate(
