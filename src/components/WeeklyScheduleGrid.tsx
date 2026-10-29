@@ -706,6 +706,11 @@ export function WeeklyScheduleGrid({
                     const height = Math.max(ROW_PX, ((endMin - startMin) / SLOT_MIN) * ROW_PX);
                     const color = colorForMateria(h.materia);
                     const textColor = getReadableTextColor(color);
+                    // Al elegir una materia (clic en un bloque o pill del panel) el resto se
+                    // apaga a gris claro, para resaltar solo los horarios de la materia activa.
+                    const isOtherMateria = Boolean(selectedMateria) && h.materia !== selectedMateria;
+                    const blockBg = isOtherMateria ? (darkMode ? "#3f3f46" : "#e2e8f0") : color;
+                    const blockTextColor = isOtherMateria ? (darkMode ? "#a1a1aa" : "#94a3b8") : textColor;
 
                     return (
                       <div
@@ -719,26 +724,26 @@ export function WeeklyScheduleGrid({
                           e.stopPropagation();
                           startEditingBlock(h);
                         }}
-                        className={`absolute left-0.5 right-0.5 rounded-lg overflow-hidden px-1.5 py-1 shadow-sm transition-shadow ${
+                        className={`absolute left-0.5 right-0.5 rounded-lg overflow-hidden px-1.5 py-1 shadow-sm transition-all ${
                           mode === "pintar" ? "cursor-pointer hover:shadow-md" : ""
                         }`}
                         style={{
                           top,
                           height,
-                          backgroundColor: color,
+                          backgroundColor: blockBg,
                           opacity: isBeingResized ? 0.85 : 1,
                           zIndex: isBeingResized ? 15 : 5,
                         }}
                         title={`${h.materia} · ${h.horaInicio} - ${h.horaFin}${h.aulas ? ` · ${h.aulas}` : ""}`}
                       >
-                        <p className="text-[9px] font-extrabold leading-tight truncate" style={{ color: textColor }}>
+                        <p className="text-[9px] font-extrabold leading-tight truncate" style={{ color: blockTextColor }}>
                           {h.materia}
                         </p>
-                        <p className="text-[8px] leading-tight truncate" style={{ color: textColor, opacity: 0.85 }}>
+                        <p className="text-[8px] leading-tight truncate" style={{ color: blockTextColor, opacity: 0.85 }}>
                           {h.horaInicio}–{h.horaFin}
                         </p>
                         {height > 42 && h.aulas && (
-                          <p className="text-[8px] leading-tight truncate" style={{ color: textColor, opacity: 0.7 }}>
+                          <p className="text-[8px] leading-tight truncate" style={{ color: blockTextColor, opacity: 0.7 }}>
                             {h.aulas}
                           </p>
                         )}
@@ -747,7 +752,7 @@ export function WeeklyScheduleGrid({
                           <div
                             onPointerDown={(e) => startResizeDrag(e, dia, h)}
                             className="absolute left-1/2 -translate-x-1/2 bottom-0.5 w-6 h-1.5 rounded-full cursor-ns-resize"
-                            style={{ backgroundColor: textColor, opacity: 0.7 }}
+                            style={{ backgroundColor: blockTextColor, opacity: 0.7 }}
                             title="Arrastrá para cambiar la hora de fin"
                           />
                         )}
