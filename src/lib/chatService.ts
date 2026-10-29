@@ -226,6 +226,34 @@ export function subscribeToConversation(
   );
 }
 
+/**
+ * Subscribes to just the most recent message of a conversation, para la vista previa de cada
+ * contacto en la lista (como el último mensaje que muestra WhatsApp debajo de cada chat).
+ */
+export function subscribeToLastMessage(
+  conversationId: string,
+  onUpdate: (message: ChatMessage | null) => void
+): Unsubscribe {
+  if (!conversationId) {
+    onUpdate(null);
+    return () => {};
+  }
+  const q = query(collection(db, MESSAGES_COLLECTION), where("conversationId", "==", conversationId));
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      if (snapshot.empty) {
+        onUpdate(null);
+        return;
+      }
+      const messages = snapshot.docs.map((d) => ({ id: d.id, ...d.data() })) as ChatMessage[];
+      messages.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      onUpdate(messages[0]);
+    },
+    (err) => console.warn("[Chat] Error en último mensaje:", err)
+  );
+}
+
 export interface ChatMessageAttachment {
   url: string;
   type: ChatAttachmentType;

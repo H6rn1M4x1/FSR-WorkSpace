@@ -21,7 +21,6 @@ import {
   CalendarPlus,
   Mic,
   Square,
-  Lock,
   Pencil,
   Download,
 } from "lucide-react";
@@ -30,6 +29,7 @@ import {
   subscribeToContacts,
   subscribeToUnreadMessages,
   subscribeToConversation,
+  subscribeToLastMessage,
   subscribeToUserProfileName,
   sendContactInvitation,
   acceptContactInvitation,
@@ -62,6 +62,7 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
   const [active, setActive] = useState<ChatContact[]>([]);
   const [unreadByContact, setUnreadByContact] = useState<Record<string, number>>({});
   const [profiles, setProfiles] = useState<Record<string, { displayName?: string; photoURL?: string }>>({});
+  const [lastMessageByContact, setLastMessageByContact] = useState<Record<string, ChatMessage>>({});
   const [selectedEmail, setSelectedEmail] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [messageText, setMessageText] = useState("");
@@ -74,6 +75,13 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
   const [newContactName, setNewContactName] = useState("");
   const [renamingEmail, setRenamingEmail] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  // En mobile, el lápiz/tacho de cada contacto solo se revelan (y se vuelven tocables) con un
+  // mantener-presionado — antes quedaban "invisibles" (opacity-0 por :hover, que no existe en
+  // touch) pero igual tocables, así que un tap para abrir el chat que caía sobre esa zona
+  // terminaba entrando a edición en vez de abrir la conversación.
+  const [longPressRevealedEmail, setLongPressRevealedEmail] = useState<string | null>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const suppressNextRowClickRef = useRef(false);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const { showToast } = useToast();
 
@@ -92,7 +100,7 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
   const attachMenuRef = useRef<HTMLDivElement>(null);
 
   // --- Grabación de notas de voz ---
-  type RecordingState = "idle" | "recording" | "locked" | "preview";
+  type RecordingState = "idle" | "recording" | "preview";
   const [recordingState, setRecordingState] = useState<RecordingState>("idle");
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [previewAudioUrl, setPreviewAudioUrl] = useState<string | null>(null);
@@ -185,6 +193,31 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
     [active, normalizedUserEmail]
   );
 
+  // Vista previa del último mensaje de cada contacto (debajo del nombre, en la lista).
+  useEffect(() => {
+    if (!normalizedUserEmail) return;
+    const unsubs = contactEmails.map((email) => {
+      const conversationId = getConversationId(normalizedUserEmail, email);
+      return subscribeToLastMessage(conversationId, (msg) => {
+        setLastMessageByContact((prev) => {
+          if (!msg) {
+            if (!(email in prev)) return prev;
+            const next = { ...prev };
+            delete next[email];
+            return next;
+          }
+          return { ...prev, [email]: msg };
+        });
+      });
+    });
+    return () => unsubs.forEach((u) => { try { u(); } catch (_) {} });
+  }, [contactEmails, normalizedUserEmail]);
+
+  const unreadContactsCount = useMemo(
+    () => Object.values(unreadByContact).filter((n) => n > 0).length,
+    [unreadByContact]
+  );
+
   const filteredContactEmails = useMemo(() => {
     if (!search.trim()) return contactEmails;
     const term = search.trim().toLowerCase();
@@ -215,6 +248,7 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
   const handleStartRename = (email: string) => {
     setRenamingEmail(email);
     setRenameValue(customNameFor(email) === email ? "" : customNameFor(email));
+    setLongPressRevealedEmail(null);
   };
 
   const handleConfirmRename = async (email: string) => {
@@ -222,6 +256,41 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
     if (!contact) return;
     await renameContact(contact, normalizedUserEmail, renameValue);
     setRenamingEmail(null);
+  };
+
+  const handleRowPointerDown = (email: string) => {
+    if (!isTouchDevice) return;
+    longPressTimerRef.current = setTimeout(() => {
+      longPressTimerRef.current = null;
+      suppressNextRowClickRef.current = true;
+      setLongPressRevealedEmail(email);
+      try { navigator.vibrate?.(15); } catch (_) {}
+    }, 550);
+  };
+
+  const cancelRowLongPress = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  const handleRowClick = (email: string) => {
+    if (!isTouchDevice) {
+      setSelectedEmail(email);
+      setShowMobileConversation(true);
+      return;
+    }
+    if (suppressNextRowClickRef.current) {
+      suppressNextRowClickRef.current = false;
+      return;
+    }
+    if (longPressRevealedEmail === email) {
+      setLongPressRevealedEmail(null);
+      return;
+    }
+    setSelectedEmail(email);
+    setShowMobileConversation(true);
   };
 
   const handleSendMessage = async (e: React.FormEvent) => {
@@ -309,6 +378,17 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
 
   const getDisplayName = (email: string) => customNameFor(email);
   const getInitial = (email: string) => customNameFor(email).charAt(0).toUpperCase();
+
+  const previewTextFor = (msg: ChatMessage): string => {
+    if (msg.text) return msg.text;
+    switch (msg.attachmentType) {
+      case "image": return "📷 Foto";
+      case "video": return "🎥 Video";
+      case "document": return `📄 ${msg.attachmentName || "Documento"}`;
+      case "audio": return "🎤 Audio";
+      default: return "";
+    }
+  };
 
   useEffect(() => {
     const handleClickOutsideMenu = (event: MouseEvent) => {
@@ -471,47 +551,11 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
     await sendRecordedAudio(blob, seconds);
   };
 
-  // El botón de micrófono deja de existir en el DOM apenas arranca a grabar (la UI cambia
-  // entera a la barra de "grabando..."), así que capturar el puntero en ESE botón no sirve:
-  // en cuanto React lo desmonta, el navegador deja de entregarle los eventos de move/up y el
-  // gesto de "deslizar para bloquear" y "soltar para enviar" quedaban muertos. En vez de eso,
-  // se escuchan move/up a nivel window durante todo el gesto, que sobreviven cualquier cambio
-  // de UI — y como son listeners imperativos (fuera del ciclo de React), leen el estado actual
-  // desde un ref en vez del valor de closure, que quedaría pegado en "idle".
-  const recordingStateRef = useRef<RecordingState>("idle");
-  useEffect(() => {
-    recordingStateRef.current = recordingState;
-  }, [recordingState]);
-
-  const handleMicPointerDown = (e: React.PointerEvent) => {
-    if (!isTouchDevice || recordingState !== "idle") return;
-    e.preventDefault();
-    const startY = e.clientY;
-    startRecording();
-
-    const onMove = (ev: PointerEvent) => {
-      if (recordingStateRef.current !== "recording") return;
-      if (startY - ev.clientY > 60) {
-        setRecordingState("locked");
-      }
-    };
-    const onUp = () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onUp);
-      if (recordingStateRef.current === "recording") {
-        stopRecording("send");
-      }
-      // Si ya está "locked", soltar el dedo no hace nada — queda grabando manos libres hasta
-      // que se toque el botón de enviar o el de cancelar.
-    };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-    window.addEventListener("pointercancel", onUp);
-  };
-
+  // Un solo tap para empezar a grabar y otro para terminar (con vista previa antes de confirmar
+  // el envío) — igual en mobile que en PC. Antes mobile tenía su propio gesto de mantener
+  // presionado + deslizar para bloquear, pero se sacó a pedido explícito del usuario en favor de
+  // este comportamiento único y más simple.
   const handleMicClick = () => {
-    if (isTouchDevice) return;
     if (recordingState === "idle") startRecording();
     else if (recordingState === "recording") stopRecording("preview");
   };
@@ -536,7 +580,7 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                 <div className="flex items-center justify-between px-1 pb-2 shrink-0">
                   <div className="flex items-center gap-1.5">
                     <MessageCircle className="w-3.5 h-3.5 text-primary" />
-                    <h3 className="text-xs font-extrabold">Chat ({contactEmails.length})</h3>
+                    <h3 className="text-xs font-extrabold">Chat{unreadContactsCount > 0 ? ` (${unreadContactsCount})` : ""}</h3>
                   </div>
                   <div className="flex items-center gap-1">
                     <motion.button
@@ -713,16 +757,20 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                       const unread = unreadByContact[email] || 0;
                       const isSelected = selectedEmail === email;
                       const contact = active.find((c) => c.fromEmail === email || c.toEmail === email);
+                      const revealed = longPressRevealedEmail === email;
+                      const photoURL = profiles[email]?.photoURL;
+                      const lastMsg = lastMessageByContact[email];
                       return (
                         <motion.div
                           key={email}
                           layout
                           whileHover={{ scale: 1.01 }}
                           whileTap={{ scale: 0.98 }}
-                          onClick={() => {
-                            setSelectedEmail(email);
-                            setShowMobileConversation(true);
-                          }}
+                          onClick={() => handleRowClick(email)}
+                          onPointerDown={() => handleRowPointerDown(email)}
+                          onPointerUp={cancelRowLongPress}
+                          onPointerLeave={cancelRowLongPress}
+                          onPointerCancel={cancelRowLongPress}
                           className={`group p-2.5 rounded-xl border cursor-pointer transition-all flex items-center gap-2.5 ${
                             isSelected
                               ? "border-primary ring-1 ring-primary/40 bg-primary/5"
@@ -731,9 +779,18 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                               : "border-zinc-200 hover:border-zinc-300"
                           }`}
                         >
-                          <div className="w-8 h-8 rounded-full bg-primary/15 text-primary font-bold text-xs flex items-center justify-center shrink-0">
-                            {getInitial(email)}
-                          </div>
+                          {photoURL ? (
+                            <img
+                              src={photoURL}
+                              alt={getDisplayName(email)}
+                              referrerPolicy="no-referrer"
+                              className="w-8 h-8 rounded-full object-cover shrink-0"
+                            />
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-primary/15 text-primary font-bold text-xs flex items-center justify-center shrink-0">
+                              {getInitial(email)}
+                            </div>
+                          )}
                           <div className="flex-1 min-w-0">
                             {renamingEmail === email ? (
                               <form
@@ -760,7 +817,9 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                                 {getDisplayName(email)}
                               </span>
                             )}
-                            <span className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate block">{email}</span>
+                            <span className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate block">
+                              {lastMsg ? `${lastMsg.fromEmail === normalizedUserEmail ? "Vos: " : ""}${previewTextFor(lastMsg)}` : email}
+                            </span>
                           </div>
                           {unread > 0 && (
                             <span className="w-5 h-5 rounded-full bg-primary text-white dark:text-blue-950 text-[10px] font-black flex items-center justify-center shrink-0">
@@ -773,7 +832,13 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                               e.stopPropagation();
                               handleStartRename(email);
                             }}
-                            className="p-1 rounded-full text-zinc-400 hover:text-primary hover:bg-primary/10 opacity-0 group-hover:opacity-100 transition-all cursor-pointer shrink-0"
+                            className={`p-1 rounded-full text-zinc-400 hover:text-primary hover:bg-primary/10 transition-all cursor-pointer shrink-0 ${
+                              isTouchDevice
+                                ? revealed
+                                  ? "opacity-100"
+                                  : "opacity-0 pointer-events-none"
+                                : "opacity-0 group-hover:opacity-100"
+                            }`}
                             title="Renombrar contacto"
                           >
                             <Pencil className="w-3 h-3" />
@@ -784,8 +849,15 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                               e.stopPropagation();
                               if (contact?.id) removeContact(contact.id);
                               if (isSelected) setSelectedEmail(null);
+                              setLongPressRevealedEmail(null);
                             }}
-                            className="p-1 rounded-full text-zinc-400 hover:text-red-500 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all cursor-pointer shrink-0"
+                            className={`p-1 rounded-full text-zinc-400 hover:text-red-500 hover:bg-red-500/10 transition-all cursor-pointer shrink-0 ${
+                              isTouchDevice
+                                ? revealed
+                                  ? "opacity-100"
+                                  : "opacity-0 pointer-events-none"
+                                : "opacity-0 group-hover:opacity-100"
+                            }`}
                             title="Eliminar contacto"
                           >
                             <Trash2 className="w-3 h-3" />
@@ -813,9 +885,18 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>
-                      <div className="w-7 h-7 rounded-full bg-primary/15 text-primary font-bold text-[11px] flex items-center justify-center shrink-0">
-                        {getInitial(selectedEmail)}
-                      </div>
+                      {profiles[selectedEmail]?.photoURL ? (
+                        <img
+                          src={profiles[selectedEmail].photoURL}
+                          alt={getDisplayName(selectedEmail)}
+                          referrerPolicy="no-referrer"
+                          className="w-7 h-7 rounded-full object-cover shrink-0"
+                        />
+                      ) : (
+                        <div className="w-7 h-7 rounded-full bg-primary/15 text-primary font-bold text-[11px] flex items-center justify-center shrink-0">
+                          {getInitial(selectedEmail)}
+                        </div>
+                      )}
                       <div className="min-w-0">
                         <div className="text-[11.5px] font-bold text-black dark:text-white truncate">{getDisplayName(selectedEmail)}</div>
                         <div className="text-[9.5px] text-zinc-500 truncate">{selectedEmail}</div>
@@ -893,7 +974,14 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                                   </span>
                                   {isOwn &&
                                     (msg.read ? (
-                                      <CheckCheck className="w-3.5 h-3.5" style={{ color: "var(--color-primary)" }} />
+                                      // El mensaje propio va sobre un fondo bg-primary — el acento
+                                      // tal cual quedaba invisible encima de sí mismo. Una versión
+                                      // bien oscurecida del mismo acento sí contrasta en cualquier
+                                      // tono, sin salirse de "seguir el color de acento".
+                                      <CheckCheck
+                                        className="w-3.5 h-3.5"
+                                        style={{ color: "color-mix(in srgb, var(--color-primary) 45%, black)" }}
+                                      />
                                     ) : msg.delivered ? (
                                       <CheckCheck className="w-3.5 h-3.5 opacity-70" />
                                     ) : (
@@ -958,7 +1046,7 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                         )}
                       </AnimatePresence>
 
-                      {recordingState === "recording" || recordingState === "locked" ? (
+                      {recordingState === "recording" ? (
                         <div className="flex items-center gap-2 p-2.5">
                           <motion.button
                             type="button"
@@ -983,33 +1071,15 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                               />
                             ))}
                           </div>
-                          {recordingState === "recording" && isTouchDevice && (
-                            <span className="text-[9px] text-zinc-400 flex items-center gap-1 shrink-0 whitespace-nowrap">
-                              <Lock className="w-3 h-3" /> Deslizá ↑
-                            </span>
-                          )}
-                          {recordingState === "locked" && (
-                            <motion.button
-                              type="button"
-                              whileTap={{ scale: 0.9 }}
-                              onClick={() => stopRecording("send")}
-                              className="p-2.5 rounded-full bg-primary text-white dark:text-blue-950 cursor-pointer shrink-0"
-                              title="Enviar audio"
-                            >
-                              <Send className="w-4 h-4" />
-                            </motion.button>
-                          )}
-                          {recordingState === "recording" && !isTouchDevice && (
-                            <motion.button
-                              type="button"
-                              whileTap={{ scale: 0.9 }}
-                              onClick={() => stopRecording("preview")}
-                              className="p-2.5 rounded-full bg-primary text-white dark:text-blue-950 cursor-pointer shrink-0"
-                              title="Detener grabación"
-                            >
-                              <Square className="w-3.5 h-3.5" />
-                            </motion.button>
-                          )}
+                          <motion.button
+                            type="button"
+                            whileTap={{ scale: 0.9 }}
+                            onClick={() => stopRecording("preview")}
+                            className="p-2.5 rounded-full bg-primary text-white dark:text-blue-950 cursor-pointer shrink-0"
+                            title="Detener grabación"
+                          >
+                            <Square className="w-3.5 h-3.5" />
+                          </motion.button>
                         </div>
                       ) : recordingState === "preview" && previewAudioUrl ? (
                         <div className="flex items-center gap-2 p-2.5">
@@ -1165,8 +1235,7 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                               whileHover={{ scale: 1.05 }}
                               whileTap={{ scale: 0.9 }}
                               onClick={handleMicClick}
-                              onPointerDown={handleMicPointerDown}
-                              className="p-2.5 rounded-full bg-primary hover:bg-primary-hover text-white dark:text-blue-950 cursor-pointer shrink-0 touch-none"
+                              className="p-2.5 rounded-full bg-primary hover:bg-primary-hover text-white dark:text-blue-950 cursor-pointer shrink-0"
                               title="Grabar audio"
                             >
                               <Mic className="w-4 h-4" />
