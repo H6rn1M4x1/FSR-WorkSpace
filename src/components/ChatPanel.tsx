@@ -491,7 +491,7 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
     audio: Mic,
   };
 
-  const SHARED_EVENT_ICON: Record<SharedEventCategory, React.ComponentType<{ className?: string }>> = {
+  const SHARED_EVENT_ICON: Record<SharedEventCategory, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
     turno: Calendar,
     finanzas: DollarSign,
     universidad_horario: Clock,
@@ -508,7 +508,6 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
     { id: "universidad", label: "Universidad" },
     { id: "salud", label: "Salud" },
     { id: "comidas", label: "Comidas" },
-    { id: "notas", label: "Notas" },
   ];
 
   const EVENT_PICKER_MONTH_NAMES = [
@@ -550,17 +549,12 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
     return item.category === eventPickerFilter;
   };
 
-  // Las Notas Rápidas no tienen fecha ni día — igual que en Inicio (donde no forman parte del
-  // calendario), acá quedan desvinculadas por completo: el calendario no se usa para filtrarlas.
   const eventPickerDayHasItems = (dateStr: string): boolean =>
-    eventPickerAllItems.some(
-      (it) => it.category !== "notas" && matchesEventPickerFilter(it) && eventPickerItemAppliesToDate(it, dateStr)
-    );
+    eventPickerAllItems.some((it) => matchesEventPickerFilter(it) && eventPickerItemAppliesToDate(it, dateStr));
 
   const eventPickerFilteredItems = useMemo(() => {
     return eventPickerAllItems.filter((it) => {
       if (!matchesEventPickerFilter(it)) return false;
-      if (it.category === "notas") return true;
       if (!eventPickerSelectedDate) return true;
       return eventPickerItemAppliesToDate(it, eventPickerSelectedDate);
     });
@@ -571,6 +565,16 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
     if (!msg) return email;
     const prefix = msg.fromEmail === normalizedUserEmail ? "Vos: " : "";
     if (msg.text) return `${prefix}${msg.text}`;
+    if (msg.sharedEventCategory) {
+      const EventIcon = SHARED_EVENT_ICON[msg.sharedEventCategory];
+      return (
+        <span className="flex items-center gap-1">
+          {prefix && <span className="shrink-0">{prefix}</span>}
+          <EventIcon className="w-3 h-3 text-primary shrink-0" />
+          <span className="truncate">{sharedEventCategoryLabel(msg.sharedEventCategory)}</span>
+        </span>
+      );
+    }
     if (!msg.attachmentType) return prefix || "";
     const Icon = ATTACHMENT_PREVIEW_ICON[msg.attachmentType];
     const label =
@@ -1189,8 +1193,14 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                                         }`}
                                       >
                                         <div className="flex items-center gap-1.5 mb-1">
-                                          <EventIcon className="w-3.5 h-3.5 text-primary shrink-0" />
-                                          <span className="text-[9px] font-extrabold uppercase tracking-wide text-primary">
+                                          <EventIcon
+                                            className={`w-3.5 h-3.5 shrink-0 ${isOwn ? "" : "text-primary"}`}
+                                            style={isOwn ? { color: "color-mix(in srgb, var(--color-primary) 40%, black)" } : undefined}
+                                          />
+                                          <span
+                                            className={`text-[9px] font-extrabold uppercase tracking-wide ${isOwn ? "" : "text-primary"}`}
+                                            style={isOwn ? { color: "color-mix(in srgb, var(--color-primary) 40%, black)" } : undefined}
+                                          >
                                             {sharedEventCategoryLabel(msg.sharedEventCategory)}
                                           </span>
                                         </div>
@@ -1272,19 +1282,19 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                         </button>
                       </div>
 
-                      <div className="flex-1 min-h-0 overflow-y-auto p-3">
+                      <div className="flex-1 min-h-0 p-3">
                         {eventPickerLoading && eventPickerAllItems.length === 0 ? (
                           <div className="h-full flex items-center justify-center">
                             <RefreshCw className="w-5 h-5 text-primary animate-spin" />
                           </div>
                         ) : (
-                          <div className="flex flex-col lg:flex-row gap-3">
-                            {/* Calendario: arriba en mobile, a la izquierda en PC — mismo patrón
-                                que "Calendario Unificado" de Inicio, pero acá filtra la lista de
-                                al lado en vez de navegar a cada sección. */}
-                            {eventPickerFilter !== "notas" && (
+                          <div className="flex flex-col lg:flex-row gap-3 h-full min-h-0">
+                            {/* Calendario: arriba en mobile, a la izquierda en PC — fijo, no
+                                scrollea (solo la agenda de al lado tiene su propio scroll) —
+                                mismo patrón que "Calendario Unificado" de Inicio, pero acá filtra
+                                la lista de al lado en vez de navegar a cada sección. */}
                             <div
-                              className={`shrink-0 lg:w-[270px] p-3 rounded-2xl border ${
+                              className={`shrink-0 lg:w-[270px] p-3 rounded-2xl border self-start ${
                                 darkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-zinc-200"
                               }`}
                             >
@@ -1358,10 +1368,10 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                                 Ir a Hoy
                               </button>
                             </div>
-                            )}
 
-                            {/* Agenda del día elegido: abajo en mobile, a la derecha en PC */}
-                            <div className="flex-1 min-w-0 flex flex-col gap-2">
+                            {/* Agenda del día elegido: abajo en mobile, a la derecha en PC — con
+                                su propio scroll, independiente del calendario de al lado. */}
+                            <div className="flex-1 min-w-0 min-h-0 flex flex-col gap-2">
                               <PillFilterBar
                                 options={EVENT_FILTER_OPTIONS}
                                 activeValue={eventPickerFilter}

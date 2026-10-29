@@ -702,9 +702,10 @@ export async function fetchOwnItemsForSharedEventCategory(
   return items;
 }
 
-/** Trae los registros propios de LAS 6 secciones a la vez, para el selector tipo calendario. */
+/** Trae los registros propios de LAS 5 secciones con calendario propio (no Notas Rápidas, que no
+ *  tienen fecha y por eso quedaron afuera de este selector), para el selector tipo calendario. */
 export async function fetchAllOwnSharableItems(userEmail: string): Promise<SharedEventListItem[]> {
-  const categories = Object.keys(SHARED_EVENT_CATEGORIES) as SharedEventCategory[];
+  const categories = (Object.keys(SHARED_EVENT_CATEGORIES) as SharedEventCategory[]).filter((cat) => cat !== "notas");
   const perCategory = await Promise.all(
     categories.map((cat) =>
       fetchOwnItemsForSharedEventCategory(userEmail, cat).catch((err) => {
