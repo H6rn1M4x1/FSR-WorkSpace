@@ -386,24 +386,34 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
         if (e.data.size > 0) recordedChunksRef.current.push(e.data);
       };
       recorder.onstop = async () => {
-        const blob = new Blob(recordedChunksRef.current, { type: recorder.mimeType || "audio/webm" });
-        recordedBlobRef.current = blob;
-        const seconds = recordingSecondsRef.current;
-        cleanupRecordingResources();
-        const action = pendingStopActionRef.current;
-        if (action === "cancel") {
+        // Nunca dejar este handler sin un catch: es un callback de evento del MediaRecorder, no
+        // algo que nadie "await"-ea — cualquier excepción acá antes se perdía como una promesa
+        // rechazada sin manejar, y el audio quedaba "grabado" sin enviarse ni avisar por qué.
+        try {
+          const blob = new Blob(recordedChunksRef.current, { type: recorder.mimeType || "audio/webm" });
+          recordedBlobRef.current = blob;
+          const seconds = recordingSecondsRef.current;
+          cleanupRecordingResources();
+          const action = pendingStopActionRef.current;
+          if (action === "cancel") {
+            setRecordingState("idle");
+            setRecordingSeconds(0);
+            return;
+          }
+          if (action === "send") {
+            setRecordingState("idle");
+            setRecordingSeconds(0);
+            await sendRecordedAudio(blob, seconds);
+            return;
+          }
+          setPreviewAudioUrl(URL.createObjectURL(blob));
+          setRecordingState("preview");
+        } catch (err: any) {
+          cleanupRecordingResources();
           setRecordingState("idle");
           setRecordingSeconds(0);
-          return;
+          showToast(err?.message || "No se pudo procesar la nota de voz grabada.", "error");
         }
-        if (action === "send") {
-          setRecordingState("idle");
-          setRecordingSeconds(0);
-          await sendRecordedAudio(blob, seconds);
-          return;
-        }
-        setPreviewAudioUrl(URL.createObjectURL(blob));
-        setRecordingState("preview");
       };
       mediaRecorderRef.current = recorder;
       recorder.start();
