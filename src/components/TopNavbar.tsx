@@ -50,6 +50,7 @@ import {
   Shield,
   KeyRound,
   MapPin,
+  MessageCircle,
 } from "lucide-react";
 import {
   AppNotification,
@@ -65,6 +66,7 @@ import {
   MedicalRecord,
 } from "../types";
 import Logo from "./Logo";
+import { ChatPanel } from "./ChatPanel";
 import { NotificationDetailPreview } from "./NotificationDetailPreview";
 import { getMealImage } from "../lib/mealHelpers";
 import { uiSounds } from "../lib/sounds";
@@ -408,9 +410,11 @@ export default function TopNavbar({
   const [showNotifications, setShowNotifications] = useState(false);
   const [selectedNotifId, setSelectedNotifId] = useState<string | null>(null);
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
+  const [showChat, setShowChat] = useState(false);
+  const [chatUnreadCount, setChatUnreadCount] = useState(0);
 
   useLockBodyScroll(
-    Boolean(mobileMenuOpen || showNotifications || mobileDetailOpen)
+    Boolean(mobileMenuOpen || showNotifications || mobileDetailOpen || showChat)
   );
   const notificationsRef = useRef<HTMLDivElement>(null);
   const unreadCount = notifications.filter((n) => !n.read).length;
@@ -442,15 +446,16 @@ export default function TopNavbar({
         !notificationsRef.current.contains(event.target as Node)
       ) {
         setShowNotifications(false);
+        setShowChat(false);
       }
     };
-    if (showNotifications) {
+    if (showNotifications || showChat) {
       document.addEventListener("mousedown", handleClickOutside);
     }
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [showNotifications]);
+  }, [showNotifications, showChat]);
 
   const currentSubMenu = isSettingsOpen || mobileMenuOpen ? [] : (SUBMENUS_BY_TAB[currentTab] || []);
   const effectiveSubPanelRows = isSettingsOpen || mobileMenuOpen ? null : subPanelRows;
@@ -587,6 +592,7 @@ export default function TopNavbar({
             onClick={() => {
               setCurrentTab("home");
               setShowNotifications(false);
+              setShowChat(false);
             }}
             className="flex items-center shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
           >
@@ -604,6 +610,7 @@ export default function TopNavbar({
                   onClick={() => {
                     setCurrentTab(item.id);
                     setShowNotifications(false);
+                    setShowChat(false);
                   }}
                   className={`relative flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors duration-300 cursor-pointer whitespace-nowrap z-10 ${
                     isActive
@@ -629,18 +636,35 @@ export default function TopNavbar({
 
           {/* Right Actions Header */}
           <div className="flex items-center gap-1.5 sm:gap-2">
-            {/* Sync Button */}
-            <button
-              onClick={() => {
-                if (onManualSync) onManualSync();
-                setShowNotifications(false);
-              }}
-              disabled={syncing}
-              className="p-2 sm:p-2.5 rounded-full transition-all cursor-pointer bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 text-black dark:text-white hover:text-primary dark:hover:text-primary border border-zinc-200/60 dark:border-white/10 shadow-xs header-action-btn"
-              title="Sincronizar todo"
-            >
-              <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin text-primary" : ""}`} />
-            </button>
+            {/* Chat Button */}
+            <div>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.92 }}
+                onClick={() => {
+                  if (isSettingsOpen) return;
+                  const nextVal = !showChat;
+                  setShowChat(nextVal);
+                  if (nextVal) {
+                    setShowNotifications(false);
+                    setMobileMenuOpen(false);
+                  }
+                }}
+                className={`p-2 sm:p-2.5 rounded-full relative transition-all border shadow-xs header-action-btn ${
+                  isSettingsOpen ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+                } ${
+                  showChat
+                    ? "bg-primary/20 text-primary border-primary/40 dark:bg-primary/20 dark:text-primary dark:border-primary/40"
+                    : "bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 text-black dark:text-white hover:text-primary dark:hover:text-primary border-zinc-200/60 dark:border-white/10"
+                }`}
+                title="Chat"
+              >
+                <MessageCircle className="w-4 h-4" />
+                {chatUnreadCount > 0 && (
+                  <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-primary ring-1 ring-white dark:ring-zinc-950 animate-pulse" />
+                )}
+              </motion.button>
+            </div>
 
             {/* Notification Bell */}
             <div>
@@ -652,6 +676,7 @@ export default function TopNavbar({
                   const nextVal = !showNotifications;
                   setShowNotifications(nextVal);
                   if (nextVal) {
+                    setShowChat(false);
                     setMobileMenuOpen(false);
                   }
                 }}
@@ -680,6 +705,7 @@ export default function TopNavbar({
                   if (onOpenSettings) onOpenSettings();
                   setMobileMenuOpen(false);
                   setShowNotifications(false);
+                  setShowChat(false);
                 }}
                 className={`p-2 sm:p-2.5 rounded-full transition-all cursor-pointer border shadow-xs header-action-btn ${
                   isSettingsOpen
@@ -701,6 +727,7 @@ export default function TopNavbar({
                   if (onOpenSettings) onOpenSettings();
                   setMobileMenuOpen(false);
                   setShowNotifications(false);
+                  setShowChat(false);
                 }}
                 className="flex items-center justify-center p-0.5 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-all cursor-pointer border border-transparent hover:border-zinc-200 dark:hover:border-white/10"
                 title="Ajustes de Perfil"
@@ -941,6 +968,7 @@ export default function TopNavbar({
                       onLogout();
                       setMobileMenuOpen(false);
                       setShowNotifications(false);
+                      setShowChat(false);
                     }}
                     className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-red-500/10 text-red-500 dark:text-red-400 text-xs font-semibold"
                   >
@@ -1187,6 +1215,15 @@ export default function TopNavbar({
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* CHAT PANEL (Seamlessly integrated into TopNavbar Capsule, mirroring the Notifications Panel) */}
+        <ChatPanel
+          userEmail={user?.email || ""}
+          darkMode={darkMode}
+          isOpen={showChat}
+          onClose={() => setShowChat(false)}
+          onUnreadCountChange={setChatUnreadCount}
+        />
 
         {/* Mobile Detail Modal (For narrow screens when tapping a notification) */}
         {typeof document !== "undefined" &&
