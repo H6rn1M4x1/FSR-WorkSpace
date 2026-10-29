@@ -551,13 +551,35 @@ export function sharedEventCategoryLabel(category: SharedEventCategory): string 
 
 export interface SharedEventListItem {
   id: string;
+  category: SharedEventCategory;
   title: string;
   subtitle: string;
+  /** YYYY-MM-DD cuando el registro tiene una fecha puntual (todo menos horarios de clase, que
+   *  son recurrentes semana a semana y no caen en un día del calendario). */
+  date?: string;
   raw: any;
 }
 
 function stripHtml(html: string): string {
   return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function dateOf(category: SharedEventCategory, data: any): string | undefined {
+  const raw =
+    category === "turno"
+      ? data.fecha
+      : category === "finanzas"
+      ? data.fechaVencimiento
+      : category === "universidad_examen"
+      ? data.fecha
+      : category === "salud"
+      ? data.studyDate
+      : category === "comidas"
+      ? data.fecha
+      : undefined; // universidad_horario (recurrente) y notas (sin fecha) no aplican
+  if (!raw) return undefined;
+  // Algunos campos de fecha vienen con hora incluida (ISO completo) — solo interesa el día.
+  return String(raw).slice(0, 10);
 }
 
 function buildTitleSubtitle(
@@ -615,25 +637,36 @@ export async function fetchOwnItemsForSharedEventCategory(
     });
   }
 
-  const items = docs.map((d) => {
+  const items: SharedEventListItem[] = docs.map((d) => {
     const { title, subtitle } = buildTitleSubtitle(category, d, category === "comidas" ? platoNames[d.platoId] : undefined);
-    return { id: d.id, title, subtitle, raw: d };
+    return { id: d.id, category, title, subtitle, date: dateOf(category, d), raw: d };
   });
 
-  items.sort((a, b) => {
-    const dateOf = (it: SharedEventListItem) => it.raw?.fecha || it.raw?.fechaVencimiento || it.raw?.studyDate || "";
-    return dateOf(b).localeCompare(dateOf(a));
-  });
+  items.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
   return items;
+}
+
+/** Trae los registros propios de LAS 6 secciones a la vez, para el selector tipo calendario. */
+export async function fetchAllOwnSharableItems(userEmail: string): Promise<SharedEventListItem[]> {
+  const categories = Object.keys(SHARED_EVENT_CATEGORIES) as SharedEventCategory[];
+  const perCategory = await Promise.all(
+    categories.map((cat) =>
+      fetchOwnItemsForSharedEventCategory(userEmail, cat).catch((err) => {
+        console.warn(`[Chat] Error trayendo registros de "${cat}" para compartir:`, err);
+        return [] as SharedEventListItem[];
+      })
+    )
+  );
+  return perCategory.flat();
 }
 
 /** Envía la tarjeta de evento compartido como un mensaje más de la conversación. */
 export async function sendSharedEventMessage(
   fromEmail: string,
   toEmail: string,
-  category: SharedEventCategory,
   item: SharedEventListItem
 ): Promise<void> {
+  const category = item.category;
   const normFrom = (fromEmail || "").trim().toLowerCase();
   const normTo = (toEmail || "").trim().toLowerCase();
 

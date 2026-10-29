@@ -31,7 +31,7 @@ import {
   UtensilsCrossed,
   StickyNote,
   ChevronLeft,
-  ArrowRight,
+  ChevronRight,
 } from "lucide-react";
 import { ChatContact, ChatMessage, ChatAttachmentType, SharedEventCategory } from "../types";
 import {
@@ -51,14 +51,16 @@ import {
   uploadChatAttachment,
   compressImageFile,
   compressVideoFile,
-  fetchOwnItemsForSharedEventCategory,
+  fetchAllOwnSharableItems,
   sendSharedEventMessage,
   acceptSharedEvent,
   sharedEventCategoryLabel,
   SharedEventListItem,
 } from "../lib/chatService";
 import { VoiceMessageBubble } from "./VoiceMessageBubble";
+import { PillFilterBar } from "./PillFilterBar";
 import { useToast } from "../context/ToastContext";
+import { getLocalDateString } from "../utils/date";
 
 interface ChatPanelProps {
   userEmail: string;
@@ -115,10 +117,15 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
   const attachMenuRef = useRef<HTMLDivElement>(null);
 
   // --- Compartir un registro de otra sección como tarjeta ("Evento") ---
+  // Mismo patrón que "Calendario Unificado" + "Agenda Central Integrada" de Inicio: un
+  // calendario que filtra por día a la izquierda (PC) / arriba (mobile), y la lista de
+  // registros de ese día con pills de categoría al lado / abajo.
   const [showEventPicker, setShowEventPicker] = useState(false);
-  const [eventPickerCategory, setEventPickerCategory] = useState<SharedEventCategory | null>(null);
-  const [eventPickerItems, setEventPickerItems] = useState<SharedEventListItem[]>([]);
   const [eventPickerLoading, setEventPickerLoading] = useState(false);
+  const [eventPickerAllItems, setEventPickerAllItems] = useState<SharedEventListItem[]>([]);
+  const [eventPickerMonth, setEventPickerMonth] = useState(() => new Date());
+  const [eventPickerSelectedDate, setEventPickerSelectedDate] = useState<string | null>(() => getLocalDateString());
+  const [eventPickerFilter, setEventPickerFilter] = useState<"todos" | SharedEventCategory | "universidad">("todos");
   const [isSendingEvent, setIsSendingEvent] = useState(false);
   const [acceptedEventIds, setAcceptedEventIds] = useState<Set<string>>(new Set());
   const [acceptingEventId, setAcceptingEventId] = useState<string | null>(null);
@@ -403,26 +410,16 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
     setShowAttachMenu(false);
   };
 
-  const openEventPicker = () => {
+  const openEventPicker = async () => {
     setShowAttachMenu(false);
-    setEventPickerCategory(null);
-    setEventPickerItems([]);
+    setEventPickerMonth(new Date());
+    setEventPickerSelectedDate(getLocalDateString());
+    setEventPickerFilter("todos");
     setShowEventPicker(true);
-  };
-
-  const closeEventPicker = () => {
-    setShowEventPicker(false);
-    setEventPickerCategory(null);
-    setEventPickerItems([]);
-  };
-
-  const selectEventCategory = async (category: SharedEventCategory) => {
-    setEventPickerCategory(category);
     setEventPickerLoading(true);
-    setEventPickerItems([]);
     try {
-      const items = await fetchOwnItemsForSharedEventCategory(normalizedUserEmail, category);
-      setEventPickerItems(items);
+      const items = await fetchAllOwnSharableItems(normalizedUserEmail);
+      setEventPickerAllItems(items);
     } catch (err: any) {
       showToast(err?.message || "No se pudieron cargar tus registros.", "error");
     } finally {
@@ -430,11 +427,15 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
     }
   };
 
+  const closeEventPicker = () => {
+    setShowEventPicker(false);
+  };
+
   const handleSendSharedEvent = async (item: SharedEventListItem) => {
-    if (!selectedEmail || !eventPickerCategory) return;
+    if (!selectedEmail) return;
     setIsSendingEvent(true);
     try {
-      await sendSharedEventMessage(normalizedUserEmail, selectedEmail, eventPickerCategory, item);
+      await sendSharedEventMessage(normalizedUserEmail, selectedEmail, item);
       closeEventPicker();
       setJustSent(true);
       setTimeout(() => setJustSent(false), 400);
@@ -488,14 +489,55 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
     notas: StickyNote,
   };
 
-  const EVENT_CATEGORY_GROUPS: Array<{ key: string; label: string; icon: React.ComponentType<{ className?: string }>; children: SharedEventCategory[] }> = [
-    { key: "turno", label: "Turnos", icon: Calendar, children: ["turno"] },
-    { key: "finanzas", label: "Finanzas", icon: DollarSign, children: ["finanzas"] },
-    { key: "universidad", label: "Universidad", icon: GraduationCap, children: ["universidad_horario", "universidad_examen"] },
-    { key: "salud", label: "Salud", icon: Heart, children: ["salud"] },
-    { key: "comidas", label: "Comidas", icon: UtensilsCrossed, children: ["comidas"] },
-    { key: "notas", label: "Notas Rápidas", icon: StickyNote, children: ["notas"] },
+  const EVENT_FILTER_OPTIONS: { id: "todos" | SharedEventCategory | "universidad"; label: string }[] = [
+    { id: "todos", label: "Todos" },
+    { id: "turno", label: "Turnos" },
+    { id: "finanzas", label: "Finanzas" },
+    { id: "universidad", label: "Universidad" },
+    { id: "salud", label: "Salud" },
+    { id: "comidas", label: "Comidas" },
+    { id: "notas", label: "Notas" },
   ];
+
+  const EVENT_PICKER_MONTH_NAMES = [
+    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+  ];
+  const EVENT_PICKER_WEEK_DAYS = ["D", "L", "M", "M", "J", "V", "S"];
+
+  const getEventPickerMonthGrid = (date: Date): Array<number | null> => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const days: Array<number | null> = [];
+    for (let i = 0; i < firstDay; i++) days.push(null);
+    for (let d = 1; d <= daysInMonth; d++) days.push(d);
+    return days;
+  };
+
+  const eventPickerDatesWithItems = useMemo(() => {
+    const set = new Set<string>();
+    eventPickerAllItems.forEach((it) => { if (it.date) set.add(it.date); });
+    return set;
+  }, [eventPickerAllItems]);
+
+  const matchesEventPickerFilter = (item: SharedEventListItem): boolean => {
+    if (eventPickerFilter === "todos") return true;
+    if (eventPickerFilter === "universidad") return item.category === "universidad_horario" || item.category === "universidad_examen";
+    return item.category === eventPickerFilter;
+  };
+
+  const eventPickerFilteredItems = useMemo(() => {
+    return eventPickerAllItems.filter((it) => {
+      if (!matchesEventPickerFilter(it)) return false;
+      if (!eventPickerSelectedDate) return true;
+      // Horarios de clase (recurrentes, sin fecha propia) y notas rápidas (sin fecha) se
+      // muestran siempre, sin importar qué día esté elegido en el calendario.
+      if (!it.date) return true;
+      return it.date === eventPickerSelectedDate;
+    });
+  }, [eventPickerAllItems, eventPickerFilter, eventPickerSelectedDate]);
 
   const renderLastMessagePreview = (email: string) => {
     const msg = lastMessageByContact[email];
@@ -1017,23 +1059,8 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                       className={`absolute inset-0 z-30 flex flex-col ${darkMode ? "bg-zinc-950" : "bg-white"}`}
                     >
                       <div className="flex items-center gap-2 p-2.5 border-b border-zinc-200/60 dark:border-white/10 shrink-0">
-                        {eventPickerCategory && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEventPickerCategory(null);
-                              setEventPickerItems([]);
-                            }}
-                            className="p-1 rounded-full hover:bg-zinc-200/60 dark:hover:bg-zinc-800 cursor-pointer text-zinc-500 shrink-0"
-                            title="Volver"
-                          >
-                            <ChevronLeft className="w-4 h-4" />
-                          </button>
-                        )}
                         <CalendarPlus className="w-3.5 h-3.5 text-primary shrink-0" />
-                        <h3 className="text-xs font-extrabold flex-1 truncate">
-                          {eventPickerCategory ? sharedEventCategoryLabel(eventPickerCategory) : "Compartir un evento"}
-                        </h3>
+                        <h3 className="text-xs font-extrabold flex-1 truncate">Compartir un evento</h3>
                         <button
                           type="button"
                           onClick={closeEventPicker}
@@ -1045,80 +1072,143 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                       </div>
 
                       <div className="flex-1 min-h-0 overflow-y-auto p-3">
-                        {!eventPickerCategory ? (
-                          <div className="grid grid-cols-2 gap-2">
-                            {EVENT_CATEGORY_GROUPS.map((group) => {
-                              const GroupIcon = group.icon;
-                              return group.children.length === 1 ? (
-                                <motion.button
-                                  key={group.key}
-                                  type="button"
-                                  whileHover={{ scale: 1.02 }}
-                                  whileTap={{ scale: 0.97 }}
-                                  onClick={() => selectEventCategory(group.children[0])}
-                                  className={`p-3 rounded-xl border flex flex-col items-center gap-1.5 cursor-pointer text-center ${
-                                    darkMode ? "border-zinc-800 hover:border-primary/50" : "border-zinc-200 hover:border-primary/50"
-                                  }`}
-                                >
-                                  <GroupIcon className="w-5 h-5 text-primary" />
-                                  <span className="text-[11px] font-bold">{group.label}</span>
-                                </motion.button>
-                              ) : (
-                                <div
-                                  key={group.key}
-                                  className={`col-span-2 p-3 rounded-xl border ${
-                                    darkMode ? "border-zinc-800" : "border-zinc-200"
-                                  }`}
-                                >
-                                  <div className="flex items-center gap-1.5 mb-2">
-                                    <GroupIcon className="w-4 h-4 text-primary" />
-                                    <span className="text-[11px] font-bold">{group.label}</span>
-                                  </div>
-                                  <div className="flex gap-2">
-                                    {group.children.map((child) => (
-                                      <button
-                                        key={child}
-                                        type="button"
-                                        onClick={() => selectEventCategory(child)}
-                                        className="flex-1 px-2.5 py-1.5 rounded-full border border-primary/30 text-primary text-[10.5px] font-bold hover:bg-primary/10 cursor-pointer flex items-center justify-center gap-1"
-                                      >
-                                        {sharedEventCategoryLabel(child)}
-                                        <ArrowRight className="w-3 h-3" />
-                                      </button>
-                                    ))}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ) : eventPickerLoading ? (
+                        {eventPickerLoading && eventPickerAllItems.length === 0 ? (
                           <div className="h-full flex items-center justify-center">
                             <RefreshCw className="w-5 h-5 text-primary animate-spin" />
                           </div>
-                        ) : eventPickerItems.length === 0 ? (
-                          <div className="py-8 text-center text-xs text-zinc-500 font-medium bg-zinc-500/5 rounded-xl border border-dashed border-zinc-300 dark:border-zinc-800">
-                            No tenés registros en esta sección todavía.
-                          </div>
                         ) : (
-                          <div className="space-y-1.5">
-                            {eventPickerItems.map((item) => (
-                              <motion.button
-                                key={item.id}
+                          <div className="flex flex-col lg:flex-row gap-3">
+                            {/* Calendario: arriba en mobile, a la izquierda en PC — mismo patrón
+                                que "Calendario Unificado" de Inicio, pero acá filtra la lista de
+                                al lado en vez de navegar a cada sección. */}
+                            <div
+                              className={`shrink-0 lg:w-[270px] p-3 rounded-2xl border ${
+                                darkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-zinc-200"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between mb-2.5">
+                                <button
+                                  type="button"
+                                  onClick={() => setEventPickerMonth((d) => { const n = new Date(d); n.setMonth(n.getMonth() - 1); return n; })}
+                                  className="p-1.5 rounded-lg bg-zinc-500/10 hover:bg-zinc-500/20 text-primary cursor-pointer"
+                                  title="Mes anterior"
+                                >
+                                  <ChevronLeft className="w-3.5 h-3.5" />
+                                </button>
+                                <span className="text-[10.5px] font-extrabold uppercase tracking-wide">
+                                  {EVENT_PICKER_MONTH_NAMES[eventPickerMonth.getMonth()]} {eventPickerMonth.getFullYear()}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setEventPickerMonth((d) => { const n = new Date(d); n.setMonth(n.getMonth() + 1); return n; })}
+                                  className="p-1.5 rounded-lg bg-zinc-500/10 hover:bg-zinc-500/20 text-primary cursor-pointer"
+                                  title="Mes siguiente"
+                                >
+                                  <ChevronRight className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                              <div className="grid grid-cols-7 gap-1 text-center text-[9px] font-bold text-zinc-400 dark:text-zinc-500 uppercase mb-1">
+                                {EVENT_PICKER_WEEK_DAYS.map((wd, i) => (
+                                  <div key={i}>{wd}</div>
+                                ))}
+                              </div>
+                              <div className="grid grid-cols-7 gap-1">
+                                {getEventPickerMonthGrid(eventPickerMonth).map((day, idx) => {
+                                  if (day === null) return <div key={`empty-${idx}`} />;
+                                  const dateStr = `${eventPickerMonth.getFullYear()}-${String(eventPickerMonth.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+                                  const hasEvents = eventPickerDatesWithItems.has(dateStr);
+                                  const isSelected = eventPickerSelectedDate === dateStr;
+                                  const isToday = getLocalDateString() === dateStr;
+                                  return (
+                                    <button
+                                      key={`day-${day}`}
+                                      type="button"
+                                      onClick={() => setEventPickerSelectedDate(isSelected ? null : dateStr)}
+                                      className={`relative h-7 w-full rounded-full text-[10.5px] font-bold flex items-center justify-center cursor-pointer transition-all ${
+                                        isSelected
+                                          ? "border-2 border-primary text-primary bg-primary/10"
+                                          : isToday
+                                          ? "bg-primary text-white dark:text-blue-950"
+                                          : "hover:bg-primary/10 text-slate-700 dark:text-zinc-300"
+                                      }`}
+                                    >
+                                      {day}
+                                      {hasEvents && (
+                                        <span
+                                          className={`absolute bottom-0.5 w-1 h-1 rounded-full ${
+                                            isSelected || isToday ? "bg-current" : "bg-primary animate-pulse"
+                                          }`}
+                                        />
+                                      )}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              <button
                                 type="button"
-                                whileHover={{ scale: 1.01 }}
-                                whileTap={{ scale: 0.98 }}
-                                disabled={isSendingEvent}
-                                onClick={() => handleSendSharedEvent(item)}
-                                className={`w-full p-2.5 rounded-xl border text-left cursor-pointer disabled:opacity-50 ${
-                                  darkMode ? "border-zinc-800 hover:border-primary/50" : "border-zinc-200 hover:border-primary/50"
-                                }`}
+                                onClick={() => {
+                                  setEventPickerMonth(new Date());
+                                  setEventPickerSelectedDate(getLocalDateString());
+                                }}
+                                className="mt-2.5 text-[10px] text-primary font-bold hover:underline cursor-pointer"
                               >
-                                <div className="text-[11.5px] font-bold truncate">{item.title}</div>
-                                {item.subtitle && (
-                                  <div className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate">{item.subtitle}</div>
+                                Ir a Hoy
+                              </button>
+                            </div>
+
+                            {/* Agenda del día elegido: abajo en mobile, a la derecha en PC */}
+                            <div className="flex-1 min-w-0 flex flex-col gap-2">
+                              <PillFilterBar
+                                options={EVENT_FILTER_OPTIONS}
+                                activeValue={eventPickerFilter}
+                                onChange={(value) => setEventPickerFilter(value)}
+                                layoutIdPrefix="eventPickerFilter"
+                                resetButton={
+                                  eventPickerSelectedDate ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => setEventPickerSelectedDate(null)}
+                                      className="px-2 py-1 text-[10px] text-primary font-bold hover:underline cursor-pointer ml-1 whitespace-nowrap shrink-0"
+                                      title="Ver todas las fechas"
+                                    >
+                                      Todas
+                                    </button>
+                                  ) : null
+                                }
+                              />
+                              <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5">
+                                {eventPickerFilteredItems.length === 0 ? (
+                                  <div className="py-8 text-center text-xs text-zinc-500 font-medium bg-zinc-500/5 rounded-xl border border-dashed border-zinc-300 dark:border-zinc-800">
+                                    No hay registros para mostrar acá.
+                                  </div>
+                                ) : (
+                                  eventPickerFilteredItems.map((item) => {
+                                    const ItemIcon = SHARED_EVENT_ICON[item.category];
+                                    return (
+                                      <motion.button
+                                        key={`${item.category}-${item.id}`}
+                                        type="button"
+                                        whileHover={{ scale: 1.01 }}
+                                        whileTap={{ scale: 0.98 }}
+                                        disabled={isSendingEvent}
+                                        onClick={() => handleSendSharedEvent(item)}
+                                        className={`w-full p-2.5 rounded-xl border text-left cursor-pointer disabled:opacity-50 flex items-start gap-2 ${
+                                          darkMode ? "border-zinc-800 hover:border-primary/50" : "border-zinc-200 hover:border-primary/50"
+                                        }`}
+                                      >
+                                        <ItemIcon className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
+                                        <div className="min-w-0 flex-1">
+                                          <div className="text-[11.5px] font-bold truncate">{item.title}</div>
+                                          {item.subtitle && (
+                                            <div className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate">{item.subtitle}</div>
+                                          )}
+                                        </div>
+                                      </motion.button>
+                                    );
+                                  })
                                 )}
-                              </motion.button>
-                            ))}
+                              </div>
+                            </div>
                           </div>
                         )}
                       </div>
