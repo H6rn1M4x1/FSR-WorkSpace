@@ -582,32 +582,80 @@ function dateOf(category: SharedEventCategory, data: any): string | undefined {
   return String(raw).slice(0, 10);
 }
 
+// Replica la hora desde un campo "fecha" que a veces incluye la hora embebida (ISO con "T",
+// o "YYYY-MM-DD HH:mm"), igual que getHoraFromFecha en HomeView.tsx.
+function getHoraFromFechaStr(fecha?: string): string {
+  if (!fecha) return "";
+  if (fecha.includes("T")) return (fecha.split("T")[1] || "").slice(0, 5);
+  const parts = fecha.split(" ");
+  if (parts.length >= 2) return parts[1].replace("hs", "").trim();
+  return "";
+}
+
+const PLACEHOLDER_LUGARES = ["sin dirección", "sin direccion", "sin lugar asignado"];
+
+function joinParts(parts: Array<string | false | null | undefined>): string {
+  return parts.filter((p): p is string => !!p && p.trim().length > 0).join(" • ");
+}
+
+// Subtítulo de cada tarjeta en el selector: la misma información (no solo el horario) que se ve
+// en la tarjeta compacta de cada sección en Inicio/Salud, para que al elegir qué compartir ya se
+// vea de qué se trata sin tener que adivinar — el detalle completo viaja igual en sharedEventData
+// y se muestra recién cuando el destinatario lo recibe.
 function buildTitleSubtitle(
   category: SharedEventCategory,
   data: any,
-  platoName?: string
+  platoName?: string,
+  platoDescripcion?: string
 ): { title: string; subtitle: string } {
   switch (category) {
-    case "turno":
-      return { title: data.descripcion || "Turno", subtitle: data.fecha || "" };
+    case "turno": {
+      const hora = getHoraFromFechaStr(data.fecha);
+      const lugarValido = data.lugar && !PLACEHOLDER_LUGARES.includes(String(data.lugar).trim().toLowerCase());
+      return {
+        title: data.descripcion || "Turno",
+        subtitle: joinParts([data.fecha ? data.fecha.slice(0, 10) : "", hora ? `${hora} hs` : "", lugarValido ? data.lugar : ""]),
+      };
+    }
     case "finanzas":
       return {
         title: data.descripcion || "Pago",
-        subtitle: data.fechaVencimiento ? `Vence ${data.fechaVencimiento}` : "",
+        subtitle: joinParts([
+          data.fechaVencimiento ? `Vence ${data.fechaVencimiento}` : "",
+          typeof data.montoAPagar === "number" ? `$${data.montoAPagar.toLocaleString("es-AR")} ARS` : "",
+          data.metodoPago || "",
+        ]),
       };
     case "universidad_horario":
       return {
         title: data.materia || "Materia",
-        subtitle: `${data.dia || ""} ${data.horaInicio || ""}${data.horaFin ? `-${data.horaFin}` : ""}`.trim(),
+        subtitle: joinParts([
+          data.dia || "",
+          data.horaInicio || data.horaFin ? `${data.horaInicio || "--:--"}-${data.horaFin || "--:--"} hs` : "",
+          data.aulas ? `Aula ${data.aulas}` : "",
+          data.profesores ? `Prof. ${data.profesores}` : "",
+        ]),
       };
     case "universidad_examen":
-      return { title: data.materia || "Examen", subtitle: data.fecha || "" };
+      return {
+        title: data.materia || "Examen",
+        subtitle: joinParts([data.estado || "", data.fecha || "", data.hora ? `${data.hora} hs` : "", data.aula ? `Aula ${data.aula}` : ""]),
+      };
     case "salud":
-      return { title: data.info || data.type || "Registro médico", subtitle: data.studyDate || "" };
+      return {
+        title: data.info || data.type || "Registro médico",
+        subtitle: joinParts([data.type || "", data.location || "", data.studyDate || ""]),
+      };
     case "comidas":
-      return { title: platoName || "Comida programada", subtitle: data.fecha || "" };
+      return {
+        title: platoName || "Comida programada",
+        subtitle: joinParts([data.fecha || "", platoDescripcion || ""]),
+      };
     case "notas":
-      return { title: data.title || (data.text ? stripHtml(data.text).slice(0, 48) : "Nota"), subtitle: "" };
+      return {
+        title: data.title || (data.text ? stripHtml(data.text).slice(0, 48) : "Nota"),
+        subtitle: data.text ? stripHtml(data.text).slice(0, 80) : "",
+      };
     default:
       return { title: "Elemento", subtitle: "" };
   }
@@ -630,15 +678,23 @@ export async function fetchOwnItemsForSharedEventCategory(
   }
 
   let platoNames: Record<string, string> = {};
+  let platoDescripciones: Record<string, string> = {};
   if (category === "comidas") {
     const platosSnap = await getDocs(collection(db, "users", normalized, "platos"));
     platosSnap.docs.forEach((p) => {
-      platoNames[p.id] = (p.data() as any)?.nombrePlato || "Plato";
+      const platoData = p.data() as any;
+      platoNames[p.id] = platoData?.nombrePlato || "Plato";
+      platoDescripciones[p.id] = platoData?.descripcion || "";
     });
   }
 
   const items: SharedEventListItem[] = docs.map((d) => {
-    const { title, subtitle } = buildTitleSubtitle(category, d, category === "comidas" ? platoNames[d.platoId] : undefined);
+    const { title, subtitle } = buildTitleSubtitle(
+      category,
+      d,
+      category === "comidas" ? platoNames[d.platoId] : undefined,
+      category === "comidas" ? platoDescripciones[d.platoId] : undefined
+    );
     return { id: d.id, category, title, subtitle, date: dateOf(category, d), raw: d };
   });
 

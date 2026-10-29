@@ -61,6 +61,7 @@ import { VoiceMessageBubble } from "./VoiceMessageBubble";
 import { PillFilterBar } from "./PillFilterBar";
 import { useToast } from "../context/ToastContext";
 import { getLocalDateString } from "../utils/date";
+import { uiSounds } from "../lib/sounds";
 
 interface ChatPanelProps {
   userEmail: string;
@@ -127,6 +128,9 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
   const [eventPickerSelectedDate, setEventPickerSelectedDate] = useState<string | null>(() => getLocalDateString());
   const [eventPickerFilter, setEventPickerFilter] = useState<"todos" | SharedEventCategory | "universidad">("todos");
   const [isSendingEvent, setIsSendingEvent] = useState(false);
+  // Clave `${category}-${id}` de la tarjeta que se está enviando en este momento — se usa para
+  // animarla (pulso + fade) antes de cerrar el selector.
+  const [sendingItemKey, setSendingItemKey] = useState<string | null>(null);
   const [acceptedEventIds, setAcceptedEventIds] = useState<Set<string>>(new Set());
   const [acceptingEventId, setAcceptingEventId] = useState<string | null>(null);
 
@@ -415,6 +419,7 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
     setEventPickerMonth(new Date());
     setEventPickerSelectedDate(getLocalDateString());
     setEventPickerFilter("todos");
+    setSendingItemKey(null);
     setShowEventPicker(true);
     setEventPickerLoading(true);
     try {
@@ -429,19 +434,26 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
 
   const closeEventPicker = () => {
     setShowEventPicker(false);
+    setSendingItemKey(null);
   };
 
   const handleSendSharedEvent = async (item: SharedEventListItem) => {
     if (!selectedEmail) return;
+    const key = `${item.category}-${item.id}`;
+    setSendingItemKey(key);
     setIsSendingEvent(true);
     try {
       await sendSharedEventMessage(normalizedUserEmail, selectedEmail, item);
-      closeEventPicker();
+      uiSounds.success();
       setJustSent(true);
       setTimeout(() => setJustSent(false), 400);
-      vibrateOnSend();
+      // Breve pausa para que se vea la animación de "enviado" en la tarjeta antes de cerrar.
+      setTimeout(() => {
+        closeEventPicker();
+      }, 260);
     } catch (err: any) {
       showToast(err?.message || "No se pudo compartir el evento.", "error");
+      setSendingItemKey(null);
     } finally {
       setIsSendingEvent(false);
     }
@@ -516,11 +528,21 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
     return days;
   };
 
-  const eventPickerDatesWithItems = useMemo(() => {
-    const set = new Set<string>();
-    eventPickerAllItems.forEach((it) => { if (it.date) set.add(it.date); });
-    return set;
-  }, [eventPickerAllItems]);
+  const EVENT_PICKER_DAY_NAMES = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+  const getEventPickerWeekday = (dateStr: string): string => {
+    const [y, m, d] = dateStr.split("-").map(Number);
+    return EVENT_PICKER_DAY_NAMES[new Date(y, m - 1, d).getDay()];
+  };
+
+  // Si un registro "cae" en una fecha puntual del calendario: los horarios de clase son
+  // recurrentes semana a semana, así que no tienen un campo de fecha propio — igual que en el
+  // Calendario Unificado de Inicio, se los matchea por día de la semana (h.dia) contra el día
+  // elegido, no se muestran siempre sin importar la fecha.
+  const eventPickerItemAppliesToDate = (item: SharedEventListItem, dateStr: string): boolean => {
+    if (item.category === "universidad_horario") return item.raw?.dia === getEventPickerWeekday(dateStr);
+    if (!item.date) return true;
+    return item.date === dateStr;
+  };
 
   const matchesEventPickerFilter = (item: SharedEventListItem): boolean => {
     if (eventPickerFilter === "todos") return true;
@@ -528,14 +550,19 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
     return item.category === eventPickerFilter;
   };
 
+  // Las Notas Rápidas no tienen fecha ni día — igual que en Inicio (donde no forman parte del
+  // calendario), acá quedan desvinculadas por completo: el calendario no se usa para filtrarlas.
+  const eventPickerDayHasItems = (dateStr: string): boolean =>
+    eventPickerAllItems.some(
+      (it) => it.category !== "notas" && matchesEventPickerFilter(it) && eventPickerItemAppliesToDate(it, dateStr)
+    );
+
   const eventPickerFilteredItems = useMemo(() => {
     return eventPickerAllItems.filter((it) => {
       if (!matchesEventPickerFilter(it)) return false;
+      if (it.category === "notas") return true;
       if (!eventPickerSelectedDate) return true;
-      // Horarios de clase (recurrentes, sin fecha propia) y notas rápidas (sin fecha) se
-      // muestran siempre, sin importar qué día esté elegido en el calendario.
-      if (!it.date) return true;
-      return it.date === eventPickerSelectedDate;
+      return eventPickerItemAppliesToDate(it, eventPickerSelectedDate);
     });
   }, [eventPickerAllItems, eventPickerFilter, eventPickerSelectedDate]);
 
@@ -1050,171 +1077,6 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                   showMobileConversation ? "flex" : "hidden md:flex"
                 }`}
               >
-                <AnimatePresence>
-                  {showEventPicker && (
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      className={`absolute inset-0 z-30 flex flex-col ${darkMode ? "bg-zinc-950" : "bg-white"}`}
-                    >
-                      <div className="flex items-center gap-2 p-2.5 border-b border-zinc-200/60 dark:border-white/10 shrink-0">
-                        <CalendarPlus className="w-3.5 h-3.5 text-primary shrink-0" />
-                        <h3 className="text-xs font-extrabold flex-1 truncate">Compartir un evento</h3>
-                        <button
-                          type="button"
-                          onClick={closeEventPicker}
-                          className="p-1 rounded-full hover:bg-zinc-200/60 dark:hover:bg-zinc-800 cursor-pointer text-zinc-500 shrink-0"
-                          title="Cerrar"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-
-                      <div className="flex-1 min-h-0 overflow-y-auto p-3">
-                        {eventPickerLoading && eventPickerAllItems.length === 0 ? (
-                          <div className="h-full flex items-center justify-center">
-                            <RefreshCw className="w-5 h-5 text-primary animate-spin" />
-                          </div>
-                        ) : (
-                          <div className="flex flex-col lg:flex-row gap-3">
-                            {/* Calendario: arriba en mobile, a la izquierda en PC — mismo patrón
-                                que "Calendario Unificado" de Inicio, pero acá filtra la lista de
-                                al lado en vez de navegar a cada sección. */}
-                            <div
-                              className={`shrink-0 lg:w-[270px] p-3 rounded-2xl border ${
-                                darkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-zinc-200"
-                              }`}
-                            >
-                              <div className="flex items-center justify-between mb-2.5">
-                                <button
-                                  type="button"
-                                  onClick={() => setEventPickerMonth((d) => { const n = new Date(d); n.setMonth(n.getMonth() - 1); return n; })}
-                                  className="p-1.5 rounded-lg bg-zinc-500/10 hover:bg-zinc-500/20 text-primary cursor-pointer"
-                                  title="Mes anterior"
-                                >
-                                  <ChevronLeft className="w-3.5 h-3.5" />
-                                </button>
-                                <span className="text-[10.5px] font-extrabold uppercase tracking-wide">
-                                  {EVENT_PICKER_MONTH_NAMES[eventPickerMonth.getMonth()]} {eventPickerMonth.getFullYear()}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => setEventPickerMonth((d) => { const n = new Date(d); n.setMonth(n.getMonth() + 1); return n; })}
-                                  className="p-1.5 rounded-lg bg-zinc-500/10 hover:bg-zinc-500/20 text-primary cursor-pointer"
-                                  title="Mes siguiente"
-                                >
-                                  <ChevronRight className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                              <div className="grid grid-cols-7 gap-1 text-center text-[9px] font-bold text-zinc-400 dark:text-zinc-500 uppercase mb-1">
-                                {EVENT_PICKER_WEEK_DAYS.map((wd, i) => (
-                                  <div key={i}>{wd}</div>
-                                ))}
-                              </div>
-                              <div className="grid grid-cols-7 gap-1">
-                                {getEventPickerMonthGrid(eventPickerMonth).map((day, idx) => {
-                                  if (day === null) return <div key={`empty-${idx}`} />;
-                                  const dateStr = `${eventPickerMonth.getFullYear()}-${String(eventPickerMonth.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-                                  const hasEvents = eventPickerDatesWithItems.has(dateStr);
-                                  const isSelected = eventPickerSelectedDate === dateStr;
-                                  const isToday = getLocalDateString() === dateStr;
-                                  return (
-                                    <button
-                                      key={`day-${day}`}
-                                      type="button"
-                                      onClick={() => setEventPickerSelectedDate(isSelected ? null : dateStr)}
-                                      className={`relative h-7 w-full rounded-full text-[10.5px] font-bold flex items-center justify-center cursor-pointer transition-all ${
-                                        isSelected
-                                          ? "border-2 border-primary text-primary bg-primary/10"
-                                          : isToday
-                                          ? "bg-primary text-white dark:text-blue-950"
-                                          : "hover:bg-primary/10 text-slate-700 dark:text-zinc-300"
-                                      }`}
-                                    >
-                                      {day}
-                                      {hasEvents && (
-                                        <span
-                                          className={`absolute bottom-0.5 w-1 h-1 rounded-full ${
-                                            isSelected || isToday ? "bg-current" : "bg-primary animate-pulse"
-                                          }`}
-                                        />
-                                      )}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setEventPickerMonth(new Date());
-                                  setEventPickerSelectedDate(getLocalDateString());
-                                }}
-                                className="mt-2.5 text-[10px] text-primary font-bold hover:underline cursor-pointer"
-                              >
-                                Ir a Hoy
-                              </button>
-                            </div>
-
-                            {/* Agenda del día elegido: abajo en mobile, a la derecha en PC */}
-                            <div className="flex-1 min-w-0 flex flex-col gap-2">
-                              <PillFilterBar
-                                options={EVENT_FILTER_OPTIONS}
-                                activeValue={eventPickerFilter}
-                                onChange={(value) => setEventPickerFilter(value)}
-                                layoutIdPrefix="eventPickerFilter"
-                                resetButton={
-                                  eventPickerSelectedDate ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => setEventPickerSelectedDate(null)}
-                                      className="px-2 py-1 text-[10px] text-primary font-bold hover:underline cursor-pointer ml-1 whitespace-nowrap shrink-0"
-                                      title="Ver todas las fechas"
-                                    >
-                                      Todas
-                                    </button>
-                                  ) : null
-                                }
-                              />
-                              <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5">
-                                {eventPickerFilteredItems.length === 0 ? (
-                                  <div className="py-8 text-center text-xs text-zinc-500 font-medium bg-zinc-500/5 rounded-xl border border-dashed border-zinc-300 dark:border-zinc-800">
-                                    No hay registros para mostrar acá.
-                                  </div>
-                                ) : (
-                                  eventPickerFilteredItems.map((item) => {
-                                    const ItemIcon = SHARED_EVENT_ICON[item.category];
-                                    return (
-                                      <motion.button
-                                        key={`${item.category}-${item.id}`}
-                                        type="button"
-                                        whileHover={{ scale: 1.01 }}
-                                        whileTap={{ scale: 0.98 }}
-                                        disabled={isSendingEvent}
-                                        onClick={() => handleSendSharedEvent(item)}
-                                        className={`w-full p-2.5 rounded-xl border text-left cursor-pointer disabled:opacity-50 flex items-start gap-2 ${
-                                          darkMode ? "border-zinc-800 hover:border-primary/50" : "border-zinc-200 hover:border-primary/50"
-                                        }`}
-                                      >
-                                        <ItemIcon className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
-                                        <div className="min-w-0 flex-1">
-                                          <div className="text-[11.5px] font-bold truncate">{item.title}</div>
-                                          {item.subtitle && (
-                                            <div className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate">{item.subtitle}</div>
-                                          )}
-                                        </div>
-                                      </motion.button>
-                                    );
-                                  })
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
 
                 {selectedEmail ? (
                   <>
@@ -1244,6 +1106,7 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                       </div>
                     </div>
 
+                    <div className="relative flex-1 min-h-0 flex flex-col">
                     <div ref={messagesContainerRef} className="flex-1 min-h-0 overflow-y-auto scrollbar-none p-3 space-y-1.5">
                       {messages.length === 0 ? (
                         <div className="h-full flex items-center justify-center text-xs text-zinc-400 font-medium text-center px-6">
@@ -1384,6 +1247,184 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                           );
                         })
                       )}
+                    </div>
+
+                <AnimatePresence>
+                  {showEventPicker && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 16, scale: 0.97 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 10, scale: 0.97 }}
+                      transition={{ type: "spring", stiffness: 340, damping: 30 }}
+                      className={`absolute inset-0 z-20 flex flex-col ${darkMode ? "bg-zinc-950" : "bg-white"}`}
+                    >
+                      <div className="flex items-center gap-2 p-2.5 border-b border-zinc-200/60 dark:border-white/10 shrink-0">
+                        <CalendarPlus className="w-3.5 h-3.5 text-primary shrink-0" />
+                        <h3 className="text-xs font-extrabold flex-1 truncate">Compartir un evento</h3>
+                        <button
+                          type="button"
+                          data-sound="navigate"
+                          onClick={closeEventPicker}
+                          className="p-1 rounded-full hover:bg-zinc-200/60 dark:hover:bg-zinc-800 cursor-pointer text-zinc-500 shrink-0"
+                          title="Cerrar"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
+                      <div className="flex-1 min-h-0 overflow-y-auto p-3">
+                        {eventPickerLoading && eventPickerAllItems.length === 0 ? (
+                          <div className="h-full flex items-center justify-center">
+                            <RefreshCw className="w-5 h-5 text-primary animate-spin" />
+                          </div>
+                        ) : (
+                          <div className="flex flex-col lg:flex-row gap-3">
+                            {/* Calendario: arriba en mobile, a la izquierda en PC — mismo patrón
+                                que "Calendario Unificado" de Inicio, pero acá filtra la lista de
+                                al lado en vez de navegar a cada sección. */}
+                            {eventPickerFilter !== "notas" && (
+                            <div
+                              className={`shrink-0 lg:w-[270px] p-3 rounded-2xl border ${
+                                darkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-zinc-200"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between mb-2.5">
+                                <button
+                                  type="button"
+                                  onClick={() => setEventPickerMonth((d) => { const n = new Date(d); n.setMonth(n.getMonth() - 1); return n; })}
+                                  className="p-1.5 rounded-lg bg-zinc-500/10 hover:bg-zinc-500/20 text-primary cursor-pointer"
+                                  title="Mes anterior"
+                                >
+                                  <ChevronLeft className="w-3.5 h-3.5" />
+                                </button>
+                                <span className="text-[10.5px] font-extrabold uppercase tracking-wide">
+                                  {EVENT_PICKER_MONTH_NAMES[eventPickerMonth.getMonth()]} {eventPickerMonth.getFullYear()}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setEventPickerMonth((d) => { const n = new Date(d); n.setMonth(n.getMonth() + 1); return n; })}
+                                  className="p-1.5 rounded-lg bg-zinc-500/10 hover:bg-zinc-500/20 text-primary cursor-pointer"
+                                  title="Mes siguiente"
+                                >
+                                  <ChevronRight className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                              <div className="grid grid-cols-7 gap-1 text-center text-[9px] font-bold text-zinc-400 dark:text-zinc-500 uppercase mb-1">
+                                {EVENT_PICKER_WEEK_DAYS.map((wd, i) => (
+                                  <div key={i}>{wd}</div>
+                                ))}
+                              </div>
+                              <div className="grid grid-cols-7 gap-1">
+                                {getEventPickerMonthGrid(eventPickerMonth).map((day, idx) => {
+                                  if (day === null) return <div key={`empty-${idx}`} />;
+                                  const dateStr = `${eventPickerMonth.getFullYear()}-${String(eventPickerMonth.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+                                  const hasEvents = eventPickerDayHasItems(dateStr);
+                                  const isSelected = eventPickerSelectedDate === dateStr;
+                                  const isToday = getLocalDateString() === dateStr;
+                                  return (
+                                    <button
+                                      key={`day-${day}`}
+                                      type="button"
+                                      data-sound="selectDate"
+                                      onClick={() => setEventPickerSelectedDate(isSelected ? null : dateStr)}
+                                      className={`relative h-7 w-full rounded-full text-[10.5px] font-bold flex items-center justify-center cursor-pointer transition-all ${
+                                        isSelected
+                                          ? "border-2 border-primary text-primary bg-primary/10"
+                                          : isToday
+                                          ? "bg-primary text-white dark:text-blue-950"
+                                          : "hover:bg-primary/10 text-slate-700 dark:text-zinc-300"
+                                      }`}
+                                    >
+                                      {day}
+                                      {hasEvents && (
+                                        <span
+                                          className={`absolute bottom-0.5 w-1 h-1 rounded-full ${
+                                            isSelected || isToday ? "bg-current" : "bg-primary animate-pulse"
+                                          }`}
+                                        />
+                                      )}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEventPickerMonth(new Date());
+                                  setEventPickerSelectedDate(getLocalDateString());
+                                }}
+                                className="mt-2.5 text-[10px] text-primary font-bold hover:underline cursor-pointer"
+                              >
+                                Ir a Hoy
+                              </button>
+                            </div>
+                            )}
+
+                            {/* Agenda del día elegido: abajo en mobile, a la derecha en PC */}
+                            <div className="flex-1 min-w-0 flex flex-col gap-2">
+                              <PillFilterBar
+                                options={EVENT_FILTER_OPTIONS}
+                                activeValue={eventPickerFilter}
+                                onChange={(value) => setEventPickerFilter(value)}
+                                layoutIdPrefix="eventPickerFilter"
+                                resetButton={
+                                  eventPickerSelectedDate ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => setEventPickerSelectedDate(null)}
+                                      className="px-2 py-1 text-[10px] text-primary font-bold hover:underline cursor-pointer ml-1 whitespace-nowrap shrink-0"
+                                      title="Ver todas las fechas"
+                                    >
+                                      Todas
+                                    </button>
+                                  ) : null
+                                }
+                              />
+                              <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5">
+                                {eventPickerFilteredItems.length === 0 ? (
+                                  <div className="py-8 text-center text-xs text-zinc-500 font-medium bg-zinc-500/5 rounded-xl border border-dashed border-zinc-300 dark:border-zinc-800">
+                                    No hay registros para mostrar acá.
+                                  </div>
+                                ) : (
+                                  eventPickerFilteredItems.map((item) => {
+                                    const ItemIcon = SHARED_EVENT_ICON[item.category];
+                                    return (
+                                      <motion.button
+                                        key={`${item.category}-${item.id}`}
+                                        type="button"
+                                        whileHover={{ scale: 1.01 }}
+                                        whileTap={{ scale: 0.98 }}
+                                        animate={
+                                          sendingItemKey === `${item.category}-${item.id}`
+                                            ? { scale: [1, 1.06, 0.9], opacity: [1, 1, 0] }
+                                            : { scale: 1, opacity: 1 }
+                                        }
+                                        transition={{ duration: 0.26 }}
+                                        disabled={isSendingEvent}
+                                        onClick={() => handleSendSharedEvent(item)}
+                                        className={`w-full p-2.5 rounded-xl border text-left cursor-pointer disabled:opacity-50 flex items-start gap-2 ${
+                                          darkMode ? "border-zinc-800 hover:border-primary/50" : "border-zinc-200 hover:border-primary/50"
+                                        }`}
+                                      >
+                                        <ItemIcon className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
+                                        <div className="min-w-0 flex-1">
+                                          <div className="text-[11.5px] font-bold truncate">{item.title}</div>
+                                          {item.subtitle && (
+                                            <div className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate">{item.subtitle}</div>
+                                          )}
+                                        </div>
+                                      </motion.button>
+                                    );
+                                  })
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
                     </div>
 
                     <div className="border-t border-zinc-200/60 dark:border-white/10 shrink-0">
@@ -1553,6 +1594,7 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                                   </button>
                                   <button
                                     type="button"
+                                    data-sound="expand"
                                     onClick={openEventPicker}
                                     className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl hover:bg-primary/10 text-left text-xs font-semibold cursor-pointer"
                                   >
