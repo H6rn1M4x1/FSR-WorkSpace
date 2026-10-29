@@ -268,6 +268,20 @@ export async function sendChatMessage(
  * returns its public download URL. Throws on failure — callers should surface the error as a
  * toast instead of silently dropping the attachment.
  */
+const UPLOAD_TIMEOUT_MS = 25000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`${label} tardó demasiado. Revisá tu conexión o que Firebase Storage esté habilitado.`));
+    }, ms);
+    promise.then(
+      (v) => { clearTimeout(timer); resolve(v); },
+      (err) => { clearTimeout(timer); reject(err); }
+    );
+  });
+}
+
 export async function uploadChatAttachment(
   conversationId: string,
   file: Blob,
@@ -276,8 +290,41 @@ export async function uploadChatAttachment(
   const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
   const path = `chat_attachments/${conversationId}/${Date.now()}_${safeName}`;
   const storageRef = ref(storage, path);
-  await uploadBytes(storageRef, file);
-  return getDownloadURL(storageRef);
+  try {
+    await withTimeout(uploadBytes(storageRef, file), UPLOAD_TIMEOUT_MS, "La subida del archivo");
+    return await withTimeout(getDownloadURL(storageRef), UPLOAD_TIMEOUT_MS, "Obtener el link del archivo");
+  } catch (error: any) {
+    const code = error?.code ? ` (${error.code})` : "";
+    throw new Error(`No se pudo subir el archivo${code}. Puede que falte habilitar Firebase Storage para este proyecto.`);
+  }
+}
+
+/**
+ * Re-encodes an image client-side (resize + JPEG) before subiéndola, para que pese bastante
+ * menos y el envío sea más rápido — sobre todo con fotos de celular de varios MB. Si algo falla
+ * (formato raro, canvas tainted, etc.) devuelve el archivo original tal cual, nunca bloquea el
+ * envío por esto.
+ */
+export async function compressImageFile(file: File, maxDimension = 1600, quality = 0.82): Promise<File> {
+  if (!file.type.startsWith("image/") || file.type === "image/gif") return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height));
+    const width = Math.round(bitmap.width * scale);
+    const height = Math.round(bitmap.height * scale);
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return file;
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    const blob: Blob | null = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+    if (!blob || blob.size >= file.size) return file;
+    const newName = file.name.replace(/\.[^.]+$/, "") + ".jpg";
+    return new File([blob], newName, { type: "image/jpeg" });
+  } catch (_) {
+    return file;
+  }
 }
 
 /**
@@ -326,7 +373,9 @@ export async function markConversationRead(conversationId: string, userEmail: st
       const data = d.data() as ChatMessage;
       return data.toEmail === normalizedEmail && !data.read;
     });
-    await Promise.all(toMark.map((d) => updateDoc(doc(db, MESSAGES_COLLECTION, d.id), { read: true })));
+    // "delivered" también se pisa a true acá: si por lo que sea nunca se marcó al llegar, leerlo
+    // ya implica que llegó — así la doble palomita (celeste) siempre aparece en todo mensaje visto.
+    await Promise.all(toMark.map((d) => updateDoc(doc(db, MESSAGES_COLLECTION, d.id), { read: true, delivered: true })));
   } catch (error) {
     console.warn("[Chat] Error al marcar conversación como leída:", error);
   }
