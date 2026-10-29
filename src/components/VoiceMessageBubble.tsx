@@ -101,7 +101,11 @@ export function VoiceMessageBubble({ url, isOwn, darkMode, durationSec }: VoiceM
         type="button"
         onClick={togglePlay}
         className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 cursor-pointer transition-transform active:scale-90 ${
-          isOwn ? "bg-white/25 text-white" : "bg-primary text-white dark:text-blue-950"
+          isOwn
+            ? darkMode
+              ? "bg-white/20 text-white"
+              : "bg-black/10 text-black"
+            : "bg-primary text-white dark:text-blue-950"
         }`}
         title={isPlaying ? "Pausar" : "Reproducir"}
       >
@@ -114,10 +118,14 @@ export function VoiceMessageBubble({ url, isOwn, darkMode, durationSec }: VoiceM
             className={`w-[2.5px] rounded-full transition-colors duration-150 ${
               i < playedBars
                 ? isOwn
-                  ? "bg-white"
+                  ? darkMode
+                    ? "bg-white"
+                    : "bg-black"
                   : "bg-primary"
                 : isOwn
-                ? "bg-white/40"
+                ? darkMode
+                  ? "bg-white/35"
+                  : "bg-black/25"
                 : darkMode
                 ? "bg-zinc-600"
                 : "bg-zinc-300"
@@ -126,7 +134,11 @@ export function VoiceMessageBubble({ url, isOwn, darkMode, durationSec }: VoiceM
           />
         ))}
       </div>
-      <span className={`text-[9.5px] shrink-0 tabular-nums ${isOwn ? "text-white/80" : "text-zinc-500"}`}>
+      <span
+        className={`text-[9.5px] shrink-0 tabular-nums ${
+          isOwn ? (darkMode ? "text-white/80" : "text-black/70") : "text-zinc-500"
+        }`}
+      >
         {formatTime(displayedTime)}
       </span>
     </div>

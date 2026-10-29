@@ -40,6 +40,7 @@ import {
   markConversationRead,
   getConversationId,
   uploadChatAttachment,
+  compressImageFile,
 } from "../lib/chatService";
 import { VoiceMessageBubble } from "./VoiceMessageBubble";
 import { useToast } from "../context/ToastContext";
@@ -72,7 +73,7 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
   const [newContactName, setNewContactName] = useState("");
   const [renamingEmail, setRenamingEmail] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const { showToast } = useToast();
 
   // --- Adjuntos (imágenes/videos/documentos/cámara) ---
@@ -162,9 +163,21 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
     }
   }, [unreadByContact, selectedEmail, normalizedUserEmail]);
 
+  // Scrollea solo el contenedor interno de mensajes (nunca la página entera): scrollIntoView en
+  // el div ancla arrastraba todo el layout hacia abajo al abrir el chat o al enviar un mensaje.
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = messagesContainerRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
   }, [messages.length]);
+
+  // Cada vez que se abre el panel arranca en la lista de contactos — no se queda "pegado" en la
+  // última conversación que tenías abierta la vez anterior.
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedEmail(null);
+      setShowMobileConversation(false);
+    }
+  }, [isOpen]);
 
   const contactEmails = useMemo(
     () => active.map((c) => (c.fromEmail === normalizedUserEmail ? c.toEmail : c.fromEmail)),
@@ -187,6 +200,7 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
     try {
       const res = await sendContactInvitation(normalizedUserEmail, newContactEmail, newContactName);
       setFeedback({ type: res.success ? "success" : "error", text: res.message });
+      setTimeout(() => setFeedback(null), 6000);
       if (res.success) {
         setNewContactEmail("");
         setNewContactName("");
@@ -227,8 +241,9 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
     const { file, type, previewUrl } = pendingAttachment;
     setIsUploadingAttachment(true);
     try {
+      const fileToUpload = type === "image" ? await compressImageFile(file) : file;
       const conversationId = getConversationId(normalizedUserEmail, selectedEmail);
-      const url = await uploadChatAttachment(conversationId, file, file.name);
+      const url = await uploadChatAttachment(conversationId, fileToUpload, file.name);
       await sendChatMessage(normalizedUserEmail, selectedEmail, caption, {
         url,
         type,
@@ -241,6 +256,24 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
       showToast(err?.message || "No se pudo subir el adjunto. Probá de nuevo.", "error");
     } finally {
       setIsUploadingAttachment(false);
+    }
+  };
+
+  const handleOpenDocument = async (url: string, name?: string) => {
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = name || "documento";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.open(objectUrl, "_blank");
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+    } catch (_) {
+      window.open(url, "_blank");
     }
   };
 
@@ -489,7 +522,7 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                       <div
                         className={`mb-2 p-2 rounded-lg text-[10.5px] font-bold flex items-center justify-between gap-2 ${
                           feedback.type === "success"
-                            ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                            ? "bg-primary/10 text-primary"
                             : "bg-rose-500/10 text-rose-700 dark:text-rose-300"
                         }`}
                       >
@@ -571,13 +604,13 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                   {incoming.map((invite) => (
                     <div
                       key={invite.id}
-                      className="p-2.5 rounded-xl border border-amber-500/30 bg-amber-50/50 dark:bg-amber-950/20 flex items-center justify-between gap-2"
+                      className="p-2.5 rounded-xl border border-primary/30 bg-primary/10 dark:bg-primary/15 flex items-center justify-between gap-2"
                     >
                       <div className="min-w-0">
-                        <div className="text-[11px] font-bold text-amber-900 dark:text-amber-200 truncate">
+                        <div className="text-[11px] font-bold text-primary truncate">
                           {getDisplayName(invite.fromEmail)}
                         </div>
-                        <div className="text-[9.5px] text-amber-700/80 dark:text-amber-400/80">Quiere agregarte</div>
+                        <div className="text-[9.5px] text-primary/80">Quiere agregarte</div>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
                         <motion.button
@@ -740,7 +773,7 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                       </div>
                     </div>
 
-                    <div className="flex-1 min-h-0 overflow-y-auto scrollbar-none p-3 space-y-1.5">
+                    <div ref={messagesContainerRef} className="flex-1 min-h-0 overflow-y-auto scrollbar-none p-3 space-y-1.5">
                       {messages.length === 0 ? (
                         <div className="h-full flex items-center justify-center text-xs text-zinc-400 font-medium text-center px-6">
                           Todavía no hay mensajes. ¡Escribe el primero!
@@ -758,7 +791,7 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                               <div
                                 className={`max-w-[75%] px-3 py-1.5 rounded-2xl text-[12px] font-medium leading-snug ${
                                   isOwn
-                                    ? "bg-primary text-white dark:text-blue-950 rounded-br-md"
+                                    ? "bg-primary text-black dark:text-white rounded-br-md"
                                     : darkMode
                                     ? "bg-zinc-800 text-zinc-100 rounded-bl-md"
                                     : "bg-zinc-100 text-zinc-900 rounded-bl-md"
@@ -776,17 +809,17 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                                   <video src={msg.attachmentUrl} controls className="rounded-xl max-w-full max-h-56 mb-1" />
                                 )}
                                 {msg.attachmentType === "document" && msg.attachmentUrl && (
-                                  <a
-                                    href={msg.attachmentUrl}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    download={msg.attachmentName}
-                                    className={`flex items-center gap-2 p-2 rounded-xl mb-1 ${isOwn ? "bg-white/15" : darkMode ? "bg-black/20" : "bg-white"}`}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenDocument(msg.attachmentUrl!, msg.attachmentName)}
+                                    className={`w-full flex items-center gap-2 p-2 rounded-xl mb-1 cursor-pointer ${
+                                      isOwn ? "bg-black/10 dark:bg-white/15" : darkMode ? "bg-black/20" : "bg-white"
+                                    }`}
                                   >
                                     <FileText className="w-5 h-5 shrink-0" />
                                     <span className="text-[11px] font-semibold truncate">{msg.attachmentName || "Documento"}</span>
                                     <Download className="w-3.5 h-3.5 shrink-0 opacity-70" />
-                                  </a>
+                                  </button>
                                 )}
                                 {msg.attachmentType === "audio" && msg.attachmentUrl && (
                                   <VoiceMessageBubble
@@ -799,7 +832,7 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                                 {msg.text && <span className="whitespace-pre-wrap break-words">{msg.text}</span>}
                                 <div className={`flex items-center gap-1 mt-0.5 opacity-80 ${isOwn ? "justify-end" : "justify-start"}`}>
                                   <span className="text-[9px]">
-                                    {new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                    {new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}
                                   </span>
                                   {isOwn &&
                                     (msg.read ? (
@@ -815,7 +848,6 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                           );
                         })
                       )}
-                      <div ref={messagesEndRef} />
                     </div>
 
                     <div className="border-t border-zinc-200/60 dark:border-white/10 shrink-0">
