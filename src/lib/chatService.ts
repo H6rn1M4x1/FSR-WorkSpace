@@ -10,8 +10,9 @@ import {
   getDocs,
   Unsubscribe,
 } from "firebase/firestore";
-import { db } from "./firebase";
-import { ChatContact, ChatMessage } from "../types";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { db, storage } from "./firebase";
+import { ChatContact, ChatMessage, ChatAttachmentType } from "../types";
 
 const CONTACTS_COLLECTION = "chat_contacts";
 const MESSAGES_COLLECTION = "chat_messages";
@@ -86,10 +87,12 @@ export function subscribeToContacts(
  */
 export async function sendContactInvitation(
   fromEmail: string,
-  toEmail: string
+  toEmail: string,
+  customName?: string
 ): Promise<{ success: boolean; message: string }> {
   const normFrom = (fromEmail || "").trim().toLowerCase();
   const normTo = (toEmail || "").trim().toLowerCase();
+  const trimmedCustomName = (customName || "").trim();
 
   if (!normTo || !normTo.includes("@")) {
     return { success: false, message: "Por favor ingresa un correo electrónico válido." };
@@ -125,6 +128,7 @@ export async function sendContactInvitation(
       await updateDoc(doc(db, CONTACTS_COLLECTION, reverseDoc.id), {
         status: "accepted",
         updatedAt: new Date().toISOString(),
+        ...(trimmedCustomName ? { toCustomName: trimmedCustomName } : {}),
       });
       return { success: true, message: `¡${normTo} ya te había agregado! Contacto vinculado.` };
     }
@@ -136,10 +140,35 @@ export async function sendContactInvitation(
       status: "pending",
       createdAt: now,
       updatedAt: now,
+      ...(trimmedCustomName ? { fromCustomName: trimmedCustomName } : {}),
     });
     return { success: true, message: `Invitación enviada a ${normTo}.` };
   } catch (error: any) {
     return { success: false, message: error?.message || "Error al enviar la invitación." };
+  }
+}
+
+/**
+ * Sets the custom display name a given viewer (either side of the link) sees for their contact,
+ * independent of the other person's real profile name.
+ */
+export async function renameContact(
+  contact: ChatContact,
+  viewerEmail: string,
+  customName: string
+): Promise<{ success: boolean; message: string }> {
+  if (!contact.id) return { success: false, message: "ID de contacto no válido." };
+  const normViewer = (viewerEmail || "").trim().toLowerCase();
+  const trimmedName = customName.trim();
+  const field = contact.fromEmail === normViewer ? "fromCustomName" : "toCustomName";
+  try {
+    await updateDoc(doc(db, CONTACTS_COLLECTION, contact.id), {
+      [field]: trimmedName,
+      updatedAt: new Date().toISOString(),
+    });
+    return { success: true, message: "Nombre actualizado." };
+  } catch (error: any) {
+    return { success: false, message: error?.message || "Error al renombrar el contacto." };
   }
 }
 
@@ -197,9 +226,21 @@ export function subscribeToConversation(
   );
 }
 
-export async function sendChatMessage(fromEmail: string, toEmail: string, text: string): Promise<void> {
+export interface ChatMessageAttachment {
+  url: string;
+  type: ChatAttachmentType;
+  name?: string;
+  durationSec?: number;
+}
+
+export async function sendChatMessage(
+  fromEmail: string,
+  toEmail: string,
+  text: string,
+  attachment?: ChatMessageAttachment
+): Promise<void> {
   const trimmed = text.trim();
-  if (!trimmed) return;
+  if (!trimmed && !attachment) return;
   const normFrom = (fromEmail || "").trim().toLowerCase();
   const normTo = (toEmail || "").trim().toLowerCase();
   const conversationId = getConversationId(normFrom, normTo);
@@ -210,7 +251,33 @@ export async function sendChatMessage(fromEmail: string, toEmail: string, text: 
     text: trimmed,
     createdAt: new Date().toISOString(),
     read: false,
+    delivered: false,
+    ...(attachment
+      ? {
+          attachmentUrl: attachment.url,
+          attachmentType: attachment.type,
+          ...(attachment.name ? { attachmentName: attachment.name } : {}),
+          ...(attachment.durationSec ? { audioDurationSec: attachment.durationSec } : {}),
+        }
+      : {}),
   });
+}
+
+/**
+ * Uploads a chat attachment (image, video, document or voice note) to Firebase Storage and
+ * returns its public download URL. Throws on failure — callers should surface the error as a
+ * toast instead of silently dropping the attachment.
+ */
+export async function uploadChatAttachment(
+  conversationId: string,
+  file: Blob,
+  fileName: string
+): Promise<string> {
+  const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const path = `chat_attachments/${conversationId}/${Date.now()}_${safeName}`;
+  const storageRef = ref(storage, path);
+  await uploadBytes(storageRef, file);
+  return getDownloadURL(storageRef);
 }
 
 /**
@@ -230,11 +297,20 @@ export function subscribeToUnreadMessages(
     q,
     (snapshot) => {
       const counts: Record<string, number> = {};
+      const toMarkDelivered: string[] = [];
       snapshot.docs.forEach((d) => {
         const data = d.data() as ChatMessage;
         if (!data.read) counts[data.fromEmail] = (counts[data.fromEmail] || 0) + 1;
+        if (!data.delivered) toMarkDelivered.push(d.id);
       });
       onUpdate(counts);
+      // El destinatario (yo) acaba de "ver" estos mensajes llegar — 2da palomita (gris) para
+      // quien los envió, sin importar si todavía abrí esa conversación puntual o no.
+      if (toMarkDelivered.length > 0) {
+        toMarkDelivered.forEach((id) => {
+          updateDoc(doc(db, MESSAGES_COLLECTION, id), { delivered: true }).catch(() => {});
+        });
+      }
     },
     (err) => console.warn("[Chat] Error en mensajes no leídos:", err)
   );

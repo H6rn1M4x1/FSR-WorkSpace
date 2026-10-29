@@ -6,6 +6,7 @@ import {
   UserPlus,
   X,
   Check,
+  CheckCheck,
   Clock,
   Search,
   Trash2,
@@ -13,8 +14,18 @@ import {
   AlertCircle,
   CheckCircle2,
   Users,
+  Paperclip,
+  Image as ImageIcon,
+  FileText,
+  Camera,
+  CalendarPlus,
+  Mic,
+  Square,
+  Lock,
+  Pencil,
+  Download,
 } from "lucide-react";
-import { ChatContact, ChatMessage } from "../types";
+import { ChatContact, ChatMessage, ChatAttachmentType } from "../types";
 import {
   subscribeToContacts,
   subscribeToUnreadMessages,
@@ -24,10 +35,14 @@ import {
   acceptContactInvitation,
   rejectContactInvitation,
   removeContact,
+  renameContact,
   sendChatMessage,
   markConversationRead,
   getConversationId,
+  uploadChatAttachment,
 } from "../lib/chatService";
+import { VoiceMessageBubble } from "./VoiceMessageBubble";
+import { useToast } from "../context/ToastContext";
 
 interface ChatPanelProps {
   userEmail: string;
@@ -54,7 +69,41 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [search, setSearch] = useState("");
   const [showMobileConversation, setShowMobileConversation] = useState(false);
+  const [newContactName, setNewContactName] = useState("");
+  const [renamingEmail, setRenamingEmail] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { showToast } = useToast();
+
+  // --- Adjuntos (imágenes/videos/documentos/cámara) ---
+  const [showAttachMenu, setShowAttachMenu] = useState(false);
+  const [pendingAttachment, setPendingAttachment] = useState<{
+    file: File;
+    previewUrl: string;
+    type: ChatAttachmentType;
+  } | null>(null);
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
+  const imageVideoInputRef = useRef<HTMLInputElement>(null);
+  const documentInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const attachMenuRef = useRef<HTMLDivElement>(null);
+
+  // --- Grabación de notas de voz ---
+  type RecordingState = "idle" | "recording" | "locked" | "preview";
+  const [recordingState, setRecordingState] = useState<RecordingState>("idle");
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [previewAudioUrl, setPreviewAudioUrl] = useState<string | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<BlobPart[]>([]);
+  const recordedBlobRef = useRef<Blob | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const dragStartYRef = useRef<number | null>(null);
+  const barRefs = useRef<Array<HTMLDivElement | null>>([]);
+  const rafRef = useRef<number | null>(null);
+  const isTouchDevice = typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)")?.matches;
 
   // These two subscriptions stay alive for as long as this component is mounted (i.e. for as
   // long as TopNavbar itself is mounted), regardless of `isOpen` — that's what lets the unread
@@ -136,10 +185,11 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
     setFeedback(null);
     setIsSendingInvite(true);
     try {
-      const res = await sendContactInvitation(normalizedUserEmail, newContactEmail);
+      const res = await sendContactInvitation(normalizedUserEmail, newContactEmail, newContactName);
       setFeedback({ type: res.success ? "success" : "error", text: res.message });
       if (res.success) {
         setNewContactEmail("");
+        setNewContactName("");
         setShowAddContact(false);
       }
     } finally {
@@ -147,16 +197,245 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
     }
   };
 
+  const handleStartRename = (email: string) => {
+    setRenamingEmail(email);
+    setRenameValue(customNameFor(email) === email ? "" : customNameFor(email));
+  };
+
+  const handleConfirmRename = async (email: string) => {
+    const contact = active.find((c) => c.fromEmail === email || c.toEmail === email);
+    if (!contact) return;
+    await renameContact(contact, normalizedUserEmail, renameValue);
+    setRenamingEmail(null);
+  };
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedEmail || !messageText.trim()) return;
+    if (!selectedEmail) return;
+    if (pendingAttachment) {
+      await handleSendAttachment(messageText);
+      return;
+    }
+    if (!messageText.trim()) return;
     const text = messageText;
     setMessageText("");
     await sendChatMessage(normalizedUserEmail, selectedEmail, text);
   };
 
-  const getDisplayName = (email: string) => profiles[email]?.displayName || email;
-  const getInitial = (email: string) => (profiles[email]?.displayName || email).charAt(0).toUpperCase();
+  const handleSendAttachment = async (caption: string) => {
+    if (!selectedEmail || !pendingAttachment) return;
+    const { file, type, previewUrl } = pendingAttachment;
+    setIsUploadingAttachment(true);
+    try {
+      const conversationId = getConversationId(normalizedUserEmail, selectedEmail);
+      const url = await uploadChatAttachment(conversationId, file, file.name);
+      await sendChatMessage(normalizedUserEmail, selectedEmail, caption, {
+        url,
+        type,
+        name: file.name,
+      });
+      setMessageText("");
+      setPendingAttachment(null);
+      URL.revokeObjectURL(previewUrl);
+    } catch (err: any) {
+      showToast(err?.message || "No se pudo subir el adjunto. Probá de nuevo.", "error");
+    } finally {
+      setIsUploadingAttachment(false);
+    }
+  };
+
+  const pickAttachment = (file: File | undefined, type: ChatAttachmentType) => {
+    if (!file) return;
+    if (pendingAttachment) URL.revokeObjectURL(pendingAttachment.previewUrl);
+    setPendingAttachment({ file, previewUrl: URL.createObjectURL(file), type });
+    setShowAttachMenu(false);
+  };
+
+  const customNameFor = (email: string): string => {
+    const contact = active.find((c) => c.fromEmail === email || c.toEmail === email);
+    if (!contact) return email;
+    const mine = contact.fromEmail === normalizedUserEmail ? contact.fromCustomName : contact.toCustomName;
+    return mine || profiles[email]?.displayName || email;
+  };
+
+  const getDisplayName = (email: string) => customNameFor(email);
+  const getInitial = (email: string) => customNameFor(email).charAt(0).toUpperCase();
+
+  useEffect(() => {
+    const handleClickOutsideMenu = (event: MouseEvent) => {
+      if (attachMenuRef.current && !attachMenuRef.current.contains(event.target as Node)) {
+        setShowAttachMenu(false);
+      }
+    };
+    if (showAttachMenu) document.addEventListener("mousedown", handleClickOutsideMenu);
+    return () => document.removeEventListener("mousedown", handleClickOutsideMenu);
+  }, [showAttachMenu]);
+
+  // Limpieza de recursos de audio/stream si el panel se desmonta a mitad de una grabación.
+  useEffect(() => {
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
+      try { audioCtxRef.current?.close(); } catch (_) {}
+    };
+  }, []);
+
+  const recordingSecondsRef = useRef(0);
+  const pendingStopActionRef = useRef<"send" | "preview" | "cancel">("preview");
+
+  const formatRecTime = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
+
+  const cleanupRecordingResources = () => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    rafRef.current = null;
+    if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+    recordingTimerRef.current = null;
+    mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
+    mediaStreamRef.current = null;
+    try { audioCtxRef.current?.close(); } catch (_) {}
+    audioCtxRef.current = null;
+    analyserRef.current = null;
+  };
+
+  const animateBars = () => {
+    const analyser = analyserRef.current;
+    if (!analyser) return;
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteFrequencyData(data);
+    const bars = barRefs.current;
+    const step = Math.max(1, Math.floor(data.length / Math.max(bars.length, 1)));
+    bars.forEach((bar, i) => {
+      if (!bar) return;
+      const value = data[i * step] || 0;
+      const pct = Math.max(12, Math.min(100, (value / 255) * 100));
+      bar.style.height = `${pct}%`;
+    });
+    rafRef.current = requestAnimationFrame(animateBars);
+  };
+
+  const sendRecordedAudio = async (blob: Blob, seconds: number) => {
+    if (!selectedEmail) return;
+    setIsUploadingAttachment(true);
+    try {
+      const conversationId = getConversationId(normalizedUserEmail, selectedEmail);
+      const url = await uploadChatAttachment(conversationId, blob, `audio_${Date.now()}.webm`);
+      await sendChatMessage(normalizedUserEmail, selectedEmail, "", { url, type: "audio", durationSec: seconds });
+    } catch (err: any) {
+      showToast(err?.message || "No se pudo enviar el audio.", "error");
+    } finally {
+      setIsUploadingAttachment(false);
+    }
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+      const AudioCtor = window.AudioContext || (window as any).webkitAudioContext;
+      const ctx = new AudioCtor();
+      const source = ctx.createMediaStreamSource(stream);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 64;
+      source.connect(analyser);
+      audioCtxRef.current = ctx;
+      analyserRef.current = analyser;
+
+      const preferredMime = "audio/webm;codecs=opus";
+      const mimeType = MediaRecorder.isTypeSupported(preferredMime)
+        ? preferredMime
+        : MediaRecorder.isTypeSupported("audio/webm")
+        ? "audio/webm"
+        : "";
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      recordedChunksRef.current = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) recordedChunksRef.current.push(e.data);
+      };
+      recorder.onstop = async () => {
+        const blob = new Blob(recordedChunksRef.current, { type: recorder.mimeType || "audio/webm" });
+        recordedBlobRef.current = blob;
+        const seconds = recordingSecondsRef.current;
+        cleanupRecordingResources();
+        const action = pendingStopActionRef.current;
+        if (action === "cancel") {
+          setRecordingState("idle");
+          setRecordingSeconds(0);
+          return;
+        }
+        if (action === "send") {
+          setRecordingState("idle");
+          setRecordingSeconds(0);
+          await sendRecordedAudio(blob, seconds);
+          return;
+        }
+        setPreviewAudioUrl(URL.createObjectURL(blob));
+        setRecordingState("preview");
+      };
+      mediaRecorderRef.current = recorder;
+      recorder.start();
+      recordingSecondsRef.current = 0;
+      setRecordingSeconds(0);
+      setRecordingState("recording");
+      recordingTimerRef.current = setInterval(() => {
+        recordingSecondsRef.current += 1;
+        setRecordingSeconds(recordingSecondsRef.current);
+      }, 1000);
+      rafRef.current = requestAnimationFrame(animateBars);
+    } catch (_) {
+      showToast("No se pudo acceder al micrófono. Revisá los permisos del navegador.", "error");
+    }
+  };
+
+  const stopRecording = (action: "send" | "preview" | "cancel") => {
+    pendingStopActionRef.current = action;
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== "inactive") recorder.stop();
+  };
+
+  const discardPreviewAudio = () => {
+    if (previewAudioUrl) URL.revokeObjectURL(previewAudioUrl);
+    setPreviewAudioUrl(null);
+    recordedBlobRef.current = null;
+    setRecordingState("idle");
+    setRecordingSeconds(0);
+  };
+
+  const sendPreviewAudio = async () => {
+    if (!recordedBlobRef.current) return;
+    const blob = recordedBlobRef.current;
+    const seconds = recordingSecondsRef.current;
+    if (previewAudioUrl) URL.revokeObjectURL(previewAudioUrl);
+    setPreviewAudioUrl(null);
+    setRecordingState("idle");
+    setRecordingSeconds(0);
+    await sendRecordedAudio(blob, seconds);
+  };
+
+  const handleMicPointerDown = (e: React.PointerEvent) => {
+    if (!isTouchDevice || recordingState !== "idle") return;
+    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch (_) {}
+    dragStartYRef.current = e.clientY;
+    startRecording();
+  };
+
+  const handleMicPointerMove = (e: React.PointerEvent) => {
+    if (!isTouchDevice || recordingState !== "recording" || dragStartYRef.current == null) return;
+    if (dragStartYRef.current - e.clientY > 60) {
+      setRecordingState("locked");
+    }
+  };
+
+  const handleMicPointerUp = () => {
+    if (!isTouchDevice) return;
+    if (recordingState === "recording") stopRecording("send");
+  };
+
+  const handleMicClick = () => {
+    if (isTouchDevice) return;
+    if (recordingState === "idle") startRecording();
+    else if (recordingState === "recording") stopRecording("preview");
+  };
 
   return (
     <AnimatePresence initial={false}>
@@ -239,7 +518,7 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                       exit={{ opacity: 0, height: 0 }}
                       className="overflow-hidden px-1 shrink-0"
                     >
-                      <div className="flex items-center gap-1.5 pb-2">
+                      <div className="space-y-1.5 pb-2">
                         <input
                           type="email"
                           required
@@ -247,21 +526,30 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                           value={newContactEmail}
                           onChange={(e) => setNewContactEmail(e.target.value)}
                           placeholder="correo@ejemplo.com"
-                          className="flex-1 px-3 py-1.5 rounded-full border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900/50 text-xs font-medium focus:ring-2 focus:ring-primary/20 focus:border-primary focus:outline-none transition-all"
+                          className="w-full px-3 py-1.5 rounded-full border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900/50 text-xs font-medium focus:ring-2 focus:ring-primary/20 focus:border-primary focus:outline-none transition-all"
                         />
-                        <motion.button
-                          type="submit"
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.92 }}
-                          disabled={isSendingInvite}
-                          className="p-2 rounded-full bg-primary hover:bg-primary-hover text-white dark:text-blue-950 cursor-pointer disabled:opacity-50 shrink-0"
-                        >
-                          {isSendingInvite ? (
-                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                          ) : (
-                            <Send className="w-3.5 h-3.5" />
-                          )}
-                        </motion.button>
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="text"
+                            value={newContactName}
+                            onChange={(e) => setNewContactName(e.target.value)}
+                            placeholder="Nombre para este contacto (opcional)"
+                            className="flex-1 px-3 py-1.5 rounded-full border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900/50 text-xs font-medium focus:ring-2 focus:ring-primary/20 focus:border-primary focus:outline-none transition-all"
+                          />
+                          <motion.button
+                            type="submit"
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.92 }}
+                            disabled={isSendingInvite}
+                            className="p-2 rounded-full bg-primary hover:bg-primary-hover text-white dark:text-blue-950 cursor-pointer disabled:opacity-50 shrink-0"
+                          >
+                            {isSendingInvite ? (
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Send className="w-3.5 h-3.5" />
+                            )}
+                          </motion.button>
+                        </div>
                       </div>
                     </motion.form>
                   )}
@@ -365,9 +653,31 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                             {getInitial(email)}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <span className="text-[11.5px] font-bold text-black dark:text-white truncate block">
-                              {getDisplayName(email)}
-                            </span>
+                            {renamingEmail === email ? (
+                              <form
+                                onClick={(e) => e.stopPropagation()}
+                                onSubmit={(e) => {
+                                  e.preventDefault();
+                                  handleConfirmRename(email);
+                                }}
+                                className="flex items-center gap-1"
+                              >
+                                <input
+                                  autoFocus
+                                  value={renameValue}
+                                  onChange={(e) => setRenameValue(e.target.value)}
+                                  placeholder={email}
+                                  className="w-full px-2 py-1 rounded-full border border-primary/40 bg-white dark:bg-zinc-900 text-[11px] font-bold focus:outline-none"
+                                />
+                                <button type="submit" className="p-1 rounded-full bg-primary text-white dark:text-blue-950 shrink-0 cursor-pointer">
+                                  <Check className="w-3 h-3" />
+                                </button>
+                              </form>
+                            ) : (
+                              <span className="text-[11.5px] font-bold text-black dark:text-white truncate block">
+                                {getDisplayName(email)}
+                              </span>
+                            )}
                             <span className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate block">{email}</span>
                           </div>
                           {unread > 0 && (
@@ -375,6 +685,17 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                               {unread > 9 ? "9+" : unread}
                             </span>
                           )}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleStartRename(email);
+                            }}
+                            className="p-1 rounded-full text-zinc-400 hover:text-primary hover:bg-primary/10 opacity-0 group-hover:opacity-100 transition-all cursor-pointer shrink-0"
+                            title="Renombrar contacto"
+                          >
+                            <Pencil className="w-3 h-3" />
+                          </button>
                           <button
                             type="button"
                             onClick={(e) => {
@@ -443,9 +764,51 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                                     : "bg-zinc-100 text-zinc-900 rounded-bl-md"
                                 }`}
                               >
-                                <span className="whitespace-pre-wrap break-words">{msg.text}</span>
-                                <div className={`text-[9px] mt-0.5 opacity-70 ${isOwn ? "text-right" : "text-left"}`}>
-                                  {new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                {msg.attachmentType === "image" && msg.attachmentUrl && (
+                                  <img
+                                    src={msg.attachmentUrl}
+                                    alt={msg.attachmentName || "Imagen"}
+                                    className="rounded-xl max-w-full max-h-56 object-cover mb-1 cursor-pointer"
+                                    onClick={() => window.open(msg.attachmentUrl, "_blank")}
+                                  />
+                                )}
+                                {msg.attachmentType === "video" && msg.attachmentUrl && (
+                                  <video src={msg.attachmentUrl} controls className="rounded-xl max-w-full max-h-56 mb-1" />
+                                )}
+                                {msg.attachmentType === "document" && msg.attachmentUrl && (
+                                  <a
+                                    href={msg.attachmentUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    download={msg.attachmentName}
+                                    className={`flex items-center gap-2 p-2 rounded-xl mb-1 ${isOwn ? "bg-white/15" : darkMode ? "bg-black/20" : "bg-white"}`}
+                                  >
+                                    <FileText className="w-5 h-5 shrink-0" />
+                                    <span className="text-[11px] font-semibold truncate">{msg.attachmentName || "Documento"}</span>
+                                    <Download className="w-3.5 h-3.5 shrink-0 opacity-70" />
+                                  </a>
+                                )}
+                                {msg.attachmentType === "audio" && msg.attachmentUrl && (
+                                  <VoiceMessageBubble
+                                    url={msg.attachmentUrl}
+                                    isOwn={isOwn}
+                                    darkMode={darkMode}
+                                    durationSec={msg.audioDurationSec}
+                                  />
+                                )}
+                                {msg.text && <span className="whitespace-pre-wrap break-words">{msg.text}</span>}
+                                <div className={`flex items-center gap-1 mt-0.5 opacity-80 ${isOwn ? "justify-end" : "justify-start"}`}>
+                                  <span className="text-[9px]">
+                                    {new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                  </span>
+                                  {isOwn &&
+                                    (msg.read ? (
+                                      <CheckCheck className="w-3.5 h-3.5" style={{ color: "var(--color-primary)" }} />
+                                    ) : msg.delivered ? (
+                                      <CheckCheck className="w-3.5 h-3.5 opacity-70" />
+                                    ) : (
+                                      <Check className="w-3.5 h-3.5 opacity-70" />
+                                    ))}
                                 </div>
                               </div>
                             </motion.div>
@@ -455,23 +818,265 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                       <div ref={messagesEndRef} />
                     </div>
 
-                    <form onSubmit={handleSendMessage} className="flex items-center gap-2 p-2.5 border-t border-zinc-200/60 dark:border-white/10 shrink-0">
-                      <input
-                        value={messageText}
-                        onChange={(e) => setMessageText(e.target.value)}
-                        placeholder="Escribe un mensaje..."
-                        className="flex-1 px-3.5 py-2 rounded-full border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900/50 text-xs font-medium focus:ring-2 focus:ring-primary/20 focus:border-primary focus:outline-none transition-all"
-                      />
-                      <motion.button
-                        type="submit"
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.9 }}
-                        disabled={!messageText.trim()}
-                        className="p-2.5 rounded-full bg-primary hover:bg-primary-hover text-white dark:text-blue-950 cursor-pointer disabled:opacity-40 shrink-0"
-                      >
-                        <Send className="w-4 h-4" />
-                      </motion.button>
-                    </form>
+                    <div className="border-t border-zinc-200/60 dark:border-white/10 shrink-0">
+                      <AnimatePresence>
+                        {pendingAttachment && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: "auto" }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="overflow-hidden px-2.5 pt-2"
+                          >
+                            <div className="relative inline-block">
+                              {pendingAttachment.type === "image" && (
+                                <img
+                                  src={pendingAttachment.previewUrl}
+                                  alt="Vista previa"
+                                  className="h-16 w-16 object-cover rounded-lg border border-zinc-200 dark:border-zinc-700"
+                                />
+                              )}
+                              {pendingAttachment.type === "video" && (
+                                <video src={pendingAttachment.previewUrl} className="h-16 w-16 object-cover rounded-lg border border-zinc-200 dark:border-zinc-700" />
+                              )}
+                              {pendingAttachment.type === "document" && (
+                                <div className="h-16 w-28 flex flex-col items-center justify-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 px-1.5">
+                                  <FileText className="w-5 h-5 text-primary" />
+                                  <span className="text-[9px] font-medium truncate w-full text-center">{pendingAttachment.file.name}</span>
+                                </div>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  URL.revokeObjectURL(pendingAttachment.previewUrl);
+                                  setPendingAttachment(null);
+                                }}
+                                className="absolute -top-1.5 -right-1.5 p-1 rounded-full bg-zinc-900 text-white shadow cursor-pointer"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
+                      {recordingState === "recording" || recordingState === "locked" ? (
+                        <div className="flex items-center gap-2 p-2.5">
+                          <motion.button
+                            type="button"
+                            whileTap={{ scale: 0.9 }}
+                            onClick={() => stopRecording("cancel")}
+                            className="p-2 rounded-full text-rose-500 hover:bg-rose-500/10 cursor-pointer shrink-0"
+                            title="Cancelar grabación"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </motion.button>
+                          <span className="text-[11px] font-bold text-rose-500 tabular-nums shrink-0 flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+                            {formatRecTime(recordingSeconds)}
+                          </span>
+                          <div className="flex-1 flex items-end gap-[2px] h-7 overflow-hidden">
+                            {Array.from({ length: 24 }).map((_, i) => (
+                              <div
+                                key={i}
+                                ref={(el) => { barRefs.current[i] = el; }}
+                                className="w-[2.5px] rounded-full bg-primary"
+                                style={{ height: "15%" }}
+                              />
+                            ))}
+                          </div>
+                          {recordingState === "recording" && isTouchDevice && (
+                            <span className="text-[9px] text-zinc-400 flex items-center gap-1 shrink-0 whitespace-nowrap">
+                              <Lock className="w-3 h-3" /> Deslizá ↑
+                            </span>
+                          )}
+                          {recordingState === "locked" && (
+                            <motion.button
+                              type="button"
+                              whileTap={{ scale: 0.9 }}
+                              onClick={() => stopRecording("send")}
+                              className="p-2.5 rounded-full bg-primary text-white dark:text-blue-950 cursor-pointer shrink-0"
+                              title="Enviar audio"
+                            >
+                              <Send className="w-4 h-4" />
+                            </motion.button>
+                          )}
+                          {recordingState === "recording" && !isTouchDevice && (
+                            <motion.button
+                              type="button"
+                              whileTap={{ scale: 0.9 }}
+                              onClick={() => stopRecording("preview")}
+                              className="p-2.5 rounded-full bg-primary text-white dark:text-blue-950 cursor-pointer shrink-0"
+                              title="Detener grabación"
+                            >
+                              <Square className="w-3.5 h-3.5" />
+                            </motion.button>
+                          )}
+                        </div>
+                      ) : recordingState === "preview" && previewAudioUrl ? (
+                        <div className="flex items-center gap-2 p-2.5">
+                          <motion.button
+                            type="button"
+                            whileTap={{ scale: 0.9 }}
+                            onClick={discardPreviewAudio}
+                            className="p-2 rounded-full text-rose-500 hover:bg-rose-500/10 cursor-pointer shrink-0"
+                            title="Descartar"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </motion.button>
+                          <div className="flex-1">
+                            <VoiceMessageBubble url={previewAudioUrl} isOwn={false} darkMode={darkMode} durationSec={recordingSeconds} />
+                          </div>
+                          <motion.button
+                            type="button"
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.9 }}
+                            onClick={sendPreviewAudio}
+                            disabled={isUploadingAttachment}
+                            className="p-2.5 rounded-full bg-primary text-white dark:text-blue-950 cursor-pointer shrink-0 disabled:opacity-50"
+                            title="Enviar audio"
+                          >
+                            {isUploadingAttachment ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                          </motion.button>
+                        </div>
+                      ) : (
+                        <form onSubmit={handleSendMessage} className="flex items-center gap-1.5 p-2.5">
+                          <div className="relative" ref={attachMenuRef}>
+                            <motion.button
+                              type="button"
+                              whileHover={{ scale: 1.05 }}
+                              whileTap={{ scale: 0.92 }}
+                              onClick={() => setShowAttachMenu((v) => !v)}
+                              className="p-2 rounded-full text-zinc-500 hover:text-primary hover:bg-primary/10 cursor-pointer shrink-0"
+                              title="Adjuntar"
+                            >
+                              <Paperclip className="w-4 h-4" />
+                            </motion.button>
+                            <AnimatePresence>
+                              {showAttachMenu && (
+                                <motion.div
+                                  initial={{ opacity: 0, scale: 0.9, y: 8 }}
+                                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                                  exit={{ opacity: 0, scale: 0.9, y: 8 }}
+                                  className={`absolute bottom-full left-0 mb-2 w-48 rounded-2xl border shadow-xl p-1.5 z-20 ${
+                                    darkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-zinc-200"
+                                  }`}
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => imageVideoInputRef.current?.click()}
+                                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl hover:bg-primary/10 text-left text-xs font-semibold cursor-pointer"
+                                  >
+                                    <span className="p-1.5 rounded-lg bg-purple-500/10 text-purple-500 shrink-0">
+                                      <ImageIcon className="w-3.5 h-3.5" />
+                                    </span>
+                                    Imágenes y Videos
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => documentInputRef.current?.click()}
+                                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl hover:bg-primary/10 text-left text-xs font-semibold cursor-pointer"
+                                  >
+                                    <span className="p-1.5 rounded-lg bg-blue-500/10 text-blue-500 shrink-0">
+                                      <FileText className="w-3.5 h-3.5" />
+                                    </span>
+                                    Documentos
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => cameraInputRef.current?.click()}
+                                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl hover:bg-primary/10 text-left text-xs font-semibold cursor-pointer"
+                                  >
+                                    <span className="p-1.5 rounded-lg bg-rose-500/10 text-rose-500 shrink-0">
+                                      <Camera className="w-3.5 h-3.5" />
+                                    </span>
+                                    Abrir Cámara
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setShowAttachMenu(false);
+                                      showToast("Muy pronto vas a poder compartir eventos acá.", "info");
+                                    }}
+                                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl hover:bg-primary/10 text-left text-xs font-semibold cursor-pointer"
+                                  >
+                                    <span className="p-1.5 rounded-lg bg-amber-500/10 text-amber-500 shrink-0">
+                                      <CalendarPlus className="w-3.5 h-3.5" />
+                                    </span>
+                                    Evento
+                                  </button>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                            <input
+                              ref={imageVideoInputRef}
+                              type="file"
+                              accept="image/*,video/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                pickAttachment(file, file?.type.startsWith("video") ? "video" : "image");
+                                e.target.value = "";
+                              }}
+                            />
+                            <input
+                              ref={documentInputRef}
+                              type="file"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                pickAttachment(file, "document");
+                                e.target.value = "";
+                              }}
+                            />
+                            <input
+                              ref={cameraInputRef}
+                              type="file"
+                              accept="image/*"
+                              capture="environment"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                pickAttachment(file, "image");
+                                e.target.value = "";
+                              }}
+                            />
+                          </div>
+
+                          <input
+                            value={messageText}
+                            onChange={(e) => setMessageText(e.target.value)}
+                            placeholder={pendingAttachment ? "Agregar un comentario..." : "Escribe un mensaje..."}
+                            className="flex-1 px-3.5 py-2 rounded-full border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900/50 text-xs font-medium focus:ring-2 focus:ring-primary/20 focus:border-primary focus:outline-none transition-all"
+                          />
+
+                          {messageText.trim() || pendingAttachment ? (
+                            <motion.button
+                              type="submit"
+                              whileHover={{ scale: 1.05 }}
+                              whileTap={{ scale: 0.9 }}
+                              disabled={isUploadingAttachment}
+                              className="p-2.5 rounded-full bg-primary hover:bg-primary-hover text-white dark:text-blue-950 cursor-pointer disabled:opacity-50 shrink-0"
+                            >
+                              {isUploadingAttachment ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                            </motion.button>
+                          ) : (
+                            <motion.button
+                              type="button"
+                              whileHover={{ scale: 1.05 }}
+                              whileTap={{ scale: 0.9 }}
+                              onClick={handleMicClick}
+                              onPointerDown={handleMicPointerDown}
+                              onPointerMove={handleMicPointerMove}
+                              onPointerUp={handleMicPointerUp}
+                              className="p-2.5 rounded-full bg-primary hover:bg-primary-hover text-white dark:text-blue-950 cursor-pointer shrink-0 touch-none"
+                              title="Grabar audio"
+                            >
+                              <Mic className="w-4 h-4" />
+                            </motion.button>
+                          )}
+                        </form>
+                      )}
+                    </div>
                   </>
                 ) : (
                   <div className="flex-1 flex items-center justify-center text-xs text-zinc-400 font-medium p-6 text-center">

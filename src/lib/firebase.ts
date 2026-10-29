@@ -19,6 +19,7 @@ import {
   persistentMultipleTabManager,
   setLogLevel,
 } from "firebase/firestore";
+import { getStorage } from "firebase/storage";
 import firebaseConfig from "../../firebase-applet-config.json";
 
 export const FIRESTORE_DATABASE_ID = (firebaseConfig as { firestoreDatabaseId?: string }).firestoreDatabaseId || "ai-studio-fsrworkspace-54088f75-aeab-47ef-aff0-3ed53c6ba118";
@@ -48,6 +49,9 @@ try {
 }
 
 export const db = firestoreDb;
+
+// Storage para adjuntos del chat interno (imágenes, videos, documentos y audios de voz).
+export const storage = getStorage(app);
 
 // Suppress internal Firebase SDK logs completely
 try {
