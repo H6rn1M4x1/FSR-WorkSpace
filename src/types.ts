@@ -523,7 +523,13 @@ export interface ChatContact {
   status: "pending" | "accepted";
   createdAt: string;
   updatedAt: string;
+  /** Apodo que `fromEmail` eligió para `toEmail` (independiente del nombre real de su perfil). */
+  fromCustomName?: string;
+  /** Apodo que `toEmail` eligió para `fromEmail`. */
+  toCustomName?: string;
 }
+
+export type ChatAttachmentType = "image" | "video" | "document" | "audio";
 
 /** Un mensaje dentro de una conversación 1-a-1 del chat interno. */
 export interface ChatMessage {
@@ -533,7 +539,15 @@ export interface ChatMessage {
   toEmail: string;
   text: string;
   createdAt: string;
+  /** El destinatario abrió la conversación y vio el mensaje (2da palomita en color de acento). */
   read: boolean;
+  /** El cliente del destinatario llegó a recibir el mensaje, aunque no lo haya leído todavía (2 palomitas grises). */
+  delivered?: boolean;
+  attachmentUrl?: string;
+  attachmentType?: ChatAttachmentType;
+  attachmentName?: string;
+  /** Duración del audio en segundos, para mostrarla antes de que cargue el archivo. */
+  audioDurationSec?: number;
 }
 
 export interface AgendaShare {
