@@ -214,31 +214,29 @@ let backgroundRefreshStarted = false;
 // El access token de Google (provider_token) dura ~1 hora y Supabase no lo renueva solo, así
 // que sin esto cualquier llamada a Drive después de esa hora fallaba con 401 y obligaba a
 // reconectar la cuenta a mano. Esto arranca (una sola vez) un chequeo periódico que lo refresca
-// en segundo plano antes de que venza. Como silentGoogleReauth navega la misma pestaña (no
-// abre pop-up, así que nunca lo bloquea el navegador), se prioriza hacerlo mientras la pestaña
-// está oculta para que el usuario ni note el ida y vuelta de la recarga.
+// en segundo plano antes de que venza, SOLO mientras la pestaña está oculta — nunca mientras el
+// usuario la está mirando. Antes había un "respaldo" que, pasados ~55 min sin que la pestaña
+// pasara a segundo plano ni una vez, forzaba el refresco (y su recarga de página) igual aunque
+// estuviera visible — en mobile, donde es común tener la pestaña siempre en primer plano durante
+// sesiones largas, eso terminaba siendo la recarga molesta que interrumpía al usuario a mitad de
+// uso. Si el token se vence sin haber podido renovarse en segundo plano, queda en manos del
+// camino reactivo (triggerSilentReauth llamado por quien detecta un 401 real de Drive, en
+// workspace.ts/DriveFolderVisualizer.tsx/AppointmentsView.tsx) — ahí si corresponde recargar,
+// porque hay un motivo concreto y el usuario ve el aviso correspondiente.
 const ensureBackgroundTokenRefresh = () => {
   if (backgroundRefreshStarted || typeof window === "undefined") return;
   backgroundRefreshStarted = true;
 
-  const maybeRefresh = (onlyIfHidden: boolean) => {
+  const maybeRefresh = () => {
     if (!readCachedProviderToken()) return;
-    if (onlyIfHidden && document.visibilityState !== "hidden") return;
+    if (document.visibilityState !== "hidden") return;
     if (tokenAgeMs() > TOKEN_MAX_AGE_MS) {
       triggerSilentReauth();
     }
   };
 
-  document.addEventListener("visibilitychange", () => maybeRefresh(true));
-  // Respaldo: si la pestaña nunca pasa a segundo plano durante una sesión muy larga, refresca
-  // de todos modos pasados ~55 min para no dejar que el token llegue a expirar de verdad.
-  setInterval(() => {
-    if (tokenAgeMs() > TOKEN_MAX_AGE_MS + 5 * 60 * 1000) {
-      maybeRefresh(false);
-    } else {
-      maybeRefresh(true);
-    }
-  }, 5 * 60 * 1000);
+  document.addEventListener("visibilitychange", maybeRefresh);
+  setInterval(maybeRefresh, 5 * 60 * 1000);
 };
 
 // Firebase's `User` object exposes uid/displayName/photoURL. The app has ~70 call sites
