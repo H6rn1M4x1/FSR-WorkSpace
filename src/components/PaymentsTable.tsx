@@ -13,6 +13,7 @@ import { SmartDateTimePicker } from "./SmartDateTimePicker";
 import { CurrencyInput } from "./CurrencyInput";
 import { parseFormattedNumber, formatNumberToDisplay } from "../lib/numberFormat";
 import { processAndCreateRecurringPayments } from "../utils/recurringPayments";
+import { getLocalDateString } from "../utils/date";
 import {
   Plus,
   Trash2,
@@ -41,8 +42,14 @@ import {
   Loader2,
   ListFilter,
   Pencil,
+  Save,
+  ChevronLeft,
+  ChevronRight,
+  Repeat,
+  CalendarClock,
 } from "lucide-react";
 import { WorkspaceService } from "../lib/workspace";
+import { uiSounds } from "../lib/sounds";
 
 interface PaymentsTableProps {
   payments: DetailedPayment[];
@@ -302,6 +309,88 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
     </div>
   );
 };
+// --- Toggle "Recurrente / Único" del panel de vista previa de Agregar Pago ---------------------
+// Mismo mecanismo visual que el switch "Activos/Pausados" del diseño de referencia (recurso
+// "Cobranza" de Moxen): un pill con el texto del estado actual + un círculo que desliza con
+// spring, en vez del checkbox plano que había antes.
+const RecurrenceToggle: React.FC<{ checked: boolean; onChange: (v: boolean) => void }> = ({
+  checked,
+  onChange,
+}) => {
+  return (
+    <button
+      type="button"
+      data-sound="toggle"
+      onClick={() => onChange(!checked)}
+      className={`flex items-center gap-2 pl-3 pr-1 py-1 rounded-full border transition-colors cursor-pointer ${
+        checked
+          ? "bg-primary/10 border-primary/30"
+          : "bg-slate-100 dark:bg-zinc-800 border-slate-200 dark:border-zinc-700"
+      }`}
+      title="Pago recurrente o único"
+    >
+      <span
+        className={`text-[10.5px] font-bold uppercase tracking-wide ${
+          checked ? "text-primary" : "text-slate-500 dark:text-zinc-400"
+        }`}
+      >
+        {checked ? "Recurrente" : "Único"}
+      </span>
+      <span
+        className={`relative w-9 h-5 rounded-full transition-colors shrink-0 ${
+          checked ? "bg-primary" : "bg-slate-300 dark:bg-zinc-600"
+        }`}
+      >
+        <motion.span
+          animate={{ x: checked ? 16 : 0 }}
+          transition={{ type: "spring", stiffness: 500, damping: 32 }}
+          className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm"
+        />
+      </span>
+    </button>
+  );
+};
+
+// --- Entrada grande de carga de archivo (Comprobante de Pago / Factura Emitida) -----------------
+// Reemplaza el mini-calendario de envíos del diseño de referencia: acá no hay fechas que mostrar,
+// así que estas dos tarjetas grandes son el equivalente útil para un formulario de pago.
+const PaymentUploadCard: React.FC<{
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  fileName?: string;
+  hasExisting?: boolean;
+  onSelect: (file: File | null) => void;
+}> = ({ icon: Icon, label, fileName, hasExisting, onSelect }) => {
+  const hasFile = !!fileName;
+  return (
+    <motion.label
+      whileHover={{ scale: 1.015 }}
+      whileTap={{ scale: 0.98 }}
+      data-sound="click"
+      className={`flex flex-col items-center justify-center gap-1.5 p-4 rounded-2xl border-2 border-dashed cursor-pointer text-center transition-colors min-h-[104px] ${
+        hasFile
+          ? "border-primary/40 bg-primary/5"
+          : "border-slate-300 dark:border-zinc-700 hover:border-primary/40 hover:bg-primary/5"
+      }`}
+    >
+      <span
+        className={`p-2 rounded-xl ${
+          hasFile ? "bg-primary text-white dark:text-blue-950" : "bg-slate-100 dark:bg-zinc-800 text-slate-400 dark:text-zinc-500"
+        }`}
+      >
+        {hasFile ? <Check className="w-4 h-4" /> : <Icon className="w-4 h-4" />}
+      </span>
+      <div className="min-w-0">
+        <div className="text-[11px] font-bold text-slate-700 dark:text-zinc-300">{label}</div>
+        <div className="text-[10px] text-slate-400 dark:text-zinc-500 truncate max-w-[150px]">
+          {fileName || (hasExisting ? "Reemplazar archivo" : "Subir archivo")}
+        </div>
+      </div>
+      <input type="file" className="hidden" onChange={(e) => onSelect(e.target.files?.[0] || null)} />
+    </motion.label>
+  );
+};
+
 export default function PaymentsTable({
   payments,
   setPayments,
@@ -576,6 +665,7 @@ export default function PaymentsTable({
   const [dondePagar, setDondePagar] = useState("");
   const [facturaFile, setFacturaFile] = useState<File | null>(null);
   const [comprobanteFile, setComprobanteFile] = useState<File | null>(null);
+  const [observaciones, setObservaciones] = useState("");
 
   const handleUpdate = (
     id: string,
@@ -599,6 +689,7 @@ export default function PaymentsTable({
     setPagoRecurrente(p.pagoRecurrente || false);
     setConQuePagar(p.conQuePagar || "");
     setDondePagar(p.dondePagar || "");
+    setObservaciones(p.observaciones || "");
     setShowAddPayment(true);
   };
 
@@ -613,6 +704,7 @@ export default function PaymentsTable({
     setPagoRecurrente(false);
     setConQuePagar("");
     setDondePagar("");
+    setObservaciones("");
     setEditingPaymentId(null);
     setFacturaFile(null);
     setComprobanteFile(null);
@@ -662,6 +754,7 @@ export default function PaymentsTable({
         dondePagar,
         facturaEmitida,
         comprobantePago,
+        observaciones: observaciones.trim() || undefined,
       };
 
       const userId = userEmail || "hernanmaximiliano10@gmail.com";
@@ -703,6 +796,25 @@ export default function PaymentsTable({
     } finally {
       setIsSaving(false);
     }
+  };
+
+  // "VENCE" del panel de vista previa de Agregar Pago: mismas flechas < > del diseño de
+  // referencia para correr la fecha de a un día, leyendo y escribiendo el mismo estado
+  // `fechaVencimiento` que el datepicker de la izquierda (no son dos fechas distintas).
+  const shiftFechaVencimiento = (deltaDays: number) => {
+    if (!fechaVencimiento) return;
+    const [y, m, d] = fechaVencimiento.split("-").map(Number);
+    if (!y || !m || !d) return;
+    setFechaVencimiento(getLocalDateString(new Date(y, m - 1, d + deltaDays)));
+  };
+
+  const formatVenceShort = (dateStr: string): string => {
+    if (!dateStr) return "";
+    const [y, m, d] = dateStr.split("-").map(Number);
+    if (!y || !m || !d) return "";
+    return new Date(y, m - 1, d)
+      .toLocaleDateString("es-AR", { weekday: "short", day: "numeric", month: "short" })
+      .replace(/\./g, "");
   };
 
   const handleDelete = (id: string) => {
@@ -1360,7 +1472,7 @@ export default function PaymentsTable({
                 exit={{ opacity: 0, scale: 0.95, y: 15 }}
                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
                 onClick={(e) => e.stopPropagation()}
-                className="w-full max-w-lg max-h-[85vh] flex flex-col bg-white dark:bg-zinc-900 rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
+                className="w-full max-w-4xl max-h-[85vh] flex flex-col bg-white dark:bg-zinc-900 rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
               >
               {/* Header: Fixed and Non-Scrollable */}
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-zinc-800/40 bg-white dark:bg-zinc-900 z-10">
@@ -1379,239 +1491,273 @@ export default function PaymentsTable({
 
               {/* Scrollable Content */}
               <div className="flex-1 overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-zinc-200 dark:scrollbar-thumb-zinc-800">
-                <form onSubmit={handleAddSubmit} className="space-y-4 pb-1">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        id="pago-checkbox"
-                        checked={pago}
-                        onChange={(e) => setPago(e.target.checked)}
-                        className="w-4 h-4 accent-primary"
-                      />
-                      <label
-                        htmlFor="pago-checkbox"
-                        className="text-sm font-bold text-slate-700 dark:text-zinc-300 cursor-pointer"
-                      >
-                        ¿Está Pagado?
-                      </label>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        id="recurrente-checkbox"
-                        checked={pagoRecurrente}
-                        onChange={(e) => setPagoRecurrente(e.target.checked)}
-                        className="w-4 h-4 accent-primary"
-                      />
-                      <label
-                        htmlFor="recurrente-checkbox"
-                        className="text-sm font-bold text-slate-700 dark:text-zinc-300 cursor-pointer"
-                      >
-                        Pago Recurrente
-                      </label>
-                    </div>
-                  </div>
+                <form onSubmit={handleAddSubmit} className="pb-1">
+                  <div className="grid grid-cols-1 lg:grid-cols-[1.08fr_1fr] gap-5 items-start">
+                    {/* IZQUIERDA: todo el menú con las funciones/opciones del pago ------------ */}
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                      className="space-y-4"
+                    >
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id="pago-checkbox"
+                          checked={pago}
+                          onChange={(e) => setPago(e.target.checked)}
+                          className="w-4 h-4 accent-primary"
+                        />
+                        <label
+                          htmlFor="pago-checkbox"
+                          className="text-sm font-bold text-slate-700 dark:text-zinc-300 cursor-pointer"
+                        >
+                          ¿Está Pagado?
+                        </label>
+                      </div>
 
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
-                      Descripción
-                    </label>
-                    <input
-                      type="text"
-                      value={descripcion}
-                      onChange={(e) => setDescripcion(e.target.value)}
-                      placeholder="Ej: Internet / Supermercado"
-                      className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-zinc-950/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-600 outline-none transition-all text-sm focus:border-slate-400 dark:focus:border-zinc-700"
-                      required
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
-                        Categoría
-                      </label>
-                      <CustomSelect
-                        value={categoria}
-                        onChange={(value) => setCategoria(value)}
-                        options={[
-                          "Impuestos",
-                          "Prestamos",
-                          "Telefonia e Internet",
-                          "Servicios Digitales",
-                          "Obra Social",
-                          "Tarjeta de Credito",
-                          "Servicios Esenciales",
-                        ].map((cat) => ({ value: cat, label: cat }))}
-                        className="w-full"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
-                        Monto (AR$)
-                      </label>
-                      <CurrencyInput
-                        value={montoAPagar}
-                        onChange={(val) => setMontoAPagar(val)}
-                        placeholder="Ej: 45.500,00"
-                        className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-zinc-950/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white outline-none transition-all text-sm focus:border-slate-400 dark:focus:border-zinc-700"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
-                        Fecha Vencimiento
-                      </label>
-                      <SmartDateTimePicker
-                        value={fechaVencimiento}
-                        onChange={(val) => setFechaVencimiento(val)}
-                        required
-                      />
-                    </div>
-                    {categoria === "Tarjeta de Credito" ? (
                       <div>
                         <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
-                          Fecha Cierre
+                          Descripción
                         </label>
-                        <SmartDateTimePicker
-                          value={fechaCierre}
-                          onChange={(val) => setFechaCierre(val)}
+                        <input
+                          type="text"
+                          value={descripcion}
+                          onChange={(e) => setDescripcion(e.target.value)}
+                          placeholder="Ej: Internet / Supermercado"
+                          className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-zinc-950/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-600 outline-none transition-all text-sm focus:border-slate-400 dark:focus:border-zinc-700"
                           required
                         />
                       </div>
-                    ) : (
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
-                          Método de Pago
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
+                            Categoría
+                          </label>
+                          <CustomSelect
+                            value={categoria}
+                            onChange={(value) => setCategoria(value)}
+                            options={[
+                              "Impuestos",
+                              "Prestamos",
+                              "Telefonia e Internet",
+                              "Servicios Digitales",
+                              "Obra Social",
+                              "Tarjeta de Credito",
+                              "Servicios Esenciales",
+                            ].map((cat) => ({ value: cat, label: cat }))}
+                            className="w-full"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
+                            Monto (AR$)
+                          </label>
+                          <CurrencyInput
+                            value={montoAPagar}
+                            onChange={(val) => setMontoAPagar(val)}
+                            placeholder="Ej: 45.500,00"
+                            className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-zinc-950/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white outline-none transition-all text-sm focus:border-slate-400 dark:focus:border-zinc-700"
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
+                            Fecha Vencimiento
+                          </label>
+                          <SmartDateTimePicker
+                            value={fechaVencimiento}
+                            onChange={(val) => setFechaVencimiento(val)}
+                            required
+                          />
+                        </div>
+                        {categoria === "Tarjeta de Credito" ? (
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
+                              Fecha Cierre
+                            </label>
+                            <SmartDateTimePicker
+                              value={fechaCierre}
+                              onChange={(val) => setFechaCierre(val)}
+                              required
+                            />
+                          </div>
+                        ) : (
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
+                              Método de Pago
+                            </label>
+                            <CustomSelect
+                              value={metodoPago}
+                              onChange={(value) => setMetodoPago(value)}
+                              options={[
+                                "Tarjeta de Debito",
+                                "Transferencia Bancaria",
+                                "Debito Automatico",
+                              ].map((met) => ({ value: met, label: met }))}
+                              className="w-full"
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        {categoria === "Tarjeta de Credito" && (
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
+                              Método de Pago
+                            </label>
+                            <CustomSelect
+                              value={metodoPago}
+                              onChange={(value) => setMetodoPago(value)}
+                              options={[
+                                "Tarjeta de Debito",
+                                "Transferencia Bancaria",
+                                "Debito Automatico",
+                              ].map((met) => ({ value: met, label: met }))}
+                              className="w-full"
+                            />
+                          </div>
+                        )}
+                        <div
+                          className={
+                            categoria !== "Tarjeta de Credito" ? "col-span-1" : ""
+                          }
+                        >
+                          <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
+                            ¿Con qué pagar?
+                          </label>
+                          <input
+                            type="text"
+                            value={conQuePagar}
+                            onChange={(e) => setConQuePagar(e.target.value)}
+                            className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-zinc-950/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white outline-none transition-all text-sm focus:border-slate-400 dark:focus:border-zinc-700"
+                          />
+                        </div>
+                        <div
+                          className={
+                            categoria !== "Tarjeta de Credito"
+                              ? "col-span-1"
+                              : "col-span-2"
+                          }
+                        >
+                          <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
+                            ¿Dónde pagar?
+                          </label>
+                          <input
+                            type="text"
+                            value={dondePagar}
+                            onChange={(e) => setDondePagar(e.target.value)}
+                            className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-zinc-950/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white outline-none transition-all text-sm focus:border-slate-400 dark:focus:border-zinc-700"
+                          />
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        disabled={isSaving}
+                        onClick={() => { if (!isSaving) resetForm(); }}
+                        className="text-xs font-semibold text-slate-500 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        Cancelar
+                      </button>
+                    </motion.div>
+
+                    {/* DERECHA: vista previa — guardar, recurrencia, contenido y comprobantes - */}
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3, delay: 0.05, ease: [0.16, 1, 0.3, 1] }}
+                      className="space-y-3.5"
+                    >
+                      <div className="rounded-2xl border border-slate-200 dark:border-zinc-800 bg-slate-50/70 dark:bg-zinc-950/40 p-4">
+                        <div className="flex items-start justify-between gap-2 mb-3">
+                          <div className="min-w-0">
+                            <span className="block text-[9.5px] font-bold text-primary uppercase tracking-widest truncate">
+                              {categoria}
+                            </span>
+                            <h4 className="text-[15px] font-extrabold text-slate-900 dark:text-white truncate">
+                              {descripcion || "Nuevo pago"}
+                            </h4>
+                          </div>
+                          <motion.button
+                            type="submit"
+                            whileHover={{ scale: 1.03 }}
+                            whileTap={{ scale: 0.96 }}
+                            disabled={isSaving}
+                            className="shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-primary hover:bg-primary-hover text-white dark:text-blue-950 text-[11px] font-bold shadow-sm transition-all cursor-pointer disabled:opacity-60"
+                          >
+                            {isSaving ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Save className="w-3.5 h-3.5" />
+                            )}
+                            {isSaving ? "Guardando..." : "Guardar"}
+                          </motion.button>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white dark:bg-black/30 border border-slate-200 dark:border-zinc-800">
+                            <button
+                              type="button"
+                              onClick={() => shiftFechaVencimiento(-1)}
+                              className="p-0.5 rounded-md hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-400 dark:text-zinc-500 cursor-pointer"
+                              title="Un día antes"
+                            >
+                              <ChevronLeft className="w-3.5 h-3.5" />
+                            </button>
+                            <span className="flex items-center gap-1 px-1 text-[10.5px] font-bold text-slate-700 dark:text-zinc-200">
+                              <CalendarClock className="w-3 h-3 text-primary" />
+                              Vence {formatVenceShort(fechaVencimiento) || "—"}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => shiftFechaVencimiento(1)}
+                              className="p-0.5 rounded-md hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-400 dark:text-zinc-500 cursor-pointer"
+                              title="Un día después"
+                            >
+                              <ChevronRight className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                          <RecurrenceToggle checked={pagoRecurrente} onChange={setPagoRecurrente} />
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-black/20 p-3.5">
+                        <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1.5">
+                          <Repeat className="w-3 h-3" />
+                          Contenido / Notas
                         </label>
-                        <CustomSelect
-                          value={metodoPago}
-                          onChange={(value) => setMetodoPago(value)}
-                          options={[
-                            "Tarjeta de Debito",
-                            "Transferencia Bancaria",
-                            "Debito Automatico",
-                          ].map((met) => ({ value: met, label: met }))}
-                          className="w-full"
+                        <textarea
+                          value={observaciones}
+                          onChange={(e) => setObservaciones(e.target.value)}
+                          rows={4}
+                          placeholder="Agregá un detalle, referencia o cualquier nota sobre este pago..."
+                          className="w-full bg-transparent outline-none resize-none text-[12.5px] leading-snug text-slate-800 dark:text-zinc-200 placeholder:text-slate-400 dark:placeholder:text-zinc-600"
                         />
                       </div>
-                    )}
-                  </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    {categoria === "Tarjeta de Credito" && (
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
-                          Método de Pago
-                        </label>
-                        <CustomSelect
-                          value={metodoPago}
-                          onChange={(value) => setMetodoPago(value)}
-                          options={[
-                            "Tarjeta de Debito",
-                            "Transferencia Bancaria",
-                            "Debito Automatico",
-                          ].map((met) => ({ value: met, label: met }))}
-                          className="w-full"
+                      <div className="grid grid-cols-2 gap-3">
+                        <PaymentUploadCard
+                          icon={Receipt}
+                          label="Comprobante de Pago"
+                          fileName={comprobanteFile?.name}
+                          hasExisting={!!(editingPaymentId && payments.find((p) => p.id === editingPaymentId)?.comprobantePago)}
+                          onSelect={setComprobanteFile}
+                        />
+                        <PaymentUploadCard
+                          icon={FileCheck}
+                          label="Factura Emitida"
+                          fileName={facturaFile?.name}
+                          hasExisting={!!(editingPaymentId && payments.find((p) => p.id === editingPaymentId)?.facturaEmitida)}
+                          onSelect={setFacturaFile}
                         />
                       </div>
-                    )}
-                    <div
-                      className={
-                        categoria !== "Tarjeta de Credito" ? "col-span-1" : ""
-                      }
-                    >
-                      <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
-                        ¿Con qué pagar?
-                      </label>
-                      <input
-                        type="text"
-                        value={conQuePagar}
-                        onChange={(e) => setConQuePagar(e.target.value)}
-                        className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-zinc-950/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white outline-none transition-all text-sm focus:border-slate-400 dark:focus:border-zinc-700"
-                      />
-                    </div>
-                    <div
-                      className={
-                        categoria !== "Tarjeta de Credito"
-                          ? "col-span-1"
-                          : "col-span-2"
-                      }
-                    >
-                      <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
-                        ¿Dónde pagar?
-                      </label>
-                      <input
-                        type="text"
-                        value={dondePagar}
-                        onChange={(e) => setDondePagar(e.target.value)}
-                        className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-zinc-950/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white outline-none transition-all text-sm focus:border-slate-400 dark:focus:border-zinc-700"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
-                        Factura Emitida
-                      </label>
-                      <label className="flex items-center justify-center gap-2 w-full px-3 py-2 rounded-full bg-slate-50 dark:bg-zinc-950/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white outline-none transition-all text-sm cursor-pointer hover:bg-slate-100 dark:hover:bg-zinc-900/80">
-                        <Upload className="w-4 h-4 text-slate-400 dark:text-zinc-500" />
-                        <span className="truncate">
-                          {facturaFile?.name || (editingPaymentId && payments.find((p) => p.id === editingPaymentId)?.facturaEmitida ? "Reemplazar archivo" : "Subir")}
-                        </span>
-                        <input
-                          type="file"
-                          className="hidden"
-                          onChange={(e) => setFacturaFile(e.target.files?.[0] || null)}
-                        />
-                      </label>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
-                        Comprobante
-                      </label>
-                      <label className="flex items-center justify-center gap-2 w-full px-3 py-2 rounded-full bg-slate-50 dark:bg-zinc-950/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white outline-none transition-all text-sm cursor-pointer hover:bg-slate-100 dark:hover:bg-zinc-900/80">
-                        <Upload className="w-4 h-4 text-slate-400 dark:text-zinc-500" />
-                        <span className="truncate">
-                          {comprobanteFile?.name || (editingPaymentId && payments.find((p) => p.id === editingPaymentId)?.comprobantePago ? "Reemplazar archivo" : "Subir")}
-                        </span>
-                        <input
-                          type="file"
-                          className="hidden"
-                          onChange={(e) => setComprobanteFile(e.target.files?.[0] || null)}
-                        />
-                      </label>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-center sm:justify-end gap-2.5 pt-2 border-t border-slate-100 dark:border-zinc-800/40">
-                    <button
-                      type="button"
-                      disabled={isSaving}
-                      onClick={() => { if (!isSaving) resetForm(); }}
-                      className="px-4 py-2 rounded-full text-xs font-semibold text-slate-500 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white transition-all cursor-pointer disabled:opacity-50"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={isSaving}
-                      className="px-4 py-2 rounded-full bg-primary hover:bg-primary-hover text-white dark:text-blue-950 text-xs font-bold transition-all shadow-sm cursor-pointer disabled:opacity-50 flex items-center gap-2"
-                    >
-                      {isSaving ? (
-                        <>
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          <span>Guardando...</span>
-                        </>
-                      ) : (
-                        editingPaymentId ? "Actualizar Pago" : "Guardar Pago"
-                      )}
-                    </button>
+                    </motion.div>
                   </div>
                 </form>
               </div>
