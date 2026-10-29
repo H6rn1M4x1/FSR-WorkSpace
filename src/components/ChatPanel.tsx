@@ -24,8 +24,16 @@ import {
   Pencil,
   Download,
   Video,
+  Calendar,
+  DollarSign,
+  GraduationCap,
+  Heart,
+  UtensilsCrossed,
+  StickyNote,
+  ChevronLeft,
+  ArrowRight,
 } from "lucide-react";
-import { ChatContact, ChatMessage, ChatAttachmentType } from "../types";
+import { ChatContact, ChatMessage, ChatAttachmentType, SharedEventCategory } from "../types";
 import {
   subscribeToContacts,
   subscribeToUnreadMessages,
@@ -43,6 +51,11 @@ import {
   uploadChatAttachment,
   compressImageFile,
   compressVideoFile,
+  fetchOwnItemsForSharedEventCategory,
+  sendSharedEventMessage,
+  acceptSharedEvent,
+  sharedEventCategoryLabel,
+  SharedEventListItem,
 } from "../lib/chatService";
 import { VoiceMessageBubble } from "./VoiceMessageBubble";
 import { useToast } from "../context/ToastContext";
@@ -100,6 +113,15 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
   const documentInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const attachMenuRef = useRef<HTMLDivElement>(null);
+
+  // --- Compartir un registro de otra sección como tarjeta ("Evento") ---
+  const [showEventPicker, setShowEventPicker] = useState(false);
+  const [eventPickerCategory, setEventPickerCategory] = useState<SharedEventCategory | null>(null);
+  const [eventPickerItems, setEventPickerItems] = useState<SharedEventListItem[]>([]);
+  const [eventPickerLoading, setEventPickerLoading] = useState(false);
+  const [isSendingEvent, setIsSendingEvent] = useState(false);
+  const [acceptedEventIds, setAcceptedEventIds] = useState<Set<string>>(new Set());
+  const [acceptingEventId, setAcceptingEventId] = useState<string | null>(null);
 
   // --- Grabación de notas de voz ---
   type RecordingState = "idle" | "recording" | "preview";
@@ -381,6 +403,64 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
     setShowAttachMenu(false);
   };
 
+  const openEventPicker = () => {
+    setShowAttachMenu(false);
+    setEventPickerCategory(null);
+    setEventPickerItems([]);
+    setShowEventPicker(true);
+  };
+
+  const closeEventPicker = () => {
+    setShowEventPicker(false);
+    setEventPickerCategory(null);
+    setEventPickerItems([]);
+  };
+
+  const selectEventCategory = async (category: SharedEventCategory) => {
+    setEventPickerCategory(category);
+    setEventPickerLoading(true);
+    setEventPickerItems([]);
+    try {
+      const items = await fetchOwnItemsForSharedEventCategory(normalizedUserEmail, category);
+      setEventPickerItems(items);
+    } catch (err: any) {
+      showToast(err?.message || "No se pudieron cargar tus registros.", "error");
+    } finally {
+      setEventPickerLoading(false);
+    }
+  };
+
+  const handleSendSharedEvent = async (item: SharedEventListItem) => {
+    if (!selectedEmail || !eventPickerCategory) return;
+    setIsSendingEvent(true);
+    try {
+      await sendSharedEventMessage(normalizedUserEmail, selectedEmail, eventPickerCategory, item);
+      closeEventPicker();
+      setJustSent(true);
+      setTimeout(() => setJustSent(false), 400);
+      vibrateOnSend();
+    } catch (err: any) {
+      showToast(err?.message || "No se pudo compartir el evento.", "error");
+    } finally {
+      setIsSendingEvent(false);
+    }
+  };
+
+  const handleAcceptSharedEvent = async (msg: ChatMessage) => {
+    if (!msg.id || acceptedEventIds.has(msg.id) || acceptingEventId) return;
+    setAcceptingEventId(msg.id);
+    try {
+      const sharedByName = getDisplayName(msg.fromEmail);
+      await acceptSharedEvent(msg, normalizedUserEmail, sharedByName);
+      setAcceptedEventIds((prev) => new Set(prev).add(msg.id!));
+      showToast("Se agregó a tu calendario.", "success");
+    } catch (err: any) {
+      showToast(err?.message || "No se pudo agregar el evento.", "error");
+    } finally {
+      setAcceptingEventId(null);
+    }
+  };
+
   const customNameFor = (email: string): string => {
     const contact = active.find((c) => c.fromEmail === email || c.toEmail === email);
     if (!contact) return email;
@@ -397,6 +477,25 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
     document: FileText,
     audio: Mic,
   };
+
+  const SHARED_EVENT_ICON: Record<SharedEventCategory, React.ComponentType<{ className?: string }>> = {
+    turno: Calendar,
+    finanzas: DollarSign,
+    universidad_horario: Clock,
+    universidad_examen: GraduationCap,
+    salud: Heart,
+    comidas: UtensilsCrossed,
+    notas: StickyNote,
+  };
+
+  const EVENT_CATEGORY_GROUPS: Array<{ key: string; label: string; icon: React.ComponentType<{ className?: string }>; children: SharedEventCategory[] }> = [
+    { key: "turno", label: "Turnos", icon: Calendar, children: ["turno"] },
+    { key: "finanzas", label: "Finanzas", icon: DollarSign, children: ["finanzas"] },
+    { key: "universidad", label: "Universidad", icon: GraduationCap, children: ["universidad_horario", "universidad_examen"] },
+    { key: "salud", label: "Salud", icon: Heart, children: ["salud"] },
+    { key: "comidas", label: "Comidas", icon: UtensilsCrossed, children: ["comidas"] },
+    { key: "notas", label: "Notas Rápidas", icon: StickyNote, children: ["notas"] },
+  ];
 
   const renderLastMessagePreview = (email: string) => {
     const msg = lastMessageByContact[email];
@@ -905,10 +1004,128 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
 
               {/* RIGHT: Conversation */}
               <div
-                className={`flex-1 min-w-0 min-h-0 flex-col rounded-xl border border-zinc-200/60 dark:border-white/10 overflow-hidden ${
+                className={`relative flex-1 min-w-0 min-h-0 flex-col rounded-xl border border-zinc-200/60 dark:border-white/10 overflow-hidden ${
                   showMobileConversation ? "flex" : "hidden md:flex"
                 }`}
               >
+                <AnimatePresence>
+                  {showEventPicker && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className={`absolute inset-0 z-30 flex flex-col ${darkMode ? "bg-zinc-950" : "bg-white"}`}
+                    >
+                      <div className="flex items-center gap-2 p-2.5 border-b border-zinc-200/60 dark:border-white/10 shrink-0">
+                        {eventPickerCategory && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEventPickerCategory(null);
+                              setEventPickerItems([]);
+                            }}
+                            className="p-1 rounded-full hover:bg-zinc-200/60 dark:hover:bg-zinc-800 cursor-pointer text-zinc-500 shrink-0"
+                            title="Volver"
+                          >
+                            <ChevronLeft className="w-4 h-4" />
+                          </button>
+                        )}
+                        <CalendarPlus className="w-3.5 h-3.5 text-primary shrink-0" />
+                        <h3 className="text-xs font-extrabold flex-1 truncate">
+                          {eventPickerCategory ? sharedEventCategoryLabel(eventPickerCategory) : "Compartir un evento"}
+                        </h3>
+                        <button
+                          type="button"
+                          onClick={closeEventPicker}
+                          className="p-1 rounded-full hover:bg-zinc-200/60 dark:hover:bg-zinc-800 cursor-pointer text-zinc-500 shrink-0"
+                          title="Cerrar"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
+                      <div className="flex-1 min-h-0 overflow-y-auto p-3">
+                        {!eventPickerCategory ? (
+                          <div className="grid grid-cols-2 gap-2">
+                            {EVENT_CATEGORY_GROUPS.map((group) => {
+                              const GroupIcon = group.icon;
+                              return group.children.length === 1 ? (
+                                <motion.button
+                                  key={group.key}
+                                  type="button"
+                                  whileHover={{ scale: 1.02 }}
+                                  whileTap={{ scale: 0.97 }}
+                                  onClick={() => selectEventCategory(group.children[0])}
+                                  className={`p-3 rounded-xl border flex flex-col items-center gap-1.5 cursor-pointer text-center ${
+                                    darkMode ? "border-zinc-800 hover:border-primary/50" : "border-zinc-200 hover:border-primary/50"
+                                  }`}
+                                >
+                                  <GroupIcon className="w-5 h-5 text-primary" />
+                                  <span className="text-[11px] font-bold">{group.label}</span>
+                                </motion.button>
+                              ) : (
+                                <div
+                                  key={group.key}
+                                  className={`col-span-2 p-3 rounded-xl border ${
+                                    darkMode ? "border-zinc-800" : "border-zinc-200"
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-1.5 mb-2">
+                                    <GroupIcon className="w-4 h-4 text-primary" />
+                                    <span className="text-[11px] font-bold">{group.label}</span>
+                                  </div>
+                                  <div className="flex gap-2">
+                                    {group.children.map((child) => (
+                                      <button
+                                        key={child}
+                                        type="button"
+                                        onClick={() => selectEventCategory(child)}
+                                        className="flex-1 px-2.5 py-1.5 rounded-full border border-primary/30 text-primary text-[10.5px] font-bold hover:bg-primary/10 cursor-pointer flex items-center justify-center gap-1"
+                                      >
+                                        {sharedEventCategoryLabel(child)}
+                                        <ArrowRight className="w-3 h-3" />
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : eventPickerLoading ? (
+                          <div className="h-full flex items-center justify-center">
+                            <RefreshCw className="w-5 h-5 text-primary animate-spin" />
+                          </div>
+                        ) : eventPickerItems.length === 0 ? (
+                          <div className="py-8 text-center text-xs text-zinc-500 font-medium bg-zinc-500/5 rounded-xl border border-dashed border-zinc-300 dark:border-zinc-800">
+                            No tenés registros en esta sección todavía.
+                          </div>
+                        ) : (
+                          <div className="space-y-1.5">
+                            {eventPickerItems.map((item) => (
+                              <motion.button
+                                key={item.id}
+                                type="button"
+                                whileHover={{ scale: 1.01 }}
+                                whileTap={{ scale: 0.98 }}
+                                disabled={isSendingEvent}
+                                onClick={() => handleSendSharedEvent(item)}
+                                className={`w-full p-2.5 rounded-xl border text-left cursor-pointer disabled:opacity-50 ${
+                                  darkMode ? "border-zinc-800 hover:border-primary/50" : "border-zinc-200 hover:border-primary/50"
+                                }`}
+                              >
+                                <div className="text-[11.5px] font-bold truncate">{item.title}</div>
+                                {item.subtitle && (
+                                  <div className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate">{item.subtitle}</div>
+                                )}
+                              </motion.button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
                 {selectedEmail ? (
                   <>
                     <div className="flex items-center gap-2 p-2.5 border-b border-zinc-200/60 dark:border-white/10 shrink-0">
@@ -1003,6 +1220,54 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                                     durationSec={msg.audioDurationSec}
                                   />
                                 )}
+                                {msg.sharedEventCategory &&
+                                  (() => {
+                                    const EventIcon = SHARED_EVENT_ICON[msg.sharedEventCategory];
+                                    const alreadyAccepted = !!msg.id && acceptedEventIds.has(msg.id);
+                                    const isAccepting = acceptingEventId === msg.id;
+                                    return (
+                                      <div
+                                        className={`min-w-[180px] max-w-[220px] rounded-xl p-2.5 mb-1 border ${
+                                          isOwn
+                                            ? "border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/10"
+                                            : darkMode
+                                            ? "border-zinc-700 bg-zinc-900"
+                                            : "border-zinc-200 bg-white"
+                                        }`}
+                                      >
+                                        <div className="flex items-center gap-1.5 mb-1">
+                                          <EventIcon className="w-3.5 h-3.5 text-primary shrink-0" />
+                                          <span className="text-[9px] font-extrabold uppercase tracking-wide text-primary">
+                                            {sharedEventCategoryLabel(msg.sharedEventCategory)}
+                                          </span>
+                                        </div>
+                                        <div className="text-[12px] font-bold leading-snug">{msg.sharedEventTitle}</div>
+                                        {msg.sharedEventSubtitle && (
+                                          <div className="text-[10px] opacity-70 mt-0.5">{msg.sharedEventSubtitle}</div>
+                                        )}
+                                        {!isOwn && (
+                                          <motion.button
+                                            type="button"
+                                            whileTap={{ scale: 0.95 }}
+                                            disabled={alreadyAccepted || isAccepting}
+                                            onClick={() => handleAcceptSharedEvent(msg)}
+                                            className={`mt-2 w-full py-1.5 rounded-full text-[10px] font-bold cursor-pointer flex items-center justify-center gap-1.5 ${
+                                              alreadyAccepted
+                                                ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                                                : "bg-primary text-white dark:text-blue-950 disabled:opacity-60"
+                                            }`}
+                                          >
+                                            {isAccepting ? (
+                                              <RefreshCw className="w-3 h-3 animate-spin" />
+                                            ) : alreadyAccepted ? (
+                                              <Check className="w-3 h-3" />
+                                            ) : null}
+                                            {alreadyAccepted ? "Agregado" : isAccepting ? "Agregando..." : "Agregar a mi calendario"}
+                                          </motion.button>
+                                        )}
+                                      </div>
+                                    );
+                                  })()}
                                 {msg.text && <span className="whitespace-pre-wrap break-words">{msg.text}</span>}
                                 <div className={`flex items-center gap-1 mt-0.5 opacity-80 ${isOwn ? "justify-end" : "justify-start"}`}>
                                   <span className="text-[9px]">
@@ -1198,10 +1463,7 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                                   </button>
                                   <button
                                     type="button"
-                                    onClick={() => {
-                                      setShowAttachMenu(false);
-                                      showToast("Muy pronto vas a poder compartir eventos acá.", "info");
-                                    }}
+                                    onClick={openEventPicker}
                                     className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl hover:bg-primary/10 text-left text-xs font-semibold cursor-pointer"
                                   >
                                     <span className="p-1.5 rounded-lg bg-amber-500/10 text-amber-500 shrink-0">

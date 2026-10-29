@@ -531,6 +531,16 @@ export interface ChatContact {
 
 export type ChatAttachmentType = "image" | "video" | "document" | "audio";
 
+/** Categorías de la app desde las que se puede compartir un registro puntual como tarjeta de chat. */
+export type SharedEventCategory =
+  | "turno"
+  | "finanzas"
+  | "universidad_horario"
+  | "universidad_examen"
+  | "salud"
+  | "comidas"
+  | "notas";
+
 /** Un mensaje dentro de una conversación 1-a-1 del chat interno. */
 export interface ChatMessage {
   id?: string;
@@ -548,6 +558,13 @@ export interface ChatMessage {
   attachmentName?: string;
   /** Duración del audio en segundos, para mostrarla antes de que cargue el archivo. */
   audioDurationSec?: number;
+  /** Tarjeta de "evento compartido": un registro puntual de otra sección de la app, enviado como
+   *  snapshot para que el destinatario lo pueda agregar como copia propia (ver chatService.ts). */
+  sharedEventCategory?: SharedEventCategory;
+  sharedEventTitle?: string;
+  sharedEventSubtitle?: string;
+  /** JSON con los datos necesarios para recrear el registro del lado del destinatario. */
+  sharedEventData?: string;
 }
 
 export interface AgendaShare {
