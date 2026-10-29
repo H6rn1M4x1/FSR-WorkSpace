@@ -4,6 +4,8 @@ import {
   addDoc,
   updateDoc,
   deleteDoc,
+  getDoc,
+  setDoc,
   query,
   where,
   onSnapshot,
@@ -12,7 +14,9 @@ import {
 } from "firebase/firestore";
 import { db } from "./firebase";
 import { supabase } from "./supabase";
-import { ChatContact, ChatMessage, ChatAttachmentType } from "../types";
+import { saveItemToFirestore } from "./firestoreSyncService";
+import { generateUniqueId } from "../utils/id";
+import { ChatContact, ChatMessage, ChatAttachmentType, SharedEventCategory } from "../types";
 
 const CONTACTS_COLLECTION = "chat_contacts";
 const MESSAGES_COLLECTION = "chat_messages";
@@ -519,4 +523,184 @@ export function subscribeToUserProfileName(
     },
     () => {}
   );
+}
+
+// ---------------------------------------------------------------------------------------------
+// Tarjetas de "evento compartido": enviar por chat una copia de un registro puntual de otra
+// sección de la app (Turnos, Finanzas, Universidad, Salud, Comidas, Notas Rápidas), para que el
+// destinatario la agregue como copia propia editable — NO un vínculo en vivo (para eso ya existe
+// itemSharingService.ts, con otra semántica). Al aceptar, se marca la copia con
+// __sharedByEmail/__sharedByName, los mismos campos que ya lee <SharedBadge> en todas las vistas
+// de la app — así el aviso de "Compartido" en Inicio y en la propia sección sale sin tocar
+// ninguno de esos componentes.
+// ---------------------------------------------------------------------------------------------
+
+const SHARED_EVENT_CATEGORIES: Record<SharedEventCategory, { label: string; collection: string }> = {
+  turno: { label: "Turnos", collection: "turnos_compromisos" },
+  finanzas: { label: "Finanzas", collection: "detailed_payments" },
+  universidad_horario: { label: "Horario de clase", collection: "horarios" },
+  universidad_examen: { label: "Examen", collection: "examenes" },
+  salud: { label: "Salud", collection: "medical_records" },
+  comidas: { label: "Comidas", collection: "organizacion_semanal" },
+  notas: { label: "Notas Rápidas", collection: "notes" },
+};
+
+export function sharedEventCategoryLabel(category: SharedEventCategory): string {
+  return SHARED_EVENT_CATEGORIES[category]?.label || "Evento";
+}
+
+export interface SharedEventListItem {
+  id: string;
+  title: string;
+  subtitle: string;
+  raw: any;
+}
+
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function buildTitleSubtitle(
+  category: SharedEventCategory,
+  data: any,
+  platoName?: string
+): { title: string; subtitle: string } {
+  switch (category) {
+    case "turno":
+      return { title: data.descripcion || "Turno", subtitle: data.fecha || "" };
+    case "finanzas":
+      return {
+        title: data.descripcion || "Pago",
+        subtitle: data.fechaVencimiento ? `Vence ${data.fechaVencimiento}` : "",
+      };
+    case "universidad_horario":
+      return {
+        title: data.materia || "Materia",
+        subtitle: `${data.dia || ""} ${data.horaInicio || ""}${data.horaFin ? `-${data.horaFin}` : ""}`.trim(),
+      };
+    case "universidad_examen":
+      return { title: data.materia || "Examen", subtitle: data.fecha || "" };
+    case "salud":
+      return { title: data.info || data.type || "Registro médico", subtitle: data.studyDate || "" };
+    case "comidas":
+      return { title: platoName || "Comida programada", subtitle: data.fecha || "" };
+    case "notas":
+      return { title: data.title || (data.text ? stripHtml(data.text).slice(0, 48) : "Nota"), subtitle: "" };
+    default:
+      return { title: "Elemento", subtitle: "" };
+  }
+}
+
+/** Trae los registros propios de una categoría, para elegir cuál compartir. */
+export async function fetchOwnItemsForSharedEventCategory(
+  userEmail: string,
+  category: SharedEventCategory
+): Promise<SharedEventListItem[]> {
+  const normalized = (userEmail || "").trim().toLowerCase();
+  const { collection: colName } = SHARED_EVENT_CATEGORIES[category];
+  const snap = await getDocs(collection(db, "users", normalized, colName));
+  let docs = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as any[];
+
+  if (category === "notas") {
+    // La colección "notes" también guarda notas académicas (title/content, sin "pinned") —
+    // acá solo interesan las notas rápidas reales.
+    docs = docs.filter((d) => typeof d.pinned === "boolean");
+  }
+
+  let platoNames: Record<string, string> = {};
+  if (category === "comidas") {
+    const platosSnap = await getDocs(collection(db, "users", normalized, "platos"));
+    platosSnap.docs.forEach((p) => {
+      platoNames[p.id] = (p.data() as any)?.nombrePlato || "Plato";
+    });
+  }
+
+  const items = docs.map((d) => {
+    const { title, subtitle } = buildTitleSubtitle(category, d, category === "comidas" ? platoNames[d.platoId] : undefined);
+    return { id: d.id, title, subtitle, raw: d };
+  });
+
+  items.sort((a, b) => {
+    const dateOf = (it: SharedEventListItem) => it.raw?.fecha || it.raw?.fechaVencimiento || it.raw?.studyDate || "";
+    return dateOf(b).localeCompare(dateOf(a));
+  });
+  return items;
+}
+
+/** Envía la tarjeta de evento compartido como un mensaje más de la conversación. */
+export async function sendSharedEventMessage(
+  fromEmail: string,
+  toEmail: string,
+  category: SharedEventCategory,
+  item: SharedEventListItem
+): Promise<void> {
+  const normFrom = (fromEmail || "").trim().toLowerCase();
+  const normTo = (toEmail || "").trim().toLowerCase();
+
+  let payload: any = item.raw;
+  if (category === "comidas" && item.raw?.platoId) {
+    const platoSnap = await getDoc(doc(db, "users", normFrom, "platos", item.raw.platoId));
+    payload = {
+      organizacionItem: item.raw,
+      plato: platoSnap.exists() ? { id: platoSnap.id, ...platoSnap.data() } : null,
+    };
+  }
+
+  const conversationId = getConversationId(normFrom, normTo);
+  await addDoc(collection(db, MESSAGES_COLLECTION), {
+    conversationId,
+    fromEmail: normFrom,
+    toEmail: normTo,
+    text: "",
+    createdAt: new Date().toISOString(),
+    read: false,
+    delivered: false,
+    sharedEventCategory: category,
+    sharedEventTitle: item.title,
+    sharedEventSubtitle: item.subtitle,
+    sharedEventData: JSON.stringify(payload),
+  });
+}
+
+/**
+ * El destinatario acepta una tarjeta compartida: crea una copia propia editable (nunca un
+ * vínculo en vivo) marcada con __sharedByEmail/__sharedByName, que <SharedBadge> ya sabe mostrar
+ * en todas las vistas de la app.
+ */
+export async function acceptSharedEvent(
+  message: ChatMessage,
+  receiverEmail: string,
+  sharedByName: string
+): Promise<void> {
+  if (!message.sharedEventCategory || !message.sharedEventData) {
+    throw new Error("Este evento ya no está disponible.");
+  }
+  const category = message.sharedEventCategory;
+  const { collection: colName } = SHARED_EVENT_CATEGORIES[category];
+  const normReceiver = (receiverEmail || "").trim().toLowerCase();
+  const payload = JSON.parse(message.sharedEventData);
+
+  if (category === "comidas") {
+    const { organizacionItem, plato } = payload;
+    if (plato?.id) {
+      const existing = await getDoc(doc(db, "users", normReceiver, "platos", plato.id));
+      if (!existing.exists()) {
+        await setDoc(doc(db, "users", normReceiver, "platos", plato.id), plato);
+      }
+    }
+    await saveItemToFirestore(normReceiver, colName, {
+      ...organizacionItem,
+      id: generateUniqueId("plan"),
+      __sharedByEmail: message.fromEmail,
+      __sharedByName: sharedByName,
+    });
+    return;
+  }
+
+  await saveItemToFirestore(normReceiver, colName, {
+    ...payload,
+    id: generateUniqueId(category),
+    __sharedByEmail: message.fromEmail,
+    __sharedByName: sharedByName,
+  });
 }
