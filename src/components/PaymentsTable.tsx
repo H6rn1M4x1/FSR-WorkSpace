@@ -330,10 +330,11 @@ const RecurrenceToggle: React.FC<{ checked: boolean; onChange: (v: boolean) => v
       title="Pago recurrente o único"
     >
       <span
-        className={`text-[10.5px] font-bold uppercase tracking-wide ${
+        className={`flex items-center gap-1 text-[10.5px] font-bold uppercase tracking-wide ${
           checked ? "text-primary" : "text-slate-500 dark:text-zinc-400"
         }`}
       >
+        {checked && <Repeat className="w-3 h-3" />}
         {checked ? "Recurrente" : "Único"}
       </span>
       <span
@@ -1729,7 +1730,7 @@ export default function PaymentsTable({
 
                       <div className="rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-black/20 p-3.5">
                         <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1.5">
-                          <Repeat className="w-3 h-3" />
+                          <FileText className="w-3 h-3" />
                           Contenido / Notas
                         </label>
                         <textarea
