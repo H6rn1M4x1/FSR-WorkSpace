@@ -515,6 +515,27 @@ export interface MateriaInfo {
   fechaAprobado?: string;
 }
 
+/** Invitación/vínculo de contacto para el chat interno entre usuarios de la app. */
+export interface ChatContact {
+  id?: string;
+  fromEmail: string;
+  toEmail: string;
+  status: "pending" | "accepted";
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Un mensaje dentro de una conversación 1-a-1 del chat interno. */
+export interface ChatMessage {
+  id?: string;
+  conversationId: string;
+  fromEmail: string;
+  toEmail: string;
+  text: string;
+  createdAt: string;
+  read: boolean;
+}
+
 export interface AgendaShare {
   id?: string;
   fromEmail: string;
