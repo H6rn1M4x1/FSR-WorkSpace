@@ -10,8 +10,8 @@ import {
   getDocs,
   Unsubscribe,
 } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { db, storage } from "./firebase";
+import { db } from "./firebase";
+import { supabase } from "./supabase";
 import { ChatContact, ChatMessage, ChatAttachmentType } from "../types";
 
 const CONTACTS_COLLECTION = "chat_contacts";
@@ -273,7 +273,7 @@ const UPLOAD_TIMEOUT_MS = 25000;
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
-      reject(new Error(`${label} tardó demasiado. Revisá tu conexión o que Firebase Storage esté habilitado.`));
+      reject(new Error(`${label} tardó demasiado. Revisá tu conexión a internet.`));
     }, ms);
     promise.then(
       (v) => { clearTimeout(timer); resolve(v); },
@@ -282,20 +282,36 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   });
 }
 
+const CHAT_ATTACHMENTS_BUCKET = "chat-attachments";
+
+/**
+ * Sube un adjunto del chat a Supabase Storage (no a Firebase Storage: ese servicio no está
+ * disponible en el plan "AI Studio Starter Tier" de este proyecto de Firebase sin upgrade de
+ * pago). La app ya usa Supabase para la autenticación real de los usuarios, así que el mismo
+ * proyecto sirve también de almacenamiento de archivos sin depender de ningún servicio nuevo.
+ */
 export async function uploadChatAttachment(
   conversationId: string,
   file: Blob,
   fileName: string
 ): Promise<string> {
   const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
-  const path = `chat_attachments/${conversationId}/${Date.now()}_${safeName}`;
-  const storageRef = ref(storage, path);
+  const path = `${conversationId}/${Date.now()}_${safeName}`;
   try {
-    await withTimeout(uploadBytes(storageRef, file), UPLOAD_TIMEOUT_MS, "La subida del archivo");
-    return await withTimeout(getDownloadURL(storageRef), UPLOAD_TIMEOUT_MS, "Obtener el link del archivo");
+    const { error: uploadError } = await withTimeout(
+      supabase.storage.from(CHAT_ATTACHMENTS_BUCKET).upload(path, file, {
+        contentType: file.type || undefined,
+        upsert: false,
+      }),
+      UPLOAD_TIMEOUT_MS,
+      "La subida del archivo"
+    );
+    if (uploadError) throw uploadError;
+    const { data } = supabase.storage.from(CHAT_ATTACHMENTS_BUCKET).getPublicUrl(path);
+    if (!data?.publicUrl) throw new Error("No se pudo obtener el link del archivo subido.");
+    return data.publicUrl;
   } catch (error: any) {
-    const code = error?.code ? ` (${error.code})` : "";
-    throw new Error(`No se pudo subir el archivo${code}. Puede que falte habilitar Firebase Storage para este proyecto.`);
+    throw new Error(`No se pudo subir el archivo: ${error?.message || "error desconocido"}.`);
   }
 }
 
