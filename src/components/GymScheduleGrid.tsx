@@ -3,6 +3,7 @@ import { Paintbrush, Eraser, Trash2, Clock, Check, X, CalendarDays, Pencil } fro
 import { DeporteActividad } from "../types";
 import { AnimatedNumber } from "./AnimatedNumber";
 import { CustomSelect } from "./CustomSelect";
+import { RouteDrawMap } from "./RouteDrawMap";
 import { getLocalDateString } from "../utils/date";
 import { estimateCaloriesByMET } from "../data/activityCatalog";
 import {
@@ -24,6 +25,10 @@ import {
 
 const DIAS_CORTO = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 const DIAS_LARGO = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+const MESES = [
+  "enero", "febrero", "marzo", "abril", "mayo", "junio",
+  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+];
 
 const SLOT_MIN = 30;
 const ROW_PX = 26;
@@ -51,6 +56,19 @@ function formatMinutesLabel(mins: number): string {
 function splitFecha(fecha: string): { dateStr: string; time: string } {
   const [dateStr, time] = (fecha || "").split(" ");
   return { dateStr: dateStr || "", time: (time || "00:00").slice(0, 5) };
+}
+
+function formatFullDiaLabel(dayIdx: number, weekDates: Date[]): string {
+  const d = weekDates[dayIdx];
+  return `${DIAS_LARGO[dayIdx]} ${d.getDate()} de ${MESES[d.getMonth()]} de ${d.getFullYear()}`;
+}
+
+function formatPace(minutes: number, distanceKm: number): string {
+  if (!distanceKm || distanceKm <= 0 || !minutes || minutes <= 0) return "";
+  const paceMin = minutes / distanceKm;
+  const m = Math.floor(paceMin);
+  const s = Math.round((paceMin - m) * 60);
+  return `${m}:${String(s).padStart(2, "0")} min/km`;
 }
 
 export type GymScheduleOptionKind = "rutina" | "deporte";
@@ -191,6 +209,16 @@ export function GymScheduleGrid({
     const opt = options.find((o) => o.key === key) || null;
     const minutes = Math.max(MIN_BLOCK_MIN, parseTimeMin(panelHoraFin) - parseTimeMin(panelHoraInicio));
     applyEstimate(opt, minutes);
+  };
+
+  // Al terminar de dibujar la ruta en el mapa (solo para deportes "isDistanceBased"), completa
+  // Distancia y Pasos automáticamente, y además recalcula el ritmo (Frecuencia) con la duración
+  // ya cargada en el panel — mismo cálculo que usaba "Añadir Actividad".
+  const handleRouteComplete = (result: { distanceKm: number; steps: number }) => {
+    setPanelDistancia(result.distanceKm);
+    setPanelPasos(result.steps);
+    const minutes = Math.max(0, parseTimeMin(panelHoraFin) - parseTimeMin(panelHoraInicio));
+    setPanelFrecuencia(formatPace(minutes, result.distanceKm));
   };
 
   const gridStartMin = weekActividades.reduce(
@@ -474,6 +502,16 @@ export function GymScheduleGrid({
               size="sm"
               searchable
               className="w-full"
+              renderValue={(opt) => {
+                const parts = opt.label.split(" · ");
+                if (parts.length < 2) return <span className="font-bold truncate">{opt.label}</span>;
+                return (
+                  <span className="truncate">
+                    <span className="font-bold">{parts[0]}</span>{" "}
+                    <span className="font-normal text-[13px] text-slate-500 dark:text-zinc-400">· {parts[1]}</span>
+                  </span>
+                );
+              }}
             />
           </div>
 
@@ -481,13 +519,19 @@ export function GymScheduleGrid({
             <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
               Día
             </label>
-            <CustomSelect
-              value={String(panelDayIdx)}
-              onChange={(v) => setPanelDayIdx(Number(v))}
-              options={diaOptions}
-              size="sm"
-              className="w-full"
-            />
+            {editingDraftId ? (
+              <CustomSelect
+                value={String(panelDayIdx)}
+                onChange={(v) => setPanelDayIdx(Number(v))}
+                options={diaOptions}
+                size="sm"
+                className="w-full"
+              />
+            ) : (
+              <div className="w-full px-3 py-2.5 h-[42px] rounded-xl bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 text-xs md:text-sm font-semibold flex items-center truncate">
+                {formatFullDiaLabel(panelDayIdx, weekDates)}
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-2">
@@ -596,6 +640,10 @@ export function GymScheduleGrid({
                   className="w-full px-3 py-2 rounded-xl bg-white dark:bg-black/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-600 outline-none text-xs focus:border-primary disabled:opacity-40 disabled:cursor-not-allowed"
                 />
               </div>
+
+              {selectedOption.isDistanceBased && (
+                <RouteDrawMap darkMode={darkMode} onRouteComplete={handleRouteComplete} heightClass="h-44" />
+              )}
             </>
           ) : (
             <p className="text-[11px] text-slate-500 dark:text-zinc-400 flex items-center gap-1.5 bg-slate-100 dark:bg-zinc-900/60 rounded-xl px-3 py-2">

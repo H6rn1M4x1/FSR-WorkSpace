@@ -21,6 +21,10 @@ interface CustomSelectProps {
   size?: "sm" | "md";
   icon?: React.ReactNode;
   searchable?: boolean;
+  /** Personaliza el contenido mostrado en el botón cerrado para la opción elegida — el resto
+   * (búsqueda, lista desplegable) sigue usando `label` como texto plano. Opcional: si no se pasa,
+   * se muestra `label` tal cual, como antes. */
+  renderValue?: (option: { value: string; label: string }) => React.ReactNode;
 }
 
 // Select propio (no el <select> nativo del navegador) con el mismo estilo/animación que el resto
@@ -37,6 +41,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
   size = "md",
   icon,
   searchable = false,
+  renderValue,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -158,7 +163,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
             data-custom-select-selected={!!selectedOption}
             className={`truncate ${selectedOption ? "font-bold text-black dark:text-white" : "text-slate-400 dark:text-zinc-500 font-normal"}`}
           >
-            {selectedOption ? selectedOption.label : placeholder}
+            {selectedOption ? (renderValue ? renderValue(selectedOption) : selectedOption.label) : placeholder}
           </span>
         </span>
         <ChevronDown
