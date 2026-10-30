@@ -1,11 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
-import { StickyNote, Pin, Plus, Pencil, Check, X } from "lucide-react";
+import { StickyNote, Pin, Plus, Pencil, X } from "lucide-react";
 import { useNotes } from "../hooks/useNotes";
-import { RichTextEditor } from "./RichTextEditor";
 import { InteractiveRichText } from "./InteractiveRichText";
-import { SaveOnIdle, buildNoteColorPalette, findNoteColorEntry, type Draft } from "./NotesView";
+import { buildNoteColorPalette, findNoteColorEntry, type Draft } from "./NotesView";
 import { useToast } from "../context/ToastContext";
 
 function stripHtml(html: string): string {
@@ -20,26 +19,27 @@ const NOTES_AUTO_ADVANCE_MS = 5000;
 /**
  * Miniatura de "Notas Rápidas" para Inicio, en reemplazo de "Seguimiento Semanal de Equipos"
  * (MultiTeamMatchWidget) — mismas notas que NotesView.tsx (vía el mismo hook useNotes). Cada
- * tarjeta tiene su propio botón de expandir (ver en grande + editar sin salir de Inicio, mismo
- * modal/auto-guardado que NotesView.tsx) — hacer click en el resto de la tarjeta sigue
- * navegando a la pestaña real de Notas Rápidas, igual que antes.
+ * tarjeta tiene su propio botón de expandir (ver en grande, de solo lectura salvo tildar
+ * checkboxes) — "Editar" lleva a la pestaña real de Notas Rápidas con esa nota ya seleccionada
+ * para editar, en vez de editarla ahí mismo en el modal de Inicio.
  */
 export function QuickNotesMiniWidget({
   userId,
   darkMode,
   onOpenAll,
   onAddNote,
+  onEditNote,
 }: {
   userId: string;
   darkMode: boolean;
   onOpenAll?: () => void;
   onAddNote?: () => void;
+  onEditNote?: (noteId: string) => void;
 }) {
   const { notes, updateNote } = useNotes(userId);
   const { showToast } = useToast();
   const notePalette = useMemo(() => buildNoteColorPalette(darkMode), [darkMode]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
 
   // Tildar un checkbox en modo lectura (no editando) debe guardar el cambio al toque, no
@@ -59,20 +59,21 @@ export function QuickNotesMiniWidget({
   const pageCount = Math.max(1, Math.ceil(sortedNotes.length / NOTES_PAGE_SIZE));
 
   // Slider: con más de NOTES_PAGE_SIZE notas, en vez de recortar el resto arma páginas de a
-  // NOTES_PAGE_SIZE y las va rotando sola — en pausa mientras el mouse esté sobre alguna tarjeta,
-  // para no cambiar el contenido debajo del cursor mientras el usuario la está mirando/leyendo.
+  // NOTES_PAGE_SIZE y las va rotando sola — en pausa mientras el mouse esté sobre alguna tarjeta
+  // (para no cambiar el contenido debajo del cursor mientras se está leyendo) o mientras haya una
+  // nota abierta en el modal "ver en grande" de Inicio.
   const [page, setPage] = useState(0);
   const [isHovering, setIsHovering] = useState(false);
   useEffect(() => {
     if (page >= pageCount) setPage(0);
   }, [pageCount, page]);
   useEffect(() => {
-    if (pageCount <= 1 || isHovering) return;
+    if (pageCount <= 1 || isHovering || expandedId) return;
     const id = setInterval(() => {
       setPage((p) => (p + 1) % pageCount);
     }, NOTES_AUTO_ADVANCE_MS);
     return () => clearInterval(id);
-  }, [pageCount, isHovering]);
+  }, [pageCount, isHovering, expandedId]);
 
   const preview = sortedNotes.slice(page * NOTES_PAGE_SIZE, page * NOTES_PAGE_SIZE + NOTES_PAGE_SIZE);
 
@@ -83,8 +84,13 @@ export function QuickNotesMiniWidget({
     const note = notes.find((n) => n.id === noteId);
     if (!note) return;
     setExpandedId(noteId);
-    setEditing(false);
     setDraft({ title: note.title || "", text: note.text });
+  };
+
+  const handleEditClick = (noteId: string) => {
+    setExpandedId(null);
+    if (onEditNote) onEditNote(noteId);
+    else onOpenAll?.();
   };
 
   return (
@@ -235,27 +241,17 @@ export function QuickNotesMiniWidget({
                   }
                 >
                   <div className="flex items-start justify-between gap-3 mb-3">
-                    {editing ? (
-                      <input
-                        autoFocus
-                        value={draft.title}
-                        onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-                        placeholder="Título"
-                        className="flex-1 bg-transparent text-lg font-extrabold text-zinc-900 dark:text-white focus:outline-none placeholder:text-zinc-400"
-                      />
-                    ) : (
-                      <h3 className="flex-1 text-lg font-extrabold text-zinc-900 dark:text-white break-words">
-                        {draft.title || "Sin título"}
-                      </h3>
-                    )}
+                    <h3 className="flex-1 text-lg font-extrabold text-zinc-900 dark:text-white break-words">
+                      {draft.title || "Sin título"}
+                    </h3>
                     <div className="flex items-center gap-1 shrink-0">
                       <button
                         type="button"
-                        onClick={() => setEditing((v) => !v)}
+                        onClick={() => handleEditClick(expandedNote.id)}
                         className="p-1.5 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 text-zinc-500 dark:text-zinc-300 cursor-pointer"
-                        title={editing ? "Listo" : "Editar"}
+                        title="Editar en Notas Rápidas"
                       >
-                        {editing ? <Check className="w-4 h-4" /> : <Pencil className="w-4 h-4" />}
+                        <Pencil className="w-4 h-4" />
                       </button>
                       <button
                         type="button"
@@ -268,27 +264,10 @@ export function QuickNotesMiniWidget({
                     </div>
                   </div>
 
-                  {editing ? (
-                    <RichTextEditor
-                      value={draft.text}
-                      onChange={(html) => setDraft({ ...draft, text: html })}
-                      placeholder="Escribí algo..."
-                      darkToolbar
-                      attachments={expandedNote.attachments || []}
-                      onAttachmentsChange={(atts) => updateNote(expandedNote.id, { attachments: atts })}
-                    />
-                  ) : (
-                    <InteractiveRichText
-                      className="rich-text-content prose dark:prose-invert prose-sm max-w-none text-sm text-zinc-900 dark:text-white [&_ol_ol]:list-[lower-alpha]"
-                      html={draft.text || "<p class='text-zinc-400 italic'>Nota vacía.</p>"}
-                      onToggleCheckbox={(newHtml) => handleToggleCheckbox(expandedNote.id, newHtml)}
-                    />
-                  )}
-
-                  <SaveOnIdle
-                    draft={draft}
-                    original={{ title: expandedNote.title || "", text: expandedNote.text }}
-                    onSave={(patch) => { updateNote(expandedNote.id, patch); }}
+                  <InteractiveRichText
+                    className="rich-text-content prose dark:prose-invert prose-sm max-w-none text-sm text-zinc-900 dark:text-white [&_ol_ol]:list-[lower-alpha]"
+                    html={draft.text || "<p class='text-zinc-400 italic'>Nota vacía.</p>"}
+                    onToggleCheckbox={(newHtml) => handleToggleCheckbox(expandedNote.id, newHtml)}
                   />
                 </motion.div>
               </motion.div>

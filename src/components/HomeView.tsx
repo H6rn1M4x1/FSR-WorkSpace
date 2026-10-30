@@ -136,6 +136,9 @@ interface HomeViewProps {
   /** Navega a Notas Rápidas con el formulario de nueva nota ya abierto — usado por el botón "+"
    *  de la miniatura en Inicio. */
   onAddNote?: () => void;
+  /** Navega a Notas Rápidas con la nota indicada ya seleccionada para editar — usado por
+   *  "Editar" en la miniatura en Inicio. */
+  onEditNote?: (noteId: string) => void;
   /** Navega a la pestaña real de la categoría elegida y le pide que abra directo su formulario
    *  de "nuevo" — usado por el botón "Agendar" de Inicio. Si hay una fecha fijada en el filtro
    *  del calendario de Inicio al tocarlo, se la pasa para que ese formulario la precargue en vez
@@ -185,6 +188,7 @@ export default function HomeView({
   materiasInfo = [],
   onOpenNotes,
   onAddNote,
+  onEditNote,
   onQuickAdd,
   onQuickEdit,
 }: HomeViewProps) {
@@ -3615,7 +3619,7 @@ export default function HomeView({
 
       {/* Miniatura de Notas Rápidas */}
       <div className="w-full relative z-30">
-        <QuickNotesMiniWidget userId={homeUserId} darkMode={darkMode} onOpenAll={onOpenNotes} onAddNote={onAddNote} />
+        <QuickNotesMiniWidget userId={homeUserId} darkMode={darkMode} onOpenAll={onOpenNotes} onAddNote={onAddNote} onEditNote={onEditNote} />
       </div>
 
       {/* DETAILED MODAL POPUP (Mini Menu Desplegado) */}

@@ -48,6 +48,10 @@ interface NotesViewProps {
   /** Cambia (a cualquier valor distinto del anterior) para abrir directo el formulario de
    *  "nueva nota" — usado por el botón "+" de la miniatura de Notas Rápidas de Inicio. */
   autoOpenCompose?: number;
+  /** Cambia (nonce distinto cada vez, aunque sea la misma nota) para seleccionar de una la nota
+   *  indicada en el panel de detalle, lista para editar — usado por "Editar" en la miniatura de
+   *  Notas Rápidas de Inicio. */
+  autoSelectNote?: { id: string; nonce: number } | null;
 }
 
 // Paleta de color de nota: en vez de 8 colores sueltos sin relación entre sí, una escala del
@@ -464,21 +468,22 @@ function NoteDetailPane({
   }, [menu, onSetMenu]);
 
   // Indicador de guardado (círculo girando → palomita) en la esquina superior derecha de la nota
-  // abierta: envuelve onSaveDraft (disparado por SaveOnIdle más abajo) para reflejar en pantalla
-  // cuándo el guardado automático está en curso y cuándo terminó.
+  // abierta: envuelve cualquier guardado (el autoguardado debounced de SaveOnIdle, o un cambio de
+  // color al toque) para reflejar en pantalla cuándo está en curso y cuándo terminó.
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const savedResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (savedResetRef.current) clearTimeout(savedResetRef.current); }, []);
+  const runWithSaveIndicator = useCallback((action: () => void | Promise<void>) => {
+    setSaveStatus("saving");
+    Promise.resolve(action()).then(() => {
+      setSaveStatus("saved");
+      if (savedResetRef.current) clearTimeout(savedResetRef.current);
+      savedResetRef.current = setTimeout(() => setSaveStatus("idle"), 1500);
+    });
+  }, []);
   const handleSaveDraft = useCallback(
-    (patch: Draft) => {
-      setSaveStatus("saving");
-      Promise.resolve(onSaveDraft(patch)).then(() => {
-        setSaveStatus("saved");
-        if (savedResetRef.current) clearTimeout(savedResetRef.current);
-        savedResetRef.current = setTimeout(() => setSaveStatus("idle"), 1500);
-      });
-    },
-    [onSaveDraft]
+    (patch: Draft) => runWithSaveIndicator(() => onSaveDraft(patch)),
+    [runWithSaveIndicator, onSaveDraft]
   );
 
   return (
@@ -600,7 +605,7 @@ function NoteDetailPane({
             <ColorPicker
               palette={colorPalette}
               value={note.color}
-              onChange={(color) => onUpdateNote(note.id, { color })}
+              onChange={(color) => runWithSaveIndicator(() => onUpdateNote(note.id, { color }))}
               onClose={() => onSetMenu(null)}
             />
           )}
@@ -634,6 +639,7 @@ export function NotesView({
   activeSubTab: propActiveSubTab,
   onSubTabChange,
   autoOpenCompose,
+  autoSelectNote,
 }: NotesViewProps) {
   const {
     notes,
@@ -703,6 +709,18 @@ export function NotesView({
   // Carpeta seleccionada en la barra lateral (null = "Todas las notas"); una nota nueva se crea
   // directo en la carpeta que se esté mirando, igual que en el diseño de referencia.
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+
+  // Llega desde "Editar" en la miniatura de Notas Rápidas de Inicio: selecciona esa nota en el
+  // panel de detalle, lista para editar. "Todas las notas" (sin filtro de carpeta) para que se
+  // vea sin importar en qué carpeta esté — si se dejara el filtro de carpeta tal cual estaba, la
+  // nota podía quedar invisible (filtrada) aunque selectedNoteId ya apunte a ella.
+  useEffect(() => {
+    if (!autoSelectNote) return;
+    setSelectedFolderId(null);
+    setSelectedNoteId(autoSelectNote.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSelectNote]);
+
   const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [newFolderIcon, setNewFolderIcon] = useState(FOLDER_ICON_KEYS[0]);
@@ -967,7 +985,9 @@ export function NotesView({
         <motion.button
           type="button"
           layout
-          transition={{ layout: { duration: 0.28, ease: [0.16, 1, 0.3, 1] } }}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ layout: { duration: 0.28, ease: [0.16, 1, 0.3, 1] }, opacity: { duration: 0.25 }, y: { duration: 0.25 } }}
           whileTap={{ scale: 0.98 }}
           onClick={() => {
             if (selectedNoteId !== note.id) uiSounds.expand();
@@ -1263,23 +1283,28 @@ export function NotesView({
               </p>
             )}
 
-            {pinned.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5 px-1">
-                  <Pin className="w-3 h-3" /> Fijadas
-                </p>
-                <div className="space-y-2.5">{getGroupRenderOrder(pinned).map((n) => renderNoteListItem(n, pinned))}</div>
-              </div>
-            )}
+            {/* Alto fijo (≈4 tarjetas) con scroll propio en vez de una lista que crece sin
+                límite — con la barra de scroll invisible global de la app (sigue andando con
+                rueda/touch/teclado, solo no se ve la barra). */}
+            <div className="max-h-[28rem] overflow-y-auto space-y-4 -mx-1 px-1">
+              {pinned.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5 px-1">
+                    <Pin className="w-3 h-3" /> Fijadas
+                  </p>
+                  <div className="space-y-2.5">{getGroupRenderOrder(pinned).map((n) => renderNoteListItem(n, pinned))}</div>
+                </div>
+              )}
 
-            {others.length > 0 && (
-              <div className="space-y-2">
-                {pinned.length > 0 && (
-                  <p className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-400 px-1">Otras</p>
-                )}
-                <div className="space-y-2.5">{getGroupRenderOrder(others).map((n) => renderNoteListItem(n, others))}</div>
-              </div>
-            )}
+              {others.length > 0 && (
+                <div className="space-y-2">
+                  {pinned.length > 0 && (
+                    <p className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-400 px-1">Otras</p>
+                  )}
+                  <div className="space-y-2.5">{getGroupRenderOrder(others).map((n) => renderNoteListItem(n, others))}</div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Columna 3: panel de detalle — la nota seleccionada, siempre editable ahí mismo
