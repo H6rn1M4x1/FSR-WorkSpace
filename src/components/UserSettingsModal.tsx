@@ -69,7 +69,9 @@ import {
   Users,
   Volume2,
   VolumeX,
+  BookMarked,
 } from "lucide-react";
+import { AddressBookModal, AddressEntry } from "./AddressBookModal";
 import {
   generate2FAQRCode,
   generate2FASecret,
@@ -637,6 +639,7 @@ export function UserSettingsModal({
   const [showAddressSuggestions, setShowAddressSuggestions] = useState(false);
   const [searchingAddress, setSearchingAddress] = useState(false);
   const [showAddressMap, setShowAddressMap] = useState(false);
+  const [isAddressBookOpen, setIsAddressBookOpen] = useState(false);
   const addressSearchDebounceRef = useRef<any>(null);
   const addressSearchSeqRef = useRef<number>(0);
 
@@ -1108,6 +1111,7 @@ export function UserSettingsModal({
   };
 
   return (
+    <>
     <AnimatePresence>
       {isOpen && (
         <motion.div
@@ -1431,9 +1435,21 @@ export function UserSettingsModal({
                 </div>
 
                 <div className="md:col-span-2 space-y-1.5 relative">
-                  <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
-                    <MapPin className="w-3.5 h-3.5 text-primary" />
-                    <span>Dirección Personal (Calle y Número)</span>
+                  <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300 flex items-center justify-between gap-1.5">
+                    <span className="flex items-center gap-1.5">
+                      <MapPin className="w-3.5 h-3.5 text-primary" />
+                      <span>Dirección Personal (Calle y Número)</span>
+                    </span>
+                    <button
+                      type="button"
+                      data-sound="click"
+                      onClick={() => setIsAddressBookOpen(true)}
+                      className="flex items-center gap-1 px-2 py-1 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary text-[10px] font-extrabold transition-all cursor-pointer shrink-0"
+                      title="Guardar o elegir desde el Libro de Direcciones"
+                    >
+                      <BookMarked className="w-3 h-3" />
+                      <span>Libro de Direcciones</span>
+                    </button>
                   </label>
                   <div className="relative">
                     <input
@@ -3183,5 +3199,20 @@ export function UserSettingsModal({
     </motion.div>
       )}
     </AnimatePresence>
+    <AddressBookModal
+      isOpen={isAddressBookOpen}
+      onClose={() => setIsAddressBookOpen(false)}
+      onSelectAddress={(entry: AddressEntry) => {
+        setProfile({ ...profile, address: entry.address, lat: entry.lat, lon: entry.lon });
+        setShowAddressMap(true);
+      }}
+      currentSelected={{
+        name: profile.address,
+        address: profile.address,
+        lat: profile.lat,
+        lon: profile.lon,
+      }}
+    />
+    </>
   );
 }
