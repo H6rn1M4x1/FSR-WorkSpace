@@ -4,9 +4,9 @@ import type { NoteFolder } from "../types";
 
 interface UseNoteFoldersResult {
   folders: NoteFolder[]; // ordenadas por "order"
-  addFolder: (name: string, color: string) => Promise<NoteFolder | null>;
+  addFolder: (name: string, icon: string) => Promise<NoteFolder | null>;
   renameFolder: (id: string, name: string) => Promise<void>;
-  recolorFolder: (id: string, color: string) => Promise<void>;
+  setFolderIcon: (id: string, icon: string) => Promise<void>;
   deleteFolder: (id: string) => Promise<void>;
 }
 
@@ -22,7 +22,7 @@ export function useNoteFolders(userId: string | null | undefined): UseNoteFolder
   }, [userId]);
 
   const addFolder = useCallback(
-    async (name: string, color: string): Promise<NoteFolder | null> => {
+    async (name: string, icon: string): Promise<NoteFolder | null> => {
       const trimmed = name.trim();
       if (!userId || !trimmed) return null;
       const now = Date.now();
@@ -30,7 +30,7 @@ export function useNoteFolders(userId: string | null | undefined): UseNoteFolder
       const folder: NoteFolder = {
         id: `nfolder_${now}_${Math.random().toString(36).slice(2, 8)}`,
         name: trimmed,
-        color,
+        icon,
         order: highestOrder + 1,
         createdAt: now,
         updatedAt: now,
@@ -52,12 +52,12 @@ export function useNoteFolders(userId: string | null | undefined): UseNoteFolder
     [userId, folders]
   );
 
-  const recolorFolder = useCallback(
-    async (id: string, color: string) => {
+  const setFolderIcon = useCallback(
+    async (id: string, icon: string) => {
       if (!userId) return;
       const existing = folders.find((f) => f.id === id);
       if (!existing) return;
-      await saveNoteFolder(userId, { ...existing, color, updatedAt: Date.now() });
+      await saveNoteFolder(userId, { ...existing, icon, updatedAt: Date.now() });
     },
     [userId, folders]
   );
@@ -76,7 +76,7 @@ export function useNoteFolders(userId: string | null | undefined): UseNoteFolder
   );
 
   return useMemo(
-    () => ({ folders: sortedFolders, addFolder, renameFolder, recolorFolder, deleteFolder }),
-    [sortedFolders, addFolder, renameFolder, recolorFolder, deleteFolder]
+    () => ({ folders: sortedFolders, addFolder, renameFolder, setFolderIcon, deleteFolder }),
+    [sortedFolders, addFolder, renameFolder, setFolderIcon, deleteFolder]
   );
 }

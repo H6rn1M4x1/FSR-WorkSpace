@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { LucideIcon } from "lucide-react";
 import {
   StickyNote as StickyNoteIcon,
   KeyRound,
@@ -15,6 +16,14 @@ import {
   ChevronDown,
   Layers,
   Loader2,
+  Briefcase,
+  Home,
+  Heart,
+  Star,
+  BookOpen,
+  ShoppingBag,
+  Plane,
+  GraduationCap,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useNotes } from "../hooks/useNotes";
@@ -88,20 +97,21 @@ const NOTE_COLORS: Record<string, { card: string; swatch: string; label: string 
 };
 const COLOR_KEYS = Object.keys(NOTE_COLORS);
 
-// Paleta chica para el ícono de cada carpeta (independiente de NOTE_COLORS, que tiñe la hoja
-// entera de una nota) — solo necesita un tono de texto/ícono prendido y uno apagado de fondo.
-const FOLDER_COLORS: Record<string, { icon: string; dot: string }> = {
-  slate: { icon: "text-zinc-500 dark:text-zinc-400", dot: "bg-zinc-400" },
-  red: { icon: "text-red-500", dot: "bg-red-400" },
-  orange: { icon: "text-orange-500", dot: "bg-orange-400" },
-  yellow: { icon: "text-amber-500", dot: "bg-amber-400" },
-  green: { icon: "text-emerald-500", dot: "bg-emerald-400" },
-  sky: { icon: "text-sky-500", dot: "bg-sky-400" },
-  blue: { icon: "text-blue-500", dot: "bg-blue-400" },
-  violet: { icon: "text-violet-500", dot: "bg-violet-400" },
-  pink: { icon: "text-pink-500", dot: "bg-pink-400" },
+// Formas disponibles para el ícono de cada carpeta — a diferencia de antes, el ícono de una
+// carpeta SIEMPRE se pinta con el color de acento de la app (ver usos de "text-primary" más
+// abajo); lo que distingue una carpeta de otra ahora es la forma del ícono, no un color propio.
+const FOLDER_ICONS: Record<string, LucideIcon> = {
+  folder: Folder,
+  briefcase: Briefcase,
+  home: Home,
+  heart: Heart,
+  star: Star,
+  book: BookOpen,
+  shopping: ShoppingBag,
+  plane: Plane,
+  graduation: GraduationCap,
 };
-const FOLDER_COLOR_KEYS = Object.keys(FOLDER_COLORS);
+const FOLDER_ICON_KEYS = Object.keys(FOLDER_ICONS);
 
 // The dark, semi-transparent "floating pill" look requested for every icon toolbar and
 // popover in this view, so icons never sit directly on a note's color with nothing behind them.
@@ -208,7 +218,7 @@ function FolderPicker({
         <span className="truncate">Sin carpeta</span>
       </button>
       {folders.map((f) => {
-        const palette = FOLDER_COLORS[f.color] || FOLDER_COLORS.slate;
+        const FolderIcon = FOLDER_ICONS[f.icon] || Folder;
         return (
           <button
             key={f.id}
@@ -218,7 +228,7 @@ function FolderPicker({
               value === f.id ? "bg-primary/25 text-white" : "text-zinc-200 hover:bg-white/10"
             }`}
           >
-            <Folder className={`w-3.5 h-3.5 shrink-0 ${palette.icon}`} fill="currentColor" fillOpacity={0.2} />
+            <FolderIcon className="w-3.5 h-3.5 shrink-0 text-primary" fill="currentColor" fillOpacity={0.2} />
             <span className="truncate">{f.name}</span>
           </button>
         );
@@ -572,7 +582,7 @@ export function NotesView({
     getAllRecipients,
     reorderNotes,
   } = useNotes(userId);
-  const { folders, addFolder, renameFolder, recolorFolder, deleteFolder } = useNoteFolders(userId);
+  const { folders, addFolder, renameFolder, setFolderIcon, deleteFolder } = useNoteFolders(userId);
   const { showToast } = useToast();
 
   // The submenu ("Notas Rápidas" / "Caja Fuerte") is normally driven by the main top navbar
@@ -629,7 +639,7 @@ export function NotesView({
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
-  const [newFolderColor, setNewFolderColor] = useState(FOLDER_COLOR_KEYS[0]);
+  const [newFolderIcon, setNewFolderIcon] = useState(FOLDER_ICON_KEYS[0]);
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
   const [editingFolderName, setEditingFolderName] = useState("");
   const [folderMenuId, setFolderMenuId] = useState<string | null>(null);
@@ -695,10 +705,10 @@ export function NotesView({
   };
 
   const handleCreateFolder = async () => {
-    const created = await addFolder(newFolderName, newFolderColor);
+    const created = await addFolder(newFolderName, newFolderIcon);
     uiSounds.success();
     setNewFolderName("");
-    setNewFolderColor(FOLDER_COLOR_KEYS[0]);
+    setNewFolderIcon(FOLDER_ICON_KEYS[0]);
     setNewFolderOpen(false);
     if (created) setSelectedFolderId(created.id);
   };
@@ -1010,16 +1020,24 @@ export function NotesView({
                     className="w-full px-2 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
                   />
                   <div className="flex flex-wrap gap-1.5">
-                    {FOLDER_COLOR_KEYS.map((key) => (
-                      <button
-                        key={key}
-                        type="button"
-                        onClick={() => { setNewFolderColor(key); uiSounds.click(); }}
-                        className={`w-5 h-5 rounded-full cursor-pointer transition-transform ${FOLDER_COLORS[key].dot} ${
-                          newFolderColor === key ? "ring-2 ring-primary ring-offset-1 ring-offset-white dark:ring-offset-zinc-950 scale-110" : "hover:scale-110"
-                        }`}
-                      />
-                    ))}
+                    {FOLDER_ICON_KEYS.map((key) => {
+                      const Icon = FOLDER_ICONS[key];
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => { setNewFolderIcon(key); uiSounds.click(); }}
+                          title="Ícono de la carpeta"
+                          className={`w-7 h-7 rounded-lg flex items-center justify-center text-primary cursor-pointer transition-transform ${
+                            newFolderIcon === key
+                              ? "bg-primary/20 ring-2 ring-primary scale-110"
+                              : "hover:bg-primary/10 hover:scale-110"
+                          }`}
+                        >
+                          <Icon className="w-4 h-4" />
+                        </button>
+                      );
+                    })}
                   </div>
                   <div className="flex items-center justify-end gap-2">
                     <button
@@ -1061,7 +1079,7 @@ export function NotesView({
               </motion.button>
 
               {folders.map((f) => {
-                const palette = FOLDER_COLORS[f.color] || FOLDER_COLORS.slate;
+                const FolderIcon = FOLDER_ICONS[f.icon] || Folder;
                 const isEditing = editingFolderId === f.id;
                 const isActive = selectedFolderId === f.id;
                 return (
@@ -1108,8 +1126,8 @@ export function NotesView({
                           isActive ? "" : "text-zinc-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800"
                         }`}
                       >
-                        <Folder
-                          className={`w-3.5 h-3.5 shrink-0 ${isActive ? "" : palette.icon}`}
+                        <FolderIcon
+                          className={`w-3.5 h-3.5 shrink-0 ${isActive ? "" : "text-primary"}`}
                           fill="currentColor"
                           fillOpacity={isActive ? 0.35 : 0.2}
                         />
