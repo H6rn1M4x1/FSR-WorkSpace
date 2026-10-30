@@ -236,6 +236,29 @@ const FALLBACK_PLACES = [
   },
 ];
 
+// Ruta calle por calle (hogar → ubicación) vía el servicio público de OSRM (perfil "driving"),
+// devuelve la lista de puntos [lat, lon] ya en el orden que espera Leaflet. Si el servicio no
+// responde o no encuentra camino, devuelve null y el llamador se queda con la línea recta que ya
+// tenía dibujada — nunca se rompe el mapa por una falla de red.
+async function fetchStreetRoute(
+  homeLat: number,
+  homeLon: number,
+  lat: number,
+  lon: number,
+): Promise<[number, number][] | null> {
+  try {
+    const url = `https://router.project-osrm.org/route/v1/driving/${homeLon},${homeLat};${lon},${lat}?overview=full&geometries=geojson`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const coords = data?.routes?.[0]?.geometry?.coordinates;
+    if (!Array.isArray(coords) || coords.length < 2) return null;
+    return coords.map(([lo, la]: [number, number]) => [la, lo] as [number, number]);
+  } catch {
+    return null;
+  }
+}
+
 const MapComponent = ({
   turnosCompromisos,
   locationCoords,
@@ -256,6 +279,11 @@ const MapComponent = ({
   // Only auto-fit/center the map the first time markers are drawn — later marker refreshes
   // (e.g. from the background data sync) must NOT reset whatever zoom/pan the user set.
   const hasFitBoundsOnceRef = useRef(false);
+  // Se incrementa en cada corrida del efecto de marcadores — las rutas calle-por-calle se piden
+  // de forma asíncrona, así que cuando la respuesta llega hay que chequear que siga siendo la
+  // corrida vigente antes de tocar el mapa (si no, se estaría dibujando sobre marcadores viejos
+  // que ya fueron limpiados por una corrida más nueva).
+  const routeRunIdRef = useRef(0);
 
   // Initialize Map
   useEffect(() => {
@@ -357,6 +385,25 @@ const MapComponent = ({
   // Update Markers
   useEffect(() => {
     if (!mapInstanceRef.current || !markersLayerRef.current) return;
+
+    routeRunIdRef.current += 1;
+    const runId = routeRunIdRef.current;
+
+    // Al pasar el mouse por un pin, el resto de los pines y rutas pasa a gris claro (vía la clase
+    // .map-loc-dimmed en index.css) para resaltar la ubicación activa; al salir, se restaura todo.
+    const dimOtherLocations = (activeSlug: string) => {
+      if (!mapContainerRef.current) return;
+      mapContainerRef.current.querySelectorAll<HTMLElement>(".map-loc-marker").forEach((el) => {
+        el.classList.toggle("map-loc-dimmed", el.getAttribute("data-loc-slug") !== activeSlug);
+      });
+      mapContainerRef.current.querySelectorAll<SVGPathElement>(".route-pulse-path").forEach((el) => {
+        el.classList.toggle("map-loc-dimmed", !el.classList.contains(`route-loc-${activeSlug}`));
+      });
+    };
+    const clearLocationDim = () => {
+      if (!mapContainerRef.current) return;
+      mapContainerRef.current.querySelectorAll(".map-loc-dimmed").forEach((el) => el.classList.remove("map-loc-dimmed"));
+    };
 
     try {
       markersLayerRef.current.clearLayers();
@@ -497,6 +544,8 @@ const MapComponent = ({
         )
         .join("");
 
+      const slug = lugar.replace(/[^a-zA-Z0-9]/g, "_").toLowerCase();
+
       const osmUrl = `https://www.openstreetmap.org/search?query=${encodeURIComponent(lugar.includes("San Juan") ? lugar : `${lugar}, San Juan, Argentina`)}`;
 
       const sharedCardHtml = `
@@ -537,7 +586,7 @@ const MapComponent = ({
       `;
 
       const markerHtml = `
-        <div class="relative group cursor-pointer inline-block">
+        <div class="relative group cursor-pointer inline-block map-loc-marker" data-loc-slug="${slug}">
           <div class="w-7 h-7 rounded-full bg-primary border-2 ${pinBorderColor} shadow-md flex items-center justify-center transform hover:scale-110 transition-transform">
             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
           </div>
@@ -564,15 +613,33 @@ const MapComponent = ({
           autoClose: true,
         },
       );
+      marker.on("mouseover", () => dimOtherLocations(slug));
+      marker.on("mouseout", () => clearLocationDim());
 
       markersLayerRef.current.addLayer(marker);
       markerCount++;
 
       // Ruta animada "pulso" hogar → esta ubicación (ver .route-pulse-path en index.css): se
       // dibuja y se deshace en bucle. La longitud real del trazo (distinta para cada ruta) se
-      // calcula recién cuando el <path> ya está en el DOM, por eso el rAF.
+      // calcula recién cuando el <path> ya está en el DOM, por eso el rAF. Arranca como línea
+      // recta (resultado inmediato) y, si OSRM responde a tiempo, se reemplaza por el camino
+      // real calle por calle sin perder la animación ni el resaltado por hover.
       if (homeCoords && markersLayerRef.current) {
-        const routeLine = L.polyline(
+        const routeClassName = `route-pulse-path route-loc-${slug}`;
+        const applyPulseStyling = (line: L.Polyline, delay: number) => {
+          requestAnimationFrame(() => {
+            const pathEl = (line as any)._path as SVGPathElement | undefined;
+            if (pathEl) {
+              try {
+                const length = pathEl.getTotalLength();
+                pathEl.style.setProperty("--pulse-length", String(length));
+                pathEl.style.animationDelay = `${delay}s`;
+              } catch {}
+            }
+          });
+        };
+
+        let routeLine = L.polyline(
           [
             [homeCoords.lat, homeCoords.lon],
             [lat, lon],
@@ -581,22 +648,27 @@ const MapComponent = ({
             color: routeAccentHex,
             weight: 2.5,
             opacity: 0.85,
-            className: "route-pulse-path",
+            className: routeClassName,
             interactive: false,
           },
         );
         markersLayerRef.current.addLayer(routeLine);
         const delay = (routeIndex * 0.45) % 3.6;
         routeIndex++;
-        requestAnimationFrame(() => {
-          const pathEl = (routeLine as any)._path as SVGPathElement | undefined;
-          if (pathEl) {
-            try {
-              const length = pathEl.getTotalLength();
-              pathEl.style.setProperty("--pulse-length", String(length));
-              pathEl.style.animationDelay = `${delay}s`;
-            } catch {}
-          }
+        applyPulseStyling(routeLine, delay);
+
+        fetchStreetRoute(homeCoords.lat, homeCoords.lon, lat, lon).then((streetPath) => {
+          if (routeRunIdRef.current !== runId || !streetPath || !markersLayerRef.current) return;
+          markersLayerRef.current.removeLayer(routeLine);
+          routeLine = L.polyline(streetPath, {
+            color: routeAccentHex,
+            weight: 2.5,
+            opacity: 0.85,
+            className: routeClassName,
+            interactive: false,
+          });
+          markersLayerRef.current.addLayer(routeLine);
+          applyPulseStyling(routeLine, delay);
         });
       }
     });

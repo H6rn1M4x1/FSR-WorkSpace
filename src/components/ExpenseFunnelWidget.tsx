@@ -131,33 +131,10 @@ function hslToHex(h: number, s: number, l: number): string {
   return rgbToHex((r1 + m) * 255, (g1 + m) * 255, (b1 + m) * 255);
 }
 
-// Geometría del embudo (ver análisis fotograma a fotograma del video de referencia): cada etapa
-// es un bloque de ancho constante que NO ocupa toda la altura de su fila — deja un hueco abajo
-// antes del siguiente bloque, más angosto. Atrás de todos los bloques va un polígono de fondo que
-// sí une el ancho de cada etapa con el de la siguiente en diagonal, así que en ese hueco se asoma
-// la diagonal de fondo — el mismo efecto de "alero/caída" que tiene el recurso.
-//
-// Cada bloque además se dibuja con una extrusión simple (cara frontal + tapa + lateral, como un
-// gráfico de barras 3D) para que se note el volumen en vez de quedar un rectángulo plano, y cada
-// etapa usa un tono distinto del color de acento (misma rampa que WeeklyScheduleGrid usa para
-// "Materia" en Horario) en vez de un único naranja repetido, para que las categorías se
-// diferencien de un vistazo.
-const FUNNEL_SEGMENT_H = 72;
-const FUNNEL_RECT_H = 52;
-const FUNNEL_HALF_W = 108;
-const FUNNEL_MIN_HALF_W = 13;
-const FUNNEL_CENTER_X = FUNNEL_HALF_W + 8;
-const FUNNEL_DEPTH_X = 13;
-const FUNNEL_DEPTH_Y = -10;
-const FUNNEL_PAD_TOP = Math.abs(FUNNEL_DEPTH_Y);
-const FUNNEL_SVG_WIDTH = FUNNEL_CENTER_X * 2 + FUNNEL_DEPTH_X;
-
 /**
- * "Embudo de Gastos" — adaptación del recurso de referencia "Embudo de ventas" (Moxen) al
- * dominio de la app: en vez de etapas de un funnel de ventas, las "etapas" son las 7 categorías
- * de gasto de Finanzas (mismas que en Agregar Pago), ordenadas de mayor a menor gasto del mes —
- * mismo efecto visual de embudo (barras angostándose), con el color de acento de la app en vez
- * de la paleta azul/magenta original.
+ * "Embudo de Gastos" — las "etapas" son las 7 categorías de gasto de Finanzas (mismas que en
+ * Agregar Pago), ordenadas de mayor a menor gasto del mes, mostradas como barras 2D horizontales
+ * cuyo largo es proporcional al monto de cada categoría, con el color de acento de la app.
  *
  * Las dos tarjetas superiores de contexto también se adaptaron a algo útil en esta app en vez de
  * copiar literalmente el original (que no aplica: no hay "conversión" ni "etapas de venta" acá):
@@ -220,27 +197,6 @@ export function ExpenseFunnelWidget({
 
   const maxTotal = rows[0]?.total || 1;
 
-  const funnelHalfWidths = useMemo(
-    () => rows.map((r) => Math.max(FUNNEL_MIN_HALF_W, (r.total / maxTotal) * FUNNEL_HALF_W)),
-    [rows, maxTotal]
-  );
-
-  const funnelBackgroundPoints = useMemo(() => {
-    const left: [number, number][] = [];
-    const right: [number, number][] = [];
-    rows.forEach((_, i) => {
-      const yTop = i * FUNNEL_SEGMENT_H + FUNNEL_PAD_TOP;
-      const yBottom = i * FUNNEL_SEGMENT_H + FUNNEL_RECT_H + FUNNEL_PAD_TOP;
-      left.push([FUNNEL_CENTER_X - funnelHalfWidths[i], yTop]);
-      left.push([FUNNEL_CENTER_X - funnelHalfWidths[i], yBottom]);
-      right.push([FUNNEL_CENTER_X + funnelHalfWidths[i], yTop]);
-      right.push([FUNNEL_CENTER_X + funnelHalfWidths[i], yBottom]);
-    });
-    return [...left, ...right.reverse()].map(([x, y]) => `${x},${y}`).join(" ");
-  }, [rows, funnelHalfWidths]);
-
-  const funnelSvgHeight = rows.length * FUNNEL_SEGMENT_H + FUNNEL_PAD_TOP;
-
   // Una tonalidad distinta del acento por etapa: varía la LUMINOSIDAD en HSL (no una mezcla con
   // blanco/gris en RGB) para que cada categoría se vea como un tono vivo y saturado propio —
   // mezclar hacia blanco "lavaba" el color hacia un beige apagado y las categorías chicas
@@ -257,18 +213,6 @@ export function ExpenseFunnelWidget({
       return hslToHex(baseH, targetS, targetL);
     });
   }, [rows.length, darkMode]);
-  // Iluminación simulada en HSL (no mezcla porcentual con blanco/negro) para que el desplazamiento
-  // de luminosidad entre cara frontal/tapa/lateral sea el MISMO en todas las etapas — si no, las
-  // etapas más claras (categorías chicas) terminaban con una cara lateral casi igual a las demás,
-  // porque oscurecer por porcentaje achica mucho menos a un color ya claro que a uno oscuro.
-  const funnelTopShade = (hex: string) => {
-    const [h, s, l] = hexToHsl(hex);
-    return hslToHex(h, s, l + 16);
-  };
-  const funnelSideShade = (hex: string) => {
-    const [h, s, l] = hexToHsl(hex);
-    return hslToHex(h, Math.min(100, s + 5), l - 22);
-  };
 
   const dropInfo = useMemo(() => {
     return rows.map((row, i) => {
@@ -394,183 +338,127 @@ export function ExpenseFunnelWidget({
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-[1.3fr_1fr] gap-5 items-start">
-          {/* Embudo: forma real de embudo (no barras), angostándose de mayor a menor gasto -- */}
-          <div className="overflow-x-auto scroll-reveal">
-            <div className="flex items-stretch gap-1.5 min-w-[380px]">
-              {/* Columna de etiquetas (categoría + monto) */}
-              <div className="shrink-0 flex flex-col" style={{ width: 128 }}>
-                {rows.map((row) => {
-                  const Icon = CATEGORY_ICON[row.categoria];
-                  const isSelected = row.categoria === selectedCategoria;
-                  const isPinned = row.categoria === pinnedCategory;
-                  return (
-                    <button
-                      key={row.categoria}
-                      type="button"
-                      data-sound="expand"
-                      onMouseEnter={() => setHoveredCategory(row.categoria)}
-                      onMouseLeave={() => setHoveredCategory(null)}
-                      onClick={() => togglePin(row.categoria)}
-                      style={{ height: FUNNEL_SEGMENT_H }}
-                      className="flex flex-col justify-center items-start text-left cursor-pointer group"
-                    >
-                      <span className={`flex items-center gap-1 text-[10px] font-bold truncate w-full ${isSelected ? "text-primary" : "text-zinc-500 dark:text-zinc-400"}`}>
-                        {Icon && <Icon className="w-3 h-3 shrink-0" />}
-                        <span className="truncate">{row.categoria}</span>
-                        {isPinned && <Pin className="w-2.5 h-2.5 shrink-0 fill-current" />}
-                      </span>
-                      <span className="text-[13px] font-extrabold mt-0.5">
-                        <AnimatedNumber value={row.total} format={formatARS} />
-                      </span>
-                      {viewMode === "compare" && (
-                        <span className={`flex items-center gap-0.5 text-[8.5px] font-bold mt-0.5 ${row.deltaPct > 0 ? "text-red-500" : row.deltaPct < 0 ? "text-emerald-500" : "text-zinc-400"}`}>
-                          {row.deltaPct > 0 ? <TrendingUp className="w-2.5 h-2.5" /> : row.deltaPct < 0 ? <TrendingDown className="w-2.5 h-2.5" /> : null}
-                          {row.deltaPct === 0 ? "Sin cambios" : `${row.deltaPct > 0 ? "+" : ""}${row.deltaPct.toFixed(1)}%`}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* El embudo propiamente dicho — cada etapa extruida (cara frontal + tapa + lateral)
-                  como una barra 3D, en vez de un rectángulo plano. */}
-              <div className="flex-1 flex justify-center">
-                <svg
-                  viewBox={`0 0 ${FUNNEL_SVG_WIDTH} ${funnelSvgHeight}`}
-                  width="100%"
-                  style={{
-                    maxWidth: FUNNEL_SVG_WIDTH * 1.5,
-                    height: funnelSvgHeight,
-                    filter: darkMode ? "drop-shadow(0 6px 10px rgba(0,0,0,0.5))" : "drop-shadow(0 6px 10px rgba(15,23,42,0.18))",
-                  }}
+          {/* Barras 2D animadas, ordenadas de mayor a menor gasto, con bounce al aparecer */}
+          <div className="flex flex-col gap-3">
+            {rows.map((row, i) => {
+              const Icon = CATEGORY_ICON[row.categoria];
+              const isSelected = row.categoria === selectedCategoria;
+              const isPinned = row.categoria === pinnedCategory;
+              const hasSelection = Boolean(selectedCategoria);
+              const widthPct = Math.max(3, (row.total / maxTotal) * 100);
+              const color = funnelPalette[i];
+              const drop = dropInfo[i];
+              return (
+                <button
+                  key={row.categoria}
+                  type="button"
+                  data-sound="expand"
+                  onMouseEnter={() => setHoveredCategory(row.categoria)}
+                  onMouseLeave={() => setHoveredCategory(null)}
+                  onClick={() => togglePin(row.categoria)}
+                  className="w-full text-left cursor-pointer group"
                 >
-                  <polygon
-                    points={funnelBackgroundPoints}
-                    style={{ fill: darkMode ? "rgba(0,0,0,0.45)" : "rgba(15,23,42,0.12)" }}
-                  />
-                  {rows.map((row, i) => {
-                    const isSelected = row.categoria === selectedCategoria;
-                    const hasSelection = Boolean(selectedCategoria);
-                    const hw = funnelHalfWidths[i];
-                    const x1 = FUNNEL_CENTER_X - hw;
-                    const x2 = FUNNEL_CENTER_X + hw;
-                    const y1 = i * FUNNEL_SEGMENT_H + FUNNEL_PAD_TOP;
-                    const y2 = y1 + FUNNEL_RECT_H;
-                    // La profundidad se achica proporcional al ancho del bloque (con un piso) —
-                    // si no, en los bloques angostos la cara lateral (más oscura) terminaba
-                    // ocupando casi todo el ancho visible y los tapaba de un tono parejo oscuro,
-                    // arruinando la diferenciación por tonalidad que se buscaba con la paleta.
-                    const dx = Math.min(FUNNEL_DEPTH_X, Math.max(5, hw * 0.55));
-                    const dy = dx * (FUNNEL_DEPTH_Y / FUNNEL_DEPTH_X);
-                    const base = funnelPalette[i];
-                    const top = funnelTopShade(base);
-                    const side = funnelSideShade(base);
-                    return (
-                      <motion.g
-                        key={row.categoria}
-                        data-sound="expand"
-                        onMouseEnter={() => setHoveredCategory(row.categoria)}
-                        onMouseLeave={() => setHoveredCategory(null)}
-                        onClick={() => togglePin(row.categoria)}
-                        initial={{ opacity: 0, scaleY: 0 }}
-                        animate={{ opacity: !hasSelection || isSelected ? 1 : 0.45, scaleY: 1 }}
-                        transition={{
-                          opacity: { duration: 0.2 },
-                          scaleY: { duration: 0.5, delay: i * 0.06, ease: [0.16, 1, 0.3, 1] },
-                        }}
-                        style={{ transformOrigin: `${FUNNEL_CENTER_X}px ${y1}px`, cursor: "pointer" }}
-                      >
-                        {/* Lateral derecho (más oscuro) */}
-                        <polygon points={`${x2},${y1} ${x2 + dx},${y1 + dy} ${x2 + dx},${y2 + dy} ${x2},${y2}`} fill={side} />
-                        {/* Cara frontal (tono base de la categoría) */}
-                        <rect x={x1} y={y1} width={hw * 2} height={FUNNEL_RECT_H} rx={6} fill={base} />
-                        {/* Tapa superior (más clara, da la sensación de volumen) */}
-                        <polygon points={`${x1},${y1} ${x1 + dx},${y1 + dy} ${x2 + dx},${y1 + dy} ${x2},${y1}`} fill={top} />
-                      </motion.g>
-                    );
-                  })}
-                </svg>
-              </div>
-
-              {/* Columna de estadísticas (% del total + caída vs. la categoría anterior) */}
-              <div className="shrink-0 flex flex-col items-end" style={{ width: 96 }}>
-                {rows.map((row, i) => {
-                  const drop = dropInfo[i];
-                  return (
-                    <div key={row.categoria} style={{ height: FUNNEL_SEGMENT_H }} className="flex flex-col justify-center items-end">
-                      <span className="text-[13px] font-extrabold">
-                        <AnimatedNumber value={row.share} format={(n) => `${n.toFixed(1)}%`} />
-                      </span>
-                      <span className="text-[8.5px] text-zinc-400 font-medium whitespace-nowrap">del gasto total</span>
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <span className={`flex items-center gap-1.5 text-[11px] font-bold truncate ${isSelected ? "text-primary" : "text-zinc-500 dark:text-zinc-400"}`}>
+                      {Icon && <Icon className="w-3.5 h-3.5 shrink-0" />}
+                      <span className="truncate">{row.categoria}</span>
+                      {isPinned && <Pin className="w-2.5 h-2.5 shrink-0 fill-current" />}
+                    </span>
+                    <span className="flex items-baseline gap-1.5 shrink-0">
                       {drop && (
-                        <span className="mt-1 px-1.5 py-0.5 rounded-full text-[8.5px] font-bold bg-primary/10 text-primary whitespace-nowrap">
+                        <span className="px-1.5 py-0.5 rounded-full text-[8.5px] font-bold bg-primary/10 text-primary whitespace-nowrap">
                           ↓ {drop.dropPct.toFixed(1)}%
                         </span>
                       )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* Detalle de la categoría seleccionada (hover para previsualizar, clic para fijar) */}
-          <div className={`rounded-2xl border p-4 ${darkMode ? "bg-black/30 border-zinc-800" : "bg-slate-50 border-slate-200"}`}>
-            <AnimatePresence mode="wait">
-              {selectedRow && (
-                <motion.div
-                  key={selectedRow.categoria}
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -6 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  <span className="text-[9.5px] font-bold text-zinc-400 uppercase tracking-widest">
-                    Categoría {selectedIndex + 1} de {rows.length}
-                  </span>
-                  <h4 className="text-base font-extrabold mt-0.5">{selectedRow.categoria}</h4>
-                  <div className="text-2xl font-black text-primary mt-1">
-                    <AnimatedNumber value={selectedRow.total} format={formatARS} />
+                      <span className="text-[13px] font-extrabold">
+                        <AnimatedNumber value={row.total} format={formatARS} />
+                      </span>
+                      <span className="text-[9.5px] text-zinc-400 font-bold">
+                        <AnimatedNumber value={row.share} format={(n) => `${n.toFixed(1)}%`} />
+                      </span>
+                    </span>
                   </div>
-                  <p className="text-[10.5px] text-zinc-400 font-medium mt-0.5">
-                    <AnimatedNumber value={selectedRow.share} format={(n) => `${n.toFixed(1)}%`} /> del gasto de{" "}
-                    {viewMode === "previous" ? previousMonthName : currentMonthName}
-                  </p>
-
-                  <div className={`relative h-2.5 rounded-full overflow-hidden mt-3 ${darkMode ? "bg-zinc-800" : "bg-slate-200"}`}>
+                  <div className={`relative h-6 rounded-full overflow-hidden ${darkMode ? "bg-zinc-800" : "bg-slate-100"}`}>
                     <motion.div
                       initial={{ width: 0 }}
-                      animate={{ width: `${selectedRow.share}%` }}
-                      transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-                      className="h-full rounded-full bg-primary"
+                      animate={{ width: `${widthPct}%`, opacity: !hasSelection || isSelected ? 1 : 0.45 }}
+                      transition={{
+                        width: { type: "spring", bounce: 0.5, duration: 0.9, delay: i * 0.08 },
+                        opacity: { duration: 0.2 },
+                      }}
+                      style={{ backgroundColor: color }}
+                      className={`h-full rounded-full ${isSelected ? "ring-2 ring-primary/50 shadow-md" : "group-hover:brightness-110"}`}
                     />
                   </div>
+                  {viewMode === "compare" && (
+                    <span className={`flex items-center gap-0.5 text-[8.5px] font-bold mt-0.5 ${row.deltaPct > 0 ? "text-red-500" : row.deltaPct < 0 ? "text-emerald-500" : "text-zinc-400"}`}>
+                      {row.deltaPct > 0 ? <TrendingUp className="w-2.5 h-2.5" /> : row.deltaPct < 0 ? <TrendingDown className="w-2.5 h-2.5" /> : null}
+                      {row.deltaPct === 0 ? "Sin cambios" : `${row.deltaPct > 0 ? "+" : ""}${row.deltaPct.toFixed(1)}%`}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
 
-                  <div className="flex items-center justify-between text-[10.5px] font-semibold mt-3 pt-3 border-t border-zinc-200/60 dark:border-zinc-800">
-                    <span className="text-zinc-400">Resto de categorías</span>
-                    <span>{formatARS(activeGrandTotal - selectedRow.total)}</span>
-                  </div>
-
-                  {viewMode !== "compare" && selectedRow.prevTotal > 0 && (
-                    <div className="flex items-center justify-between text-[10.5px] font-semibold mt-1.5">
-                      <span className="text-zinc-400">{previousMonthName}</span>
-                      <span>{formatARS(selectedRow.prevTotal)}</span>
+          <div className="flex flex-col gap-3">
+            {/* Detalle de la categoría seleccionada (hover para previsualizar, clic para fijar) */}
+            <div className={`rounded-2xl border p-4 ${darkMode ? "bg-black/30 border-zinc-800" : "bg-slate-50 border-slate-200"}`}>
+              <AnimatePresence mode="wait">
+                {selectedRow && (
+                  <motion.div
+                    key={selectedRow.categoria}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <span className="text-[9.5px] font-bold text-zinc-400 uppercase tracking-widest">
+                      Categoría {selectedIndex + 1} de {rows.length}
+                    </span>
+                    <h4 className="text-base font-extrabold mt-0.5">{selectedRow.categoria}</h4>
+                    <div className="text-2xl font-black text-primary mt-1">
+                      <AnimatedNumber value={selectedRow.total} format={formatARS} />
                     </div>
-                  )}
-
-                  {!pinnedCategory && (
-                    <p className="text-[9.5px] text-zinc-400 font-medium mt-3">
-                      Pasá el cursor por una categoría · clic para fijarla
+                    <p className="text-[10.5px] text-zinc-400 font-medium mt-0.5">
+                      <AnimatedNumber value={selectedRow.share} format={(n) => `${n.toFixed(1)}%`} /> del gasto de{" "}
+                      {viewMode === "previous" ? previousMonthName : currentMonthName}
                     </p>
-                  )}
-                </motion.div>
-              )}
-            </AnimatePresence>
 
-            {/* Slider "Resultado de Inversiones" — reusa los snapshots diarios que ya calcula
-                Finanzas, sin recalcular nada. Ocupa el espacio vacío debajo del detalle. */}
-            <div className="mt-4 pt-4 border-t border-zinc-200/60 dark:border-zinc-800">
+                    <div className={`relative h-2.5 rounded-full overflow-hidden mt-3 ${darkMode ? "bg-zinc-800" : "bg-slate-200"}`}>
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${selectedRow.share}%` }}
+                        transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+                        className="h-full rounded-full bg-primary"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between text-[10.5px] font-semibold mt-3 pt-3 border-t border-zinc-200/60 dark:border-zinc-800">
+                      <span className="text-zinc-400">Resto de categorías</span>
+                      <span>{formatARS(activeGrandTotal - selectedRow.total)}</span>
+                    </div>
+
+                    {viewMode !== "compare" && selectedRow.prevTotal > 0 && (
+                      <div className="flex items-center justify-between text-[10.5px] font-semibold mt-1.5">
+                        <span className="text-zinc-400">{previousMonthName}</span>
+                        <span>{formatARS(selectedRow.prevTotal)}</span>
+                      </div>
+                    )}
+
+                    {!pinnedCategory && (
+                      <p className="text-[9.5px] text-zinc-400 font-medium mt-3">
+                        Pasá el cursor por una categoría · clic para fijarla
+                      </p>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Slider "Resultado de Inversiones" — bloque separado, debajo del detalle. Reusa los
+                snapshots diarios que ya calcula Finanzas, sin recalcular nada. */}
+            <div className={`rounded-2xl border p-4 ${darkMode ? "bg-black/30 border-zinc-800" : "bg-slate-50 border-slate-200"}`}>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[9.5px] font-bold text-zinc-400 uppercase tracking-widest">
                   Resultado de Inversiones

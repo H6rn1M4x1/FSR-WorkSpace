@@ -145,6 +145,11 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
         zoom: 16,
         zoomControl: false,
         attributionControl: false,
+        // Con la rueda del mouse habilitada, hacer scroll de la página mientras el cursor pasa
+        // por encima del mapa termina haciendo zoom en vez de bajar — atrapa el scroll del
+        // formulario que lo contiene (p.ej. Ajustes & Configuración). Los botones +/- y el pellizco
+        // táctil siguen andando, así que no se pierde la forma de hacer zoom, solo la rueda.
+        scrollWheelZoom: false,
       });
 
       // Add Zoom control in top right
