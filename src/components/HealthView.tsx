@@ -1330,7 +1330,7 @@ export default function HealthView({
 
   const [medsActiveTab, setMedsActiveTab] = useState<"historial" | "stock">("historial");
   const [deporteAlimActiveTab, setDeporteAlimActiveTab] = useState<"rutina" | "alimentacion" | "registro_diario">("rutina");
-  const [gymActiveTab, setGymActiveTab] = useState<"rutinas" | "logger" | "tecnica" | "progreso" | "historial">("rutinas");
+  const [gymActiveTab, setGymActiveTab] = useState<"rutinas" | "logger" | "tecnica" | "progreso" | "historial">("historial");
 
   const lastSubTabRef = useRef<string | null>(null);
 

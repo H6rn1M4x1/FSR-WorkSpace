@@ -35,9 +35,7 @@ import {
   Filter,
   Footprints,
   HeartPulse,
-  AlignJustify,
-  Save,
-  CalendarDays
+  AlignJustify
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -77,8 +75,7 @@ import { activityMETs, distanceBasedActivities, estimateCaloriesByMET } from "..
 import { generateUniqueId } from "../utils/id";
 import { getLocalDateString } from "../utils/date";
 import { uiSounds } from "../lib/sounds";
-import { AnimatedNumber } from "./AnimatedNumber";
-import { PillFilterBar } from "./PillFilterBar";
+import { GymScheduleGrid, GymScheduleOption, GymScheduleCreatePayload, GymScheduleBatch } from "./GymScheduleGrid";
 
 interface GymRutinaViewProps {
   darkMode: boolean;
@@ -1181,37 +1178,13 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
     return rutinasGimnasio || [];
   }, [rutinasGimnasio]);
 
-  // --- Historial de Sesiones: agendar una rutina o un deporte -----------------------------
-  // En vez de mostrar la tabla de sesiones ya registradas, se elige una tarjeta (rutina propia
-  // o deporte del catálogo) y se la agenda con los mismos campos que "Añadir Actividad",
-  // guardando en la misma colección (deportes_actividades), más un mini calendario para elegir
-  // el día.
-  type ScheduleCardKind = "rutina" | "deporte";
-  interface ScheduleCard {
-    key: string;
-    kind: ScheduleCardKind;
-    label: string;
-    sublabel?: string;
-    estMinutes: number;
-    estCalorias: number;
-  }
-
-  const [schedQuery, setSchedQuery] = useState("");
-  const [schedKindFilter, setSchedKindFilter] = useState<"todos" | ScheduleCardKind>("todos");
-  const [schedSelectedKey, setSchedSelectedKey] = useState<string | null>(null);
-  const [schedCalendarMonth, setSchedCalendarMonth] = useState(() => new Date());
-  const [schedFechaDesde, setSchedFechaDesde] = useState("");
-  const [schedFechaHasta, setSchedFechaHasta] = useState("");
-  const [schedCalorias, setSchedCalorias] = useState<number | "">("");
-  const [schedPasos, setSchedPasos] = useState<number | "">("");
-  const [schedDistancia, setSchedDistancia] = useState<number | "">("");
-  const [schedTiempoMovimiento, setSchedTiempoMovimiento] = useState("");
-  const [schedFrecuencia, setSchedFrecuencia] = useState("");
-  const [schedPuntos, setSchedPuntos] = useState<number | "">("");
-  const [schedSaving, setSchedSaving] = useState(false);
-
-  const scheduleCards = useMemo<ScheduleCard[]>(() => {
-    const routineCards: ScheduleCard[] = listRutinas.map((r) => {
+  // --- Historial de Sesiones: registrar rutinas y deportes en la grilla semanal -----------
+  // Mismo mecanismo de "pintar/borrar" que Universidad > Horario (ver WeeklyScheduleGrid.tsx),
+  // pero en vez de pastillas de "Materia" hay un desplegable de Rutina/Actividad (o "Actividad
+  // libre"), y en vez de Aula/Profesor los campos son las métricas de "Añadir Actividad". Se
+  // sigue guardando en la misma colección deportes_actividades.
+  const scheduleOptions = useMemo<GymScheduleOption[]>(() => {
+    const routineOptions: GymScheduleOption[] = listRutinas.map((r) => {
       const estMinutes = r.duracionEstimadaMin || 45;
       const estCalorias = Math.round(
         (r.ejercicios || []).reduce((acc, ej) => {
@@ -1225,172 +1198,105 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
       );
       return {
         key: `rutina:${r.id}`,
-        kind: "rutina",
+        kind: "rutina" as const,
         label: r.nombre,
-        sublabel: r.grupoMuscularPrincipal,
         estMinutes,
         estCalorias,
+        isDistanceBased: false,
       };
     });
 
-    const sportCards: ScheduleCard[] = Object.keys(activityMETs)
+    const sportOptions: GymScheduleOption[] = Object.keys(activityMETs)
       .filter((name) => name !== "Otro")
       .sort((a, b) => a.localeCompare(b))
       .map((name) => ({
         key: `deporte:${name}`,
-        kind: "deporte",
+        kind: "deporte" as const,
         label: name,
         estMinutes: 30,
         estCalorias: estimateCaloriesByMET(name, 30),
+        isDistanceBased: distanceBasedActivities.includes(name),
       }));
 
-    return [...routineCards, ...sportCards];
+    return [...routineOptions, ...sportOptions];
   }, [listRutinas]);
 
-  const filteredScheduleCards = useMemo(() => {
-    const q = schedQuery.trim().toLowerCase();
-    return scheduleCards.filter((c) => {
-      if (schedKindFilter !== "todos" && c.kind !== schedKindFilter) return false;
-      if (q && !c.label.toLowerCase().includes(q)) return false;
-      return true;
-    });
-  }, [scheduleCards, schedQuery, schedKindFilter]);
-
-  // Paginado de tarjetas (8 por página) para que la grilla no quede desmedidamente larga —
-  // evita además que la animación de aparición dependa de hacer scroll por decenas de tarjetas.
-  const SCHED_CARDS_PAGE_SIZE = 8;
-  const [schedCardsPage, setSchedCardsPage] = useState(1);
-
-  useEffect(() => {
-    setSchedCardsPage(1);
-  }, [schedQuery, schedKindFilter]);
-
-  const schedTotalPages = Math.max(1, Math.ceil(filteredScheduleCards.length / SCHED_CARDS_PAGE_SIZE));
-
-  useEffect(() => {
-    setSchedCardsPage((p) => Math.min(p, schedTotalPages));
-  }, [schedTotalPages]);
-
-  const paginatedScheduleCards = useMemo(() => {
-    const start = (schedCardsPage - 1) * SCHED_CARDS_PAGE_SIZE;
-    return filteredScheduleCards.slice(start, start + SCHED_CARDS_PAGE_SIZE);
-  }, [filteredScheduleCards, schedCardsPage]);
-
-  const selectedScheduleCard = useMemo(
-    () => scheduleCards.find((c) => c.key === schedSelectedKey) || null,
-    [scheduleCards, schedSelectedKey]
-  );
-
-  const schedIsDistanceBased = selectedScheduleCard
-    ? selectedScheduleCard.kind === "deporte" && distanceBasedActivities.includes(selectedScheduleCard.label)
-    : false;
-
-  const SCHED_MONTH_NAMES = [
-    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
-  ];
-  const SCHED_WEEK_DAYS = ["D", "L", "M", "M", "J", "V", "S"];
-
-  const schedMonthGridDays = useMemo(() => {
-    const year = schedCalendarMonth.getFullYear();
-    const month = schedCalendarMonth.getMonth();
-    const firstDay = new Date(year, month, 1).getDay();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const days: Array<number | null> = [];
-    for (let i = 0; i < firstDay; i++) days.push(null);
-    for (let d = 1; d <= daysInMonth; d++) days.push(d);
-    return days;
-  }, [schedCalendarMonth]);
-
-  const schedDatesWithActivity = useMemo(() => {
-    const set = new Set<string>();
-    (deportesActividades || []).forEach((a) => {
-      const d = (a.fechaDesde || "").split(" ")[0].split("T")[0];
-      if (d) set.add(d);
-    });
-    return set;
-  }, [deportesActividades]);
-
-  const resetScheduler = () => {
-    setSchedSelectedKey(null);
-    setSchedFechaDesde("");
-    setSchedFechaHasta("");
-    setSchedCalorias("");
-    setSchedPasos("");
-    setSchedDistancia("");
-    setSchedTiempoMovimiento("");
-    setSchedFrecuencia("");
-    setSchedPuntos("");
-  };
-
-  const formatMinutesLabel = (mins: number) => {
-    if (mins >= 60) return `${Math.floor(mins / 60)}h ${mins % 60}m`;
-    return `${mins}m`;
-  };
-
-  const handleSelectScheduleCard = (card: ScheduleCard) => {
-    setSchedSelectedKey(card.key);
-    const now = new Date();
-    const pad = (n: number) => String(n).padStart(2, "0");
-    const startStr = `${getLocalDateString(now)}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
-    const end = new Date(now.getTime() + card.estMinutes * 60000);
-    const endStr = `${getLocalDateString(end)}T${pad(end.getHours())}:${pad(end.getMinutes())}`;
-    setSchedFechaDesde(startStr);
-    setSchedFechaHasta(endStr);
-    setSchedCalorias(card.estCalorias);
-    setSchedTiempoMovimiento(formatMinutesLabel(card.estMinutes));
-    setSchedPuntos(card.estMinutes);
-    setSchedPasos("");
-    setSchedDistancia("");
-    setSchedFrecuencia("");
-    uiSounds.expand();
-  };
-
-  const handlePickSchedDate = (day: number) => {
-    const year = schedCalendarMonth.getFullYear();
-    const month = schedCalendarMonth.getMonth();
-    const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    setSchedFechaDesde((prev) => {
-      const time = prev.includes("T") ? prev.split("T")[1] : "09:00";
-      return `${dateStr}T${time}`;
-    });
-    setSchedFechaHasta((prev) => {
-      const time = prev.includes("T") ? prev.split("T")[1] : "10:00";
-      return `${dateStr}T${time}`;
-    });
-  };
-
-  const handleSaveScheduledActivity = async () => {
-    if (!selectedScheduleCard) return;
-    if (!schedFechaDesde || !schedFechaHasta) {
-      showToast("Elegí fecha y hora de inicio y fin.", "error");
-      return;
-    }
-    setSchedSaving(true);
+  const handleGymDirectCreate = async (payload: GymScheduleCreatePayload) => {
+    const nuevaActividad: DeporteActividad = {
+      id: generateUniqueId("act"),
+      fechaDesde: `${payload.dateStr} ${payload.horaInicio}`,
+      fechaHasta: `${payload.dateStr} ${payload.horaFin}`,
+      informacion: payload.label,
+      calorias: payload.calorias,
+      pasos: payload.pasos,
+      distancia: payload.distancia,
+      tiempoMovimiento: payload.tiempoMovimiento,
+      frecuencia: payload.frecuencia,
+      puntos: payload.puntos,
+    };
     try {
-      const nuevaActividad: DeporteActividad = {
-        id: generateUniqueId("act"),
-        fechaDesde: schedFechaDesde.replace("T", " "),
-        fechaHasta: schedFechaHasta.replace("T", " "),
-        informacion: selectedScheduleCard.label,
-        calorias: Number(schedCalorias) || 0,
-        pasos: Number(schedPasos) || 0,
-        distancia: Number(schedDistancia) || 0,
-        tiempoMovimiento: schedTiempoMovimiento || "",
-        frecuencia: schedFrecuencia || "",
-        puntos: Number(schedPuntos) || 0,
-      };
       await saveItemToFirestore(userId, "deportes_actividades", nuevaActividad);
       setDeportesActividades?.((prev) => [nuevaActividad, ...(prev || [])]);
       uiSounds.save();
-      showToast(`"${selectedScheduleCard.label}" agendada con éxito`, "success");
-      resetScheduler();
+      showToast(`"${payload.label}" registrada con éxito`, "success");
     } catch (error: any) {
-      showToast(error?.message || "No se pudo agendar la actividad", "error");
-    } finally {
-      setSchedSaving(false);
+      showToast(error?.message || "No se pudo registrar el ejercicio", "error");
     }
   };
+
+  const handleGymConfirmEdit = async (id: string, payload: GymScheduleCreatePayload) => {
+    const actualizada: DeporteActividad = {
+      id,
+      fechaDesde: `${payload.dateStr} ${payload.horaInicio}`,
+      fechaHasta: `${payload.dateStr} ${payload.horaFin}`,
+      informacion: payload.label,
+      calorias: payload.calorias,
+      pasos: payload.pasos,
+      distancia: payload.distancia,
+      tiempoMovimiento: payload.tiempoMovimiento,
+      frecuencia: payload.frecuencia,
+      puntos: payload.puntos,
+    };
+    try {
+      await saveItemToFirestore(userId, "deportes_actividades", actualizada);
+      setDeportesActividades?.((prev) => (prev || []).map((a) => (a.id === id ? actualizada : a)));
+      uiSounds.save();
+      showToast("Ejercicio actualizado", "success");
+    } catch (error: any) {
+      showToast(error?.message || "No se pudo actualizar el ejercicio", "error");
+    }
+  };
+
+  const handleGymBatchUpdate = async (batch: GymScheduleBatch) => {
+    try {
+      await Promise.all([
+        ...batch.toDelete.map((id) => deleteItemFromFirestore(userId, "deportes_actividades", id)),
+        ...batch.toUpsert.map((a) => saveItemToFirestore(userId, "deportes_actividades", a)),
+      ]);
+      setDeportesActividades?.((prev) => {
+        const afterDelete = (prev || []).filter((a) => !batch.toDelete.includes(a.id));
+        const map = new Map(afterDelete.map((a) => [a.id, a]));
+        batch.toUpsert.forEach((a) => map.set(a.id, a));
+        return Array.from(map.values());
+      });
+    } catch (error: any) {
+      showToast(error?.message || "No se pudo actualizar el historial", "error");
+    }
+  };
+
+  const handleGymClearWeek = (ids: string[]) => {
+    if (ids.length === 0) return;
+    requestConfirmation(
+      "Vaciar semana",
+      "¿Estás seguro de que querés borrar todos los ejercicios registrados esta semana?",
+      async () => {
+        await handleGymBatchUpdate({ toDelete: ids, toUpsert: [] });
+        uiSounds.delete();
+        showToast("Semana vaciada", "success");
+      }
+    );
+  };
+
 
   // Inicialización de muestra únicamente una sola vez para nuevos usuarios
   useEffect(() => {
@@ -2997,417 +2903,16 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
 
       {/* --- VISTA 5: HISTORIAL DE SESIONES --- */}
       {activeTab === "historial" && (
-        <div className="space-y-4 scroll-reveal">
-          {/* Header */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-200/40 dark:border-zinc-800/50 pb-3">
-            <div>
-              <h3 className="text-sm font-extrabold flex items-center gap-2 text-slate-900 dark:text-white shrink-0">
-                <CalendarDays className="w-4 h-4 text-primary" />
-                Historial de Sesiones
-              </h3>
-              <p className="text-[11px] text-slate-400 dark:text-zinc-500 mt-0.5">
-                Elegí una rutina o un deporte y agendalo con fecha, hora y métricas.
-              </p>
-            </div>
-
-            <div className="relative w-full md:w-72">
-              <Search className="w-4 h-4 text-slate-400 dark:text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={schedQuery}
-                onChange={(e) => setSchedQuery(e.target.value)}
-                placeholder="Buscar rutina o deporte..."
-                className={`w-full pl-9.5 pr-8 py-2.5 rounded-2xl text-xs border transition-all outline-none ${
-                  darkMode
-                    ? "bg-zinc-900/60 border-zinc-800 text-white placeholder:text-zinc-500 focus:border-primary focus:ring-1 focus:ring-primary"
-                    : "bg-white border-slate-200 text-slate-800 placeholder:text-slate-400 focus:border-primary focus:ring-1 focus:ring-primary shadow-xs"
-                }`}
-              />
-              {schedQuery && (
-                <button
-                  type="button"
-                  data-sound="click"
-                  onClick={() => setSchedQuery("")}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 dark:text-zinc-500 dark:hover:text-zinc-300 rounded-full cursor-pointer"
-                  title="Borrar búsqueda"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-          </div>
-
-          <PillFilterBar
-            options={[
-              { id: "todos" as const, label: `Todos (${scheduleCards.length})` },
-              { id: "rutina" as const, label: `Rutinas (${scheduleCards.filter((c) => c.kind === "rutina").length})` },
-              { id: "deporte" as const, label: `Deportes (${scheduleCards.filter((c) => c.kind === "deporte").length})` },
-            ]}
-            activeValue={schedKindFilter}
-            onChange={(v) => setSchedKindFilter(v)}
-            layoutIdPrefix="sched-kind"
-          />
-
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-4 items-start">
-            {/* IZQUIERDA: Tarjetas de rutinas y deportes */}
-            {filteredScheduleCards.length === 0 ? (
-              <div className="p-8 rounded-3xl border border-dashed border-slate-200 dark:border-zinc-800 text-center flex flex-col items-center justify-center space-y-2">
-                <Search className="w-8 h-8 text-slate-300 dark:text-zinc-600 mb-1" />
-                <p className="text-sm font-bold text-slate-700 dark:text-zinc-300">
-                  No se encontraron rutinas ni deportes
-                </p>
-                <p className="text-xs text-slate-400 dark:text-zinc-500 max-w-sm">
-                  Probá con otra búsqueda o cambiá el filtro.
-                </p>
-              </div>
-            ) : (
-              <div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {paginatedScheduleCards.map((card, idx) => {
-                    const isSelected = schedSelectedKey === card.key;
-                    return (
-                      <motion.button
-                        key={card.key}
-                        type="button"
-                        data-sound="expand"
-                        onClick={() => handleSelectScheduleCard(card)}
-                        initial={{ opacity: 0, y: 14 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true, margin: "0px 0px -60px 0px" }}
-                        transition={{ duration: 0.3, delay: Math.min(idx * 0.05, 0.3), ease: [0.22, 1, 0.36, 1] }}
-                        className={`w-full text-left p-4 rounded-3xl border transition-colors cursor-pointer hover:scale-[1.015] active:scale-[0.98] ${
-                          isSelected
-                            ? "border-primary bg-primary text-white dark:text-blue-950 shadow-md shadow-primary/30"
-                            : darkMode
-                            ? "bg-zinc-900/40 border-zinc-800 hover:border-primary/40"
-                            : "bg-white border-slate-200 hover:border-primary/40 shadow-xs"
-                        }`}
-                      >
-                        <span
-                          className={`px-2 py-0.5 rounded-md text-[9px] font-extrabold uppercase inline-flex items-center gap-1 mb-1.5 border ${
-                            isSelected
-                              ? "bg-white/20 text-white dark:text-blue-950 border-white/30"
-                              : "bg-primary/10 text-primary border-primary/20"
-                          }`}
-                        >
-                          {card.kind === "rutina" ? (
-                            <Dumbbell className="w-2.5 h-2.5" />
-                          ) : (
-                            <Activity className="w-2.5 h-2.5" />
-                          )}
-                          {card.kind === "rutina" ? "Rutina" : "Deporte"}
-                        </span>
-                        <h4 className={`text-sm font-extrabold truncate ${isSelected ? "text-white dark:text-blue-950" : "text-slate-900 dark:text-white"}`}>
-                          {card.label}
-                        </h4>
-                        {card.sublabel && (
-                          <p className={`text-[11px] truncate ${isSelected ? "text-white/80 dark:text-blue-950/70" : "text-slate-400 dark:text-zinc-500"}`}>
-                            {card.sublabel}
-                          </p>
-                        )}
-
-                        <div
-                          className={`flex items-center gap-2 mt-3 pt-3 border-t ${
-                            isSelected ? "border-white/25 dark:border-blue-950/20" : "border-zinc-200/50 dark:border-zinc-800/60"
-                          }`}
-                        >
-                          <span
-                            className={`px-2.5 py-1 rounded-full text-[11px] font-mono font-bold flex items-center gap-1 border ${
-                              isSelected
-                                ? "bg-white/20 text-white dark:text-blue-950 border-white/30"
-                                : "bg-primary/10 text-primary border-primary/20"
-                            }`}
-                          >
-                            <Clock className="w-3 h-3" /> {formatMinutesLabel(card.estMinutes)}
-                          </span>
-                          <span
-                            className={`px-2.5 py-1 rounded-full text-[11px] font-mono font-bold flex items-center gap-1 border ${
-                              isSelected
-                                ? "bg-white/20 text-white dark:text-blue-950 border-white/30"
-                                : "bg-primary/10 text-primary border-primary/20"
-                            }`}
-                          >
-                            <Flame className="w-3 h-3 fill-current" />
-                            <AnimatedNumber value={card.estCalorias} duration={1} delay={0} /> kcal
-                          </span>
-                        </div>
-                      </motion.button>
-                    );
-                  })}
-                </div>
-
-                {schedTotalPages > 1 && (
-                  <div className="mt-4 pt-4 border-t border-slate-100 dark:border-zinc-800/80 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500 dark:text-zinc-400 font-medium">
-                    <span>
-                      Mostrando {paginatedScheduleCards.length} de {filteredScheduleCards.length} (Página {schedCardsPage} de {schedTotalPages})
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        data-sound="click"
-                        disabled={schedCardsPage === 1}
-                        onClick={() => setSchedCardsPage((prev) => Math.max(1, prev - 1))}
-                        className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-zinc-800 transition-all font-bold cursor-pointer"
-                      >
-                        Anterior
-                      </button>
-                      <button
-                        type="button"
-                        data-sound="click"
-                        disabled={schedCardsPage === schedTotalPages}
-                        onClick={() => setSchedCardsPage((prev) => Math.min(schedTotalPages, prev + 1))}
-                        className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-zinc-800 transition-all font-bold cursor-pointer"
-                      >
-                        Siguiente
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* DERECHA: Mini calendario + formulario de agendado */}
-            <AnimatePresence mode="wait">
-              {selectedScheduleCard ? (
-                <motion.div
-                  key="sched-panel"
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 12 }}
-                  transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-                  className={`p-4 rounded-3xl border space-y-4 ${
-                    darkMode ? "bg-zinc-950 border-zinc-800 text-zinc-100" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 block">
-                        Agendar
-                      </span>
-                      <h4 className="text-sm font-extrabold truncate">{selectedScheduleCard.label}</h4>
-                    </div>
-                    <button
-                      type="button"
-                      data-sound="click"
-                      onClick={resetScheduler}
-                      className="p-1.5 text-slate-500 hover:text-red-500 dark:text-zinc-400 dark:hover:text-red-500 hover:bg-slate-100 dark:hover:bg-zinc-800 rounded-full transition-all cursor-pointer shrink-0"
-                      title="Cancelar selección"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  {/* Mini calendario */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <button
-                        type="button"
-                        data-sound="click"
-                        onClick={() => setSchedCalendarMonth((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1))}
-                        className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer transition-colors"
-                      >
-                        <ChevronLeft className="w-4 h-4" />
-                      </button>
-                      <span className="text-xs font-extrabold uppercase tracking-wider">
-                        {SCHED_MONTH_NAMES[schedCalendarMonth.getMonth()]} {schedCalendarMonth.getFullYear()}
-                      </span>
-                      <button
-                        type="button"
-                        data-sound="click"
-                        onClick={() => setSchedCalendarMonth((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1))}
-                        className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer transition-colors"
-                      >
-                        <ChevronRight className="w-4 h-4" />
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-7 gap-1 text-center">
-                      {SCHED_WEEK_DAYS.map((d, i) => (
-                        <span key={i} className="text-[9px] font-extrabold text-slate-400 dark:text-zinc-500">
-                          {d}
-                        </span>
-                      ))}
-                      {schedMonthGridDays.map((day, idx) => {
-                        if (day === null) return <div key={idx} />;
-                        const dateStr = `${schedCalendarMonth.getFullYear()}-${String(schedCalendarMonth.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-                        const isToday = dateStr === getLocalDateString(new Date());
-                        const isSelected = schedFechaDesde.startsWith(dateStr);
-                        const hasActivity = schedDatesWithActivity.has(dateStr);
-                        return (
-                          <button
-                            key={idx}
-                            type="button"
-                            data-sound="selectDate"
-                            onClick={() => handlePickSchedDate(day)}
-                            className={`aspect-square rounded-xl text-[11px] font-bold flex items-center justify-center relative transition-all cursor-pointer hover:scale-105 active:scale-95 ${
-                              isSelected
-                                ? "bg-primary text-white shadow-md"
-                                : hasActivity
-                                ? "bg-primary/10 text-primary"
-                                : darkMode
-                                ? "text-zinc-300 hover:bg-zinc-800"
-                                : "text-slate-600 hover:bg-slate-100"
-                            } ${isToday && !isSelected ? "ring-1 ring-primary/60" : ""}`}
-                          >
-                            {day}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Campos tipo "Añadir Actividad" */}
-                  <div className="space-y-3 pt-2 border-t border-zinc-200/50 dark:border-zinc-800/60">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
-                          Fecha Desde
-                        </label>
-                        <SmartDateTimePicker value={schedFechaDesde} onChange={setSchedFechaDesde} size="sm" />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
-                          Fecha Hasta
-                        </label>
-                        <SmartDateTimePicker value={schedFechaHasta} onChange={setSchedFechaHasta} size="sm" />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
-                          Calorías
-                        </label>
-                        <input
-                          type="number"
-                          value={schedCalorias}
-                          onChange={(e) => setSchedCalorias(e.target.value === "" ? "" : Number(e.target.value))}
-                          className="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white outline-none transition-all text-sm focus:border-primary"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
-                          Pasos
-                        </label>
-                        <input
-                          type="number"
-                          value={schedPasos}
-                          onChange={(e) => setSchedPasos(e.target.value === "" ? "" : Number(e.target.value))}
-                          disabled={!schedIsDistanceBased}
-                          className="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white outline-none transition-all text-sm focus:border-primary disabled:opacity-50 disabled:cursor-not-allowed"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
-                          Distancia (km)
-                        </label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={schedDistancia}
-                          onChange={(e) => setSchedDistancia(e.target.value === "" ? "" : Number(e.target.value))}
-                          disabled={!schedIsDistanceBased}
-                          className="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white outline-none transition-all text-sm focus:border-primary disabled:opacity-50 disabled:cursor-not-allowed"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
-                          Puntos (Cardio)
-                        </label>
-                        <input
-                          type="number"
-                          value={schedPuntos}
-                          onChange={(e) => setSchedPuntos(e.target.value === "" ? "" : Number(e.target.value))}
-                          className="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white outline-none transition-all text-sm focus:border-primary"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
-                          Tiempo Movimiento
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="Ej: 1h 30m"
-                          value={schedTiempoMovimiento}
-                          onChange={(e) => setSchedTiempoMovimiento(e.target.value)}
-                          className="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-600 outline-none transition-all text-sm focus:border-primary"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
-                          Frecuencia / Ritmo
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="Ej: 5:30 min/km"
-                          value={schedFrecuencia}
-                          onChange={(e) => setSchedFrecuencia(e.target.value)}
-                          disabled={!schedIsDistanceBased}
-                          className="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-600 outline-none transition-all text-sm focus:border-primary disabled:opacity-50 disabled:cursor-not-allowed"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="pt-3 flex items-center justify-end gap-3 border-t border-slate-100 dark:border-zinc-800/40">
-                      <button
-                        type="button"
-                        data-sound="click"
-                        disabled={schedSaving}
-                        onClick={resetScheduler}
-                        className="px-4 py-2 rounded-xl text-xs font-bold text-zinc-400 hover:text-slate-900 dark:hover:text-white cursor-pointer disabled:opacity-50"
-                      >
-                        Cancelar
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleSaveScheduledActivity}
-                        disabled={schedSaving || !schedFechaDesde || !schedFechaHasta}
-                        className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-white dark:text-blue-950 text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {schedSaving ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            <span>Guardando...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Save className="w-4 h-4" />
-                            <span>Guardar Actividad</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="sched-empty"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className={`p-8 rounded-3xl border border-dashed text-center flex flex-col items-center justify-center space-y-2 ${
-                    darkMode ? "border-zinc-800 text-zinc-500" : "border-slate-200 text-slate-400"
-                  }`}
-                >
-                  <CalendarDays className="w-8 h-8 opacity-40 text-primary" />
-                  <p className="text-sm font-bold text-slate-700 dark:text-zinc-300">
-                    Elegí una rutina o un deporte
-                  </p>
-                  <p className="text-xs max-w-xs">
-                    Tocá una tarjeta de la izquierda para agendarla con fecha, hora y métricas.
-                  </p>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        </div>
+        <GymScheduleGrid
+          darkMode={darkMode}
+          actividades={deportesActividades || []}
+          options={scheduleOptions}
+          onDirectCreate={handleGymDirectCreate}
+          onConfirmEdit={handleGymConfirmEdit}
+          onBatchUpdate={handleGymBatchUpdate}
+          onClearWeek={handleGymClearWeek}
+          generateId={generateUniqueId}
+        />
       )}
       </div>
 
