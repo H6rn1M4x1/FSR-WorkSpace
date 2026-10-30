@@ -108,73 +108,7 @@ import {
   Legend,
 } from "recharts";
 
-const activityMETs: Record<string, number> = {
-  Caminata: 3.5,
-  Correr: 9.8,
-  Ciclismo: 7.5,
-  "Ciclismo indoor / Spinning": 8.5,
-  "Ciclismo de montaña": 8.5,
-  Natación: 7.0,
-  "Levantamiento de pesas": 3.0,
-  "Gimnasio / Musculación": 3.5,
-  Yoga: 2.5,
-  Pilates: 3.0,
-  Fútbol: 7.0,
-  Básquetbol: 6.5,
-  Tenis: 7.3,
-  Pádel: 6.0,
-  Voleibol: 4.0,
-  "Danza / Baile": 5.0,
-  Zumba: 6.8,
-  CrossFit: 8.0,
-  "Entrenamiento funcional": 7.0,
-  Boxeo: 7.8,
-  "Artes Marciales": 7.5,
-  Escalada: 8.0,
-  Remo: 7.0,
-  "Saltar la cuerda": 11.0,
-  Gimnasia: 4.0,
-  Elíptica: 5.0,
-  "Cinta de correr": 9.0,
-  Aeróbicos: 7.3,
-  Bádminton: 5.5,
-  Béisbol: 5.0,
-  Buceo: 7.0,
-  Esquí: 7.0,
-  "Esquí alpino": 5.0,
-  Golf: 4.5,
-  Hockey: 8.0,
-  Judo: 10.0,
-  Karate: 10.0,
-  Kickboxing: 10.0,
-  Patinaje: 7.0,
-  Rugby: 8.3,
-  Skateboarding: 5.0,
-  Snowboard: 5.3,
-  Surf: 3.0,
-  "Tenis de mesa": 4.0,
-  Trekking: 7.0,
-  Senderismo: 6.0,
-  "Patinaje en línea": 7.5,
-  "Estiramiento / Stretching": 2.5,
-  Otro: 5.0,
-};
-
-const distanceBasedActivities = [
-  "Caminata",
-  "Correr",
-  "Ciclismo",
-  "Natación",
-  "Remo",
-  "Cinta de correr",
-  "Elíptica",
-  "Ciclismo de montaña",
-  "Esquí",
-  "Patinaje",
-  "Senderismo",
-  "Trekking",
-  "Patinaje en línea",
-];
+import { activityMETs, distanceBasedActivities } from "../data/activityCatalog";
 
 interface CustomSelectProps {
   value: string;
@@ -3087,8 +3021,8 @@ export default function HealthView({
                   activeId: gymActiveTab,
                   onChange: (id: string) => setGymActiveTab(id as any),
                   tabs: [
-                    { id: "rutinas", label: `Mis Rutinas (${rutinasGimnasio.length})`, icon: Layers },
                     { id: "historial", label: "Historial de Sesiones", icon: Activity },
+                    { id: "rutinas", label: `Mis Rutinas (${rutinasGimnasio.length})`, icon: Layers },
                     { id: "tecnica", label: "Biblioteca de Ejercicios", icon: BookOpen },
                     { id: "progreso", label: "Progreso y Métricas", icon: BarChart2 },
                   ],
@@ -5175,6 +5109,7 @@ export default function HealthView({
                   askConfirmation={askConfirmation}
                   onOpenActividadModal={handleOpenActividadModal}
                   deportesActividades={deportesActividades}
+                  setDeportesActividades={setDeportesActividades}
                   onDeleteActividad={handleDeleteActividad}
                   onEditActividad={handleEditActividad}
                 />
