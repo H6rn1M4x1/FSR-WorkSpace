@@ -165,6 +165,18 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
         scrollWheelZoom: false,
       });
 
+      // Recalcula --pulse-length (ver .route-pulse-path en index.css) en cada zoom — Leaflet
+      // reproyecta el <path> a los nuevos píxeles de pantalla, así que su longitud real cambia;
+      // sin esto el trazo se veía "cortado" en vez de continuo apenas se hacía zoom.
+      map.on("zoomend", () => {
+        const pathEl = (routeLineRef.current as any)?._path as SVGPathElement | undefined;
+        if (pathEl) {
+          try {
+            pathEl.style.setProperty("--pulse-length", String(pathEl.getTotalLength()));
+          } catch {}
+        }
+      });
+
       // Add Zoom control in top right
       L.control.zoom({ position: "topright" }).addTo(map);
 

@@ -262,6 +262,13 @@ const MapComponent = ({
   // corrida vigente antes de tocar el mapa (si no, se estaría dibujando sobre marcadores viejos
   // que ya fueron limpiados por una corrida más nueva).
   const routeRunIdRef = useRef(0);
+  // Se recalcula --pulse-length (ver .route-pulse-path en index.css) en cada zoom — Leaflet
+  // reproyecta el <path> a los nuevos píxeles de pantalla, así que su longitud real cambia, pero
+  // el stroke-dasharray quedaba con el valor viejo y el trazo se veía "cortado" en vez de
+  // continuo. Se guarda en un ref (en vez de usarse directo en el listener) porque la función se
+  // recrea en cada corrida del efecto de marcadores, mientras que el listener de zoom se agrega
+  // una sola vez al crear el mapa.
+  const recomputeRouteLengthsRef = useRef<(() => void) | null>(null);
 
   // Initialize Map
   useEffect(() => {
@@ -288,6 +295,7 @@ const MapComponent = ({
       });
 
       map.scrollWheelZoom.enable();
+      map.on("zoomend", () => recomputeRouteLengthsRef.current?.());
       L.control.zoom({ position: "topleft" }).addTo(map);
       L.control.attribution({ position: "bottomleft", prefix: false }).addTo(map);
 
@@ -367,6 +375,22 @@ const MapComponent = ({
     routeRunIdRef.current += 1;
     const runId = routeRunIdRef.current;
 
+    // Rutas de esta corrida, por slug de ubicación — permite traer al frente (bringToFront) la
+    // ruta activa en hover (si no, cuando dos rutas comparten calle y se superponen, la que
+    // queda dibujada encima tapa a la otra con su color aunque esta última sea la resaltada) y
+    // recalcular la longitud de cada trazo en cada zoom (ver recomputeRouteLengthsRef).
+    const routeLinesBySlug: Record<string, L.Polyline> = {};
+    recomputeRouteLengthsRef.current = () => {
+      Object.values(routeLinesBySlug).forEach((line) => {
+        const pathEl = (line as any)._path as SVGPathElement | undefined;
+        if (pathEl) {
+          try {
+            pathEl.style.setProperty("--pulse-length", String(pathEl.getTotalLength()));
+          } catch {}
+        }
+      });
+    };
+
     // Al pasar el mouse por un pin, el resto de los pines y rutas pasa a gris claro (vía la clase
     // .map-loc-dimmed en index.css) para resaltar la ubicación activa; al salir, se restaura todo.
     const dimOtherLocations = (activeSlug: string) => {
@@ -377,6 +401,7 @@ const MapComponent = ({
       mapContainerRef.current.querySelectorAll<SVGPathElement>(".route-pulse-path").forEach((el) => {
         el.classList.toggle("map-loc-dimmed", !el.classList.contains(`route-loc-${activeSlug}`));
       });
+      routeLinesBySlug[activeSlug]?.bringToFront();
     };
     const clearLocationDim = () => {
       if (!mapContainerRef.current) return;
@@ -628,6 +653,7 @@ const MapComponent = ({
             interactive: false,
           });
           markersLayerRef.current.addLayer(routeLine);
+          routeLinesBySlug[slug] = routeLine;
           requestAnimationFrame(() => {
             const pathEl = (routeLine as any)._path as SVGPathElement | undefined;
             if (pathEl) {

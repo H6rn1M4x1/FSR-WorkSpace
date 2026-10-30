@@ -341,18 +341,11 @@ export function ExpenseFunnelWidget({
                   className="w-full text-left cursor-pointer group"
                 >
                   <div className="flex items-center justify-between gap-2 mb-1">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <span className={`flex items-center gap-1.5 text-[11px] font-bold truncate ${isSelected ? "text-primary" : "text-zinc-500 dark:text-zinc-400"}`}>
-                        {Icon && <Icon className="w-3.5 h-3.5 shrink-0" />}
-                        <span className="truncate">{row.categoria}</span>
-                        {isPinned && <Pin className="w-2.5 h-2.5 shrink-0 fill-current" />}
-                      </span>
-                      {/* Comparación vs. el mes anterior, siempre a la derecha del nombre */}
-                      <span className={`flex items-center gap-0.5 text-[9px] font-bold shrink-0 whitespace-nowrap ${row.deltaPct > 0 ? "text-red-500" : row.deltaPct < 0 ? "text-emerald-500" : "text-zinc-400"}`}>
-                        {row.deltaPct > 0 ? <TrendingUp className="w-2.5 h-2.5" /> : row.deltaPct < 0 ? <TrendingDown className="w-2.5 h-2.5" /> : null}
-                        {row.deltaPct === 0 ? "Sin cambios" : `${row.deltaPct > 0 ? "+" : ""}${row.deltaPct.toFixed(1)}%`}
-                      </span>
-                    </div>
+                    <span className={`flex items-center gap-1.5 text-[11px] font-bold truncate ${isSelected ? "text-primary" : "text-zinc-500 dark:text-zinc-400"}`}>
+                      {Icon && <Icon className="w-3.5 h-3.5 shrink-0" />}
+                      <span className="truncate">{row.categoria}</span>
+                      {isPinned && <Pin className="w-2.5 h-2.5 shrink-0 fill-current" />}
+                    </span>
                     <span className="flex items-baseline gap-1.5 shrink-0">
                       {drop && (
                         <span className="px-1.5 py-0.5 rounded-full text-[8.5px] font-bold bg-primary/10 text-primary whitespace-nowrap">
@@ -378,6 +371,15 @@ export function ExpenseFunnelWidget({
                       style={{ backgroundColor: color }}
                       className={`h-full rounded-full ${isSelected ? "ring-2 ring-primary/50 shadow-md" : "group-hover:brightness-110"}`}
                     />
+                    {/* Comparación vs. el mes anterior, superpuesta dentro de la barra */}
+                    <span
+                      className={`absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full whitespace-nowrap ${
+                        darkMode ? "bg-black/40" : "bg-white/55"
+                      } ${row.deltaPct > 0 ? "text-red-500" : row.deltaPct < 0 ? "text-emerald-500" : "text-zinc-500 dark:text-zinc-300"}`}
+                    >
+                      {row.deltaPct > 0 ? <TrendingUp className="w-2.5 h-2.5" /> : row.deltaPct < 0 ? <TrendingDown className="w-2.5 h-2.5" /> : null}
+                      {row.deltaPct === 0 ? "Sin cambios" : `${row.deltaPct > 0 ? "+" : ""}${row.deltaPct.toFixed(1)}%`}
+                    </span>
                   </div>
                 </button>
               );

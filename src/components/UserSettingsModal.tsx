@@ -1119,7 +1119,15 @@ export function UserSettingsModal({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2 }}
-          className="fixed inset-0 z-[100] flex items-start justify-center p-3 md:p-6 pt-16 md:pt-24 pb-10 bg-black/60 backdrop-blur-md"
+          // overflow-y-auto acá es el fix real del scroll que no llegaba hasta "Guardar Datos
+          // Personales": max-h-[92vh] del modal se calcula contra el VIEWPORT completo (vh es
+          // siempre relativo al viewport, nunca al padding de este contenedor), mientras que el
+          // padding fijo de acá (pt-16/24 + pb-10) le resta espacio real disponible — en casi
+          // cualquier altura de pantalla normal el modal terminaba siendo más alto que el hueco
+          // que le quedaba, y como este contenedor no scrolleaba, esa porción de abajo quedaba
+          // permanentemente fuera de la pantalla sin forma de alcanzarla (el scroll interno del
+          // modal por sí solo no alcanza si el problema es el modal entero, no su contenido).
+          className="fixed inset-0 z-[100] flex items-start justify-center p-3 md:p-6 pt-16 md:pt-24 pb-10 bg-black/60 backdrop-blur-md overflow-y-auto"
           onClick={onClose}
         >
           <motion.div
