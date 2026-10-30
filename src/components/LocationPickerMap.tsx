@@ -25,6 +25,15 @@ interface LocationPickerMapProps {
   // calle-por-calle del Mapa de Localizaciones Programadas, hogar → punto seleccionado — se usa
   // en el mapa de "Cargar Registro de Turno y Compromiso" para previsualizar cómo llegar.
   homeCoords?: { lat: number; lon: number } | null;
+  // Habilita hacer zoom con la rueda del mouse. Default false porque en algunos usos (p.ej. la
+  // Dirección Personal en Ajustes) el mapa vive dentro de un formulario con scroll propio, y con
+  // la rueda habilitada, pasar el cursor por encima del mapa mientras se hace scroll de la página
+  // termina atrapándolo en zoom — ver el comentario en la inicialización del mapa más abajo.
+  scrollWheelZoom?: boolean;
+  // Contenido extra (p.ej. botones "Guardar"/"Abrir Mapa") flotando en la esquina superior
+  // derecha del mapa, por encima de los controles de zoom de Leaflet — estos últimos se corren
+  // hacia abajo automáticamente para no superponerse (ver ".has-top-overlay" en index.css).
+  topRightOverlay?: React.ReactNode;
 }
 
 // Fix Leaflet default marker icon path issue in bundled environments
@@ -61,6 +70,8 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
   readOnly = false,
   darkMode = false,
   homeCoords = null,
+  scrollWheelZoom = false,
+  topRightOverlay,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -161,8 +172,9 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
         // Con la rueda del mouse habilitada, hacer scroll de la página mientras el cursor pasa
         // por encima del mapa termina haciendo zoom en vez de bajar — atrapa el scroll del
         // formulario que lo contiene (p.ej. Ajustes & Configuración). Los botones +/- y el pellizco
-        // táctil siguen andando, así que no se pierde la forma de hacer zoom, solo la rueda.
-        scrollWheelZoom: false,
+        // táctil siguen andando, así que no se pierde la forma de hacer zoom, solo la rueda. Por
+        // eso queda off por default y solo se habilita por prop en los usos donde no hay ese riesgo.
+        scrollWheelZoom,
       });
 
       // Recalcula --pulse-length (ver .route-pulse-path en index.css) en cada zoom — Leaflet
@@ -409,7 +421,14 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
             />
           </div>
         ) : (
-          <div ref={mapContainerRef} className={`location-picker-map-tiles w-full ${heightClass} z-10 ${readOnly ? "" : "cursor-crosshair"}`} />
+          <div
+            ref={mapContainerRef}
+            className={`location-picker-map-tiles w-full ${heightClass} z-10 ${readOnly ? "" : "cursor-crosshair"} ${topRightOverlay ? "has-top-overlay" : ""}`}
+          />
+        )}
+
+        {!embedMode && topRightOverlay && (
+          <div className="absolute top-2 right-2 z-30 flex items-center gap-1.5">{topRightOverlay}</div>
         )}
 
         {/* "Mi GPS" flota sobre el mapa (antes vivía en una barra de herramientas arriba, ahora

@@ -1034,6 +1034,14 @@ html:not(.dark) .location-picker-map-tiles .leaflet-tile-pane {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
 }
 
+/* Cuando LocationPickerMap.tsx recibe "topRightOverlay" (p.ej. los botones Guardar/Abrir Mapa
+   del turno), ese contenido flota en la esquina superior derecha y el control de zoom de Leaflet
+   se corre hacia abajo para no quedar tapado — el margen de arriba lo agranda lo suficiente para
+   una fila de botones de ~34px de alto. */
+.location-picker-map-tiles.has-top-overlay .leaflet-top.leaflet-right {
+  margin-top: 50px !important;
+}
+
 /* Atribución de OpenStreetMap: Leaflet exige mostrarla para poder usar sus baldosas gratis, pero
    acá se la achica y se le baja el contraste para que no compita visualmente con el resto de los
    controles flotantes del mapa (antes chocaba con el botón "Mi GPS"). */
