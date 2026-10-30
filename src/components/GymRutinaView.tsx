@@ -79,7 +79,6 @@ import { getLocalDateString } from "../utils/date";
 import { uiSounds } from "../lib/sounds";
 import { AnimatedNumber } from "./AnimatedNumber";
 import { PillFilterBar } from "./PillFilterBar";
-import { Reveal, RevealGroup } from "./Reveal";
 
 interface GymRutinaViewProps {
   darkMode: boolean;
@@ -1256,6 +1255,26 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
       return true;
     });
   }, [scheduleCards, schedQuery, schedKindFilter]);
+
+  // Paginado de tarjetas (8 por página) para que la grilla no quede desmedidamente larga —
+  // evita además que la animación de aparición dependa de hacer scroll por decenas de tarjetas.
+  const SCHED_CARDS_PAGE_SIZE = 8;
+  const [schedCardsPage, setSchedCardsPage] = useState(1);
+
+  useEffect(() => {
+    setSchedCardsPage(1);
+  }, [schedQuery, schedKindFilter]);
+
+  const schedTotalPages = Math.max(1, Math.ceil(filteredScheduleCards.length / SCHED_CARDS_PAGE_SIZE));
+
+  useEffect(() => {
+    setSchedCardsPage((p) => Math.min(p, schedTotalPages));
+  }, [schedTotalPages]);
+
+  const paginatedScheduleCards = useMemo(() => {
+    const start = (schedCardsPage - 1) * SCHED_CARDS_PAGE_SIZE;
+    return filteredScheduleCards.slice(start, start + SCHED_CARDS_PAGE_SIZE);
+  }, [filteredScheduleCards, schedCardsPage]);
 
   const selectedScheduleCard = useMemo(
     () => scheduleCards.find((c) => c.key === schedSelectedKey) || null,
@@ -3042,24 +3061,35 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
                 </p>
               </div>
             ) : (
-              <RevealGroup className="grid grid-cols-1 sm:grid-cols-2 gap-3" stagger={0.04}>
-                {filteredScheduleCards.map((card) => {
-                  const isSelected = schedSelectedKey === card.key;
-                  return (
-                    <Reveal key={card.key}>
-                      <button
+              <div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {paginatedScheduleCards.map((card, idx) => {
+                    const isSelected = schedSelectedKey === card.key;
+                    return (
+                      <motion.button
+                        key={card.key}
                         type="button"
                         data-sound="expand"
                         onClick={() => handleSelectScheduleCard(card)}
-                        className={`w-full text-left p-4 rounded-3xl border transition-all cursor-pointer hover:scale-[1.015] active:scale-[0.98] ${
+                        initial={{ opacity: 0, y: 14 }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ once: true, margin: "0px 0px -60px 0px" }}
+                        transition={{ duration: 0.3, delay: Math.min(idx * 0.05, 0.3), ease: [0.22, 1, 0.36, 1] }}
+                        className={`w-full text-left p-4 rounded-3xl border transition-colors cursor-pointer hover:scale-[1.015] active:scale-[0.98] ${
                           isSelected
-                            ? "border-primary ring-2 ring-primary/40 bg-primary/5"
+                            ? "border-primary bg-primary text-white dark:text-blue-950 shadow-md shadow-primary/30"
                             : darkMode
                             ? "bg-zinc-900/40 border-zinc-800 hover:border-primary/40"
                             : "bg-white border-slate-200 hover:border-primary/40 shadow-xs"
                         }`}
                       >
-                        <span className="px-2 py-0.5 rounded-md text-[9px] font-extrabold uppercase bg-primary/10 text-primary border border-primary/20 inline-flex items-center gap-1 mb-1.5">
+                        <span
+                          className={`px-2 py-0.5 rounded-md text-[9px] font-extrabold uppercase inline-flex items-center gap-1 mb-1.5 border ${
+                            isSelected
+                              ? "bg-white/20 text-white dark:text-blue-950 border-white/30"
+                              : "bg-primary/10 text-primary border-primary/20"
+                          }`}
+                        >
                           {card.kind === "rutina" ? (
                             <Dumbbell className="w-2.5 h-2.5" />
                           ) : (
@@ -3067,29 +3097,73 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
                           )}
                           {card.kind === "rutina" ? "Rutina" : "Deporte"}
                         </span>
-                        <h4 className="text-sm font-extrabold text-slate-900 dark:text-white truncate">
+                        <h4 className={`text-sm font-extrabold truncate ${isSelected ? "text-white dark:text-blue-950" : "text-slate-900 dark:text-white"}`}>
                           {card.label}
                         </h4>
                         {card.sublabel && (
-                          <p className="text-[11px] text-slate-400 dark:text-zinc-500 truncate">
+                          <p className={`text-[11px] truncate ${isSelected ? "text-white/80 dark:text-blue-950/70" : "text-slate-400 dark:text-zinc-500"}`}>
                             {card.sublabel}
                           </p>
                         )}
 
-                        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-zinc-200/50 dark:border-zinc-800/60">
-                          <span className="px-2.5 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 text-[11px] font-mono font-bold flex items-center gap-1">
+                        <div
+                          className={`flex items-center gap-2 mt-3 pt-3 border-t ${
+                            isSelected ? "border-white/25 dark:border-blue-950/20" : "border-zinc-200/50 dark:border-zinc-800/60"
+                          }`}
+                        >
+                          <span
+                            className={`px-2.5 py-1 rounded-full text-[11px] font-mono font-bold flex items-center gap-1 border ${
+                              isSelected
+                                ? "bg-white/20 text-white dark:text-blue-950 border-white/30"
+                                : "bg-primary/10 text-primary border-primary/20"
+                            }`}
+                          >
                             <Clock className="w-3 h-3" /> {formatMinutesLabel(card.estMinutes)}
                           </span>
-                          <span className="px-2.5 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 text-[11px] font-mono font-bold flex items-center gap-1">
+                          <span
+                            className={`px-2.5 py-1 rounded-full text-[11px] font-mono font-bold flex items-center gap-1 border ${
+                              isSelected
+                                ? "bg-white/20 text-white dark:text-blue-950 border-white/30"
+                                : "bg-primary/10 text-primary border-primary/20"
+                            }`}
+                          >
                             <Flame className="w-3 h-3 fill-current" />
                             <AnimatedNumber value={card.estCalorias} duration={1} delay={0} /> kcal
                           </span>
                         </div>
+                      </motion.button>
+                    );
+                  })}
+                </div>
+
+                {schedTotalPages > 1 && (
+                  <div className="mt-4 pt-4 border-t border-slate-100 dark:border-zinc-800/80 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500 dark:text-zinc-400 font-medium">
+                    <span>
+                      Mostrando {paginatedScheduleCards.length} de {filteredScheduleCards.length} (Página {schedCardsPage} de {schedTotalPages})
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        data-sound="click"
+                        disabled={schedCardsPage === 1}
+                        onClick={() => setSchedCardsPage((prev) => Math.max(1, prev - 1))}
+                        className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-zinc-800 transition-all font-bold cursor-pointer"
+                      >
+                        Anterior
                       </button>
-                    </Reveal>
-                  );
-                })}
-              </RevealGroup>
+                      <button
+                        type="button"
+                        data-sound="click"
+                        disabled={schedCardsPage === schedTotalPages}
+                        onClick={() => setSchedCardsPage((prev) => Math.min(schedTotalPages, prev + 1))}
+                        className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-zinc-800 transition-all font-bold cursor-pointer"
+                      >
+                        Siguiente
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
 
             {/* DERECHA: Mini calendario + formulario de agendado */}
