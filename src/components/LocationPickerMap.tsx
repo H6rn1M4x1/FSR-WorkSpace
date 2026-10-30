@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import { Locate, RefreshCw } from "lucide-react";
+import { getAccentColorHex } from "./WeeklyScheduleGrid";
+import { fetchStreetRoute } from "../utils/routing";
 
 interface LocationPickerMapProps {
   lat?: number;
@@ -17,6 +19,12 @@ interface LocationPickerMapProps {
   // Modo de solo-visualización (p.ej. modales de detalle): oculta "Mi GPS" y el banner de
   // instrucciones, y deshabilita arrastrar el marcador / click en el mapa para mover el punto.
   readOnly?: boolean;
+  darkMode?: boolean;
+  // Si se pasa (p.ej. la Dirección Personal guardada en Ajustes), dibuja un marcador fijo de "Mi
+  // hogar" en esas coordenadas y, apenas lat/lon también están definidos, la misma ruta animada
+  // calle-por-calle del Mapa de Localizaciones Programadas, hogar → punto seleccionado — se usa
+  // en el mapa de "Cargar Registro de Turno y Compromiso" para previsualizar cómo llegar.
+  homeCoords?: { lat: number; lon: number } | null;
 }
 
 // Fix Leaflet default marker icon path issue in bundled environments
@@ -51,11 +59,16 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
   onSelectLocation,
   heightClass = "h-52",
   readOnly = false,
+  darkMode = false,
+  homeCoords = null,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
+  const homeMarkerRef = useRef<L.Marker | null>(null);
+  const routeLineRef = useRef<L.Polyline | null>(null);
+  const routeRunIdRef = useRef(0);
   const [loading, setLoading] = useState(false);
   const [locatingGps, setLocatingGps] = useState(false);
   const [mapType, setMapType] = useState<"roadmap" | "satellite" | "terrain">("roadmap");
@@ -264,6 +277,76 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
       }, 100);
     }
   }, [lat, lon, locationName]);
+
+  // Marcador de "Mi hogar" + ruta animada calle-por-calle hasta el punto seleccionado (mismo
+  // estilo que el Mapa de Localizaciones Programadas) — solo cuando el llamador pasa homeCoords
+  // (p.ej. el mapa de "Cargar Registro de Turno y Compromiso", con la Dirección Personal de
+  // Ajustes como origen). No dibuja nada hasta tener el camino real (o, si OSRM falla, la línea
+  // recta de respaldo), para evitar el flash de una versión intermedia.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || embedMode) return;
+
+    if (homeMarkerRef.current) {
+      try { map.removeLayer(homeMarkerRef.current); } catch {}
+      homeMarkerRef.current = null;
+    }
+    if (routeLineRef.current) {
+      try { map.removeLayer(routeLineRef.current); } catch {}
+      routeLineRef.current = null;
+    }
+
+    routeRunIdRef.current += 1;
+    const runId = routeRunIdRef.current;
+
+    if (!homeCoords) return;
+
+    const accentHex = getAccentColorHex();
+    const homeMarkerHtml = `
+      <div class="relative inline-block">
+        <div class="w-7 h-7 rounded-full shadow-md flex items-center justify-center" style="background:${accentHex};border:2px solid ${darkMode ? "#18181b" : "#ffffff"};">
+          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        </div>
+      </div>
+    `;
+    const homeIcon = L.divIcon({
+      html: homeMarkerHtml,
+      className: "custom-osm-marker",
+      iconSize: [24, 24],
+      iconAnchor: [12, 12],
+    });
+    homeMarkerRef.current = L.marker([homeCoords.lat, homeCoords.lon], {
+      icon: homeIcon,
+      zIndexOffset: 900,
+      interactive: false,
+    }).addTo(map);
+
+    if (!lat || !lon || isNaN(lat) || isNaN(lon)) return;
+
+    fetchStreetRoute(homeCoords.lat, homeCoords.lon, lat, lon).then((streetPath) => {
+      if (routeRunIdRef.current !== runId || !mapRef.current) return;
+      const points: [number, number][] = streetPath || [
+        [homeCoords.lat, homeCoords.lon],
+        [lat, lon],
+      ];
+      const routeLine = L.polyline(points, {
+        color: accentHex,
+        weight: 2.5,
+        opacity: 0.85,
+        className: "route-pulse-path",
+        interactive: false,
+      }).addTo(mapRef.current);
+      routeLineRef.current = routeLine;
+      requestAnimationFrame(() => {
+        const pathEl = (routeLine as any)._path as SVGPathElement | undefined;
+        if (pathEl) {
+          try {
+            pathEl.style.setProperty("--pulse-length", String(pathEl.getTotalLength()));
+          } catch {}
+        }
+      });
+    });
+  }, [homeCoords?.lat, homeCoords?.lon, lat, lon, darkMode, embedMode]);
 
   // Handle GPS location click
   const handleGpsLocation = () => {

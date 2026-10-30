@@ -13,3 +13,8 @@
   from = "/api/gemini/chat"
   to = "/.netlify/functions/gemini-chat"
   status = 200
+
+[[redirects]]
+  from = "/api/reverse-geocode"
+  to = "/.netlify/functions/reverse-geocode"
+  status = 200
