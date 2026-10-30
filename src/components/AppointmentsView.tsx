@@ -22,7 +22,7 @@ import { AddressBookModal, loadSavedAddressBook, saveAddressBook, AddressEntry }
 import { UserProfileData } from "./UserSettingsModal";
 import { getAccentColorHex } from "./WeeklyScheduleGrid";
 import { fetchStreetRoute } from "../utils/routing";
-import { findNearestTransitLines } from "../utils/transit";
+import { findConnectingTransitLines, ConnectingTransitLine } from "../utils/transit";
 import { PillFilterBar } from "./PillFilterBar";
 import { ConfirmationModal } from "./ConfirmationModal";
 import { DetailModal } from "./DetailModal";
@@ -238,6 +238,79 @@ const FALLBACK_PLACES = [
     lon: "-68.5305",
   },
 ];
+
+// Botones (ícono de colectivo + número) superpuestos sobre el mapa de "Cargar Registro de Turno y
+// Compromiso", uno por cada línea de Red Tulum que conecta la Dirección Personal con el destino
+// elegido (ver findConnectingTransitLines). Clic en uno expande una tarjeta con el detalle (parada
+// más cercana a cada punta y la distancia) — clic de nuevo, o en la "X" de la tarjeta, la cierra.
+const TransitLinesMapOverlay = ({
+  lines,
+  darkMode,
+  expandedCode,
+  onToggle,
+}: {
+  lines: ConnectingTransitLine[];
+  darkMode: boolean;
+  expandedCode: string | null;
+  onToggle: (code: string | null) => void;
+}) => {
+  if (lines.length === 0) return null;
+  const expanded = lines.find((l) => l.code === expandedCode) || null;
+  const formatDist = (km: number) => (km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`);
+  return (
+    <>
+      <div className="absolute top-3 left-3 right-14 z-[1000] flex flex-wrap gap-1.5 pointer-events-none">
+        {lines.map((r) => (
+          <button
+            key={r.code}
+            type="button"
+            onClick={() => onToggle(expandedCode === r.code ? null : r.code)}
+            title={r.line}
+            className={`pointer-events-auto flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-extrabold shadow-md border cursor-pointer transition-all ${
+              expandedCode === r.code
+                ? "bg-primary text-white dark:text-blue-950 border-primary"
+                : darkMode
+                ? "bg-zinc-900/90 text-zinc-100 border-zinc-700 hover:border-primary"
+                : "bg-white/90 text-zinc-800 border-slate-200 hover:border-primary"
+            }`}
+          >
+            <Bus className="w-3 h-3" />
+            <span>{r.code}</span>
+          </button>
+        ))}
+      </div>
+      {expanded && (
+        <div
+          className={`absolute left-3 right-3 bottom-3 z-[1000] p-2.5 rounded-xl border text-[10.5px] shadow-lg backdrop-blur-md ${
+            darkMode ? "bg-zinc-900/95 border-zinc-700 text-zinc-100" : "bg-white/95 border-slate-200 text-zinc-800"
+          }`}
+        >
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <span className="font-extrabold text-primary">{expanded.line}</span>
+            <button type="button" onClick={() => onToggle(null)} className="text-zinc-400 hover:text-primary cursor-pointer shrink-0">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <p className="text-zinc-400 mb-1.5">{expanded.description}</p>
+          <div className="flex items-center justify-between gap-2">
+            <span className="truncate">
+              Cerca de casa: <strong>{expanded.homeStop.name}</strong>
+              {expanded.homeStop.approx ? " (aprox.)" : ""}
+            </span>
+            <span className="shrink-0 font-bold whitespace-nowrap">{formatDist(expanded.homeDistanceKm)}</span>
+          </div>
+          <div className="flex items-center justify-between gap-2 mt-1">
+            <span className="truncate">
+              Cerca del destino: <strong>{expanded.destStop.name}</strong>
+              {expanded.destStop.approx ? " (aprox.)" : ""}
+            </span>
+            <span className="shrink-0 font-bold whitespace-nowrap">{formatDist(expanded.destDistanceKm)}</span>
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
 
 const MapComponent = ({
   turnosCompromisos,
@@ -1598,13 +1671,17 @@ export default function AppointmentsView({
   const [tcLat, setTcLat] = useState<number | undefined>(undefined);
   const [tcLon, setTcLon] = useState<number | undefined>(undefined);
 
-  // Colectivos de Red Tulum (San Juan) con la parada más cercana a la ubicación elegida para el
-  // turno/compromiso — dataset chico armado a mano (ver src/data/redTulumLines.ts), San Juan no
-  // tiene un feed de datos de transporte público abierto ni en vivo.
-  const nearestTransitLines = useMemo(() => {
+  // Colectivos de Red Tulum (San Juan) que conectan la Dirección Personal (Ajustes) con la
+  // ubicación elegida para el turno/compromiso — solo líneas con una parada cerca de casa Y otra
+  // cerca del destino (respeta el recorrido real de cada línea, no solo "la más cercana al
+  // destino"). Dataset chico armado a mano (ver src/data/redTulumLines.ts), San Juan no tiene un
+  // feed de datos de transporte público abierto ni en vivo.
+  const [expandedTransitCode, setExpandedTransitCode] = useState<string | null>(null);
+  const connectingTransitLines = useMemo(() => {
     if (tcLat === undefined || tcLon === undefined || isNaN(tcLat) || isNaN(tcLon)) return [];
-    return findNearestTransitLines(tcLat, tcLon, 3);
-  }, [tcLat, tcLon]);
+    if (!homeCoordsForPreview) return [];
+    return findConnectingTransitLines(homeCoordsForPreview.lat, homeCoordsForPreview.lon, tcLat, tcLon);
+  }, [tcLat, tcLon, homeCoordsForPreview]);
 
   // Status Filter state
   const [statusFilter, setStatusFilter] = useState<string>("Pendiente");
@@ -4482,21 +4559,29 @@ export default function AppointmentsView({
                     {/* En mobile el mapa va acá, justo debajo del buscador (igual que antes) — en
                         >=1024px se oculta esta copia y se ve la de la columna derecha más abajo. */}
                     <div className="lg:hidden mt-2 space-y-2.5">
-                      <LocationPickerMap
-                        lat={tcLat}
-                        lon={tcLon}
-                        locationName={tcLugar || lugarQuery}
-                        onSelectLocation={(selected) => {
-                          const titleAndAddress = selected.display_name || selected.address || selected.title || `${selected.lat.toFixed(5)}, ${selected.lon.toFixed(5)}`;
-                          setTcLugar(titleAndAddress);
-                          setLugarQuery(titleAndAddress);
-                          setTcLat(selected.lat);
-                          setTcLon(selected.lon);
-                        }}
-                        heightClass="h-48"
-                        darkMode={darkMode}
-                        homeCoords={homeCoordsForPreview}
-                      />
+                      <div className="relative">
+                        <LocationPickerMap
+                          lat={tcLat}
+                          lon={tcLon}
+                          locationName={tcLugar || lugarQuery}
+                          onSelectLocation={(selected) => {
+                            const titleAndAddress = selected.display_name || selected.address || selected.title || `${selected.lat.toFixed(5)}, ${selected.lon.toFixed(5)}`;
+                            setTcLugar(titleAndAddress);
+                            setLugarQuery(titleAndAddress);
+                            setTcLat(selected.lat);
+                            setTcLon(selected.lon);
+                          }}
+                          heightClass="h-48"
+                          darkMode={darkMode}
+                          homeCoords={homeCoordsForPreview}
+                        />
+                        <TransitLinesMapOverlay
+                          lines={connectingTransitLines}
+                          darkMode={darkMode}
+                          expandedCode={expandedTransitCode}
+                          onToggle={setExpandedTransitCode}
+                        />
+                      </div>
 
                       {tcLugar && (
                         <div className="p-2 bg-primary/10 rounded-xl flex items-center justify-between gap-2 text-xs text-primary dark:text-primary font-bold">
@@ -4523,28 +4608,6 @@ export default function AppointmentsView({
                               <ExternalLink className="w-3 h-3" />
                               <span>Abrir Mapa</span>
                             </a>
-                          </div>
-                        </div>
-                      )}
-
-                      {nearestTransitLines.length > 0 && (
-                        <div className={`p-2.5 rounded-xl border text-[11px] ${darkMode ? "bg-zinc-900/60 border-zinc-800" : "bg-slate-50 border-slate-200"}`}>
-                          <div className="flex items-center gap-1.5 mb-1.5 text-zinc-400 font-bold uppercase tracking-widest text-[9px]">
-                            <Bus className="w-3 h-3" />
-                            <span>Colectivos cercanos (Red Tulum, aprox.)</span>
-                          </div>
-                          <div className="space-y-1.5">
-                            {nearestTransitLines.map((r) => (
-                              <div key={r.line} className="flex items-start justify-between gap-2">
-                                <div className="min-w-0">
-                                  <span className="font-bold text-primary">{r.line}</span>
-                                  <p className="text-zinc-400 truncate">{r.stop.name}{r.stop.approx ? " (aprox.)" : ""}</p>
-                                </div>
-                                <span className="shrink-0 font-bold whitespace-nowrap">
-                                  {r.distanceKm < 1 ? `${Math.round(r.distanceKm * 1000)} m` : `${r.distanceKm.toFixed(1)} km`}
-                                </span>
-                              </div>
-                            ))}
                           </div>
                         </div>
                       )}
@@ -4793,21 +4856,29 @@ export default function AppointmentsView({
                   <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest">
                     Ubicación en el mapa
                   </label>
-                  <LocationPickerMap
-                    lat={tcLat}
-                    lon={tcLon}
-                    locationName={tcLugar || lugarQuery}
-                    onSelectLocation={(selected) => {
-                      const titleAndAddress = selected.display_name || selected.address || selected.title || `${selected.lat.toFixed(5)}, ${selected.lon.toFixed(5)}`;
-                      setTcLugar(titleAndAddress);
-                      setLugarQuery(titleAndAddress);
-                      setTcLat(selected.lat);
-                      setTcLon(selected.lon);
-                    }}
-                    heightClass="h-[340px]"
-                    darkMode={darkMode}
-                    homeCoords={homeCoordsForPreview}
-                  />
+                  <div className="relative">
+                    <LocationPickerMap
+                      lat={tcLat}
+                      lon={tcLon}
+                      locationName={tcLugar || lugarQuery}
+                      onSelectLocation={(selected) => {
+                        const titleAndAddress = selected.display_name || selected.address || selected.title || `${selected.lat.toFixed(5)}, ${selected.lon.toFixed(5)}`;
+                        setTcLugar(titleAndAddress);
+                        setLugarQuery(titleAndAddress);
+                        setTcLat(selected.lat);
+                        setTcLon(selected.lon);
+                      }}
+                      heightClass="h-[340px]"
+                      darkMode={darkMode}
+                      homeCoords={homeCoordsForPreview}
+                    />
+                    <TransitLinesMapOverlay
+                      lines={connectingTransitLines}
+                      darkMode={darkMode}
+                      expandedCode={expandedTransitCode}
+                      onToggle={setExpandedTransitCode}
+                    />
+                  </div>
 
                   {tcLugar && (
                     <div className="p-2 bg-primary/10 rounded-xl flex items-center justify-between gap-2 text-xs text-primary dark:text-primary font-bold">
@@ -4834,28 +4905,6 @@ export default function AppointmentsView({
                           <ExternalLink className="w-3 h-3" />
                           <span>Abrir Mapa</span>
                         </a>
-                      </div>
-                    </div>
-                  )}
-
-                  {nearestTransitLines.length > 0 && (
-                    <div className={`p-2.5 rounded-xl border text-[11px] ${darkMode ? "bg-zinc-900/60 border-zinc-800" : "bg-slate-50 border-slate-200"}`}>
-                      <div className="flex items-center gap-1.5 mb-1.5 text-zinc-400 font-bold uppercase tracking-widest text-[9px]">
-                        <Bus className="w-3 h-3" />
-                        <span>Colectivos cercanos (Red Tulum, aprox.)</span>
-                      </div>
-                      <div className="space-y-1.5">
-                        {nearestTransitLines.map((r) => (
-                          <div key={r.line} className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <span className="font-bold text-primary">{r.line}</span>
-                              <p className="text-zinc-400 truncate">{r.stop.name}{r.stop.approx ? " (aprox.)" : ""}</p>
-                            </div>
-                            <span className="shrink-0 font-bold whitespace-nowrap">
-                              {r.distanceKm < 1 ? `${Math.round(r.distanceKm * 1000)} m` : `${r.distanceKm.toFixed(1)} km`}
-                            </span>
-                          </div>
-                        ))}
                       </div>
                     </div>
                   )}
