@@ -1451,6 +1451,18 @@ html {
   }
 }
 
+/* Al pasar el mouse por una ubicación marcada en el Mapa de Localizaciones Programadas, el resto
+   de los pines y rutas pasa a gris claro para resaltar la que está activa. */
+.map-loc-marker.map-loc-dimmed {
+  filter: grayscale(1) opacity(0.45);
+  transition: filter 0.2s ease;
+}
+path.route-pulse-path.map-loc-dimmed {
+  filter: grayscale(1);
+  opacity: 0.2 !important;
+  transition: filter 0.2s ease, opacity 0.2s ease;
+}
+
 /* Todos los botones crecen un poco al pasar el mouse y se achican al presionar — salvo que ya
    traigan su propia escala con una utilidad de Tailwind (hover:scale-*), que por ser una clase
    pesa más que este selector de elemento y gana sola, sin pisarse. El escape hatch .no-hover-scale

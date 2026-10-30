@@ -3203,7 +3203,9 @@ export function UserSettingsModal({
       isOpen={isAddressBookOpen}
       onClose={() => setIsAddressBookOpen(false)}
       onSelectAddress={(entry: AddressEntry) => {
-        setProfile({ ...profile, address: entry.address, lat: entry.lat, lon: entry.lon });
+        // El campo muestra el nombre que el usuario le puso a la dirección (p.ej. "Mi Casa"), no
+        // la dirección/coordenadas crudas — esas quedan guardadas pero ocultas (lat/lon).
+        setProfile({ ...profile, address: entry.name, lat: entry.lat, lon: entry.lon });
         setShowAddressMap(true);
       }}
       currentSelected={{
