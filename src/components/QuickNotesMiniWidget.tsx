@@ -1,27 +1,13 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { StickyNote, Pin, Plus, Pencil, Check, X } from "lucide-react";
 import { useNotes } from "../hooks/useNotes";
 import { RichTextEditor } from "./RichTextEditor";
 import { InteractiveRichText } from "./InteractiveRichText";
-import { SaveOnIdle, type Draft } from "./NotesView";
+import { SaveOnIdle, buildNoteColorPalette, findNoteColorEntry, type Draft } from "./NotesView";
 import { useToast } from "../context/ToastContext";
 import { RevealGroup, Reveal } from "./Reveal";
-
-// Mismos colores que NotesView.tsx (NOTE_COLORS), en versión compacta — solo la clase de fondo
-// de la tarjeta, sin duplicar el resto de esa paleta (swatch/label) que acá no hace falta.
-const NOTE_CARD_COLOR: Record<string, string> = {
-  default: "bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-800",
-  red: "bg-red-100 dark:bg-red-950 border-red-200 dark:border-red-900",
-  orange: "bg-orange-100 dark:bg-orange-950 border-orange-200 dark:border-orange-900",
-  yellow: "bg-amber-100 dark:bg-amber-950 border-amber-200 dark:border-amber-900",
-  green: "bg-emerald-100 dark:bg-emerald-950 border-emerald-200 dark:border-emerald-900",
-  sky: "bg-sky-100 dark:bg-sky-950 border-sky-200 dark:border-sky-900",
-  blue: "bg-blue-100 dark:bg-blue-950 border-blue-200 dark:border-blue-900",
-  violet: "bg-violet-100 dark:bg-violet-950 border-violet-200 dark:border-violet-900",
-  pink: "bg-pink-100 dark:bg-pink-950 border-pink-200 dark:border-pink-900",
-};
 
 function stripHtml(html: string): string {
   return (html || "").replace(/<[^>]*>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
@@ -47,6 +33,7 @@ export function QuickNotesMiniWidget({
 }) {
   const { notes, updateNote } = useNotes(userId);
   const { showToast } = useToast();
+  const notePalette = useMemo(() => buildNoteColorPalette(darkMode), [darkMode]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -69,7 +56,7 @@ export function QuickNotesMiniWidget({
     .slice(0, 6);
 
   const expandedNote = notes.find((n) => n.id === expandedId) || null;
-  const palette = expandedNote ? NOTE_CARD_COLOR[expandedNote.color] || NOTE_CARD_COLOR.default : "";
+  const expandedColorEntry = expandedNote ? findNoteColorEntry(notePalette, expandedNote.color) : null;
 
   const openExpanded = (noteId: string) => {
     const note = notes.find((n) => n.id === noteId);
@@ -129,7 +116,9 @@ export function QuickNotesMiniWidget({
         </button>
       ) : (
         <RevealGroup className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-          {preview.map((note) => (
+          {preview.map((note) => {
+            const cardColorEntry = findNoteColorEntry(notePalette, note.color);
+            return (
             <Reveal
               key={note.id}
               role="button"
@@ -141,8 +130,9 @@ export function QuickNotesMiniWidget({
               }}
               title="Ver en grande"
               className={`text-left rounded-2xl border p-4 flex flex-col gap-1.5 h-80 overflow-hidden hover:shadow-md transition-all cursor-pointer ${
-                NOTE_CARD_COLOR[note.color] || NOTE_CARD_COLOR.default
-              } ${note.pinned ? "ring-2 ring-primary border-primary" : ""}`}
+                note.pinned ? "ring-2 ring-primary border-primary" : ""
+              }`}
+              style={{ backgroundColor: cardColorEntry.bg, borderColor: cardColorEntry.border }}
             >
               <div className="flex items-center gap-1.5 min-w-0 pr-5">
                 {note.pinned && <Pin className="w-3.5 h-3.5 text-primary fill-primary shrink-0" />}
@@ -165,7 +155,8 @@ export function QuickNotesMiniWidget({
                 <p className="text-xs text-zinc-400 italic">Nota vacía</p>
               )}
             </Reveal>
-          ))}
+            );
+          })}
         </RevealGroup>
       )}
 
@@ -188,9 +179,12 @@ export function QuickNotesMiniWidget({
                   exit={{ opacity: 0, scale: 0.96, y: 12 }}
                   transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
                   onClick={(e) => e.stopPropagation()}
-                  className={`w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl border p-5 shadow-2xl ${palette} ${
-                    !expandedNote.color || expandedNote.color === "default" ? "force-solid-bg" : ""
-                  }`}
+                  className="w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl border p-5 shadow-2xl"
+                  style={
+                    expandedColorEntry
+                      ? { backgroundColor: expandedColorEntry.bg, borderColor: expandedColorEntry.border }
+                      : undefined
+                  }
                 >
                   <div className="flex items-start justify-between gap-3 mb-3">
                     {editing ? (
