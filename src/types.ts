@@ -840,8 +840,9 @@ export interface StickyNote {
 export interface NoteFolder {
   id: string;
   name: string;
-  /** Key into FOLDER_COLORS (ver NotesView.tsx). */
-  color: string;
+  /** Key into FOLDER_ICONS (ver NotesView.tsx) — el ícono de cada carpeta siempre se pinta con el
+   *  color de acento de la app; lo que distingue una carpeta de otra es la FORMA del ícono. */
+  icon: string;
   order?: number;
   createdAt: number;
   updatedAt: number;

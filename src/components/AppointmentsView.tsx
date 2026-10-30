@@ -4512,13 +4512,6 @@ export default function AppointmentsView({
                           ) : undefined
                         }
                       />
-
-                      {tcLugar && (
-                        <div className="p-2 bg-primary/10 rounded-xl flex items-center gap-1.5 text-xs text-primary dark:text-primary font-bold">
-                          <MapPin className="w-3.5 h-3.5 text-primary shrink-0 stroke-[1.75]" />
-                          <span className="truncate">{tcLugar}</span>
-                        </div>
-                      )}
                     </div>
                   </div>
 
@@ -4804,13 +4797,6 @@ export default function AppointmentsView({
                       ) : undefined
                     }
                   />
-
-                  {tcLugar && (
-                    <div className="p-2 bg-primary/10 rounded-xl flex items-center gap-1.5 text-xs text-primary dark:text-primary font-bold">
-                      <MapPin className="w-3.5 h-3.5 text-primary shrink-0 stroke-[1.75]" />
-                      <span className="truncate">{tcLugar}</span>
-                    </div>
-                  )}
                 </div>
                 </div>
               </div>
