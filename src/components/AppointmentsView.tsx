@@ -269,6 +269,12 @@ const MapComponent = ({
   // recrea en cada corrida del efecto de marcadores, mientras que el listener de zoom se agrega
   // una sola vez al crear el mapa.
   const recomputeRouteLengthsRef = useRef<(() => void) | null>(null);
+  // Ubicación "fijada" por clic (igual concepto que togglePin en Embudo de Gastos): persiste
+  // entre corridas del efecto de marcadores (p.ej. si llega data nueva del sync de fondo) para
+  // no perder la selección del usuario, y clearSelectionRef permite deseleccionar desde el
+  // listener de clic en el mapa (agregado una sola vez al crear el mapa, ver abajo).
+  const selectedLocSlugRef = useRef<string | null>(null);
+  const clearSelectionRef = useRef<(() => void) | null>(null);
 
   // Initialize Map
   useEffect(() => {
@@ -296,6 +302,9 @@ const MapComponent = ({
 
       map.scrollWheelZoom.enable();
       map.on("zoomend", () => recomputeRouteLengthsRef.current?.());
+      // Clic en una zona vacía del mapa (ningún pin consume el evento, ver stopPropagation en el
+      // click de cada marcador) deselecciona la ubicación fijada, si hay una.
+      map.on("click", () => clearSelectionRef.current?.());
       L.control.zoom({ position: "topleft" }).addTo(map);
       L.control.attribution({ position: "bottomleft", prefix: false }).addTo(map);
 
@@ -407,6 +416,32 @@ const MapComponent = ({
       if (!mapContainerRef.current) return;
       mapContainerRef.current.querySelectorAll(".map-loc-dimmed").forEach((el) => el.classList.remove("map-loc-dimmed"));
     };
+
+    // Clic para "fijar" una ubicación (igual concepto que togglePin en Embudo de Gastos): su
+    // ruta queda en color de acento y el resto en gris hasta deseleccionar, y su tarjeta de
+    // información queda abierta con el mismo estilo exacto que al pasar el mouse (.map-loc-
+    // popup-card, ver index.css) en vez del popup nativo de Leaflet, que tenía otro estilo.
+    const selectLocation = (slug: string) => {
+      if (selectedLocSlugRef.current && selectedLocSlugRef.current !== slug) {
+        mapContainerRef.current
+          ?.querySelector(`.map-loc-marker[data-loc-slug="${selectedLocSlugRef.current}"]`)
+          ?.classList.remove("map-loc-selected");
+      }
+      selectedLocSlugRef.current = slug;
+      mapContainerRef.current
+        ?.querySelector(`.map-loc-marker[data-loc-slug="${slug}"]`)
+        ?.classList.add("map-loc-selected");
+      dimOtherLocations(slug);
+    };
+    const clearSelection = () => {
+      if (!selectedLocSlugRef.current) return;
+      mapContainerRef.current
+        ?.querySelector(`.map-loc-marker[data-loc-slug="${selectedLocSlugRef.current}"]`)
+        ?.classList.remove("map-loc-selected");
+      selectedLocSlugRef.current = null;
+      clearLocationDim();
+    };
+    clearSelectionRef.current = clearSelection;
 
     try {
       markersLayerRef.current.clearLayers();
@@ -582,12 +617,11 @@ const MapComponent = ({
         </div>
       `;
 
-      const popupHtml = `
-        <div class="p-1">
-          ${sharedCardHtml}
-        </div>
-      `;
-
+      // La tarjeta de información es SIEMPRE la misma (sharedCardHtml) — se muestra por CSS al
+      // pasar el mouse (group-hover:block) y, cuando el pin está "fijado" por clic, por la clase
+      // .map-loc-selected (ver index.css), que fuerza el mismo display:block. Así el clic abre
+      // exactamente la misma tarjeta, con el mismo estilo, que el hover — ya no se usa el popup
+      // nativo de Leaflet (bindPopup), que tenía otro estilo y otra posición.
       const markerHtml = `
         <div class="relative group cursor-pointer inline-block map-loc-marker" data-loc-slug="${slug}">
           <div class="w-7 h-7 rounded-full bg-primary border-2 ${pinBorderColor} shadow-md flex items-center justify-center transform hover:scale-110 transition-transform">
@@ -595,7 +629,7 @@ const MapComponent = ({
           </div>
           <div class="w-1.5 h-1.5 bg-primary rotate-45 -mt-1 mx-auto rounded-sm"></div>
 
-          <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 hidden group-hover:block z-[9999] p-3 ${popupBgColor} backdrop-blur-md rounded-2xl shadow-xl border ${popupBorderColor} pointer-events-auto">
+          <div class="map-loc-popup-card absolute bottom-full left-1/2 -translate-x-1/2 mb-3 hidden group-hover:block z-[9999] p-3 ${popupBgColor} backdrop-blur-md rounded-2xl shadow-xl border ${popupBorderColor} pointer-events-auto">
             ${sharedCardHtml}
           </div>
         </div>
@@ -608,14 +642,7 @@ const MapComponent = ({
         iconAnchor: [12, 28],
       });
 
-      const marker = L.marker([lat, lon], { icon: customIcon }).bindPopup(
-        popupHtml,
-        {
-          className: "custom-app-popup",
-          closeButton: true,
-          autoClose: true,
-        },
-      );
+      const marker = L.marker([lat, lon], { icon: customIcon });
       markersLayerRef.current.addLayer(marker);
       markerCount++;
       // mouseenter/mouseleave (no mouseover/mouseout) porque el popup-card que se abre al pasar
@@ -626,7 +653,22 @@ const MapComponent = ({
       const markerEl = marker.getElement();
       if (markerEl) {
         markerEl.addEventListener("mouseenter", () => dimOtherLocations(slug));
-        markerEl.addEventListener("mouseleave", () => clearLocationDim());
+        // Al salir, si hay una ubicación fijada por clic, se vuelve a ESA (no se limpia del
+        // todo) — si no, pasar el mouse por otro pin mientras hay una selección haría que, al
+        // salir, todo quedara en color de acento en vez de mantener la fijada resaltada.
+        markerEl.addEventListener("mouseleave", () => {
+          if (selectedLocSlugRef.current) dimOtherLocations(selectedLocSlugRef.current);
+          else clearLocationDim();
+        });
+      }
+      marker.on("click", (e: L.LeafletMouseEvent) => {
+        L.DomEvent.stopPropagation(e);
+        if (selectedLocSlugRef.current === slug) clearSelection();
+        else selectLocation(slug);
+      });
+
+      if (selectedLocSlugRef.current === slug) {
+        markerEl?.classList.add("map-loc-selected");
       }
 
       // Ruta animada "pulso" hogar → esta ubicación (ver .route-pulse-path en index.css): se
@@ -664,9 +706,24 @@ const MapComponent = ({
               } catch {}
             }
           });
+          // Si esta ruta se termina de dibujar mientras ya había una ubicación fijada por clic
+          // (p.ej. llegó tarde por la espera de OSRM), se re-aplica el dim para que arranque
+          // atenuada si no es la seleccionada, en vez de aparecer un instante en color de acento.
+          if (selectedLocSlugRef.current) dimOtherLocations(selectedLocSlugRef.current);
         });
       }
     });
+
+      // Si había una ubicación fijada de una corrida anterior (p.ej. llegó data nueva del sync
+      // de fondo) y sigue existiendo entre las que se acaban de dibujar, se vuelve a aplicar su
+      // estado — si no, queda limpia para la próxima vez que el usuario fije algo.
+      if (selectedLocSlugRef.current) {
+        if (mapContainerRef.current?.querySelector(`.map-loc-marker[data-loc-slug="${selectedLocSlugRef.current}"]`)) {
+          dimOtherLocations(selectedLocSlugRef.current);
+        } else {
+          selectedLocSlugRef.current = null;
+        }
+      }
 
       if (markerCount > 0 && mapInstanceRef.current && markersLayerRef.current && !hasFitBoundsOnceRef.current) {
         try {
