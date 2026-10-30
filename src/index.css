@@ -1013,6 +1013,20 @@ html:not(.dark) .location-picker-map-tiles .leaflet-tile-pane {
   filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(88%) saturate(0.6) brightness(1.05);
 }
 
+/* Leaflet no le pone fondo propio a .leaflet-container (queda transparente) — mientras las
+   baldosas de alguna zona nueva todavía no terminaron de descargarse (p.ej. justo después de
+   mover el marcador a una ubicación recién elegida, que pide baldosas que el navegador todavía
+   no tenía en caché), sin este fondo se veía el negro del modal/fondo de la página de atrás,
+   como si "el mapa se hubiera puesto negro". Con un fondo propio, ese instante se ve gris claro/
+   oscuro acorde al tema en vez de negro. */
+.location-picker-map-tiles.leaflet-container {
+  background: #e4e4e7;
+}
+
+.dark .location-picker-map-tiles.leaflet-container {
+  background: #27272a;
+}
+
 /* Controles de zoom de LocationPickerMap.tsx: círculos sueltos con un poco de aire entre ellos,
    en vez de la barra rectangular pegada que trae Leaflet por default (que se veía "cortada" al
    apoyarse justo en la esquina redondeada del mapa). Scopeado a esta clase para no afectar algún
