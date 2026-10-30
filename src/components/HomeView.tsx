@@ -85,6 +85,7 @@ import {
   AcademicTask,
   AcademicSubject,
   MateriaInfo,
+  InvestmentSnapshot,
 } from "../types";
 import { StorageService } from "../lib/storage";
 import { createShare, updateShare, deleteShare } from "../lib/sharing";
@@ -103,6 +104,7 @@ interface HomeViewProps {
   // Finanzas
   invoices: Invoice[];
   detailedPayments: DetailedPayment[];
+  investmentSnapshots?: InvestmentSnapshot[];
   setInvoices: React.Dispatch<React.SetStateAction<Invoice[]>>;
   setDetailedPayments: React.Dispatch<React.SetStateAction<DetailedPayment[]>>;
   // Turnos
@@ -160,6 +162,7 @@ export default function HomeView({
   notes = [],
   invoices,
   detailedPayments,
+  investmentSnapshots = [],
   setInvoices,
   setDetailedPayments,
   appointments,
@@ -3607,7 +3610,7 @@ export default function HomeView({
 
       {/* Embudo de Gastos — gastos por categoría del mes, arriba de Notas Rápidas */}
       <div className="w-full relative z-30">
-        <ExpenseFunnelWidget detailedPayments={detailedPayments} darkMode={darkMode} />
+        <ExpenseFunnelWidget detailedPayments={detailedPayments} darkMode={darkMode} investmentSnapshots={investmentSnapshots} />
       </div>
 
       {/* Miniatura de Notas Rápidas */}

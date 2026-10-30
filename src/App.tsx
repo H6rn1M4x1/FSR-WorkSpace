@@ -2425,6 +2425,7 @@ export default function App() {
                   setInvoices={setInvoices}
                   detailedPayments={detailedPaymentsWithShared}
                   setDetailedPayments={setDetailedPayments}
+                  investmentSnapshots={investmentSnapshots}
                   appointments={appointmentsWithShared}
                   setAppointments={setAppointments}
                   turnosCompromisos={turnosCompromisosWithShared}
