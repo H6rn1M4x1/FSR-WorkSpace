@@ -839,6 +839,307 @@ export default function PaymentsTable({
     return "Pendiente de Pago";
   };
 
+  // --- Bloques del formulario de Agregar Pago, como variables en vez de JSX inline -------------
+  // En desktop cada columna tiene que ocupar solo lo que necesita su propio contenido (como
+  // antes), no la altura del bloque que quede "enfrente" en la otra columna — eso es lo que pasa
+  // si ambos layouts comparten las mismas filas de un único CSS grid (lg:row-start), que fue el
+  // enfoque anterior: el bloque corto queda con un hueco enorme abajo porque la fila se estira
+  // para alcanzar al bloque alto de al lado. La única forma de tener un orden distinto en mobile
+  // (todo en una columna) sin ese problema en desktop es renderizar dos layouts separados — uno
+  // visible solo en mobile (apilado en el orden pedido) y otro solo en desktop (las dos columnas
+  // de siempre, cada una con su propio alto) — reusando estas mismas variables en los dos, así el
+  // contenido de cada campo está escrito una sola vez. Los inputs duplicados no son un problema:
+  // los que quedan con display:none (el layout de la otra resolución) quedan "barred from
+  // constraint validation" por spec, así que `required` no bloquea el submit del otro, y como el
+  // submit lee directo de los estados de React (no del DOM), da lo mismo cuál copia "ve" el click.
+  const blockSwitches = (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+      className="rounded-2xl border border-slate-200 dark:border-zinc-800 bg-slate-50/70 dark:bg-zinc-950/40 p-4"
+    >
+      <div className="flex items-start justify-between gap-2 mb-3">
+        <div className="min-w-0">
+          <span className="block text-[9.5px] font-bold text-primary uppercase tracking-widest truncate">
+            {categoria}
+          </span>
+          <h4 className="text-[15px] font-extrabold text-slate-900 dark:text-white truncate">
+            {descripcion || "Nuevo pago"}
+          </h4>
+        </div>
+        <motion.button
+          type="submit"
+          whileHover={{ scale: 1.03 }}
+          whileTap={{ scale: 0.96 }}
+          disabled={isSaving}
+          className="shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-primary hover:bg-primary-hover text-white dark:text-blue-950 text-[11px] font-bold shadow-sm transition-all cursor-pointer disabled:opacity-60"
+        >
+          {isSaving ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            <Save className="w-3.5 h-3.5" />
+          )}
+          {isSaving ? "Guardando..." : "Guardar"}
+        </motion.button>
+      </div>
+
+      <div className="flex items-center gap-1 mb-3">
+        <button
+          type="button"
+          onClick={() => shiftFechaVencimiento(-1)}
+          className="p-0.5 rounded-md hover:bg-slate-200/60 dark:hover:bg-zinc-800 text-slate-400 dark:text-zinc-500 cursor-pointer"
+          title="Un día antes"
+        >
+          <ChevronLeft className="w-3.5 h-3.5" />
+        </button>
+        <span className="flex items-center gap-1 px-1 text-[10.5px] font-bold text-slate-500 dark:text-zinc-400">
+          <CalendarClock className="w-3 h-3 text-primary" />
+          Vence {formatVenceShort(fechaVencimiento) || "—"}
+        </span>
+        <button
+          type="button"
+          onClick={() => shiftFechaVencimiento(1)}
+          className="p-0.5 rounded-md hover:bg-slate-200/60 dark:hover:bg-zinc-800 text-slate-400 dark:text-zinc-500 cursor-pointer"
+          title="Un día después"
+        >
+          <ChevronRight className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      {/* Pagado/Impago y Recurrente/Único: mismo tamaño, ocupando todo el
+          ancho de la tarjeta entre los dos. */}
+      <div className="flex items-stretch gap-2">
+        <BigToggle checked={pago} onChange={setPago} onLabel="Pagado" offLabel="Impago" icon={CheckSquare} />
+        <BigToggle checked={pagoRecurrente} onChange={setPagoRecurrente} onLabel="Recurrente" offLabel="Único" icon={Repeat} />
+      </div>
+    </motion.div>
+  );
+
+  const blockDescripcion = (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, delay: 0.03, ease: [0.16, 1, 0.3, 1] }}
+    >
+      <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
+        Descripción
+      </label>
+      <input
+        type="text"
+        value={descripcion}
+        onChange={(e) => setDescripcion(e.target.value)}
+        placeholder="Ej: Internet / Supermercado"
+        className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-zinc-950/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-600 outline-none transition-all text-sm focus:border-slate-400 dark:focus:border-zinc-700"
+        required
+      />
+    </motion.div>
+  );
+
+  const blockCategoriaMonto = (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, delay: 0.06, ease: [0.16, 1, 0.3, 1] }}
+      className="grid grid-cols-2 gap-3"
+    >
+      <div>
+        <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
+          Categoría
+        </label>
+        <CustomSelect
+          value={categoria}
+          onChange={(value) => setCategoria(value)}
+          options={[
+            "Impuestos",
+            "Prestamos",
+            "Telefonia e Internet",
+            "Servicios Digitales",
+            "Obra Social",
+            "Tarjeta de Credito",
+            "Servicios Esenciales",
+          ].map((cat) => ({ value: cat, label: cat }))}
+          className="w-full"
+        />
+      </div>
+      <div>
+        <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
+          Monto (AR$)
+        </label>
+        <CurrencyInput
+          value={montoAPagar}
+          onChange={(val) => setMontoAPagar(val)}
+          placeholder="Ej: 45.500,00"
+          className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-zinc-950/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white outline-none transition-all text-sm focus:border-slate-400 dark:focus:border-zinc-700"
+          required
+        />
+      </div>
+    </motion.div>
+  );
+
+  const blockFechas = (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, delay: 0.09, ease: [0.16, 1, 0.3, 1] }}
+      className="grid grid-cols-2 gap-3"
+    >
+      <div>
+        <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
+          Fecha Vencimiento
+        </label>
+        <SmartDateTimePicker
+          value={fechaVencimiento}
+          onChange={(val) => setFechaVencimiento(val)}
+          required
+        />
+      </div>
+      {categoria === "Tarjeta de Credito" ? (
+        <div>
+          <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
+            Fecha Cierre
+          </label>
+          <SmartDateTimePicker
+            value={fechaCierre}
+            onChange={(val) => setFechaCierre(val)}
+            required
+          />
+        </div>
+      ) : (
+        <div>
+          <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
+            Método de Pago
+          </label>
+          <CustomSelect
+            value={metodoPago}
+            onChange={(value) => setMetodoPago(value)}
+            options={[
+              "Tarjeta de Debito",
+              "Transferencia Bancaria",
+              "Debito Automatico",
+            ].map((met) => ({ value: met, label: met }))}
+            className="w-full"
+          />
+        </div>
+      )}
+    </motion.div>
+  );
+
+  const blockConDondePagar = (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, delay: 0.12, ease: [0.16, 1, 0.3, 1] }}
+      className="grid grid-cols-2 gap-3"
+    >
+      {categoria === "Tarjeta de Credito" && (
+        <div>
+          <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
+            Método de Pago
+          </label>
+          <CustomSelect
+            value={metodoPago}
+            onChange={(value) => setMetodoPago(value)}
+            options={[
+              "Tarjeta de Debito",
+              "Transferencia Bancaria",
+              "Debito Automatico",
+            ].map((met) => ({ value: met, label: met }))}
+            className="w-full"
+          />
+        </div>
+      )}
+      <div
+        className={
+          categoria !== "Tarjeta de Credito" ? "col-span-1" : ""
+        }
+      >
+        <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
+          ¿Con qué pagar?
+        </label>
+        <input
+          type="text"
+          value={conQuePagar}
+          onChange={(e) => setConQuePagar(e.target.value)}
+          className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-zinc-950/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white outline-none transition-all text-sm focus:border-slate-400 dark:focus:border-zinc-700"
+        />
+      </div>
+      <div
+        className={
+          categoria !== "Tarjeta de Credito"
+            ? "col-span-1"
+            : "col-span-2"
+        }
+      >
+        <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
+          ¿Dónde pagar?
+        </label>
+        <input
+          type="text"
+          value={dondePagar}
+          onChange={(e) => setDondePagar(e.target.value)}
+          className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-zinc-950/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white outline-none transition-all text-sm focus:border-slate-400 dark:focus:border-zinc-700"
+        />
+      </div>
+    </motion.div>
+  );
+
+  const blockContenido = (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
+      className="rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-black/20 p-3.5"
+    >
+      <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1.5">
+        <FileText className="w-3 h-3" />
+        Contenido / Notas
+      </label>
+      <textarea
+        value={observaciones}
+        onChange={(e) => setObservaciones(e.target.value)}
+        rows={4}
+        placeholder="Agregá un detalle, referencia o cualquier nota sobre este pago..."
+        className="w-full bg-transparent outline-none resize-none text-[12.5px] leading-snug text-slate-800 dark:text-zinc-200 placeholder:text-slate-400 dark:placeholder:text-zinc-600"
+      />
+    </motion.div>
+  );
+
+  const blockUploads = (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, delay: 0.18, ease: [0.16, 1, 0.3, 1] }}
+      className="grid grid-cols-2 gap-3"
+    >
+      <PaymentUploadCard
+        icon={Receipt}
+        label="Comprobante de Pago"
+        fileName={comprobanteFile?.name}
+        hasExisting={!!(editingPaymentId && payments.find((p) => p.id === editingPaymentId)?.comprobantePago)}
+        onSelect={setComprobanteFile}
+      />
+      <PaymentUploadCard
+        icon={FileCheck}
+        label="Factura Emitida"
+        fileName={facturaFile?.name}
+        hasExisting={!!(editingPaymentId && payments.find((p) => p.id === editingPaymentId)?.facturaEmitida)}
+        onSelect={setFacturaFile}
+      />
+    </motion.div>
+  );
+
+  const blockCancelar = (
+    <button
+      type="button"
+      disabled={isSaving}
+      onClick={() => { if (!isSaving) resetForm(); }}
+      className="text-xs font-semibold text-slate-500 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white transition-all cursor-pointer disabled:opacity-50"
+    >
+      Cancelar
+    </button>
+  );
+
   return (
         <div className={`p-6 rounded-3xl border scroll-reveal ${darkMode ? "bg-zinc-900 border-zinc-800 text-white shadow-lg" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"}`}>
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
@@ -1468,295 +1769,32 @@ export default function PaymentsTable({
               {/* Scrollable Content */}
               <div className="flex-1 overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-zinc-200 dark:scrollbar-thumb-zinc-800">
                 <form onSubmit={handleAddSubmit} className="pb-1">
-                  {/*
-                    Grid único con posición explícita (columna+fila) por bloque en vez de dos
-                    columnas envolventes: así se puede fijar un orden distinto en mobile (todo en
-                    una columna, con `order-N`) sin romper el layout de dos columnas de escritorio
-                    (`lg:col-start`/`lg:row-start`), que ningún `order` por sí solo podía lograr de
-                    forma confiable con contenido de alturas desparejas entre columnas.
-                  */}
-                  <div className="grid grid-cols-1 lg:grid-cols-[1.08fr_1fr] gap-5 items-start">
-                    {/* A. Bloque de switches (va primero en mobile) --------------------------- */}
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-                      className="order-1 lg:order-none lg:col-start-2 lg:row-start-1 rounded-2xl border border-slate-200 dark:border-zinc-800 bg-slate-50/70 dark:bg-zinc-950/40 p-4"
-                    >
-                      <div className="flex items-start justify-between gap-2 mb-3">
-                        <div className="min-w-0">
-                          <span className="block text-[9.5px] font-bold text-primary uppercase tracking-widest truncate">
-                            {categoria}
-                          </span>
-                          <h4 className="text-[15px] font-extrabold text-slate-900 dark:text-white truncate">
-                            {descripcion || "Nuevo pago"}
-                          </h4>
-                        </div>
-                        <motion.button
-                          type="submit"
-                          whileHover={{ scale: 1.03 }}
-                          whileTap={{ scale: 0.96 }}
-                          disabled={isSaving}
-                          className="shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-primary hover:bg-primary-hover text-white dark:text-blue-950 text-[11px] font-bold shadow-sm transition-all cursor-pointer disabled:opacity-60"
-                        >
-                          {isSaving ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          ) : (
-                            <Save className="w-3.5 h-3.5" />
-                          )}
-                          {isSaving ? "Guardando..." : "Guardar"}
-                        </motion.button>
-                      </div>
+                  {/* Mobile: todo apilado en una sola columna, en el orden pedido. */}
+                  <div className="flex flex-col gap-4 lg:hidden">
+                    {blockSwitches}
+                    {blockDescripcion}
+                    {blockCategoriaMonto}
+                    {blockFechas}
+                    {blockConDondePagar}
+                    {blockContenido}
+                    {blockUploads}
+                    {blockCancelar}
+                  </div>
 
-                      <div className="flex items-center gap-1 mb-3">
-                        <button
-                          type="button"
-                          onClick={() => shiftFechaVencimiento(-1)}
-                          className="p-0.5 rounded-md hover:bg-slate-200/60 dark:hover:bg-zinc-800 text-slate-400 dark:text-zinc-500 cursor-pointer"
-                          title="Un día antes"
-                        >
-                          <ChevronLeft className="w-3.5 h-3.5" />
-                        </button>
-                        <span className="flex items-center gap-1 px-1 text-[10.5px] font-bold text-slate-500 dark:text-zinc-400">
-                          <CalendarClock className="w-3 h-3 text-primary" />
-                          Vence {formatVenceShort(fechaVencimiento) || "—"}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => shiftFechaVencimiento(1)}
-                          className="p-0.5 rounded-md hover:bg-slate-200/60 dark:hover:bg-zinc-800 text-slate-400 dark:text-zinc-500 cursor-pointer"
-                          title="Un día después"
-                        >
-                          <ChevronRight className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-
-                      {/* Pagado/Impago y Recurrente/Único: mismo tamaño, ocupando todo el
-                          ancho de la tarjeta entre los dos. */}
-                      <div className="flex items-stretch gap-2">
-                        <BigToggle checked={pago} onChange={setPago} onLabel="Pagado" offLabel="Impago" icon={CheckSquare} />
-                        <BigToggle checked={pagoRecurrente} onChange={setPagoRecurrente} onLabel="Recurrente" offLabel="Único" icon={Repeat} />
-                      </div>
-                    </motion.div>
-
-                    {/* B. Descripción ----------------------------------------------------------- */}
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.3, delay: 0.03, ease: [0.16, 1, 0.3, 1] }}
-                      className="order-2 lg:order-none lg:col-start-1 lg:row-start-1"
-                    >
-                      <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
-                        Descripción
-                      </label>
-                      <input
-                        type="text"
-                        value={descripcion}
-                        onChange={(e) => setDescripcion(e.target.value)}
-                        placeholder="Ej: Internet / Supermercado"
-                        className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-zinc-950/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-600 outline-none transition-all text-sm focus:border-slate-400 dark:focus:border-zinc-700"
-                        required
-                      />
-                    </motion.div>
-
-                    {/* C. Categoría + Monto ------------------------------------------------------ */}
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.3, delay: 0.06, ease: [0.16, 1, 0.3, 1] }}
-                      className="order-3 lg:order-none lg:col-start-1 lg:row-start-2 grid grid-cols-2 gap-3"
-                    >
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
-                          Categoría
-                        </label>
-                        <CustomSelect
-                          value={categoria}
-                          onChange={(value) => setCategoria(value)}
-                          options={[
-                            "Impuestos",
-                            "Prestamos",
-                            "Telefonia e Internet",
-                            "Servicios Digitales",
-                            "Obra Social",
-                            "Tarjeta de Credito",
-                            "Servicios Esenciales",
-                          ].map((cat) => ({ value: cat, label: cat }))}
-                          className="w-full"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
-                          Monto (AR$)
-                        </label>
-                        <CurrencyInput
-                          value={montoAPagar}
-                          onChange={(val) => setMontoAPagar(val)}
-                          placeholder="Ej: 45.500,00"
-                          className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-zinc-950/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white outline-none transition-all text-sm focus:border-slate-400 dark:focus:border-zinc-700"
-                          required
-                        />
-                      </div>
-                    </motion.div>
-
-                    {/* D. Fechas ------------------------------------------------------------------ */}
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.3, delay: 0.09, ease: [0.16, 1, 0.3, 1] }}
-                      className="order-4 lg:order-none lg:col-start-1 lg:row-start-3 grid grid-cols-2 gap-3"
-                    >
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
-                          Fecha Vencimiento
-                        </label>
-                        <SmartDateTimePicker
-                          value={fechaVencimiento}
-                          onChange={(val) => setFechaVencimiento(val)}
-                          required
-                        />
-                      </div>
-                      {categoria === "Tarjeta de Credito" ? (
-                        <div>
-                          <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
-                            Fecha Cierre
-                          </label>
-                          <SmartDateTimePicker
-                            value={fechaCierre}
-                            onChange={(val) => setFechaCierre(val)}
-                            required
-                          />
-                        </div>
-                      ) : (
-                        <div>
-                          <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
-                            Método de Pago
-                          </label>
-                          <CustomSelect
-                            value={metodoPago}
-                            onChange={(value) => setMetodoPago(value)}
-                            options={[
-                              "Tarjeta de Debito",
-                              "Transferencia Bancaria",
-                              "Debito Automatico",
-                            ].map((met) => ({ value: met, label: met }))}
-                            className="w-full"
-                          />
-                        </div>
-                      )}
-                    </motion.div>
-
-                    {/* E. Con qué pagar + Dónde pagar --------------------------------------------- */}
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.3, delay: 0.12, ease: [0.16, 1, 0.3, 1] }}
-                      className="order-5 lg:order-none lg:col-start-1 lg:row-start-4 grid grid-cols-2 gap-3"
-                    >
-                      {categoria === "Tarjeta de Credito" && (
-                        <div>
-                          <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
-                            Método de Pago
-                          </label>
-                          <CustomSelect
-                            value={metodoPago}
-                            onChange={(value) => setMetodoPago(value)}
-                            options={[
-                              "Tarjeta de Debito",
-                              "Transferencia Bancaria",
-                              "Debito Automatico",
-                            ].map((met) => ({ value: met, label: met }))}
-                            className="w-full"
-                          />
-                        </div>
-                      )}
-                      <div
-                        className={
-                          categoria !== "Tarjeta de Credito" ? "col-span-1" : ""
-                        }
-                      >
-                        <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
-                          ¿Con qué pagar?
-                        </label>
-                        <input
-                          type="text"
-                          value={conQuePagar}
-                          onChange={(e) => setConQuePagar(e.target.value)}
-                          className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-zinc-950/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white outline-none transition-all text-sm focus:border-slate-400 dark:focus:border-zinc-700"
-                        />
-                      </div>
-                      <div
-                        className={
-                          categoria !== "Tarjeta de Credito"
-                            ? "col-span-1"
-                            : "col-span-2"
-                        }
-                      >
-                        <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
-                          ¿Dónde pagar?
-                        </label>
-                        <input
-                          type="text"
-                          value={dondePagar}
-                          onChange={(e) => setDondePagar(e.target.value)}
-                          className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-zinc-950/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white outline-none transition-all text-sm focus:border-slate-400 dark:focus:border-zinc-700"
-                        />
-                      </div>
-                    </motion.div>
-
-                    {/* F. Contenido / Notas -------------------------------------------------------- */}
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.3, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
-                      className="order-6 lg:order-none lg:col-start-2 lg:row-start-2 rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-black/20 p-3.5"
-                    >
-                      <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1.5">
-                        <FileText className="w-3 h-3" />
-                        Contenido / Notas
-                      </label>
-                      <textarea
-                        value={observaciones}
-                        onChange={(e) => setObservaciones(e.target.value)}
-                        rows={4}
-                        placeholder="Agregá un detalle, referencia o cualquier nota sobre este pago..."
-                        className="w-full bg-transparent outline-none resize-none text-[12.5px] leading-snug text-slate-800 dark:text-zinc-200 placeholder:text-slate-400 dark:placeholder:text-zinc-600"
-                      />
-                    </motion.div>
-
-                    {/* G. Comprobante de Pago + Factura Emitida ------------------------------------ */}
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.3, delay: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                      className="order-7 lg:order-none lg:col-start-2 lg:row-start-3 grid grid-cols-2 gap-3"
-                    >
-                      <PaymentUploadCard
-                        icon={Receipt}
-                        label="Comprobante de Pago"
-                        fileName={comprobanteFile?.name}
-                        hasExisting={!!(editingPaymentId && payments.find((p) => p.id === editingPaymentId)?.comprobantePago)}
-                        onSelect={setComprobanteFile}
-                      />
-                      <PaymentUploadCard
-                        icon={FileCheck}
-                        label="Factura Emitida"
-                        fileName={facturaFile?.name}
-                        hasExisting={!!(editingPaymentId && payments.find((p) => p.id === editingPaymentId)?.facturaEmitida)}
-                        onSelect={setFacturaFile}
-                      />
-                    </motion.div>
-
-                    {/* H. Cancelar — siempre al final, abajo a la izquierda ------------------------ */}
-                    <div className="order-8 lg:order-none lg:col-start-1 lg:row-start-5">
-                      <button
-                        type="button"
-                        disabled={isSaving}
-                        onClick={() => { if (!isSaving) resetForm(); }}
-                        className="text-xs font-semibold text-slate-500 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white transition-all cursor-pointer disabled:opacity-50"
-                      >
-                        Cancelar
-                      </button>
+                  {/* Desktop: dos columnas independientes (cada una con su propio alto, sin
+                      estirarse para igualar a la otra) — el layout original. */}
+                  <div className="hidden lg:grid lg:grid-cols-[1.08fr_1fr] gap-5 items-start">
+                    <div className="space-y-4">
+                      {blockDescripcion}
+                      {blockCategoriaMonto}
+                      {blockFechas}
+                      {blockConDondePagar}
+                      {blockCancelar}
+                    </div>
+                    <div className="space-y-3.5">
+                      {blockSwitches}
+                      {blockContenido}
+                      {blockUploads}
                     </div>
                   </div>
                 </form>
