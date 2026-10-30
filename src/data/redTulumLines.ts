@@ -18,6 +18,8 @@ export interface TransitStop {
 }
 
 export interface TransitLine {
+  /** Código corto para mostrar en los botones del mapa (p.ej. "TNS", "A", "103"). */
+  code: string;
   line: string;
   description: string;
   stops: TransitStop[];
@@ -25,6 +27,7 @@ export interface TransitLine {
 
 export const RED_TULUM_LINES: TransitLine[] = [
   {
+    code: "TNS",
     line: "TNS (Troncal Norte-Sur)",
     description: "Columna vertebral norte-sur de la Red Tulum: une Chimbas con Villa Krause (Rawson) atravesando el microcentro de Capital. Operada por El Triunfo S.A.",
     stops: [
@@ -35,6 +38,7 @@ export const RED_TULUM_LINES: TransitLine[] = [
     ],
   },
   {
+    code: "TEO",
     line: "TEO (Troncal Este-Oeste)",
     description: "Une La Bebida (Rivadavia, oeste) con la plaza departamental de Santa Lucía (este) por el microcentro de Capital. Pasa cerca del Hospital Rawson y la Terminal de Ómnibus. Operada por UTE La Marina S.A.-La Positiva S.A.",
     stops: [
@@ -45,6 +49,7 @@ export const RED_TULUM_LINES: TransitLine[] = [
     ],
   },
   {
+    code: "A",
     line: "Corredor A - Inter-Hospitalario",
     description: "Une el Hospital Marcial Quiroga (Rivadavia) con el Hospital Rawson (Capital). Operado por El Libertador.",
     stops: [
@@ -53,6 +58,7 @@ export const RED_TULUM_LINES: TransitLine[] = [
     ],
   },
   {
+    code: "D",
     line: "Corredor D - Alto de Sierra",
     description: "Une semirruralmente la zona de Santa Lucía con la de Chimbas. Operado por Alto de Sierra.",
     stops: [
@@ -61,6 +67,7 @@ export const RED_TULUM_LINES: TransitLine[] = [
     ],
   },
   {
+    code: "101",
     line: "Línea 101",
     description: "Capital: conecta ATE-API y Aramburu con el microcentro y el Hospital Rawson.",
     stops: [
@@ -69,6 +76,7 @@ export const RED_TULUM_LINES: TransitLine[] = [
     ],
   },
   {
+    code: "123",
     line: "Línea 123",
     description: "Rivadavia-Capital, directa por Av. Libertador. Sirve al Hospital Marcial Quiroga. Operada por UTE La Marina S.A.-La Positiva S.A.",
     stops: [
@@ -77,6 +85,7 @@ export const RED_TULUM_LINES: TransitLine[] = [
     ],
   },
   {
+    code: "125",
     line: "Línea 125",
     description: "Rivadavia-Capital. Sirve a la Facultad de Ingeniería (UNSJ) y a la Terminal de Ómnibus.",
     stops: [
@@ -85,6 +94,7 @@ export const RED_TULUM_LINES: TransitLine[] = [
     ],
   },
   {
+    code: "103",
     line: "Línea 103",
     description: "Capital/Rivadavia, zona suroeste, por Av. Rawson y Lateral de Circunvalación.",
     stops: [
@@ -93,6 +103,7 @@ export const RED_TULUM_LINES: TransitLine[] = [
     ],
   },
   {
+    code: "200",
     line: "Línea 200",
     description: "Pocito-Capital. Une Calle 10 y Alfonso XIII (Pocito) con Av. Rawson y 9 de Julio (Capital). Empresa Mayo.",
     stops: [
@@ -101,6 +112,7 @@ export const RED_TULUM_LINES: TransitLine[] = [
     ],
   },
   {
+    code: "247",
     line: "Línea 247",
     description: "Rawson-Capital. Une el Hospital Federico Cantoni (Rawson) con Av. Córdoba y Av. Rawson (Capital), vía Estación de Transbordo Córdoba. Empresa Mayo.",
     stops: [
@@ -109,6 +121,7 @@ export const RED_TULUM_LINES: TransitLine[] = [
     ],
   },
   {
+    code: "206",
     line: "Línea 206",
     description: "Rawson-Capital. Une la Plaza del Barrio Lagares (Rawson) con Salta y Av. Libertador (Capital). Empresa Mayo.",
     stops: [
@@ -117,6 +130,7 @@ export const RED_TULUM_LINES: TransitLine[] = [
     ],
   },
   {
+    code: "407",
     line: "Línea 407",
     description: "Chimbas-Capital, por Villa Mariano Moreno y B° 2 de Abril hasta el microcentro.",
     stops: [
@@ -125,6 +139,7 @@ export const RED_TULUM_LINES: TransitLine[] = [
     ],
   },
   {
+    code: "408",
     line: "Línea 408",
     description: "Chimbas-Capital. Conecta Chimbas con el Hospital Rawson y la Terminal de Ómnibus.",
     stops: [
@@ -134,6 +149,7 @@ export const RED_TULUM_LINES: TransitLine[] = [
     ],
   },
   {
+    code: "248",
     line: "Línea 248 / 248-E",
     description: "Pocito. La extensión 248-E conecta distritos de Pocito sin servicio previo. Empresa Mayo.",
     stops: [
@@ -143,6 +159,7 @@ export const RED_TULUM_LINES: TransitLine[] = [
     ],
   },
   {
+    code: "20",
     line: "Línea 20 (Perimetral Sureste)",
     description: "Perimetral, no entra al microcentro. Conecta barrios periféricos entre Rawson, Santa Lucía y Capital.",
     stops: [

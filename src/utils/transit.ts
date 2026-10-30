@@ -10,28 +10,60 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): nu
   return R * 2 * Math.asin(Math.sqrt(a));
 }
 
-export interface NearestTransitResult {
-  line: string;
-  description: string;
-  stop: TransitStop;
-  distanceKm: number;
+function nearestStop(stops: TransitStop[], lat: number, lon: number): { stop: TransitStop; distanceKm: number } | null {
+  let nearest: TransitStop | null = null;
+  let nearestDist = Infinity;
+  stops.forEach((stop) => {
+    const d = haversineKm(lat, lon, stop.lat, stop.lon);
+    if (d < nearestDist) {
+      nearestDist = d;
+      nearest = stop;
+    }
+  });
+  return nearest ? { stop: nearest, distanceKm: nearestDist } : null;
 }
 
-// Para cada línea de Red Tulum, busca su parada más cercana al punto dado y devuelve las N
-// líneas con la parada más próxima, ordenadas de más cerca a más lejos.
-export function findNearestTransitLines(lat: number, lon: number, limit = 3): NearestTransitResult[] {
-  const results: NearestTransitResult[] = RED_TULUM_LINES.map((line) => {
-    let nearestStop: TransitStop | null = null;
-    let nearestDist = Infinity;
-    line.stops.forEach((stop) => {
-      const d = haversineKm(lat, lon, stop.lat, stop.lon);
-      if (d < nearestDist) {
-        nearestDist = d;
-        nearestStop = stop;
-      }
-    });
-    return nearestStop ? { line: line.line, description: line.description, stop: nearestStop, distanceKm: nearestDist } : null;
-  }).filter((r): r is NearestTransitResult => r !== null);
+export interface ConnectingTransitLine {
+  code: string;
+  line: string;
+  description: string;
+  homeStop: TransitStop;
+  homeDistanceKm: number;
+  destStop: TransitStop;
+  destDistanceKm: number;
+}
 
-  return results.sort((a, b) => a.distanceKm - b.distanceKm).slice(0, limit);
+// Solo devuelve líneas cuyo recorrido (según las paradas principales que tenemos de cada una,
+// ver src/data/redTulumLines.ts) pasa razonablemente cerca TANTO de "casa" como del destino — no
+// alcanza con que una parada cualquiera de la línea quede cerca del destino, tiene que haber otra
+// parada de esa misma línea cerca de home también, así se respeta el recorrido real en vez de
+// sugerir una línea que simplemente tiene UNA parada cerca del destino pero nunca pasa por casa.
+// maxWalkKm es generoso (los departamentos de Gran San Juan son grandes y el dataset solo tiene
+// 2-5 paradas por línea, no el recorrido completo calle por calle) — de todas formas solo se
+// listan líneas con cobertura en ambas puntas, nunca "la más cercana nomás".
+export function findConnectingTransitLines(
+  homeLat: number,
+  homeLon: number,
+  destLat: number,
+  destLon: number,
+  maxWalkKm = 3,
+  limit = 6
+): ConnectingTransitLine[] {
+  const results: ConnectingTransitLine[] = [];
+  RED_TULUM_LINES.forEach((line) => {
+    const home = nearestStop(line.stops, homeLat, homeLon);
+    const dest = nearestStop(line.stops, destLat, destLon);
+    if (!home || !dest) return;
+    if (home.distanceKm > maxWalkKm || dest.distanceKm > maxWalkKm) return;
+    results.push({
+      code: line.code,
+      line: line.line,
+      description: line.description,
+      homeStop: home.stop,
+      homeDistanceKm: home.distanceKm,
+      destStop: dest.stop,
+      destDistanceKm: dest.distanceKm,
+    });
+  });
+  return results.sort((a, b) => a.homeDistanceKm + a.destDistanceKm - (b.homeDistanceKm + b.destDistanceKm)).slice(0, limit);
 }
