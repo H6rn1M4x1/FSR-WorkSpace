@@ -387,6 +387,16 @@ export default function App() {
     setQuickNoteComposeNonce(Date.now());
   };
 
+  // "Editar" en la miniatura de Notas Rápidas de Inicio — navega a Notas Rápidas con esa nota ya
+  // seleccionada en el panel de detalle, lista para editar (en vez de editarla ahí mismo en el
+  // modal de Inicio).
+  const [quickNoteEditTarget, setQuickNoteEditTarget] = useState<{ id: string; nonce: number } | undefined>(undefined);
+  const handleEditQuickNote = (noteId: string) => {
+    handleTabChange("notes");
+    setActiveSubTab("quick");
+    setQuickNoteEditTarget({ id: noteId, nonce: Date.now() });
+  };
+
   // Check periodically or on user changes if Firestore quota is exceeded
   const [quotaExceeded, setQuotaExceeded] = useState(false);
   const [appConfirmModal, setAppConfirmModal] = useState<{
@@ -2450,6 +2460,7 @@ export default function App() {
                     setActiveSubTab("quick");
                   }}
                   onAddNote={handleAddQuickNote}
+                  onEditNote={handleEditQuickNote}
                   onQuickAdd={handleQuickAdd}
                   onQuickEdit={handleQuickEdit}
                 />
@@ -2659,6 +2670,7 @@ export default function App() {
                   activeSubTab={activeSubTab}
                   onSubTabChange={setActiveSubTab}
                   autoOpenCompose={quickNoteComposeNonce}
+                  autoSelectNote={quickNoteEditTarget}
                 />
               )}
             </>
