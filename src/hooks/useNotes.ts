@@ -22,11 +22,12 @@ interface UseNotesResult {
     title: string,
     html: string,
     color: string,
-    attachments?: { name: string; url: string }[]
+    attachments?: { name: string; url: string }[],
+    folderId?: string
   ) => Promise<void>;
   updateNote: (
     id: string,
-    patch: Partial<Pick<StickyNote, "title" | "text" | "color" | "pinned" | "attachments" | "order">>
+    patch: Partial<Pick<StickyNote, "title" | "text" | "color" | "pinned" | "attachments" | "order" | "folderId">>
   ) => Promise<void>;
   deleteNote: (id: string) => Promise<void>;
   togglePin: (id: string) => Promise<void>;
@@ -77,7 +78,13 @@ export function useNotes(userId: string | null | undefined): UseNotesResult {
   }, [sharedInRefs]);
 
   const addNote = useCallback(
-    async (title: string, html: string, color: string, attachments?: { name: string; url: string }[]) => {
+    async (
+      title: string,
+      html: string,
+      color: string,
+      attachments?: { name: string; url: string }[],
+      folderId?: string
+    ) => {
       if (!userId) return;
       if (!title.trim() && !stripHtml(html) && !(attachments && attachments.length)) return;
       const now = Date.now();
@@ -91,6 +98,7 @@ export function useNotes(userId: string | null | undefined): UseNotesResult {
         color,
         pinned: false,
         order: lowestOrder - 1,
+        folderId,
         attachments: attachments || [],
         createdAt: now,
         updatedAt: now,
@@ -106,7 +114,7 @@ export function useNotes(userId: string | null | undefined): UseNotesResult {
   );
 
   const updateNote = useCallback(
-    async (id: string, patch: Partial<Pick<StickyNote, "text" | "color" | "pinned" | "attachments">>) => {
+    async (id: string, patch: Partial<Pick<StickyNote, "title" | "text" | "color" | "pinned" | "attachments" | "order" | "folderId">>) => {
       const existing = findNote(id);
       if (!existing) return;
       const ownerEmail = existing.__sharedByEmail || userId;
