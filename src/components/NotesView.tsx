@@ -1,8 +1,25 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { StickyNote as StickyNoteIcon, KeyRound, Pin, Trash2, Plus, X, Send, Share2, Check, Maximize2, Pencil } from "lucide-react";
+import {
+  StickyNote as StickyNoteIcon,
+  KeyRound,
+  Pin,
+  Trash2,
+  Plus,
+  X,
+  Send,
+  Share2,
+  Check,
+  Maximize2,
+  Pencil,
+  Folder,
+  FolderPlus,
+  ChevronDown,
+  Layers,
+} from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useNotes } from "../hooks/useNotes";
+import { useNoteFolders } from "../hooks/useNoteFolders";
 import { useToast } from "../context/ToastContext";
 import { ConfirmationModal } from "./ConfirmationModal";
 import { RichTextEditor } from "./RichTextEditor";
@@ -11,7 +28,7 @@ import { SharedBadge } from "./SharedBadge";
 import { SubNav } from "./SubNav";
 import { PasswordVaultPanel } from "./PasswordVaultPanel";
 import { auth } from "../lib/firebase";
-import type { StickyNote } from "../types";
+import type { StickyNote, NoteFolder } from "../types";
 
 interface NotesViewProps {
   userId: string;
@@ -72,11 +89,26 @@ const NOTE_COLORS: Record<string, { card: string; swatch: string; label: string 
 };
 const COLOR_KEYS = Object.keys(NOTE_COLORS);
 
+// Paleta chica para el ícono de cada carpeta (independiente de NOTE_COLORS, que tiñe la hoja
+// entera de una nota) — solo necesita un tono de texto/ícono prendido y uno apagado de fondo.
+const FOLDER_COLORS: Record<string, { icon: string; dot: string }> = {
+  slate: { icon: "text-zinc-500 dark:text-zinc-400", dot: "bg-zinc-400" },
+  red: { icon: "text-red-500", dot: "bg-red-400" },
+  orange: { icon: "text-orange-500", dot: "bg-orange-400" },
+  yellow: { icon: "text-amber-500", dot: "bg-amber-400" },
+  green: { icon: "text-emerald-500", dot: "bg-emerald-400" },
+  sky: { icon: "text-sky-500", dot: "bg-sky-400" },
+  blue: { icon: "text-blue-500", dot: "bg-blue-400" },
+  violet: { icon: "text-violet-500", dot: "bg-violet-400" },
+  pink: { icon: "text-pink-500", dot: "bg-pink-400" },
+};
+const FOLDER_COLOR_KEYS = Object.keys(FOLDER_COLORS);
+
 // The dark, semi-transparent "floating pill" look requested for every icon toolbar and
 // popover in this view, so icons never sit directly on a note's color with nothing behind them.
 const DARK_PANEL = "bg-black/55 backdrop-blur-md rounded-2xl border border-white/10 shadow-lg";
 
-type NoteMenu = "format" | "color" | "list" | "share" | "bgcolor" | null;
+type NoteMenu = "format" | "color" | "list" | "share" | "bgcolor" | "folder" | null;
 export type Draft = { title: string; text: string };
 
 function isValidEmail(email: string): boolean {
@@ -121,6 +153,56 @@ function ColorPicker({
           }`}
         />
       ))}
+    </div>
+  );
+}
+
+/** Lista desplegable para asignar la carpeta de una nota (desde su tarjeta, el compose box, o el modal "ver en grande") — misma mecánica que ColorPicker. */
+function FolderPicker({
+  folders,
+  value,
+  onChange,
+  onClose,
+}: {
+  folders: NoteFolder[];
+  value: string | undefined;
+  onChange: (folderId: string | undefined) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      onClick={(e) => e.stopPropagation()}
+      className={`absolute z-20 top-full left-0 mt-1.5 p-1.5 w-48 max-h-60 overflow-y-auto space-y-0.5 ${DARK_PANEL}`}
+    >
+      <button
+        type="button"
+        onClick={() => { onChange(undefined); onClose(); }}
+        className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs font-bold text-left cursor-pointer ${
+          !value ? "bg-primary/25 text-white" : "text-zinc-200 hover:bg-white/10"
+        }`}
+      >
+        <Layers className="w-3.5 h-3.5 shrink-0" />
+        <span className="truncate">Sin carpeta</span>
+      </button>
+      {folders.map((f) => {
+        const palette = FOLDER_COLORS[f.color] || FOLDER_COLORS.slate;
+        return (
+          <button
+            key={f.id}
+            type="button"
+            onClick={() => { onChange(f.id); onClose(); }}
+            className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs font-bold text-left cursor-pointer ${
+              value === f.id ? "bg-primary/25 text-white" : "text-zinc-200 hover:bg-white/10"
+            }`}
+          >
+            <Folder className={`w-3.5 h-3.5 shrink-0 ${palette.icon}`} fill="currentColor" fillOpacity={0.2} />
+            <span className="truncate">{f.name}</span>
+          </button>
+        );
+      })}
+      {folders.length === 0 && (
+        <p className="px-2.5 py-1.5 text-[10px] text-zinc-400">Todavía no creaste ninguna carpeta.</p>
+      )}
     </div>
   );
 }
@@ -255,6 +337,7 @@ export function NotesView({
     getAllRecipients,
     reorderNotes,
   } = useNotes(userId);
+  const { folders, addFolder, renameFolder, recolorFolder, deleteFolder } = useNoteFolders(userId);
   const { showToast } = useToast();
 
   // The submenu ("Notas Rápidas" / "Caja Fuerte") is normally driven by the main top navbar
@@ -306,6 +389,24 @@ export function NotesView({
   const [composeAttachments, setComposeAttachments] = useState<{ name: string; url: string }[]>([]);
   const [composeMenu, setComposeMenu] = useState<NoteMenu>(null);
 
+  // Carpeta seleccionada en la barra lateral (null = "Todas las notas"); una nota nueva se crea
+  // directo en la carpeta que se esté mirando, igual que en el diseño de referencia.
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [composeFolderId, setComposeFolderId] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    setComposeFolderId(selectedFolderId || undefined);
+  }, [selectedFolderId]);
+  const [newFolderOpen, setNewFolderOpen] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
+  const [newFolderColor, setNewFolderColor] = useState(FOLDER_COLOR_KEYS[0]);
+  const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
+  const [editingFolderName, setEditingFolderName] = useState("");
+  const [folderMenuId, setFolderMenuId] = useState<string | null>(null);
+  const [deleteFolderConfirmId, setDeleteFolderConfirmId] = useState<string | null>(null);
+  // Carpeta de la barra lateral sobre la que se está arrastrando una nota ahora mismo, para
+  // resaltarla como destino — se limpia también en el dragEnd de la nota (ver más abajo).
+  const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
+
   // Exactly one popover open across the whole board at a time: format/color/list/share
   // (rendered inside RichTextEditor) and this note's own background-color swatch.
   const [openMenu, setOpenMenu] = useState<{ id: string; menu: NoteMenu } | null>(null);
@@ -343,17 +444,46 @@ export function NotesView({
     };
   }, [rightClickMenu]);
 
+  useEffect(() => {
+    if (!folderMenuId) return;
+    const close = () => setFolderMenuId(null);
+    window.addEventListener("click", close);
+    return () => window.removeEventListener("click", close);
+  }, [folderMenuId]);
+
   const menuFor = (id: string): NoteMenu => (openMenu?.id === id ? openMenu.menu : null);
   const setMenuFor = (id: string, menu: NoteMenu) => setOpenMenu(menu ? { id, menu } : null);
 
   const handleCreate = async () => {
-    await addNote(composeTitle, composeHtml, composeColor, composeAttachments);
+    await addNote(composeTitle, composeHtml, composeColor, composeAttachments, composeFolderId);
     setComposeTitle("");
     setComposeHtml("");
     setComposeColor("default");
     setComposeAttachments([]);
     setComposeMenu(null);
+    setComposeFolderId(selectedFolderId || undefined);
     setComposeOpen(false);
+  };
+
+  const handleCreateFolder = async () => {
+    const created = await addFolder(newFolderName, newFolderColor);
+    setNewFolderName("");
+    setNewFolderColor(FOLDER_COLOR_KEYS[0]);
+    setNewFolderOpen(false);
+    if (created) setSelectedFolderId(created.id);
+  };
+
+  const handleConfirmDeleteFolder = async () => {
+    if (!deleteFolderConfirmId) return;
+    const id = deleteFolderConfirmId;
+    setDeleteFolderConfirmId(null);
+    // Las notas de la carpeta no se borran — vuelven a "Todas las notas".
+    await Promise.all(
+      notes.filter((n) => n.folderId === id && !n.__sharedByEmail).map((n) => updateNote(n.id, { folderId: undefined }))
+    );
+    await deleteFolder(id);
+    if (selectedFolderId === id) setSelectedFolderId(null);
+    showToast("Carpeta eliminada. Sus notas pasaron a “Todas las notas”.", "success");
   };
 
   const handleConfirmDelete = async () => {
@@ -369,8 +499,19 @@ export function NotesView({
     showToast(isSharedIn ? "Dejaste de ver esta nota compartida." : "Nota eliminada.", "success");
   };
 
-  const pinned = notes.filter((n) => n.pinned).sort(compareNotes);
-  const others = notes.filter((n) => !n.pinned).sort(compareNotes);
+  // Cantidad de notas por carpeta, SIEMPRE sobre el total (no sobre lo filtrado) — así los
+  // contadores de la barra lateral no cambian según qué carpeta se esté mirando.
+  const folderCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    notes.forEach((n) => {
+      if (n.folderId) counts[n.folderId] = (counts[n.folderId] || 0) + 1;
+    });
+    return counts;
+  }, [notes]);
+
+  const visibleNotes = selectedFolderId ? notes.filter((n) => n.folderId === selectedFolderId) : notes;
+  const pinned = visibleNotes.filter((n) => n.pinned).sort(compareNotes);
+  const others = visibleNotes.filter((n) => !n.pinned).sort(compareNotes);
 
   const handleDrop = async (group: StickyNote[], targetId: string) => {
     const dragId = draggingId;
@@ -461,6 +602,7 @@ export function NotesView({
         onDragEnd={() => {
           setDraggingId(null);
           setDragOverId(null);
+          setDragOverFolderId(null);
           dragSnapshotRef.current = new Map();
         }}
         onDragOver={(e) => {
@@ -514,6 +656,27 @@ export function NotesView({
             <SharedBadge item={note} />
           </div>
         )}
+        {!isSharedIn && (
+          <div className="relative inline-block mb-1">
+            <button
+              type="button"
+              onClick={() => setMenuFor(note.id, menu === "folder" ? null : "folder")}
+              className="flex items-center gap-1 text-[10px] font-bold text-zinc-500 dark:text-zinc-400 hover:text-primary cursor-pointer"
+            >
+              <Folder className={`w-3 h-3 ${note.folderId ? (FOLDER_COLORS[folders.find((f) => f.id === note.folderId)?.color || ""]?.icon || "") : ""}`} />
+              <span className="truncate max-w-[160px]">{folders.find((f) => f.id === note.folderId)?.name || "Sin carpeta"}</span>
+              <ChevronDown className="w-2.5 h-2.5" />
+            </button>
+            {menu === "folder" && (
+              <FolderPicker
+                folders={folders}
+                value={note.folderId}
+                onChange={(folderId) => updateNote(note.id, { folderId })}
+                onClose={() => setMenuFor(note.id, null)}
+              />
+            )}
+          </div>
+        )}
         <input
           value={titleValue}
           onChange={(e) => setDraft({ title: e.target.value })}
@@ -527,7 +690,7 @@ export function NotesView({
           darkToolbar
           attachments={note.attachments || []}
           onAttachmentsChange={(atts) => updateNote(note.id, { attachments: atts })}
-          activeMenu={menu === "bgcolor" ? null : menu}
+          activeMenu={menu === "bgcolor" || menu === "folder" ? null : menu}
           onActiveMenuChange={(m) => setMenuFor(note.id, m)}
           onShareClick={isSharedIn ? undefined : () => setMenuFor(note.id, "share")}
           shareMenuContent={
@@ -753,6 +916,165 @@ export function NotesView({
           </div>
         </div>
 
+        <div className="grid grid-cols-1 lg:grid-cols-[200px_1fr] gap-5 items-start">
+          {/* Barra lateral de carpetas — "Todas las notas" + cada carpeta propia. Cada fila de
+              carpeta es también blanco de drop: soltar ahí una nota que se esté arrastrando
+              (draggingId, ver el drag-and-drop de cada tarjeta) le asigna esa carpeta. */}
+          <div className="lg:sticky lg:top-4 space-y-3">
+            <div className="flex items-center justify-between px-1">
+              <p className="text-[10px] font-extrabold uppercase tracking-widest text-zinc-400">Carpetas</p>
+              <button
+                type="button"
+                onClick={() => setNewFolderOpen((v) => !v)}
+                className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-primary cursor-pointer"
+                title="Nueva carpeta"
+              >
+                <FolderPlus className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {newFolderOpen && (
+              <div className={`p-2.5 rounded-xl border space-y-2 ${darkMode ? "bg-zinc-950/60 border-zinc-800" : "bg-slate-50 border-slate-200"}`}>
+                <input
+                  autoFocus
+                  value={newFolderName}
+                  onChange={(e) => setNewFolderName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleCreateFolder()}
+                  placeholder="Nombre de la carpeta"
+                  className="w-full px-2 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+                <div className="flex flex-wrap gap-1.5">
+                  {FOLDER_COLOR_KEYS.map((key) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setNewFolderColor(key)}
+                      className={`w-5 h-5 rounded-full cursor-pointer ${FOLDER_COLORS[key].dot} ${
+                        newFolderColor === key ? "ring-2 ring-primary ring-offset-1 ring-offset-white dark:ring-offset-zinc-950" : ""
+                      }`}
+                    />
+                  ))}
+                </div>
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { setNewFolderOpen(false); setNewFolderName(""); }}
+                    className="px-2.5 py-1 text-[10px] font-bold text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCreateFolder}
+                    disabled={!newFolderName.trim()}
+                    className="px-3 py-1 rounded-full bg-primary hover:bg-primary/90 text-white text-[10px] font-bold cursor-pointer disabled:opacity-50"
+                  >
+                    Crear
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="flex lg:flex-col gap-1.5 overflow-x-auto lg:overflow-visible pb-1 lg:pb-0">
+              <button
+                type="button"
+                onClick={() => setSelectedFolderId(null)}
+                className={`shrink-0 flex items-center gap-2 px-2.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap cursor-pointer transition-colors ${
+                  selectedFolderId === null
+                    ? "bg-primary/15 text-primary"
+                    : "text-zinc-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800"
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5 shrink-0" />
+                <span className="flex-1 text-left truncate">Todas las notas</span>
+                <span className="text-[10px] text-zinc-400 font-semibold">{notes.length}</span>
+              </button>
+
+              {folders.map((f) => {
+                const palette = FOLDER_COLORS[f.color] || FOLDER_COLORS.slate;
+                const isEditing = editingFolderId === f.id;
+                return (
+                  <div
+                    key={f.id}
+                    onDragOver={(e) => {
+                      if (!draggingId) return;
+                      e.preventDefault();
+                      if (dragOverFolderId !== f.id) setDragOverFolderId(f.id);
+                    }}
+                    onDragLeave={() => setDragOverFolderId((id) => (id === f.id ? null : id))}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      if (draggingId) updateNote(draggingId, { folderId: f.id });
+                      setDraggingId(null);
+                      setDragOverId(null);
+                      setDragOverFolderId(null);
+                    }}
+                    className={`group relative shrink-0 flex items-center gap-1 rounded-xl transition-colors ${
+                      dragOverFolderId === f.id ? "ring-2 ring-primary bg-primary/10" : ""
+                    } ${selectedFolderId === f.id && dragOverFolderId !== f.id ? "bg-primary/15" : ""}`}
+                  >
+                    {isEditing ? (
+                      <input
+                        autoFocus
+                        value={editingFolderName}
+                        onChange={(e) => setEditingFolderName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") { renameFolder(f.id, editingFolderName); setEditingFolderId(null); }
+                          if (e.key === "Escape") setEditingFolderId(null);
+                        }}
+                        onBlur={() => { if (editingFolderName.trim()) renameFolder(f.id, editingFolderName); setEditingFolderId(null); }}
+                        className="flex-1 min-w-0 px-2.5 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-primary text-xs font-bold focus:outline-none"
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedFolderId(f.id)}
+                        className={`flex-1 min-w-0 flex items-center gap-2 px-2.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap cursor-pointer ${
+                          selectedFolderId === f.id ? "text-primary" : "text-zinc-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800"
+                        }`}
+                      >
+                        <Folder className={`w-3.5 h-3.5 shrink-0 ${palette.icon}`} fill="currentColor" fillOpacity={0.2} />
+                        <span className="flex-1 text-left truncate">{f.name}</span>
+                        <span className="text-[10px] text-zinc-400 font-semibold">{folderCounts[f.id] || 0}</span>
+                      </button>
+                    )}
+                    {!isEditing && (
+                      <div className="relative shrink-0">
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setFolderMenuId(folderMenuId === f.id ? null : f.id); }}
+                          className="opacity-0 group-hover:opacity-100 focus:opacity-100 p-1 mr-1 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 text-zinc-400 cursor-pointer"
+                          title="Opciones de la carpeta"
+                        >
+                          <ChevronDown className="w-3.5 h-3.5" />
+                        </button>
+                        {folderMenuId === f.id && (
+                          <div onClick={(e) => e.stopPropagation()} className={`absolute z-20 top-full right-0 mt-1 p-1 w-36 ${DARK_PANEL}`}>
+                            <button
+                              type="button"
+                              onClick={() => { setEditingFolderId(f.id); setEditingFolderName(f.name); setFolderMenuId(null); }}
+                              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs font-bold text-left text-zinc-200 hover:bg-white/10 cursor-pointer"
+                            >
+                              <Pencil className="w-3.5 h-3.5" /> Renombrar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { setDeleteFolderConfirmId(f.id); setFolderMenuId(null); }}
+                              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs font-bold text-left text-red-400 hover:bg-red-500/15 cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" /> Eliminar
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="space-y-6 min-w-0">
         {/* Compose box */}
         <div
           className={`rounded-2xl border p-4 shadow-sm transition-all ${
@@ -783,20 +1105,41 @@ export function NotesView({
                 darkToolbar
                 attachments={composeAttachments}
                 onAttachmentsChange={setComposeAttachments}
-                activeMenu={composeMenu === "bgcolor" ? null : composeMenu}
+                activeMenu={composeMenu === "bgcolor" || composeMenu === "folder" ? null : composeMenu}
                 onActiveMenuChange={setComposeMenu}
               />
               <div className="flex items-center justify-between flex-wrap gap-2">
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setComposeMenu(composeMenu === "bgcolor" ? null : "bgcolor")}
-                    className={`w-6 h-6 rounded-full border border-slate-300 dark:border-zinc-700 cursor-pointer ${NOTE_COLORS[composeColor].swatch}`}
-                    title="Color"
-                  />
-                  {composeMenu === "bgcolor" && (
-                    <ColorPicker value={composeColor} onChange={setComposeColor} onClose={() => setComposeMenu(null)} />
-                  )}
+                <div className="flex items-center gap-2">
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setComposeMenu(composeMenu === "bgcolor" ? null : "bgcolor")}
+                      className={`w-6 h-6 rounded-full border border-slate-300 dark:border-zinc-700 cursor-pointer ${NOTE_COLORS[composeColor].swatch}`}
+                      title="Color"
+                    />
+                    {composeMenu === "bgcolor" && (
+                      <ColorPicker value={composeColor} onChange={setComposeColor} onClose={() => setComposeMenu(null)} />
+                    )}
+                  </div>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setComposeMenu(composeMenu === "folder" ? null : "folder")}
+                      className="flex items-center gap-1 px-2 py-1 rounded-full border border-slate-300 dark:border-zinc-700 text-[10px] font-bold text-zinc-500 dark:text-zinc-400 hover:text-primary cursor-pointer"
+                    >
+                      <Folder className="w-3 h-3" />
+                      <span className="truncate max-w-[120px]">{folders.find((f) => f.id === composeFolderId)?.name || "Sin carpeta"}</span>
+                      <ChevronDown className="w-2.5 h-2.5" />
+                    </button>
+                    {composeMenu === "folder" && (
+                      <FolderPicker
+                        folders={folders}
+                        value={composeFolderId}
+                        onChange={setComposeFolderId}
+                        onClose={() => setComposeMenu(null)}
+                      />
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-center justify-center sm:justify-start gap-2 w-full sm:w-auto">
                   <button
@@ -826,10 +1169,11 @@ export function NotesView({
           )}
         </div>
 
-        {notes.length === 0 && (
+        {visibleNotes.length === 0 && (
           <p className="text-center text-xs text-zinc-500 dark:text-zinc-400 py-10">
-            Todavía no tenés notas. Creá la primera de arriba — quedan guardadas de forma
-            permanente hasta que las borres.
+            {notes.length === 0
+              ? "Todavía no tenés notas. Creá la primera de arriba — quedan guardadas de forma permanente hasta que las borres."
+              : "Esta carpeta todavía no tiene notas."}
           </p>
         )}
 
@@ -850,6 +1194,8 @@ export function NotesView({
             <div className="columns-[380px] gap-4">{getGroupRenderOrder(others).map((n) => renderNote(n, others))}</div>
           </div>
         )}
+          </div>
+        </div>
       </div>
           )}
         </motion.div>
@@ -888,6 +1234,17 @@ export function NotesView({
         darkMode={darkMode}
         onClose={() => setDeleteConfirmId(null)}
         onConfirm={handleConfirmDelete}
+      />
+
+      <ConfirmationModal
+        isOpen={!!deleteFolderConfirmId}
+        title="Eliminar carpeta"
+        message="¿Seguro que querés eliminar esta carpeta? Sus notas no se borran, vuelven a “Todas las notas”."
+        confirmText="Eliminar"
+        cancelText="Cancelar"
+        darkMode={darkMode}
+        onClose={() => setDeleteFolderConfirmId(null)}
+        onConfirm={handleConfirmDeleteFolder}
       />
     </div>
   );

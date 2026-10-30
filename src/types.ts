@@ -826,12 +826,25 @@ export interface StickyNote {
   pinned: boolean;
   /** Manual display order (lower = shown first). Only meaningful for notes you own — see useNotes.ts. */
   order?: number;
+  /** Carpeta a la que pertenece (ver NoteFolder) — ausente/undefined = sin carpeta ("Todas las notas"). */
+  folderId?: string;
   attachments?: { name: string; url: string }[];
   createdAt: number;
   updatedAt: number;
   // Present only on a note read via a share (never persisted) — who shared it in.
   __sharedByEmail?: string;
   __sharedByName?: string;
+}
+
+// Carpeta para organizar Notas Rápidas — ver useNoteFolders.ts / noteFoldersService.ts.
+export interface NoteFolder {
+  id: string;
+  name: string;
+  /** Key into FOLDER_COLORS (ver NotesView.tsx). */
+  color: string;
+  order?: number;
+  createdAt: number;
+  updatedAt: number;
 }
 
 // --- Events (San Juan local agenda + followed sports calendars) ---
