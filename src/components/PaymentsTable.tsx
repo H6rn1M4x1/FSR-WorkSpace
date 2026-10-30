@@ -13,7 +13,6 @@ import { SmartDateTimePicker } from "./SmartDateTimePicker";
 import { CurrencyInput } from "./CurrencyInput";
 import { parseFormattedNumber, formatNumberToDisplay } from "../lib/numberFormat";
 import { processAndCreateRecurringPayments } from "../utils/recurringPayments";
-import { getLocalDateString } from "../utils/date";
 import {
   Plus,
   Trash2,
@@ -43,10 +42,7 @@ import {
   ListFilter,
   Pencil,
   Save,
-  ChevronLeft,
-  ChevronRight,
   Repeat,
-  CalendarClock,
 } from "lucide-react";
 import { uiSounds } from "../lib/sounds";
 import { uploadPaymentDocument } from "../lib/paymentDocumentsService";
@@ -774,25 +770,6 @@ export default function PaymentsTable({
     }
   };
 
-  // "VENCE" del panel de vista previa de Agregar Pago: mismas flechas < > del diseño de
-  // referencia para correr la fecha de a un día, leyendo y escribiendo el mismo estado
-  // `fechaVencimiento` que el datepicker de la izquierda (no son dos fechas distintas).
-  const shiftFechaVencimiento = (deltaDays: number) => {
-    if (!fechaVencimiento) return;
-    const [y, m, d] = fechaVencimiento.split("-").map(Number);
-    if (!y || !m || !d) return;
-    setFechaVencimiento(getLocalDateString(new Date(y, m - 1, d + deltaDays)));
-  };
-
-  const formatVenceShort = (dateStr: string): string => {
-    if (!dateStr) return "";
-    const [y, m, d] = dateStr.split("-").map(Number);
-    if (!y || !m || !d) return "";
-    return new Date(y, m - 1, d)
-      .toLocaleDateString("es-AR", { weekday: "short", day: "numeric", month: "short" })
-      .replace(/\./g, "");
-  };
-
   const handleDelete = (id: string) => {
     askConfirmation(
       "Confirmar Eliminación",
@@ -882,29 +859,6 @@ export default function PaymentsTable({
           )}
           {isSaving ? "Guardando..." : "Guardar"}
         </motion.button>
-      </div>
-
-      <div className="flex items-center gap-1 mb-3">
-        <button
-          type="button"
-          onClick={() => shiftFechaVencimiento(-1)}
-          className="p-0.5 rounded-md hover:bg-slate-200/60 dark:hover:bg-zinc-800 text-slate-400 dark:text-zinc-500 cursor-pointer"
-          title="Un día antes"
-        >
-          <ChevronLeft className="w-3.5 h-3.5" />
-        </button>
-        <span className="flex items-center gap-1 px-1 text-[10.5px] font-bold text-slate-500 dark:text-zinc-400">
-          <CalendarClock className="w-3 h-3 text-primary" />
-          Vence {formatVenceShort(fechaVencimiento) || "—"}
-        </span>
-        <button
-          type="button"
-          onClick={() => shiftFechaVencimiento(1)}
-          className="p-0.5 rounded-md hover:bg-slate-200/60 dark:hover:bg-zinc-800 text-slate-400 dark:text-zinc-500 cursor-pointer"
-          title="Un día después"
-        >
-          <ChevronRight className="w-3.5 h-3.5" />
-        </button>
       </div>
 
       {/* Pagado/Impago y Recurrente/Único: mismo tamaño, ocupando todo el
@@ -1789,7 +1743,6 @@ export default function PaymentsTable({
                       {blockCategoriaMonto}
                       {blockFechas}
                       {blockConDondePagar}
-                      {blockCancelar}
                     </div>
                     <div className="space-y-3.5">
                       {blockSwitches}
@@ -1798,6 +1751,13 @@ export default function PaymentsTable({
                     </div>
                   </div>
                 </form>
+              </div>
+
+              {/* Cancelar en PC: fijo en la esquina inferior izquierda del modal (no se mueve
+                  con el scroll del contenido ni con la altura de ninguna columna). En mobile
+                  sigue siendo el último elemento de la lista apilada (ver blockCancelar arriba). */}
+              <div className="hidden lg:block lg:absolute lg:bottom-4 lg:left-6 lg:z-10 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-sm rounded-full px-1">
+                {blockCancelar}
               </div>
             </motion.div>
           </motion.div>
