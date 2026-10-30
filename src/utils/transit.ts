@@ -38,16 +38,20 @@ export interface ConnectingTransitLine {
 // alcanza con que una parada cualquiera de la línea quede cerca del destino, tiene que haber otra
 // parada de esa misma línea cerca de home también, así se respeta el recorrido real en vez de
 // sugerir una línea que simplemente tiene UNA parada cerca del destino pero nunca pasa por casa.
-// maxWalkKm es generoso (los departamentos de Gran San Juan son grandes y el dataset solo tiene
-// 2-5 paradas por línea, no el recorrido completo calle por calle) — de todas formas solo se
-// listan líneas con cobertura en ambas puntas, nunca "la más cercana nomás".
+//
+// maxWalkKm se ajustó de 3km a 1.5km (una caminata razonable hasta una parada, no "en el mismo
+// departamento") — con 3km, dos paradas del dataset que simplemente quedaban en el mismo barrio
+// general (pero de líneas que en la realidad no pasan por ahí) calificaban como "cerca" y
+// terminaban apareciendo como opciones falsas. limit bajó de 6 a 4 para que, entre las que sí
+// califican, se prioricen siempre las más cercanas en el resultado (el orden ya es por distancia
+// combinada ascendente).
 export function findConnectingTransitLines(
   homeLat: number,
   homeLon: number,
   destLat: number,
   destLon: number,
-  maxWalkKm = 3,
-  limit = 6
+  maxWalkKm = 1.5,
+  limit = 4
 ): ConnectingTransitLine[] {
   const results: ConnectingTransitLine[] = [];
   RED_TULUM_LINES.forEach((line) => {
