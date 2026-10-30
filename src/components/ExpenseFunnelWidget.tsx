@@ -18,7 +18,6 @@ import { DetailedPayment } from "../types";
 import { getArgentinaDateParts } from "../utils/date";
 import { useInflacionData } from "../hooks/useInflacionData";
 import { AnimatedNumber } from "./AnimatedNumber";
-import { Reveal, RevealGroup } from "./Reveal";
 import { PillFilterBar } from "./PillFilterBar";
 import { uiSounds } from "../lib/sounds";
 
@@ -73,6 +72,20 @@ const formatARS = (value: number): string => {
 };
 
 type ViewMode = "current" | "previous" | "compare";
+
+// Geometría del embudo (ver análisis fotograma a fotograma del video de referencia): cada etapa
+// es un bloque de ancho constante (el "rect" sólido, color de acento pleno) que NO ocupa toda la
+// altura de su fila — deja un hueco abajo antes del siguiente bloque, más angosto. Atrás de todos
+// los bloques va un polígono de fondo que sí une el ancho de cada etapa con el de la siguiente en
+// diagonal, así que en ese hueco se asoma la diagonal de fondo (en una sombra más tenue del mismo
+// acento, en vez del magenta del original) — el mismo efecto de "alero/caída" que tiene el
+// recurso, logrado con geometría simple en vez de las curvas bezier del original.
+const FUNNEL_SEGMENT_H = 64;
+const FUNNEL_RECT_H = 46;
+const FUNNEL_HALF_W = 92;
+const FUNNEL_MIN_HALF_W = 20;
+const FUNNEL_CENTER_X = FUNNEL_HALF_W + 6;
+const FUNNEL_SVG_WIDTH = FUNNEL_CENTER_X * 2;
 
 /**
  * "Embudo de Gastos" — adaptación del recurso de referencia "Embudo de ventas" (Moxen) al
@@ -138,6 +151,38 @@ export function ExpenseFunnelWidget({
   }, [activeTotals, previousTotals, activeGrandTotal]);
 
   const maxTotal = rows[0]?.total || 1;
+
+  const funnelHalfWidths = useMemo(
+    () => rows.map((r) => Math.max(FUNNEL_MIN_HALF_W, (r.total / maxTotal) * FUNNEL_HALF_W)),
+    [rows, maxTotal]
+  );
+
+  const funnelBackgroundPoints = useMemo(() => {
+    const left: [number, number][] = [];
+    const right: [number, number][] = [];
+    rows.forEach((_, i) => {
+      const yTop = i * FUNNEL_SEGMENT_H;
+      const yBottom = i * FUNNEL_SEGMENT_H + FUNNEL_RECT_H;
+      left.push([FUNNEL_CENTER_X - funnelHalfWidths[i], yTop]);
+      left.push([FUNNEL_CENTER_X - funnelHalfWidths[i], yBottom]);
+      right.push([FUNNEL_CENTER_X + funnelHalfWidths[i], yTop]);
+      right.push([FUNNEL_CENTER_X + funnelHalfWidths[i], yBottom]);
+    });
+    return [...left, ...right.reverse()].map(([x, y]) => `${x},${y}`).join(" ");
+  }, [rows, funnelHalfWidths]);
+
+  const funnelSvgHeight = rows.length * FUNNEL_SEGMENT_H;
+
+  const dropInfo = useMemo(() => {
+    return rows.map((row, i) => {
+      if (i === 0) return null;
+      const prev = rows[i - 1];
+      if (prev.total <= 0) return null;
+      const dropPct = ((prev.total - row.total) / prev.total) * 100;
+      return { dropPct, diff: prev.total - row.total };
+    });
+  }, [rows]);
+
   const selectedCategoria = pinnedCategory || hoveredCategory || rows[0]?.categoria || null;
   const selectedRow = rows.find((r) => r.categoria === selectedCategoria) || null;
   const selectedIndex = rows.findIndex((r) => r.categoria === selectedCategoria);
@@ -224,55 +269,104 @@ export function ExpenseFunnelWidget({
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-[1.3fr_1fr] gap-5 items-start">
-          {/* Embudo: barras por categoría, angostándose de mayor a menor gasto ------------ */}
-          <RevealGroup className="space-y-3">
-            {rows.map((row, idx) => {
-              const Icon = CATEGORY_ICON[row.categoria];
-              const isSelected = row.categoria === selectedCategoria;
-              const isPinned = row.categoria === pinnedCategory;
-              const widthPct = Math.max(6, (row.total / maxTotal) * 100);
-              return (
-                <Reveal key={row.categoria}>
-                  <button
-                    type="button"
-                    data-sound="expand"
-                    onMouseEnter={() => setHoveredCategory(row.categoria)}
-                    onMouseLeave={() => setHoveredCategory(null)}
-                    onClick={() => togglePin(row.categoria)}
-                    className="w-full text-left cursor-pointer group"
-                  >
-                    <div className="flex items-center justify-between gap-2 mb-1">
-                      <span className={`flex items-center gap-1.5 text-[11px] font-bold truncate ${isSelected ? "text-primary" : "text-zinc-600 dark:text-zinc-300"}`}>
-                        {Icon && <Icon className="w-3.5 h-3.5 shrink-0" />}
+          {/* Embudo: forma real de embudo (no barras), angostándose de mayor a menor gasto -- */}
+          <div className="overflow-x-auto scroll-reveal">
+            <div className="flex items-stretch gap-1.5 min-w-[380px]">
+              {/* Columna de etiquetas (categoría + monto) */}
+              <div className="shrink-0 flex flex-col" style={{ width: 128 }}>
+                {rows.map((row) => {
+                  const Icon = CATEGORY_ICON[row.categoria];
+                  const isSelected = row.categoria === selectedCategoria;
+                  const isPinned = row.categoria === pinnedCategory;
+                  return (
+                    <button
+                      key={row.categoria}
+                      type="button"
+                      data-sound="expand"
+                      onMouseEnter={() => setHoveredCategory(row.categoria)}
+                      onMouseLeave={() => setHoveredCategory(null)}
+                      onClick={() => togglePin(row.categoria)}
+                      style={{ height: FUNNEL_SEGMENT_H }}
+                      className="flex flex-col justify-center items-start text-left cursor-pointer group"
+                    >
+                      <span className={`flex items-center gap-1 text-[10px] font-bold truncate w-full ${isSelected ? "text-primary" : "text-zinc-500 dark:text-zinc-400"}`}>
+                        {Icon && <Icon className="w-3 h-3 shrink-0" />}
                         <span className="truncate">{row.categoria}</span>
                         {isPinned && <Pin className="w-2.5 h-2.5 shrink-0 fill-current" />}
                       </span>
-                      <span className="text-[12px] font-extrabold shrink-0">
+                      <span className="text-[13px] font-extrabold mt-0.5">
                         <AnimatedNumber value={row.total} format={formatARS} />
                       </span>
-                    </div>
-                    <div className={`relative h-5 rounded-full overflow-hidden ${darkMode ? "bg-zinc-800" : "bg-slate-100"}`}>
-                      <motion.div
-                        initial={{ width: 0 }}
-                        whileInView={{ width: `${widthPct}%` }}
-                        viewport={{ once: true, amount: 0.4 }}
-                        transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1], delay: idx * 0.05 }}
-                        className={`h-full rounded-full bg-gradient-to-r from-primary/60 to-primary transition-all ${
-                          isSelected ? "ring-2 ring-primary/50 brightness-110" : "group-hover:brightness-105"
-                        }`}
+                      {viewMode === "compare" && (
+                        <span className={`flex items-center gap-0.5 text-[8.5px] font-bold mt-0.5 ${row.deltaPct > 0 ? "text-red-500" : row.deltaPct < 0 ? "text-emerald-500" : "text-zinc-400"}`}>
+                          {row.deltaPct > 0 ? <TrendingUp className="w-2.5 h-2.5" /> : row.deltaPct < 0 ? <TrendingDown className="w-2.5 h-2.5" /> : null}
+                          {row.deltaPct === 0 ? "Sin cambios" : `${row.deltaPct > 0 ? "+" : ""}${row.deltaPct.toFixed(1)}%`}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* El embudo propiamente dicho */}
+              <div className="flex-1 flex justify-center">
+                <svg
+                  viewBox={`0 0 ${FUNNEL_SVG_WIDTH} ${funnelSvgHeight}`}
+                  width="100%"
+                  style={{ maxWidth: FUNNEL_SVG_WIDTH * 1.5, height: funnelSvgHeight }}
+                >
+                  <polygon
+                    points={funnelBackgroundPoints}
+                    style={{ fill: "color-mix(in srgb, var(--color-primary) 28%, transparent)" }}
+                  />
+                  {rows.map((row, i) => {
+                    const isSelected = row.categoria === selectedCategoria;
+                    const hasSelection = Boolean(selectedCategoria);
+                    return (
+                      <rect
+                        key={row.categoria}
+                        x={FUNNEL_CENTER_X - funnelHalfWidths[i]}
+                        y={i * FUNNEL_SEGMENT_H}
+                        width={funnelHalfWidths[i] * 2}
+                        height={FUNNEL_RECT_H}
+                        rx={8}
+                        data-sound="expand"
+                        onMouseEnter={() => setHoveredCategory(row.categoria)}
+                        onMouseLeave={() => setHoveredCategory(null)}
+                        onClick={() => togglePin(row.categoria)}
+                        style={{
+                          fill: "var(--color-primary)",
+                          opacity: !hasSelection || isSelected ? 1 : 0.5,
+                          cursor: "pointer",
+                          transition: "opacity 0.2s",
+                        }}
                       />
+                    );
+                  })}
+                </svg>
+              </div>
+
+              {/* Columna de estadísticas (% del total + caída vs. la categoría anterior) */}
+              <div className="shrink-0 flex flex-col items-end" style={{ width: 96 }}>
+                {rows.map((row, i) => {
+                  const drop = dropInfo[i];
+                  return (
+                    <div key={row.categoria} style={{ height: FUNNEL_SEGMENT_H }} className="flex flex-col justify-center items-end">
+                      <span className="text-[13px] font-extrabold">
+                        <AnimatedNumber value={row.share} format={(n) => `${n.toFixed(1)}%`} />
+                      </span>
+                      <span className="text-[8.5px] text-zinc-400 font-medium whitespace-nowrap">del gasto total</span>
+                      {drop && (
+                        <span className="mt-1 px-1.5 py-0.5 rounded-full text-[8.5px] font-bold bg-primary/10 text-primary whitespace-nowrap">
+                          ↓ {drop.dropPct.toFixed(1)}%
+                        </span>
+                      )}
                     </div>
-                    {viewMode === "compare" && (
-                      <div className={`flex items-center gap-1 text-[9.5px] font-bold mt-1 ${row.deltaPct > 0 ? "text-red-500" : row.deltaPct < 0 ? "text-emerald-500" : "text-zinc-400"}`}>
-                        {row.deltaPct > 0 ? <TrendingUp className="w-2.5 h-2.5" /> : row.deltaPct < 0 ? <TrendingDown className="w-2.5 h-2.5" /> : null}
-                        {row.deltaPct === 0 ? "Sin cambios" : `${row.deltaPct > 0 ? "+" : ""}${row.deltaPct.toFixed(1)}% vs ${previousMonthName}`}
-                      </div>
-                    )}
-                  </button>
-                </Reveal>
-              );
-            })}
-          </RevealGroup>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
 
           {/* Detalle de la categoría seleccionada (hover para previsualizar, clic para fijar) */}
           <div className={`rounded-2xl border p-4 ${darkMode ? "bg-black/30 border-zinc-800" : "bg-slate-50 border-slate-200"}`}>
