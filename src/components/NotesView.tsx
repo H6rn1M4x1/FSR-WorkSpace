@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import {
   StickyNote as StickyNoteIcon,
   KeyRound,
@@ -10,7 +9,6 @@ import {
   Send,
   Share2,
   Check,
-  Maximize2,
   Pencil,
   Folder,
   FolderPlus,
@@ -21,9 +19,9 @@ import { motion, AnimatePresence } from "motion/react";
 import { useNotes } from "../hooks/useNotes";
 import { useNoteFolders } from "../hooks/useNoteFolders";
 import { useToast } from "../context/ToastContext";
+import { uiSounds } from "../lib/sounds";
 import { ConfirmationModal } from "./ConfirmationModal";
 import { RichTextEditor } from "./RichTextEditor";
-import { InteractiveRichText } from "./InteractiveRichText";
 import { SharedBadge } from "./SharedBadge";
 import { SubNav } from "./SubNav";
 import { PasswordVaultPanel } from "./PasswordVaultPanel";
@@ -115,6 +113,24 @@ function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
 
+// Texto plano, recortado, para la vista previa de la lista compacta del medio.
+function stripHtmlPreview(html: string): string {
+  const text = (html || "").replace(/<[^>]*>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+  return text.length > 90 ? `${text.slice(0, 90)}…` : text;
+}
+
+// "Hoy"/"Ayer" para fechas recientes, igual que el diseño de referencia — una fecha corta para
+// cualquier otro día.
+function formatNoteDate(timestamp: number): string {
+  const d = new Date(timestamp);
+  const now = new Date();
+  const startOfDay = (dt: Date) => new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()).getTime();
+  const diffDays = Math.round((startOfDay(now) - startOfDay(d)) / 86400000);
+  if (diffDays === 0) return "Hoy";
+  if (diffDays === 1) return "Ayer";
+  return d.toLocaleDateString("es-AR", { day: "numeric", month: "short" });
+}
+
 /** Own notes sort by their manual drag order; shared-in ones (which have no order of their own) fall back to most-recently-updated. */
 function compareNotes(a: StickyNote, b: StickyNote): number {
   const aOrder = a.__sharedByEmail ? null : a.order;
@@ -157,22 +173,25 @@ function ColorPicker({
   );
 }
 
-/** Lista desplegable para asignar la carpeta de una nota (desde su tarjeta, el compose box, o el modal "ver en grande") — misma mecánica que ColorPicker. */
+/** Lista desplegable para asignar la carpeta de una nota (botón al final de la barra de
+ *  herramientas del editor) — misma mecánica que ColorPicker. */
 function FolderPicker({
   folders,
   value,
   onChange,
   onClose,
+  align = "left",
 }: {
   folders: NoteFolder[];
   value: string | undefined;
   onChange: (folderId: string | undefined) => void;
   onClose: () => void;
+  align?: "left" | "right";
 }) {
   return (
     <div
       onClick={(e) => e.stopPropagation()}
-      className={`absolute z-20 top-full left-0 mt-1.5 p-1.5 w-48 max-h-60 overflow-y-auto space-y-0.5 ${DARK_PANEL}`}
+      className={`absolute z-20 top-full ${align === "right" ? "right-0" : "left-0"} mt-1.5 p-1.5 w-48 max-h-60 overflow-y-auto space-y-0.5 ${DARK_PANEL}`}
     >
       <button
         type="button"
@@ -318,6 +337,179 @@ function ShareRowContent({
   );
 }
 
+/** Panel grande de la derecha: la nota seleccionada, siempre editable ahí mismo (sin modal
+ *  aparte). El botón de carpeta vive DENTRO de la barra de herramientas del editor, al final de
+ *  todo (ver extraToolbarActions en RichTextEditor), con su propio cierre al hacer clic afuera. */
+function NoteDetailPane({
+  note,
+  draft,
+  folders,
+  menu,
+  onSetDraft,
+  onSetMenu,
+  onUpdateNote,
+  onSaveDraft,
+  onTogglePin,
+  onDelete,
+  recipients,
+  allKnownRecipients,
+  onShare,
+  onUnshare,
+}: {
+  note: StickyNote;
+  draft: Draft | undefined;
+  folders: NoteFolder[];
+  menu: NoteMenu;
+  onSetDraft: (patch: Partial<Draft>) => void;
+  onSetMenu: (menu: NoteMenu) => void;
+  onUpdateNote: (
+    id: string,
+    patch: Partial<Pick<StickyNote, "title" | "text" | "color" | "pinned" | "attachments" | "order" | "folderId">>
+  ) => Promise<void>;
+  onSaveDraft: (patch: Draft) => void;
+  onTogglePin: () => void;
+  onDelete: () => void;
+  recipients: string[];
+  allKnownRecipients: string[];
+  onShare: (email: string) => Promise<void>;
+  onUnshare: (email: string) => Promise<void>;
+}) {
+  const palette = NOTE_COLORS[note.color] || NOTE_COLORS.default;
+  const titleValue = draft?.title !== undefined ? draft.title : note.title || "";
+  const textValue = draft?.text !== undefined ? draft.text : note.text;
+  const isSharedIn = !!note.__sharedByEmail;
+
+  // El selector de carpeta es un botón "extra" inyectado en la barra del editor (no es un menú
+  // propio de RichTextEditor), así que necesita su propio cierre al hacer clic afuera.
+  useEffect(() => {
+    if (menu !== "folder") return;
+    const close = () => onSetMenu(null);
+    window.addEventListener("click", close);
+    return () => window.removeEventListener("click", close);
+  }, [menu, onSetMenu]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+      className={`rounded-2xl border p-4 shadow-sm ${palette.card}`}
+    >
+      {isSharedIn && (
+        <div className="mb-2">
+          <SharedBadge item={note} />
+        </div>
+      )}
+
+      <input
+        value={titleValue}
+        onChange={(e) => onSetDraft({ title: e.target.value })}
+        placeholder="Título"
+        className="w-full bg-transparent text-base font-extrabold text-zinc-900 dark:text-white focus:outline-none placeholder:text-zinc-400 placeholder:font-extrabold mb-2"
+      />
+
+      <RichTextEditor
+        value={textValue}
+        onChange={(html) => onSetDraft({ text: html })}
+        placeholder="Escribí algo..."
+        darkToolbar
+        attachments={note.attachments || []}
+        onAttachmentsChange={(atts) => onUpdateNote(note.id, { attachments: atts })}
+        activeMenu={menu === "bgcolor" || menu === "folder" ? null : menu}
+        onActiveMenuChange={onSetMenu}
+        onShareClick={isSharedIn ? undefined : () => onSetMenu("share")}
+        shareMenuContent={
+          isSharedIn ? undefined : (
+            <ShareRowContent
+              recipients={recipients}
+              allKnownRecipients={allKnownRecipients}
+              onShare={onShare}
+              onUnshare={onUnshare}
+            />
+          )
+        }
+        extraToolbarActions={
+          isSharedIn ? undefined : (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSetMenu(menu === "folder" ? null : "folder");
+                }}
+                className={`p-2 rounded-lg transition-colors flex items-center gap-1 cursor-pointer ${
+                  menu === "folder" ? "bg-primary/20 text-primary" : "text-slate-500 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-white/10"
+                }`}
+                title="Carpeta"
+              >
+                <Folder className="w-4 h-4" />
+              </button>
+              {menu === "folder" && (
+                <FolderPicker
+                  folders={folders}
+                  value={note.folderId}
+                  onChange={(folderId) => onUpdateNote(note.id, { folderId })}
+                  onClose={() => onSetMenu(null)}
+                  align="right"
+                />
+              )}
+            </div>
+          )
+        }
+      />
+
+      {/* Commit the debounced draft to Firestore once the user stops typing — see SaveOnIdle. */}
+      <SaveOnIdle
+        draft={{ title: titleValue, text: textValue }}
+        original={{ title: note.title || "", text: note.text }}
+        onSave={onSaveDraft}
+      />
+
+      <div className="flex items-center justify-between mt-3">
+        <span className="flex items-center gap-1 text-[10.5px] text-zinc-400 font-bold truncate">
+          <Folder className="w-3 h-3 shrink-0" />
+          {folders.find((f) => f.id === note.folderId)?.name || "Sin carpeta"}
+        </span>
+        <div className={`relative flex items-center gap-1 p-1 ${DARK_PANEL}`}>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onSetMenu(menu === "bgcolor" ? null : "bgcolor"); }}
+            className="w-6 h-6 rounded-full border border-white/20 cursor-pointer flex items-center justify-center"
+            title="Color"
+          >
+            <span className={`w-4 h-4 rounded-full ${palette.swatch}`} />
+          </button>
+          {menu === "bgcolor" && (
+            <ColorPicker
+              value={note.color}
+              onChange={(color) => onUpdateNote(note.id, { color })}
+              onClose={() => onSetMenu(null)}
+            />
+          )}
+          {!isSharedIn && (
+            <button
+              type="button"
+              onClick={onTogglePin}
+              className="p-1.5 rounded-lg hover:bg-white/15 text-zinc-200 cursor-pointer"
+              title={note.pinned ? "Desfijar" : "Fijar"}
+            >
+              <Pin className={`w-4 h-4 ${note.pinned ? "fill-current text-primary" : ""}`} />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onDelete}
+            className="p-1.5 rounded-lg hover:bg-red-500/20 text-zinc-200 hover:text-red-400 cursor-pointer"
+            title={isSharedIn ? "Dejar de ver esta nota" : "Eliminar"}
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
 export function NotesView({
   userId,
   darkMode = false,
@@ -379,23 +571,19 @@ export function NotesView({
     return () => window.removeEventListener("storage", readProfile);
   }, []);
 
-  const [composeOpen, setComposeOpen] = useState(false);
+  // Nota mostrada/editada en el panel grande de la derecha (columna de detalle) — null cuando
+  // la carpeta actual no tiene notas. "+ Nueva nota" crea una nota vacía y la selecciona acá
+  // mismo en vez de abrir un formulario aparte: el panel de la derecha ES el editor, tanto para
+  // una nota nueva como para una existente.
+  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
   useEffect(() => {
-    if (autoOpenCompose) setComposeOpen(true);
+    if (autoOpenCompose) handleCreateNote();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoOpenCompose]);
-  const [composeTitle, setComposeTitle] = useState("");
-  const [composeHtml, setComposeHtml] = useState("");
-  const [composeColor, setComposeColor] = useState("default");
-  const [composeAttachments, setComposeAttachments] = useState<{ name: string; url: string }[]>([]);
-  const [composeMenu, setComposeMenu] = useState<NoteMenu>(null);
 
   // Carpeta seleccionada en la barra lateral (null = "Todas las notas"); una nota nueva se crea
   // directo en la carpeta que se esté mirando, igual que en el diseño de referencia.
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
-  const [composeFolderId, setComposeFolderId] = useState<string | undefined>(undefined);
-  useEffect(() => {
-    setComposeFolderId(selectedFolderId || undefined);
-  }, [selectedFolderId]);
   const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [newFolderColor, setNewFolderColor] = useState(FOLDER_COLOR_KEYS[0]);
@@ -428,10 +616,10 @@ export function NotesView({
   const dragSnapshotRef = useRef<Map<string, DOMRect>>(new Map());
   // Elemento DOM de cada nota (de cualquier grupo) — se usa para tomar la foto de arriba.
   const noteElsRef = useRef<Map<string, HTMLDivElement>>(new Map());
-
-  // Nota expandida en un modal grande, con su propio modo lectura/edición.
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [expandedEditing, setExpandedEditing] = useState(false);
+  // Clon 100% sólido (sin la transparencia que el navegador le pone por defecto a la imagen de
+  // arrastre nativa) que sigue al cursor mientras se arrastra una nota — ver dataTransfer.
+  // setDragImage con un canvas en blanco en renderNoteListItem.
+  const [dragGhost, setDragGhost] = useState<{ note: StickyNote; x: number; y: number } | null>(null);
 
   useEffect(() => {
     if (!rightClickMenu) return;
@@ -454,19 +642,18 @@ export function NotesView({
   const menuFor = (id: string): NoteMenu => (openMenu?.id === id ? openMenu.menu : null);
   const setMenuFor = (id: string, menu: NoteMenu) => setOpenMenu(menu ? { id, menu } : null);
 
-  const handleCreate = async () => {
-    await addNote(composeTitle, composeHtml, composeColor, composeAttachments, composeFolderId);
-    setComposeTitle("");
-    setComposeHtml("");
-    setComposeColor("default");
-    setComposeAttachments([]);
-    setComposeMenu(null);
-    setComposeFolderId(selectedFolderId || undefined);
-    setComposeOpen(false);
+  // Crea una nota vacía directo en la carpeta que se esté mirando y la deja seleccionada en el
+  // panel de la derecha, lista para escribir — el panel de detalle ES el editor, no hay un
+  // formulario de "nueva nota" aparte.
+  const handleCreateNote = async () => {
+    uiSounds.save();
+    const created = await addNote("", "", "default", [], selectedFolderId || undefined, true);
+    if (created) setSelectedNoteId(created.id);
   };
 
   const handleCreateFolder = async () => {
     const created = await addFolder(newFolderName, newFolderColor);
+    uiSounds.success();
     setNewFolderName("");
     setNewFolderColor(FOLDER_COLOR_KEYS[0]);
     setNewFolderOpen(false);
@@ -482,6 +669,7 @@ export function NotesView({
       notes.filter((n) => n.folderId === id && !n.__sharedByEmail).map((n) => updateNote(n.id, { folderId: undefined }))
     );
     await deleteFolder(id);
+    uiSounds.delete();
     if (selectedFolderId === id) setSelectedFolderId(null);
     showToast("Carpeta eliminada. Sus notas pasaron a “Todas las notas”.", "success");
   };
@@ -491,11 +679,13 @@ export function NotesView({
     const id = deleteConfirmId;
     const isSharedIn = notes.find((n) => n.id === id)?.__sharedByEmail;
     await deleteNote(id);
+    uiSounds.delete();
     setDrafts((prev) => {
       const next = { ...prev };
       delete next[id];
       return next;
     });
+    setSelectedNoteId((prev) => (prev === id ? null : prev));
     showToast(isSharedIn ? "Dejaste de ver esta nota compartida." : "Nota eliminada.", "success");
   };
 
@@ -512,6 +702,16 @@ export function NotesView({
   const visibleNotes = selectedFolderId ? notes.filter((n) => n.folderId === selectedFolderId) : notes;
   const pinned = visibleNotes.filter((n) => n.pinned).sort(compareNotes);
   const others = visibleNotes.filter((n) => !n.pinned).sort(compareNotes);
+  const orderedVisible = [...pinned, ...others];
+  const selectedNote = orderedVisible.find((n) => n.id === selectedNoteId) || null;
+
+  // Si no hay nada seleccionado (primera carga, se cambió de carpeta, o se borró la nota que
+  // estaba abierta) pero la lista actual tiene notas, se selecciona la primera — el panel de
+  // detalle de la derecha nunca queda vacío mientras haya algo para mostrar.
+  useEffect(() => {
+    if (!selectedNote && orderedVisible.length > 0) setSelectedNoteId(orderedVisible[0].id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedNote, orderedVisible.map((n) => n.id).join(",")]);
 
   const handleDrop = async (group: StickyNote[], targetId: string) => {
     const dragId = draggingId;
@@ -546,24 +746,17 @@ export function NotesView({
     return reorderedIds.map((id) => byId.get(id)!);
   };
 
-  const renderNote = (note: StickyNote, group: StickyNote[]) => {
+  // Fila compacta de la columna del medio — clic para abrirla en el panel grande de la derecha.
+  // El drag-and-drop (reordenar dentro del grupo, o soltar sobre una carpeta de la izquierda)
+  // sigue viviendo acá, sin cambios en la mecánica: solo cambió cómo se ve la tarjeta.
+  const renderNoteListItem = (note: StickyNote, group: StickyNote[]) => {
     const palette = NOTE_COLORS[note.color] || NOTE_COLORS.default;
     const draft = drafts[note.id];
     const titleValue = draft?.title !== undefined ? draft.title : note.title || "";
     const textValue = draft?.text !== undefined ? draft.text : note.text;
     const isSharedIn = !!note.__sharedByEmail;
-    const recipients = getRecipients(note.id);
-    const menu = menuFor(note.id);
-
-    const setDraft = (patch: Partial<Draft>) =>
-      setDrafts((prev) => ({
-        ...prev,
-        [note.id]: {
-          title: prev[note.id]?.title !== undefined ? prev[note.id].title : note.title || "",
-          text: prev[note.id]?.text !== undefined ? prev[note.id].text : note.text,
-          ...patch,
-        },
-      }));
+    const isSelected = selectedNoteId === note.id;
+    const folderName = folders.find((f) => f.id === note.folderId)?.name;
 
     return (
       // Envoltorio de plain <div> (no motion) SOLO para el drag nativo: motion.div reinterpreta
@@ -588,21 +781,32 @@ export function NotesView({
             if (el) snapshot.set(n.id, el.getBoundingClientRect());
           });
           dragSnapshotRef.current = snapshot;
-          // Sin esto, el navegador genera su propia "foto" semitransparente de la nota para
-          // mostrar pegada al cursor — pasarle el elemento real como imagen de arrastre lo
-          // reemplaza por una versión totalmente opaca.
-          const rect = e.currentTarget.getBoundingClientRect();
+          // La imagen de arrastre nativa del navegador siempre sale semitransparente, sin
+          // forma de evitarlo — en vez de pelear contra eso, se la reemplaza por un canvas en
+          // blanco de 1x1 (invisible) y se dibuja un clon propio, 100% sólido, seguido al
+          // cursor a mano (ver dragGhost / el onDrag de acá abajo y su render al final del
+          // componente). Así la nota arrastrada se ve en sólido, como pide el diseño.
           try {
-            e.dataTransfer.setDragImage(e.currentTarget, e.clientX - rect.left, e.clientY - rect.top);
-          } catch {
-            // setDragImage puede fallar en algún navegador viejo — no es crítico, sigue
-            // funcionando el drag, solo sin la imagen personalizada.
-          }
+            const blank = document.createElement("canvas");
+            blank.width = 1;
+            blank.height = 1;
+            e.dataTransfer.setDragImage(blank, 0, 0);
+          } catch {}
+          setDragGhost({ note, x: e.clientX, y: e.clientY });
+          uiSounds.click();
+        }}
+        onDrag={(e) => {
+          // El último evento "drag" antes de soltar suele llegar con clientX/clientY en 0 en
+          // varios navegadores — ignorarlo evita que el clon salte al origen de la pantalla
+          // justo antes de desaparecer.
+          if (e.clientX === 0 && e.clientY === 0) return;
+          setDragGhost((g) => (g ? { ...g, x: e.clientX, y: e.clientY } : g));
         }}
         onDragEnd={() => {
           setDraggingId(null);
           setDragOverId(null);
           setDragOverFolderId(null);
+          setDragGhost(null);
           dragSnapshotRef.current = new Map();
         }}
         onDragOver={(e) => {
@@ -640,231 +844,42 @@ export function NotesView({
           e.preventDefault();
           setRightClickMenu({ id: note.id, x: e.clientX, y: e.clientY });
         }}
-        className="break-inside-avoid mb-4"
       >
-      <motion.div
-        layout
-        transition={{ layout: { duration: 0.28, ease: [0.16, 1, 0.3, 1] } }}
-        className={`min-w-[280px] rounded-2xl border p-3 shadow-sm hover:shadow-md transition-all ${
-          palette.card
-        } ${draggingId === note.id ? "ring-2 ring-primary shadow-xl scale-[1.02]" : ""} ${
-          dragOverId === note.id ? "ring-2 ring-primary" : ""
-        } ${!isSharedIn ? "cursor-grab active:cursor-grabbing" : ""}`}
-      >
-        {isSharedIn && (
-          <div className="mb-1.5">
-            <SharedBadge item={note} />
-          </div>
-        )}
-        {!isSharedIn && (
-          <div className="relative inline-block mb-1">
-            <button
-              type="button"
-              onClick={() => setMenuFor(note.id, menu === "folder" ? null : "folder")}
-              className="flex items-center gap-1 text-[10px] font-bold text-zinc-500 dark:text-zinc-400 hover:text-primary cursor-pointer"
-            >
-              <Folder className={`w-3 h-3 ${note.folderId ? (FOLDER_COLORS[folders.find((f) => f.id === note.folderId)?.color || ""]?.icon || "") : ""}`} />
-              <span className="truncate max-w-[160px]">{folders.find((f) => f.id === note.folderId)?.name || "Sin carpeta"}</span>
-              <ChevronDown className="w-2.5 h-2.5" />
-            </button>
-            {menu === "folder" && (
-              <FolderPicker
-                folders={folders}
-                value={note.folderId}
-                onChange={(folderId) => updateNote(note.id, { folderId })}
-                onClose={() => setMenuFor(note.id, null)}
-              />
-            )}
-          </div>
-        )}
-        <input
-          value={titleValue}
-          onChange={(e) => setDraft({ title: e.target.value })}
-          placeholder="Título"
-          className="w-full bg-transparent text-sm font-extrabold text-zinc-900 dark:text-white focus:outline-none placeholder:text-zinc-400 placeholder:font-extrabold mb-1"
-        />
-        <RichTextEditor
-          value={textValue}
-          onChange={(html) => setDraft({ text: html })}
-          placeholder="Escribí algo..."
-          darkToolbar
-          attachments={note.attachments || []}
-          onAttachmentsChange={(atts) => updateNote(note.id, { attachments: atts })}
-          activeMenu={menu === "bgcolor" || menu === "folder" ? null : menu}
-          onActiveMenuChange={(m) => setMenuFor(note.id, m)}
-          onShareClick={isSharedIn ? undefined : () => setMenuFor(note.id, "share")}
-          shareMenuContent={
-            isSharedIn ? undefined : (
-              <ShareRowContent
-                recipients={recipients}
-                allKnownRecipients={getAllRecipients()}
-                onShare={async (email) => {
-                  await shareNote(note.id, email);
-                  showToast(`Nota compartida con ${email}.`, "success");
-                }}
-                onUnshare={async (email) => {
-                  try {
-                    await unshareNote(note.id, email);
-                    showToast(`Se dejó de compartir con ${email}.`, "success");
-                  } catch (err: any) {
-                    showToast("Error al dejar de compartir: " + (err?.message || String(err)), "error");
-                  }
-                }}
-              />
-            )
-          }
-        />
-        {/* Commit the debounced draft to Firestore once the user stops typing, then drop the
-            local draft so a later external update (e.g. from whoever this is shared with)
-            can show through again instead of being shadowed forever. */}
-        <SaveOnIdle
-          draft={{ title: titleValue, text: textValue }}
-          original={{ title: note.title || "", text: note.text }}
-          onSave={async (patch) => {
-            await updateNote(note.id, patch);
-            setDrafts((prev) => {
-              const next = { ...prev };
-              delete next[note.id];
-              return next;
-            });
+        <motion.button
+          type="button"
+          layout
+          transition={{ layout: { duration: 0.28, ease: [0.16, 1, 0.3, 1] } }}
+          whileTap={{ scale: 0.98 }}
+          onClick={() => {
+            if (selectedNoteId !== note.id) uiSounds.expand();
+            setSelectedNoteId(note.id);
           }}
-        />
-
-        <div className="flex items-center justify-end mt-2">
-          <div className={`relative flex items-center gap-1 p-1 ${DARK_PANEL}`}>
-            <button
-              type="button"
-              onClick={() => setMenuFor(note.id, menu === "bgcolor" ? null : "bgcolor")}
-              className="w-6 h-6 rounded-full border border-white/20 cursor-pointer flex items-center justify-center"
-              title="Color"
-            >
-              <span className={`w-4 h-4 rounded-full ${palette.swatch}`} />
-            </button>
-            {menu === "bgcolor" && (
-              <ColorPicker
-                value={note.color}
-                onChange={(color) => updateNote(note.id, { color })}
-                onClose={() => setMenuFor(note.id, null)}
-              />
-            )}
-            <button
-              type="button"
-              onClick={() => { setExpandedId(note.id); setExpandedEditing(false); }}
-              className="p-1.5 rounded-lg hover:bg-white/15 text-zinc-200 cursor-pointer"
-              title="Ver en grande"
-            >
-              <Maximize2 className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => togglePin(note.id)}
-              className="p-1.5 rounded-lg hover:bg-white/15 text-zinc-200 cursor-pointer"
-              title={note.pinned ? "Desfijar" : "Fijar"}
-            >
-              <Pin className={`w-4 h-4 ${note.pinned ? "fill-current text-primary" : ""}`} />
-            </button>
-            <button
-              type="button"
-              onClick={() => setDeleteConfirmId(note.id)}
-              className="p-1.5 rounded-lg hover:bg-red-500/20 text-zinc-200 hover:text-red-400 cursor-pointer"
-              title={isSharedIn ? "Dejar de ver esta nota" : "Eliminar"}
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-        {/* Modal "ver en grande": muestra la nota completa de lectura, con un botón de lápiz que
-            pasa a modo edición (mismo draft/auto-guardado que la tarjeta chica) sin tener que
-            cerrarlo. Va por portal a document.body — si quedara anidado dentro de este
-            motion.div (que anima con "layout"/transform), el position:fixed de abajo quedaría
-            relativo a ESE ancestro transformado en vez de a toda la pantalla. */}
-        {typeof document !== "undefined" &&
-          createPortal(
-            <AnimatePresence>
-              {expandedId === note.id && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.18 }}
-                  className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/60"
-                  onClick={() => setExpandedId(null)}
-                >
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.96, y: 12 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.96, y: 12 }}
-                    transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-                    onClick={(e) => e.stopPropagation()}
-                    className={`w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl border p-5 shadow-2xl ${palette.card} ${
-                      !note.color || note.color === "default" ? "force-solid-bg" : ""
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-3 mb-3">
-                      {expandedEditing ? (
-                        <input
-                          autoFocus
-                          value={titleValue}
-                          onChange={(e) => setDraft({ title: e.target.value })}
-                          placeholder="Título"
-                          className="flex-1 bg-transparent text-lg font-extrabold text-zinc-900 dark:text-white focus:outline-none placeholder:text-zinc-400"
-                        />
-                      ) : (
-                        <h3 className="flex-1 text-lg font-extrabold text-zinc-900 dark:text-white break-words">
-                          {titleValue || "Sin título"}
-                        </h3>
-                      )}
-                      <div className="flex items-center gap-1 shrink-0">
-                        {!isSharedIn && (
-                          <button
-                            type="button"
-                            onClick={() => setExpandedEditing((v) => !v)}
-                            className="p-1.5 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 text-zinc-500 dark:text-zinc-300 cursor-pointer"
-                            title={expandedEditing ? "Listo" : "Editar"}
-                          >
-                            {expandedEditing ? <Check className="w-4 h-4" /> : <Pencil className="w-4 h-4" />}
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => setExpandedId(null)}
-                          className="p-1.5 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 text-zinc-500 dark:text-zinc-300 cursor-pointer"
-                          title="Cerrar"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {expandedEditing ? (
-                      <RichTextEditor
-                        value={textValue}
-                        onChange={(html) => setDraft({ text: html })}
-                        placeholder="Escribí algo..."
-                        darkToolbar
-                        attachments={note.attachments || []}
-                        onAttachmentsChange={(atts) => updateNote(note.id, { attachments: atts })}
-                      />
-                    ) : (
-                      <InteractiveRichText
-                        className="rich-text-content prose dark:prose-invert prose-sm max-w-none text-sm text-zinc-900 dark:text-white [&_ol_ol]:list-[lower-alpha]"
-                        html={textValue || "<p class='text-zinc-400 italic'>Nota vacía.</p>"}
-                        onToggleCheckbox={(newHtml) => {
-                          setDraft({ text: newHtml });
-                          updateNote(note.id, { text: newHtml })
-                            .then(() => showToast("Nota actualizada.", "success"))
-                            .catch((err: any) => showToast(err?.message || "No se pudo guardar el cambio.", "error"));
-                        }}
-                      />
-                    )}
-                  </motion.div>
-                </motion.div>
-              )}
-            </AnimatePresence>,
-            document.body
+          className={`w-full text-left rounded-2xl border p-3 shadow-sm transition-all cursor-pointer ${palette.card} ${
+            isSelected ? "ring-2 ring-primary shadow-md" : "hover:shadow-md"
+          } ${draggingId === note.id ? "opacity-30" : ""} ${dragOverId === note.id ? "ring-2 ring-primary" : ""} ${
+            !isSharedIn ? "cursor-grab active:cursor-grabbing" : ""
+          }`}
+        >
+          {isSharedIn && (
+            <div className="mb-1">
+              <SharedBadge item={note} />
+            </div>
           )}
-      </motion.div>
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <span className="text-xs font-extrabold text-zinc-900 dark:text-white truncate">{titleValue || "Sin título"}</span>
+            {note.pinned && <Pin className="w-3 h-3 fill-current text-primary shrink-0" />}
+          </div>
+          <p className="text-[11px] text-zinc-500 dark:text-zinc-400 line-clamp-2 min-h-[2.2em]">
+            {stripHtmlPreview(textValue) || "Nota vacía"}
+          </p>
+          <div className="flex items-center justify-between gap-2 mt-1.5">
+            <span className="flex items-center gap-1 text-[9.5px] font-bold text-zinc-400 truncate">
+              <Folder className="w-2.5 h-2.5 shrink-0" />
+              <span className="truncate">{folderName || "Sin carpeta"}</span>
+            </span>
+            <span className="text-[9.5px] text-zinc-400 shrink-0">{formatNoteDate(note.updatedAt)}</span>
+          </div>
+        </motion.button>
       </div>
     );
   };
@@ -910,22 +925,23 @@ export function NotesView({
           <div>
             <h2 className="font-extrabold text-lg text-zinc-900 dark:text-zinc-100">Notas</h2>
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              Recordatorios e información que querés tener siempre a la vista. Mantené el clic
-              sostenido sobre una nota para reordenarla.
+              Recordatorios e información que querés tener siempre a la vista. Arrastrá una nota
+              para reordenarla o soltala sobre una carpeta para moverla.
             </p>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[200px_1fr] gap-5 items-start">
-          {/* Barra lateral de carpetas — "Todas las notas" + cada carpeta propia. Cada fila de
-              carpeta es también blanco de drop: soltar ahí una nota que se esté arrastrando
-              (draggingId, ver el drag-and-drop de cada tarjeta) le asigna esa carpeta. */}
+        <div className="grid grid-cols-1 lg:grid-cols-[200px_300px_1fr] gap-5 items-start">
+          {/* Columna 1: barra lateral de carpetas — "Todas las notas" + cada carpeta propia.
+              Cada fila de carpeta es también blanco de drop: soltar ahí una nota que se esté
+              arrastrando (draggingId, ver el drag-and-drop de cada tarjeta) le asigna esa
+              carpeta. */}
           <div className="lg:sticky lg:top-4 space-y-3">
             <div className="flex items-center justify-between px-1">
               <p className="text-[10px] font-extrabold uppercase tracking-widest text-zinc-400">Carpetas</p>
               <button
                 type="button"
-                onClick={() => setNewFolderOpen((v) => !v)}
+                onClick={() => { setNewFolderOpen((v) => !v); uiSounds.click(); }}
                 className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-primary cursor-pointer"
                 title="Nueva carpeta"
               >
@@ -933,69 +949,82 @@ export function NotesView({
               </button>
             </div>
 
-            {newFolderOpen && (
-              <div className={`p-2.5 rounded-xl border space-y-2 ${darkMode ? "bg-zinc-950/60 border-zinc-800" : "bg-slate-50 border-slate-200"}`}>
-                <input
-                  autoFocus
-                  value={newFolderName}
-                  onChange={(e) => setNewFolderName(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleCreateFolder()}
-                  placeholder="Nombre de la carpeta"
-                  className="w-full px-2 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-                <div className="flex flex-wrap gap-1.5">
-                  {FOLDER_COLOR_KEYS.map((key) => (
+            <AnimatePresence>
+              {newFolderOpen && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className={`p-2.5 rounded-xl border space-y-2 overflow-hidden ${darkMode ? "bg-zinc-950/60 border-zinc-800" : "bg-slate-50 border-slate-200"}`}
+                >
+                  <input
+                    autoFocus
+                    value={newFolderName}
+                    onChange={(e) => setNewFolderName(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleCreateFolder()}
+                    placeholder="Nombre de la carpeta"
+                    className="w-full px-2 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                  <div className="flex flex-wrap gap-1.5">
+                    {FOLDER_COLOR_KEYS.map((key) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => { setNewFolderColor(key); uiSounds.click(); }}
+                        className={`w-5 h-5 rounded-full cursor-pointer transition-transform ${FOLDER_COLORS[key].dot} ${
+                          newFolderColor === key ? "ring-2 ring-primary ring-offset-1 ring-offset-white dark:ring-offset-zinc-950 scale-110" : "hover:scale-110"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <div className="flex items-center justify-end gap-2">
                     <button
-                      key={key}
                       type="button"
-                      onClick={() => setNewFolderColor(key)}
-                      className={`w-5 h-5 rounded-full cursor-pointer ${FOLDER_COLORS[key].dot} ${
-                        newFolderColor === key ? "ring-2 ring-primary ring-offset-1 ring-offset-white dark:ring-offset-zinc-950" : ""
-                      }`}
-                    />
-                  ))}
-                </div>
-                <div className="flex items-center justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => { setNewFolderOpen(false); setNewFolderName(""); }}
-                    className="px-2.5 py-1 text-[10px] font-bold text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 cursor-pointer"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleCreateFolder}
-                    disabled={!newFolderName.trim()}
-                    className="px-3 py-1 rounded-full bg-primary hover:bg-primary/90 text-white text-[10px] font-bold cursor-pointer disabled:opacity-50"
-                  >
-                    Crear
-                  </button>
-                </div>
-              </div>
-            )}
+                      onClick={() => { setNewFolderOpen(false); setNewFolderName(""); }}
+                      className="px-2.5 py-1 text-[10px] font-bold text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 cursor-pointer"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCreateFolder}
+                      disabled={!newFolderName.trim()}
+                      className="px-3 py-1 rounded-full bg-primary hover:bg-primary/90 text-white text-[10px] font-bold cursor-pointer disabled:opacity-50"
+                    >
+                      Crear
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             <div className="flex lg:flex-col gap-1.5 overflow-x-auto lg:overflow-visible pb-1 lg:pb-0">
-              <button
+              <motion.button
                 type="button"
-                onClick={() => setSelectedFolderId(null)}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => { setSelectedFolderId(null); uiSounds.navigate(); }}
                 className={`shrink-0 flex items-center gap-2 px-2.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap cursor-pointer transition-colors ${
                   selectedFolderId === null
-                    ? "bg-primary/15 text-primary"
+                    ? "bg-primary text-white dark:text-zinc-950 shadow-md"
                     : "text-zinc-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800"
                 }`}
               >
                 <Layers className="w-3.5 h-3.5 shrink-0" />
                 <span className="flex-1 text-left truncate">Todas las notas</span>
-                <span className="text-[10px] text-zinc-400 font-semibold">{notes.length}</span>
-              </button>
+                <span className={`text-[10px] font-semibold ${selectedFolderId === null ? "text-white/80 dark:text-zinc-950/70" : "text-zinc-400"}`}>
+                  {notes.length}
+                </span>
+              </motion.button>
 
               {folders.map((f) => {
                 const palette = FOLDER_COLORS[f.color] || FOLDER_COLORS.slate;
                 const isEditing = editingFolderId === f.id;
+                const isActive = selectedFolderId === f.id;
                 return (
-                  <div
+                  <motion.div
                     key={f.id}
+                    layout
                     onDragOver={(e) => {
                       if (!draggingId) return;
                       e.preventDefault();
@@ -1004,14 +1033,17 @@ export function NotesView({
                     onDragLeave={() => setDragOverFolderId((id) => (id === f.id ? null : id))}
                     onDrop={(e) => {
                       e.preventDefault();
-                      if (draggingId) updateNote(draggingId, { folderId: f.id });
+                      if (draggingId) {
+                        updateNote(draggingId, { folderId: f.id });
+                        uiSounds.toggle();
+                      }
                       setDraggingId(null);
                       setDragOverId(null);
                       setDragOverFolderId(null);
                     }}
                     className={`group relative shrink-0 flex items-center gap-1 rounded-xl transition-colors ${
                       dragOverFolderId === f.id ? "ring-2 ring-primary bg-primary/10" : ""
-                    } ${selectedFolderId === f.id && dragOverFolderId !== f.id ? "bg-primary/15" : ""}`}
+                    } ${isActive && dragOverFolderId !== f.id ? "bg-primary text-white dark:text-zinc-950 shadow-md" : ""}`}
                   >
                     {isEditing ? (
                       <input
@@ -1023,19 +1055,25 @@ export function NotesView({
                           if (e.key === "Escape") setEditingFolderId(null);
                         }}
                         onBlur={() => { if (editingFolderName.trim()) renameFolder(f.id, editingFolderName); setEditingFolderId(null); }}
-                        className="flex-1 min-w-0 px-2.5 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-primary text-xs font-bold focus:outline-none"
+                        className="flex-1 min-w-0 px-2.5 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-primary text-xs font-bold text-zinc-900 dark:text-white focus:outline-none"
                       />
                     ) : (
                       <button
                         type="button"
-                        onClick={() => setSelectedFolderId(f.id)}
+                        onClick={() => { setSelectedFolderId(f.id); uiSounds.navigate(); }}
                         className={`flex-1 min-w-0 flex items-center gap-2 px-2.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap cursor-pointer ${
-                          selectedFolderId === f.id ? "text-primary" : "text-zinc-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800"
+                          isActive ? "" : "text-zinc-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800"
                         }`}
                       >
-                        <Folder className={`w-3.5 h-3.5 shrink-0 ${palette.icon}`} fill="currentColor" fillOpacity={0.2} />
+                        <Folder
+                          className={`w-3.5 h-3.5 shrink-0 ${isActive ? "" : palette.icon}`}
+                          fill="currentColor"
+                          fillOpacity={isActive ? 0.35 : 0.2}
+                        />
                         <span className="flex-1 text-left truncate">{f.name}</span>
-                        <span className="text-[10px] text-zinc-400 font-semibold">{folderCounts[f.id] || 0}</span>
+                        <span className={`text-[10px] font-semibold ${isActive ? "text-white/80 dark:text-zinc-950/70" : "text-zinc-400"}`}>
+                          {folderCounts[f.id] || 0}
+                        </span>
                       </button>
                     )}
                     {!isEditing && (
@@ -1043,7 +1081,9 @@ export function NotesView({
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); setFolderMenuId(folderMenuId === f.id ? null : f.id); }}
-                          className="opacity-0 group-hover:opacity-100 focus:opacity-100 p-1 mr-1 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 text-zinc-400 cursor-pointer"
+                          className={`opacity-0 group-hover:opacity-100 focus:opacity-100 p-1 mr-1 rounded-lg cursor-pointer ${
+                            isActive ? "hover:bg-black/15 text-white/80 dark:text-zinc-950/70" : "hover:bg-black/10 dark:hover:bg-white/10 text-zinc-400"
+                          }`}
                           title="Opciones de la carpeta"
                         >
                           <ChevronDown className="w-3.5 h-3.5" />
@@ -1068,132 +1108,105 @@ export function NotesView({
                         )}
                       </div>
                     )}
-                  </div>
+                  </motion.div>
                 );
               })}
             </div>
           </div>
 
-          <div className="space-y-6 min-w-0">
-        {/* Compose box */}
-        <div
-          className={`rounded-2xl border p-4 shadow-sm transition-all ${
-            darkMode ? "bg-zinc-950/60 border-zinc-800" : "bg-white border-slate-200"
-          }`}
-        >
-          {!composeOpen ? (
-            <button
+          {/* Columna 2: lista compacta de notas de la carpeta actual — clic en una la abre en el
+              panel grande de la derecha. Ancho fijo (300px) para que entren cómodas al menos 2
+              tarjetas apiladas sin que la columna se achique. */}
+          <div className="space-y-4 min-w-0">
+            <motion.button
               type="button"
-              onClick={() => setComposeOpen(true)}
-              className="w-full text-left text-sm text-zinc-400 font-medium flex items-center gap-2 cursor-pointer"
+              whileTap={{ scale: 0.98 }}
+              onClick={handleCreateNote}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl border border-dashed border-primary/40 text-primary text-xs font-bold hover:bg-primary/5 cursor-pointer transition-colors"
             >
-              <Plus className="w-4 h-4" /> Toma una nota...
-            </button>
-          ) : (
-            <div className="space-y-3">
-              <input
-                autoFocus
-                value={composeTitle}
-                onChange={(e) => setComposeTitle(e.target.value)}
-                placeholder="Título"
-                className="w-full bg-transparent text-sm font-extrabold text-zinc-900 dark:text-white focus:outline-none placeholder:text-zinc-400 placeholder:font-extrabold"
-              />
-              <RichTextEditor
-                value={composeHtml}
-                onChange={setComposeHtml}
-                placeholder="Escribí tu nota..."
-                darkToolbar
-                attachments={composeAttachments}
-                onAttachmentsChange={setComposeAttachments}
-                activeMenu={composeMenu === "bgcolor" || composeMenu === "folder" ? null : composeMenu}
-                onActiveMenuChange={setComposeMenu}
-              />
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <div className="flex items-center gap-2">
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => setComposeMenu(composeMenu === "bgcolor" ? null : "bgcolor")}
-                      className={`w-6 h-6 rounded-full border border-slate-300 dark:border-zinc-700 cursor-pointer ${NOTE_COLORS[composeColor].swatch}`}
-                      title="Color"
-                    />
-                    {composeMenu === "bgcolor" && (
-                      <ColorPicker value={composeColor} onChange={setComposeColor} onClose={() => setComposeMenu(null)} />
-                    )}
-                  </div>
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => setComposeMenu(composeMenu === "folder" ? null : "folder")}
-                      className="flex items-center gap-1 px-2 py-1 rounded-full border border-slate-300 dark:border-zinc-700 text-[10px] font-bold text-zinc-500 dark:text-zinc-400 hover:text-primary cursor-pointer"
-                    >
-                      <Folder className="w-3 h-3" />
-                      <span className="truncate max-w-[120px]">{folders.find((f) => f.id === composeFolderId)?.name || "Sin carpeta"}</span>
-                      <ChevronDown className="w-2.5 h-2.5" />
-                    </button>
-                    {composeMenu === "folder" && (
-                      <FolderPicker
-                        folders={folders}
-                        value={composeFolderId}
-                        onChange={setComposeFolderId}
-                        onClose={() => setComposeMenu(null)}
-                      />
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center justify-center sm:justify-start gap-2 w-full sm:w-auto">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setComposeOpen(false);
-                      setComposeTitle("");
-                      setComposeHtml("");
-                      setComposeColor("default");
-                      setComposeAttachments([]);
-                      setComposeMenu(null);
-                    }}
-                    className="px-3 py-1.5 text-xs font-bold text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 cursor-pointer"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleCreate}
-                    className="px-4 py-1.5 rounded-full bg-primary hover:bg-primary/90 text-white text-xs font-bold shadow-md cursor-pointer"
-                  >
-                    Guardar
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
+              <Plus className="w-4 h-4" /> Nueva nota
+            </motion.button>
 
-        {visibleNotes.length === 0 && (
-          <p className="text-center text-xs text-zinc-500 dark:text-zinc-400 py-10">
-            {notes.length === 0
-              ? "Todavía no tenés notas. Creá la primera de arriba — quedan guardadas de forma permanente hasta que las borres."
-              : "Esta carpeta todavía no tiene notas."}
-          </p>
-        )}
-
-        {pinned.length > 0 && (
-          <div className="space-y-2">
-            <p className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
-              <Pin className="w-3 h-3" /> Fijadas
-            </p>
-            <div className="columns-[380px] gap-4">{getGroupRenderOrder(pinned).map((n) => renderNote(n, pinned))}</div>
-          </div>
-        )}
-
-        {others.length > 0 && (
-          <div className="space-y-2">
-            {pinned.length > 0 && (
-              <p className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-400">Otras</p>
+            {visibleNotes.length === 0 && (
+              <p className="text-center text-xs text-zinc-500 dark:text-zinc-400 py-10 px-2">
+                {notes.length === 0
+                  ? "Todavía no tenés notas. Creá la primera de arriba — quedan guardadas de forma permanente hasta que las borres."
+                  : "Esta carpeta todavía no tiene notas."}
+              </p>
             )}
-            <div className="columns-[380px] gap-4">{getGroupRenderOrder(others).map((n) => renderNote(n, others))}</div>
+
+            {pinned.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5 px-1">
+                  <Pin className="w-3 h-3" /> Fijadas
+                </p>
+                <div className="space-y-2.5">{getGroupRenderOrder(pinned).map((n) => renderNoteListItem(n, pinned))}</div>
+              </div>
+            )}
+
+            {others.length > 0 && (
+              <div className="space-y-2">
+                {pinned.length > 0 && (
+                  <p className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-400 px-1">Otras</p>
+                )}
+                <div className="space-y-2.5">{getGroupRenderOrder(others).map((n) => renderNoteListItem(n, others))}</div>
+              </div>
+            )}
           </div>
-        )}
+
+          {/* Columna 3: panel de detalle — la nota seleccionada, siempre editable ahí mismo
+              (nada de modal aparte). */}
+          <div className="lg:sticky lg:top-4 min-w-0">
+            {selectedNote ? (
+              <NoteDetailPane
+                key={selectedNote.id}
+                note={selectedNote}
+                draft={drafts[selectedNote.id]}
+                folders={folders}
+                menu={menuFor(selectedNote.id)}
+                onSetDraft={(patch) =>
+                  setDrafts((prev) => ({
+                    ...prev,
+                    [selectedNote.id]: {
+                      title: prev[selectedNote.id]?.title !== undefined ? prev[selectedNote.id].title : selectedNote.title || "",
+                      text: prev[selectedNote.id]?.text !== undefined ? prev[selectedNote.id].text : selectedNote.text,
+                      ...patch,
+                    },
+                  }))
+                }
+                onSetMenu={(m) => setMenuFor(selectedNote.id, m)}
+                onUpdateNote={updateNote}
+                onSaveDraft={async (patch) => {
+                  await updateNote(selectedNote.id, patch);
+                  setDrafts((prev) => {
+                    const next = { ...prev };
+                    delete next[selectedNote.id];
+                    return next;
+                  });
+                }}
+                onTogglePin={() => { togglePin(selectedNote.id); uiSounds.toggle(); }}
+                onDelete={() => setDeleteConfirmId(selectedNote.id)}
+                recipients={getRecipients(selectedNote.id)}
+                allKnownRecipients={getAllRecipients()}
+                onShare={async (email) => {
+                  await shareNote(selectedNote.id, email);
+                  showToast(`Nota compartida con ${email}.`, "success");
+                }}
+                onUnshare={async (email) => {
+                  try {
+                    await unshareNote(selectedNote.id, email);
+                    showToast(`Se dejó de compartir con ${email}.`, "success");
+                  } catch (err: any) {
+                    showToast("Error al dejar de compartir: " + (err?.message || String(err)), "error");
+                  }
+                }}
+              />
+            ) : (
+              <div className={`rounded-2xl border p-8 text-center ${darkMode ? "bg-zinc-950/40 border-zinc-800" : "bg-slate-50 border-slate-200"}`}>
+                <StickyNoteIcon className="w-8 h-8 text-zinc-300 dark:text-zinc-700 mx-auto mb-2" />
+                <p className="text-xs text-zinc-400 font-medium">Elegí una nota de la lista, o creá una nueva.</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -1211,6 +1224,7 @@ export function NotesView({
           <button
             type="button"
             onClick={() => {
+              setSelectedNoteId(rightClickMenu.id);
               setMenuFor(rightClickMenu.id, "share");
               setRightClickMenu(null);
             }}
@@ -1218,6 +1232,24 @@ export function NotesView({
           >
             <Share2 className="w-3.5 h-3.5" /> Compartir con...
           </button>
+        </div>
+      )}
+
+      {/* Clon 100% sólido de la nota que se está arrastrando, siguiendo al cursor — reemplaza la
+          imagen de arrastre nativa del navegador (que siempre sale semitransparente). */}
+      {dragGhost && (
+        <div
+          className="fixed z-[1000] pointer-events-none w-[260px]"
+          style={{ left: dragGhost.x, top: dragGhost.y, transform: "translate(-24px, -16px) rotate(-5deg)" }}
+        >
+          <div className={`rounded-2xl border p-3 shadow-2xl ${NOTE_COLORS[dragGhost.note.color]?.card || NOTE_COLORS.default.card}`}>
+            <span className="text-xs font-extrabold text-zinc-900 dark:text-white truncate block">
+              {dragGhost.note.title || "Sin título"}
+            </span>
+            <p className="text-[11px] text-zinc-500 dark:text-zinc-400 line-clamp-2 mt-0.5">
+              {stripHtmlPreview(dragGhost.note.text) || "Nota vacía"}
+            </p>
+          </div>
         </div>
       )}
 
