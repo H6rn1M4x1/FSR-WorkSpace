@@ -114,6 +114,25 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
     }
   };
 
+  // Zoom nativo real de cada proveedor — más chico que el maxZoom de 20 que usa el mapa (controles
+  // +/- y, desde hace poco, también la rueda del mouse). Las baldosas estándar de OSM (y las de
+  // OpenTopoMap) no existen más allá de su zoom nativo: pedirlas a un zoom mayor devuelve baldosas
+  // vacías/rotas, lo que con el filtro invert() de tema oscuro se termina viendo como el mapa
+  // entero en negro. Con maxNativeZoom, Leaflet deja de pedir baldosas que no existen y en cambio
+  // agranda la última baldosa real que sí descargó, así que el mapa sigue viéndose (más pixelado,
+  // nunca en negro) aunque el usuario haga zoom más allá de lo que el proveedor cubre.
+  const getTileMaxNativeZoom = (type: "roadmap" | "satellite" | "terrain") => {
+    switch (type) {
+      case "satellite":
+        return 19;
+      case "terrain":
+        return 17;
+      case "roadmap":
+      default:
+        return 19;
+    }
+  };
+
   const getTileAttribution = (type: "roadmap" | "satellite" | "terrain") => {
     switch (type) {
       case "satellite":
@@ -201,6 +220,7 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
       // OpenStreetMap Tile Layer
       const tileLayer = L.tileLayer(getOSMTileUrl(mapType), {
         maxZoom: 20,
+        maxNativeZoom: getTileMaxNativeZoom(mapType),
         attribution: getTileAttribution(mapType),
       }).addTo(map);
 
@@ -276,6 +296,7 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
       mapRef.current.removeLayer(tileLayerRef.current);
       const newLayer = L.tileLayer(getOSMTileUrl(newType), {
         maxZoom: 20,
+        maxNativeZoom: getTileMaxNativeZoom(newType),
         attribution: getTileAttribution(newType),
       }).addTo(mapRef.current);
       tileLayerRef.current = newLayer;
