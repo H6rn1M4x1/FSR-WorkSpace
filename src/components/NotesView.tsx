@@ -37,7 +37,7 @@ import { SharedBadge } from "./SharedBadge";
 import { SubNav } from "./SubNav";
 import { PasswordVaultPanel } from "./PasswordVaultPanel";
 import { auth } from "../lib/firebase";
-import { getAccentColorHex, buildPalette, mixHex } from "./WeeklyScheduleGrid";
+import { getAccentColorHex, hexToRgb, rgbToHex, mixHex } from "./WeeklyScheduleGrid";
 import type { StickyNote, NoteFolder } from "../types";
 
 interface NotesViewProps {
@@ -51,13 +51,17 @@ interface NotesViewProps {
 }
 
 // Paleta de color de nota: en vez de 8 colores sueltos sin relación entre sí, una escala del
-// color de acento de la app — mismo método (buildPalette, variando la mezcla del acento) que
-// "Embudo de Gastos" y los horarios usan para sus barras. El selector muestra el tono "fuerte"
-// de cada paso (swatch) para que la escala se note a simple vista; la tarjeta de la nota en sí
-// usa una versión bien suavizada de ese mismo tono (bg) — el editor de texto de adentro usa
-// siempre texto oscuro en tema claro / blanco en tema oscuro (RichTextEditor, compartido con el
-// resto de la app), así que el fondo de la tarjeta tiene que quedarse claro en tema claro y
-// oscuro en tema oscuro para seguir siendo legible, por eso no se usa el tono fuerte ahí directo.
+// color de acento de la app. Variar la mezcla en RGB (como hace buildPalette, pensado para
+// pocos pasos bien separados) "lavaba" los pasos intermedios hacia un mismo gris apagado y
+// quedaban casi indistinguibles entre sí — el mismo problema que ya se había dado en "Embudo de
+// Gastos" (ver funnelPalette en ExpenseFunnelWidget.tsx) y que ahí se resolvió variando
+// LUMINOSIDAD y SATURACIÓN en HSL en vez de mezclar hacia un gris neutro; se reusa ese mismo
+// criterio acá. El selector muestra el tono "fuerte" de cada paso (swatch) para que la escala se
+// note a simple vista; la tarjeta de la nota en sí usa una versión bien suavizada de ese mismo
+// tono (bg) — el editor de texto de adentro usa siempre texto oscuro en tema claro / blanco en
+// tema oscuro (RichTextEditor, compartido con el resto de la app), así que el fondo de la
+// tarjeta tiene que quedarse claro en tema claro y oscuro en tema oscuro para seguir siendo
+// legible, por eso no se usa el tono fuerte ahí directo.
 const NOTE_ACCENT_STEPS = 7;
 
 export interface NoteColorEntry {
@@ -66,6 +70,40 @@ export interface NoteColorEntry {
   swatch: string;
   bg: string;
   border: string;
+}
+
+function hexToHsl(hex: string): [number, number, number] {
+  const [r, g, b] = hexToRgb(hex);
+  const rn = r / 255, gn = g / 255, bn = b / 255;
+  const max = Math.max(rn, gn, bn), min = Math.min(rn, gn, bn);
+  const l = (max + min) / 2;
+  let h = 0, s = 0;
+  const d = max - min;
+  if (d !== 0) {
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    if (max === rn) h = (gn - bn) / d + (gn < bn ? 6 : 0);
+    else if (max === gn) h = (bn - rn) / d + 2;
+    else h = (rn - gn) / d + 4;
+    h *= 60;
+  }
+  return [h, s * 100, l * 100];
+}
+
+function hslToHex(h: number, s: number, l: number): string {
+  const sN = Math.max(0, Math.min(100, s)) / 100;
+  const lN = Math.max(0, Math.min(100, l)) / 100;
+  const c = (1 - Math.abs(2 * lN - 1)) * sN;
+  const hp = (((h % 360) + 360) % 360) / 60;
+  const x = c * (1 - Math.abs((hp % 2) - 1));
+  let r1 = 0, g1 = 0, b1 = 0;
+  if (hp < 1) [r1, g1, b1] = [c, x, 0];
+  else if (hp < 2) [r1, g1, b1] = [x, c, 0];
+  else if (hp < 3) [r1, g1, b1] = [0, c, x];
+  else if (hp < 4) [r1, g1, b1] = [0, x, c];
+  else if (hp < 5) [r1, g1, b1] = [x, 0, c];
+  else [r1, g1, b1] = [c, 0, x];
+  const m = lN - c / 2;
+  return rgbToHex((r1 + m) * 255, (g1 + m) * 255, (b1 + m) * 255);
 }
 
 export function buildNoteColorPalette(darkMode: boolean): NoteColorEntry[] {
@@ -78,14 +116,21 @@ export function buildNoteColorPalette(darkMode: boolean): NoteColorEntry[] {
     bg: baseHex,
     border: darkMode ? "#27272a" : "#e2e8f0",
   };
-  const scale = buildPalette(accent, NOTE_ACCENT_STEPS, darkMode);
-  const accentEntries: NoteColorEntry[] = scale.map((hex, i) => ({
-    key: `accent${i}`,
-    label: `Tono ${i + 1}`,
-    swatch: hex,
-    bg: mixHex(hex, darkMode ? 30 : 16, baseHex),
-    border: mixHex(hex, darkMode ? 55 : 35, baseHex),
-  }));
+  const [baseH, baseS, baseL] = hexToHsl(accent);
+  const n = NOTE_ACCENT_STEPS;
+  const accentEntries: NoteColorEntry[] = Array.from({ length: n }, (_, i) => {
+    const t = n > 1 ? i / (n - 1) : 0;
+    const targetL = darkMode ? baseL + t * (82 - baseL) : baseL - t * baseL * 0.5;
+    const targetS = Math.max(baseS * 0.5, baseS - t * 15);
+    const hex = hslToHex(baseH, targetS, targetL);
+    return {
+      key: `accent${i}`,
+      label: `Tono ${i + 1}`,
+      swatch: hex,
+      bg: mixHex(hex, darkMode ? 30 : 16, baseHex),
+      border: mixHex(hex, darkMode ? 55 : 35, baseHex),
+    };
+  });
   return [defaultEntry, ...accentEntries];
 }
 
