@@ -13,13 +13,18 @@ import {
   TrendingDown,
   Pin,
   PercentCircle,
+  Bitcoin,
+  LineChart,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
-import { DetailedPayment } from "../types";
-import { getArgentinaDateParts } from "../utils/date";
+import { DetailedPayment, InvestmentSnapshot } from "../types";
+import { getArgentinaDateParts, formatLocalDate } from "../utils/date";
 import { useInflacionData } from "../hooks/useInflacionData";
 import { AnimatedNumber } from "./AnimatedNumber";
 import { PillFilterBar } from "./PillFilterBar";
 import { uiSounds } from "../lib/sounds";
+import { getAccentColorHex, hexToRgb, rgbToHex } from "./WeeklyScheduleGrid";
 
 const MONTH_NAMES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -73,19 +78,79 @@ const formatARS = (value: number): string => {
 
 type ViewMode = "current" | "previous" | "compare";
 
+// Mini-sparkline para el slider de inversiones: normaliza una serie de valores (pueden ser
+// negativos) a puntos dentro de un viewBox width x height, con un margen chico arriba/abajo para
+// que el trazo no quede pegado al borde.
+function buildSparklinePoints(values: number[], width: number, height: number): string {
+  if (values.length === 0) return "";
+  if (values.length === 1) return `0,${height / 2} ${width},${height / 2}`;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const margin = height * 0.12;
+  return values
+    .map((v, i) => {
+      const x = (i / (values.length - 1)) * width;
+      const y = height - margin - ((v - min) / range) * (height - margin * 2);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+}
+
+function hexToHsl(hex: string): [number, number, number] {
+  const [r, g, b] = hexToRgb(hex);
+  const rn = r / 255, gn = g / 255, bn = b / 255;
+  const max = Math.max(rn, gn, bn), min = Math.min(rn, gn, bn);
+  const l = (max + min) / 2;
+  let h = 0, s = 0;
+  const d = max - min;
+  if (d !== 0) {
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    if (max === rn) h = (gn - bn) / d + (gn < bn ? 6 : 0);
+    else if (max === gn) h = (bn - rn) / d + 2;
+    else h = (rn - gn) / d + 4;
+    h *= 60;
+  }
+  return [h, s * 100, l * 100];
+}
+
+function hslToHex(h: number, s: number, l: number): string {
+  const sN = Math.max(0, Math.min(100, s)) / 100;
+  const lN = Math.max(0, Math.min(100, l)) / 100;
+  const c = (1 - Math.abs(2 * lN - 1)) * sN;
+  const hp = (((h % 360) + 360) % 360) / 60;
+  const x = c * (1 - Math.abs((hp % 2) - 1));
+  let r1 = 0, g1 = 0, b1 = 0;
+  if (hp < 1) [r1, g1, b1] = [c, x, 0];
+  else if (hp < 2) [r1, g1, b1] = [x, c, 0];
+  else if (hp < 3) [r1, g1, b1] = [0, c, x];
+  else if (hp < 4) [r1, g1, b1] = [0, x, c];
+  else if (hp < 5) [r1, g1, b1] = [x, 0, c];
+  else [r1, g1, b1] = [c, 0, x];
+  const m = lN - c / 2;
+  return rgbToHex((r1 + m) * 255, (g1 + m) * 255, (b1 + m) * 255);
+}
+
 // Geometría del embudo (ver análisis fotograma a fotograma del video de referencia): cada etapa
-// es un bloque de ancho constante (el "rect" sólido, color de acento pleno) que NO ocupa toda la
-// altura de su fila — deja un hueco abajo antes del siguiente bloque, más angosto. Atrás de todos
-// los bloques va un polígono de fondo que sí une el ancho de cada etapa con el de la siguiente en
-// diagonal, así que en ese hueco se asoma la diagonal de fondo (en una sombra más tenue del mismo
-// acento, en vez del magenta del original) — el mismo efecto de "alero/caída" que tiene el
-// recurso, logrado con geometría simple en vez de las curvas bezier del original.
-const FUNNEL_SEGMENT_H = 64;
-const FUNNEL_RECT_H = 46;
-const FUNNEL_HALF_W = 92;
-const FUNNEL_MIN_HALF_W = 20;
-const FUNNEL_CENTER_X = FUNNEL_HALF_W + 6;
-const FUNNEL_SVG_WIDTH = FUNNEL_CENTER_X * 2;
+// es un bloque de ancho constante que NO ocupa toda la altura de su fila — deja un hueco abajo
+// antes del siguiente bloque, más angosto. Atrás de todos los bloques va un polígono de fondo que
+// sí une el ancho de cada etapa con el de la siguiente en diagonal, así que en ese hueco se asoma
+// la diagonal de fondo — el mismo efecto de "alero/caída" que tiene el recurso.
+//
+// Cada bloque además se dibuja con una extrusión simple (cara frontal + tapa + lateral, como un
+// gráfico de barras 3D) para que se note el volumen en vez de quedar un rectángulo plano, y cada
+// etapa usa un tono distinto del color de acento (misma rampa que WeeklyScheduleGrid usa para
+// "Materia" en Horario) en vez de un único naranja repetido, para que las categorías se
+// diferencien de un vistazo.
+const FUNNEL_SEGMENT_H = 72;
+const FUNNEL_RECT_H = 52;
+const FUNNEL_HALF_W = 108;
+const FUNNEL_MIN_HALF_W = 13;
+const FUNNEL_CENTER_X = FUNNEL_HALF_W + 8;
+const FUNNEL_DEPTH_X = 13;
+const FUNNEL_DEPTH_Y = -10;
+const FUNNEL_PAD_TOP = Math.abs(FUNNEL_DEPTH_Y);
+const FUNNEL_SVG_WIDTH = FUNNEL_CENTER_X * 2 + FUNNEL_DEPTH_X;
 
 /**
  * "Embudo de Gastos" — adaptación del recurso de referencia "Embudo de ventas" (Moxen) al
@@ -102,14 +167,17 @@ const FUNNEL_SVG_WIDTH = FUNNEL_CENTER_X * 2;
 export function ExpenseFunnelWidget({
   detailedPayments,
   darkMode,
+  investmentSnapshots = [],
 }: {
   detailedPayments: DetailedPayment[];
   darkMode: boolean;
+  investmentSnapshots?: InvestmentSnapshot[];
 }) {
   const inflacion = useInflacionData();
   const [viewMode, setViewMode] = useState<ViewMode>("current");
   const [hoveredCategory, setHoveredCategory] = useState<string | null>(null);
   const [pinnedCategory, setPinnedCategory] = useState<string | null>(null);
+  const [investmentSlide, setInvestmentSlide] = useState(0);
 
   const { year: curYear, month: curMonth } = useMemo(() => getArgentinaDateParts(), []);
   const prevMonth = curMonth === 0 ? 11 : curMonth - 1;
@@ -161,8 +229,8 @@ export function ExpenseFunnelWidget({
     const left: [number, number][] = [];
     const right: [number, number][] = [];
     rows.forEach((_, i) => {
-      const yTop = i * FUNNEL_SEGMENT_H;
-      const yBottom = i * FUNNEL_SEGMENT_H + FUNNEL_RECT_H;
+      const yTop = i * FUNNEL_SEGMENT_H + FUNNEL_PAD_TOP;
+      const yBottom = i * FUNNEL_SEGMENT_H + FUNNEL_RECT_H + FUNNEL_PAD_TOP;
       left.push([FUNNEL_CENTER_X - funnelHalfWidths[i], yTop]);
       left.push([FUNNEL_CENTER_X - funnelHalfWidths[i], yBottom]);
       right.push([FUNNEL_CENTER_X + funnelHalfWidths[i], yTop]);
@@ -171,7 +239,36 @@ export function ExpenseFunnelWidget({
     return [...left, ...right.reverse()].map(([x, y]) => `${x},${y}`).join(" ");
   }, [rows, funnelHalfWidths]);
 
-  const funnelSvgHeight = rows.length * FUNNEL_SEGMENT_H;
+  const funnelSvgHeight = rows.length * FUNNEL_SEGMENT_H + FUNNEL_PAD_TOP;
+
+  // Una tonalidad distinta del acento por etapa: varía la LUMINOSIDAD en HSL (no una mezcla con
+  // blanco/gris en RGB) para que cada categoría se vea como un tono vivo y saturado propio —
+  // mezclar hacia blanco "lavaba" el color hacia un beige apagado y las categorías chicas
+  // terminaban casi indistinguibles entre sí. La saturación baja apenas un poco hacia las
+  // categorías más chicas, nunca a cero, así ninguna deja de leerse como parte de la familia del
+  // acento.
+  const funnelPalette = useMemo(() => {
+    const [baseH, baseS, baseL] = hexToHsl(getAccentColorHex());
+    const n = Math.max(rows.length, 1);
+    return rows.map((_, i) => {
+      const t = n > 1 ? i / (n - 1) : 0;
+      const targetL = darkMode ? baseL + t * (86 - baseL) : baseL - t * baseL * 0.58;
+      const targetS = Math.max(baseS * 0.55, baseS - t * 18);
+      return hslToHex(baseH, targetS, targetL);
+    });
+  }, [rows.length, darkMode]);
+  // Iluminación simulada en HSL (no mezcla porcentual con blanco/negro) para que el desplazamiento
+  // de luminosidad entre cara frontal/tapa/lateral sea el MISMO en todas las etapas — si no, las
+  // etapas más claras (categorías chicas) terminaban con una cara lateral casi igual a las demás,
+  // porque oscurecer por porcentaje achica mucho menos a un color ya claro que a uno oscuro.
+  const funnelTopShade = (hex: string) => {
+    const [h, s, l] = hexToHsl(hex);
+    return hslToHex(h, s, l + 16);
+  };
+  const funnelSideShade = (hex: string) => {
+    const [h, s, l] = hexToHsl(hex);
+    return hslToHex(h, Math.min(100, s + 5), l - 22);
+  };
 
   const dropInfo = useMemo(() => {
     return rows.map((row, i) => {
@@ -195,6 +292,34 @@ export function ExpenseFunnelWidget({
     setPinnedCategory((prev) => (prev === categoria ? null : categoria));
     uiSounds.toggle();
   };
+
+  // Mini-slider "Resultado de Inversiones" — ocupaba el espacio vacío que quedaba abajo del todo
+  // en el panel de detalle, a la derecha. Reusa los snapshots diarios que Finanzas ya calcula y
+  // guarda (InvestmentSnapshot: una fila por día con la ganancia acumulada de cripto/acciones en
+  // ARS), sin recalcular nada — solo ordena por fecha y arma una mini serie para el sparkline.
+  const sortedSnapshots = useMemo(
+    () => [...(investmentSnapshots || [])].sort((a, b) => a.date.localeCompare(b.date)),
+    [investmentSnapshots]
+  );
+  const latestSnapshot = sortedSnapshots[sortedSnapshots.length - 1] || null;
+  const recentSnapshots = sortedSnapshots.slice(-14);
+  const investmentSlides = [
+    {
+      key: "crypto" as const,
+      label: "Criptomonedas",
+      icon: Bitcoin,
+      value: latestSnapshot?.cryptoGainARS ?? 0,
+      series: recentSnapshots.map((s) => s.cryptoGainARS),
+    },
+    {
+      key: "acciones" as const,
+      label: "Acciones",
+      icon: LineChart,
+      value: latestSnapshot?.accionesGainARS ?? 0,
+      series: recentSnapshots.map((s) => s.accionesGainARS),
+    },
+  ];
+  const activeInvestmentSlide = investmentSlides[investmentSlide];
 
   return (
     <div
@@ -308,39 +433,61 @@ export function ExpenseFunnelWidget({
                 })}
               </div>
 
-              {/* El embudo propiamente dicho */}
+              {/* El embudo propiamente dicho — cada etapa extruida (cara frontal + tapa + lateral)
+                  como una barra 3D, en vez de un rectángulo plano. */}
               <div className="flex-1 flex justify-center">
                 <svg
                   viewBox={`0 0 ${FUNNEL_SVG_WIDTH} ${funnelSvgHeight}`}
                   width="100%"
-                  style={{ maxWidth: FUNNEL_SVG_WIDTH * 1.5, height: funnelSvgHeight }}
+                  style={{
+                    maxWidth: FUNNEL_SVG_WIDTH * 1.5,
+                    height: funnelSvgHeight,
+                    filter: darkMode ? "drop-shadow(0 6px 10px rgba(0,0,0,0.5))" : "drop-shadow(0 6px 10px rgba(15,23,42,0.18))",
+                  }}
                 >
                   <polygon
                     points={funnelBackgroundPoints}
-                    style={{ fill: "color-mix(in srgb, var(--color-primary) 28%, transparent)" }}
+                    style={{ fill: darkMode ? "rgba(0,0,0,0.45)" : "rgba(15,23,42,0.12)" }}
                   />
                   {rows.map((row, i) => {
                     const isSelected = row.categoria === selectedCategoria;
                     const hasSelection = Boolean(selectedCategoria);
+                    const hw = funnelHalfWidths[i];
+                    const x1 = FUNNEL_CENTER_X - hw;
+                    const x2 = FUNNEL_CENTER_X + hw;
+                    const y1 = i * FUNNEL_SEGMENT_H + FUNNEL_PAD_TOP;
+                    const y2 = y1 + FUNNEL_RECT_H;
+                    // La profundidad se achica proporcional al ancho del bloque (con un piso) —
+                    // si no, en los bloques angostos la cara lateral (más oscura) terminaba
+                    // ocupando casi todo el ancho visible y los tapaba de un tono parejo oscuro,
+                    // arruinando la diferenciación por tonalidad que se buscaba con la paleta.
+                    const dx = Math.min(FUNNEL_DEPTH_X, Math.max(5, hw * 0.55));
+                    const dy = dx * (FUNNEL_DEPTH_Y / FUNNEL_DEPTH_X);
+                    const base = funnelPalette[i];
+                    const top = funnelTopShade(base);
+                    const side = funnelSideShade(base);
                     return (
-                      <rect
+                      <motion.g
                         key={row.categoria}
-                        x={FUNNEL_CENTER_X - funnelHalfWidths[i]}
-                        y={i * FUNNEL_SEGMENT_H}
-                        width={funnelHalfWidths[i] * 2}
-                        height={FUNNEL_RECT_H}
-                        rx={8}
                         data-sound="expand"
                         onMouseEnter={() => setHoveredCategory(row.categoria)}
                         onMouseLeave={() => setHoveredCategory(null)}
                         onClick={() => togglePin(row.categoria)}
-                        style={{
-                          fill: "var(--color-primary)",
-                          opacity: !hasSelection || isSelected ? 1 : 0.5,
-                          cursor: "pointer",
-                          transition: "opacity 0.2s",
+                        initial={{ opacity: 0, scaleY: 0 }}
+                        animate={{ opacity: !hasSelection || isSelected ? 1 : 0.45, scaleY: 1 }}
+                        transition={{
+                          opacity: { duration: 0.2 },
+                          scaleY: { duration: 0.5, delay: i * 0.06, ease: [0.16, 1, 0.3, 1] },
                         }}
-                      />
+                        style={{ transformOrigin: `${FUNNEL_CENTER_X}px ${y1}px`, cursor: "pointer" }}
+                      >
+                        {/* Lateral derecho (más oscuro) */}
+                        <polygon points={`${x2},${y1} ${x2 + dx},${y1 + dy} ${x2 + dx},${y2 + dy} ${x2},${y2}`} fill={side} />
+                        {/* Cara frontal (tono base de la categoría) */}
+                        <rect x={x1} y={y1} width={hw * 2} height={FUNNEL_RECT_H} rx={6} fill={base} />
+                        {/* Tapa superior (más clara, da la sensación de volumen) */}
+                        <polygon points={`${x1},${y1} ${x1 + dx},${y1 + dy} ${x2 + dx},${y1 + dy} ${x2},${y1}`} fill={top} />
+                      </motion.g>
                     );
                   })}
                 </svg>
@@ -420,6 +567,106 @@ export function ExpenseFunnelWidget({
                 </motion.div>
               )}
             </AnimatePresence>
+
+            {/* Slider "Resultado de Inversiones" — reusa los snapshots diarios que ya calcula
+                Finanzas, sin recalcular nada. Ocupa el espacio vacío debajo del detalle. */}
+            <div className="mt-4 pt-4 border-t border-zinc-200/60 dark:border-zinc-800">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[9.5px] font-bold text-zinc-400 uppercase tracking-widest">
+                  Resultado de Inversiones
+                </span>
+                {latestSnapshot && (
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      data-sound="click"
+                      onClick={() => setInvestmentSlide((i) => (i - 1 + investmentSlides.length) % investmentSlides.length)}
+                      className="p-1 rounded-full hover:bg-slate-100 dark:hover:bg-zinc-800 text-zinc-400 cursor-pointer"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      data-sound="click"
+                      onClick={() => setInvestmentSlide((i) => (i + 1) % investmentSlides.length)}
+                      className="p-1 rounded-full hover:bg-slate-100 dark:hover:bg-zinc-800 text-zinc-400 cursor-pointer"
+                    >
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {!latestSnapshot ? (
+                <p className="text-[10.5px] text-zinc-400 font-medium">
+                  Todavía no hay datos de inversiones en Finanzas &gt; Inversiones.
+                </p>
+              ) : (
+                <>
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={activeInvestmentSlide.key}
+                      initial={{ opacity: 0, x: 14 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -14 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="p-1.5 rounded-full bg-primary/10 text-primary shrink-0">
+                          <activeInvestmentSlide.icon className="w-3.5 h-3.5" />
+                        </span>
+                        <span className="text-xs font-bold">{activeInvestmentSlide.label}</span>
+                      </div>
+                      <div
+                        className={`text-xl font-black ${
+                          activeInvestmentSlide.value === 0
+                            ? ""
+                            : activeInvestmentSlide.value > 0
+                            ? "text-emerald-500"
+                            : "text-red-500"
+                        }`}
+                      >
+                        <AnimatedNumber
+                          value={activeInvestmentSlide.value}
+                          format={(n) => `${n > 0 ? "+" : n < 0 ? "-" : ""}$${Math.round(Math.abs(n)).toLocaleString("es-AR")}`}
+                        />
+                      </div>
+                      <p className="text-[10px] text-zinc-400 font-medium mt-0.5">
+                        Ganancia acumulada al {formatLocalDate(latestSnapshot.date)}
+                      </p>
+
+                      {activeInvestmentSlide.series.length > 1 && (
+                        <svg viewBox="0 0 120 30" width="100%" height="30" className="mt-2" preserveAspectRatio="none">
+                          <polyline
+                            points={buildSparklinePoints(activeInvestmentSlide.series, 120, 30)}
+                            fill="none"
+                            stroke={activeInvestmentSlide.value >= 0 ? "#10b981" : "#ef4444"}
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      )}
+                    </motion.div>
+                  </AnimatePresence>
+
+                  <div className="flex items-center justify-center gap-1.5 mt-2.5">
+                    {investmentSlides.map((s, i) => (
+                      <button
+                        key={s.key}
+                        type="button"
+                        data-sound="click"
+                        onClick={() => setInvestmentSlide(i)}
+                        title={s.label}
+                        className={`h-1.5 rounded-full transition-all cursor-pointer ${
+                          i === investmentSlide ? "w-4 bg-primary" : "w-1.5 bg-slate-300 dark:bg-zinc-700"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}

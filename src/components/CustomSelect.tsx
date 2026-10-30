@@ -202,45 +202,51 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                   width: `${popoverPosition.width}px`,
                   zIndex: 99999,
                 }}
-                className="bg-white dark:bg-black/85 backdrop-blur-md border border-slate-200 dark:border-zinc-800 rounded-xl shadow-2xl max-h-60 overflow-y-auto overflow-x-hidden p-1 scrollbar-thin scrollbar-thumb-zinc-200 dark:scrollbar-thumb-zinc-800"
+                className="bg-white dark:bg-black/85 backdrop-blur-md border border-slate-200 dark:border-zinc-800 rounded-xl shadow-2xl max-h-60 flex flex-col overflow-hidden"
               >
+                {/* El buscador queda fijo arriba (fuera del área con scroll) para no perderlo de
+                    vista al desplazarse por una lista larga de opciones. */}
                 {searchable && (
-                  <input
-                    type="text"
-                    placeholder="Buscar..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full px-3 py-2 text-xs rounded-lg bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-700 dark:placeholder:text-zinc-400 outline-none mb-1"
-                  />
-                )}
-                {filteredOptions.length === 0 ? (
-                  <div className="px-3 py-2 text-xs text-slate-400 dark:text-zinc-500 text-center">
-                    No hay opciones
+                  <div className="p-1 pb-0 shrink-0">
+                    <input
+                      type="text"
+                      placeholder="Buscar..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full px-3 py-2 text-xs rounded-lg bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-700 dark:placeholder:text-zinc-400 outline-none mb-1"
+                    />
                   </div>
-                ) : (
-                  filteredOptions.map((opt) => {
-                    const isSelected = opt.value === value;
-                    return (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => {
-                          onChange(opt.value);
-                          setIsOpen(false);
-                          setSearchTerm("");
-                        }}
-                        className={`w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-semibold rounded-lg text-left transition-colors cursor-pointer ${
-                          isSelected
-                            ? "bg-primary text-white dark:text-blue-950 font-bold"
-                            : "text-black dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-950/50"
-                        }`}
-                      >
-                        <span className="truncate pr-2">{opt.label}</span>
-                        {isSelected && <Check className="w-3.5 h-3.5 shrink-0" />}
-                      </button>
-                    );
-                  })
                 )}
+                <div className="overflow-y-auto overflow-x-hidden p-1 min-h-0 scrollbar-thin scrollbar-thumb-zinc-200 dark:scrollbar-thumb-zinc-800">
+                  {filteredOptions.length === 0 ? (
+                    <div className="px-3 py-2 text-xs text-slate-400 dark:text-zinc-500 text-center">
+                      No hay opciones
+                    </div>
+                  ) : (
+                    filteredOptions.map((opt) => {
+                      const isSelected = opt.value === value;
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => {
+                            onChange(opt.value);
+                            setIsOpen(false);
+                            setSearchTerm("");
+                          }}
+                          className={`w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-semibold rounded-lg text-left transition-colors cursor-pointer ${
+                            isSelected
+                              ? "bg-primary text-white dark:text-blue-950 font-bold"
+                              : "text-black dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-950/50"
+                          }`}
+                        >
+                          <span className="truncate pr-2">{opt.label}</span>
+                          {isSelected && <Check className="w-3.5 h-3.5 shrink-0" />}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
               </motion.div>
             )}
           </AnimatePresence>,
