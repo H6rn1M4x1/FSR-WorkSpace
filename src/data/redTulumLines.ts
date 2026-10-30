@@ -25,7 +25,90 @@ export interface TransitLine {
   stops: TransitStop[];
 }
 
+// Nodo "bus_stop" real de OpenStreetMap/Nominatim en Av. Córdoba y Las Heras (Capital/Desamparados,
+// San Juan) — la app usa OpenStreetMap (no Google Maps) para geocodificar, así que esta es la
+// referencia correcta para esa esquina, no una coordenada aproximada a ojo.
+const CORDOBA_Y_LAS_HERAS = { name: "Av. Córdoba y Las Heras", lat: -31.5409079, lon: -68.5375685 };
+
 export const RED_TULUM_LINES: TransitLine[] = [
+  // Líneas 104, 121, 214, 140, 141, 160, 161 y 162: agregadas porque un usuario que viaja a
+  // diario confirmó que SÍ pasan cerca de Av. Córdoba/Las Heras/Santa Fe (microcentro), aunque la
+  // prensa no publica el recorrido calle-por-calle completo de ninguna. 214, 140, 141, 160, 161 y
+  // 162 tienen además evidencia de prensa real de que pasan por esa zona (ver abajo); 104 y 121
+  // se agregan sobre todo por el aviso directo del usuario — tratalas como la menos verificada
+  // del dataset.
+  {
+    code: "214",
+    line: "Línea 214",
+    description: "Microcentro de Capital, por Av. Córdoba. Terminal en Av. Libertador y Av. Rawson. Operada por Empresa Mayo S.R.L.",
+    stops: [
+      { ...CORDOBA_Y_LAS_HERAS },
+      { name: "Av. Libertador y Av. Guillermo Rawson, Capital", lat: -31.539, lon: -68.533, approx: true },
+    ],
+  },
+  {
+    code: "140",
+    line: "Línea 140",
+    description: "Microcentro de Capital, por Las Heras y Av. Córdoba, con cobertura hacia la Terminal. Operada por Transporte Libertador S.R.L.",
+    stops: [
+      { ...CORDOBA_Y_LAS_HERAS },
+      { name: "Terminal de Ómnibus de San Juan", lat: -31.544, lon: -68.533, approx: true },
+    ],
+  },
+  {
+    code: "141",
+    line: "Línea 141",
+    description: "Microcentro de Capital, por Las Heras y Av. Córdoba. Operada por Transporte Libertador S.R.L.",
+    stops: [
+      { ...CORDOBA_Y_LAS_HERAS },
+      { name: "Terminal de Ómnibus de San Juan", lat: -31.544, lon: -68.533, approx: true },
+    ],
+  },
+  {
+    code: "160",
+    line: "Línea 160",
+    description: "Microcentro de Capital, por Las Heras, Santa Fe y Av. Córdoba, con cobertura hacia la Terminal. Operada por Transporte Libertador S.R.L.",
+    stops: [
+      { ...CORDOBA_Y_LAS_HERAS },
+      { name: "Terminal de Ómnibus de San Juan", lat: -31.544, lon: -68.533, approx: true },
+    ],
+  },
+  {
+    code: "161",
+    line: "Línea 161",
+    description: "Microcentro de Capital, por Las Heras, Santa Fe y Av. Córdoba. Operada por Transporte Libertador S.R.L.",
+    stops: [
+      { ...CORDOBA_Y_LAS_HERAS },
+      { name: "Terminal de Ómnibus de San Juan", lat: -31.544, lon: -68.533, approx: true },
+    ],
+  },
+  {
+    code: "162",
+    line: "Línea 162",
+    description: "Microcentro de Capital, por Las Heras, Santa Fe y Av. Córdoba. Operada por Transporte Libertador S.R.L.",
+    stops: [
+      { ...CORDOBA_Y_LAS_HERAS },
+      { name: "Terminal de Ómnibus de San Juan", lat: -31.544, lon: -68.533, approx: true },
+    ],
+  },
+  {
+    code: "121",
+    line: "Línea 121",
+    description: "Capital, zona de microcentro/Facultad de Ingeniería. Recorrido calle por calle sin publicar — incluida por confirmación directa de un usuario. Operada por UTE La Marina S.A.-La Positiva S.A.",
+    stops: [
+      { ...CORDOBA_Y_LAS_HERAS, approx: true },
+      { name: "Facultad de Ingeniería, UNSJ (Capital)", lat: -31.5395, lon: -68.5155, approx: true },
+    ],
+  },
+  {
+    code: "104",
+    line: "Línea 104",
+    description: "Capital, zona de microcentro. Recorrido calle por calle sin publicar — incluida por confirmación directa de un usuario. Operada por UTE La Marina S.A.-La Positiva S.A.",
+    stops: [
+      { ...CORDOBA_Y_LAS_HERAS, approx: true },
+      { name: "Terminal de Ómnibus de San Juan", lat: -31.544, lon: -68.533, approx: true },
+    ],
+  },
   {
     code: "TNS",
     line: "TNS (Troncal Norte-Sur)",
@@ -69,10 +152,10 @@ export const RED_TULUM_LINES: TransitLine[] = [
   {
     code: "101",
     line: "Línea 101",
-    description: "Capital: conecta ATE-API y Aramburu con el microcentro y el Hospital Rawson.",
+    description: "Capital: conecta ATE-API y Aramburu con el Hospital Rawson, por Av. Córdoba y Av. Rawson (no confirmado que llegue hasta Las Heras).",
     stops: [
       { name: "Hospital Dr. Guillermo Rawson", lat: -31.546, lon: -68.539, approx: true },
-      { name: "Microcentro / Plaza 25 de Mayo", lat: -31.5375, lon: -68.5364 },
+      { name: "Av. Córdoba y Av. Rawson, Capital", lat: -31.5415, lon: -68.5385, approx: true },
     ],
   },
   {
