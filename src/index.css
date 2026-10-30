@@ -1011,6 +1011,13 @@ html:not(.dark) .location-picker-map-tiles .leaflet-tile-pane {
 
 .dark .location-picker-map-tiles .leaflet-tile-pane {
   filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(88%) saturate(0.6) brightness(1.05);
+  /* Con un filter tan compuesto, algunos navegadores arman una capa GPU para esta capa que a
+     veces se "pierde" (queda en negro) si algo cerca se repinta — p.ej. el overlay de
+     Guardar/Abrir Mapa apareciendo, o el control de zoom corriéndose, justo al elegir una
+     ubicación. will-change + un transform propio le piden al navegador mantener esta capa
+     estable en vez de recomponerla cada vez, evitando ese parpadeo a negro. */
+  will-change: filter;
+  transform: translateZ(0);
 }
 
 /* Leaflet no le pone fondo propio a .leaflet-container (queda transparente) — mientras las

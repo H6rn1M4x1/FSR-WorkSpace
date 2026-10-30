@@ -4488,28 +4488,38 @@ export default function AppointmentsView({
                         homeCoords={homeCoordsForPreview}
                         scrollWheelZoom
                         topRightOverlay={
-                          tcLugar ? (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => setIsAddressBookOpen(true)}
-                                className="flex items-center gap-1 px-2.5 py-1.5 bg-white dark:bg-black border border-primary/30 text-primary rounded-full text-[10px] font-bold shadow-md transition-all hover:bg-primary hover:text-white cursor-pointer"
-                                title="Guardar esta ubicación en mi Libro de Direcciones"
-                              >
-                                <BookmarkPlus className="w-3 h-3" />
-                                <span>Guardar</span>
-                              </button>
-                              <a
-                                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(tcLugar)}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center gap-1 px-2.5 py-1.5 bg-primary text-white dark:text-slate-950 rounded-full text-[10px] font-bold shadow-md shrink-0"
-                              >
-                                <ExternalLink className="w-3 h-3" />
-                                <span>Abrir Mapa</span>
-                              </a>
-                            </>
-                          ) : undefined
+                          // Siempre un Fragment definido (nunca undefined), aunque tcLugar esté
+                          // vacío y no se vea ningún botón todavía: así el contenedor del mapa
+                          // reserva el lugar para el control de zoom (clase has-top-overlay en
+                          // LocationPickerMap.tsx) desde el primer render, en vez de agregarla
+                          // recién al click que fija tcLugar por primera vez — alternar esa clase
+                          // justo en el momento de un click coincidía con que el mapa se pusiera
+                          // en negro (ver comentario en LocationPickerMap.tsx sobre el filtro de
+                          // tema oscuro de las baldosas).
+                          <>
+                            {tcLugar && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => setIsAddressBookOpen(true)}
+                                  className="flex items-center gap-1 px-2.5 py-1.5 bg-white dark:bg-black border border-primary/30 text-primary rounded-full text-[10px] font-bold shadow-md transition-all hover:bg-primary hover:text-white cursor-pointer"
+                                  title="Guardar esta ubicación en mi Libro de Direcciones"
+                                >
+                                  <BookmarkPlus className="w-3 h-3" />
+                                  <span>Guardar</span>
+                                </button>
+                                <a
+                                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(tcLugar)}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-1 px-2.5 py-1.5 bg-primary text-white dark:text-slate-950 rounded-full text-[10px] font-bold shadow-md shrink-0"
+                                >
+                                  <ExternalLink className="w-3 h-3" />
+                                  <span>Abrir Mapa</span>
+                                </a>
+                              </>
+                            )}
+                          </>
                         }
                       />
                     </div>
@@ -4773,28 +4783,33 @@ export default function AppointmentsView({
                     homeCoords={homeCoordsForPreview}
                     scrollWheelZoom
                     topRightOverlay={
-                      tcLugar ? (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => setIsAddressBookOpen(true)}
-                            className="flex items-center gap-1 px-2.5 py-1.5 bg-white dark:bg-black border border-primary/30 text-primary rounded-full text-[10px] font-bold shadow-md transition-all hover:bg-primary hover:text-white cursor-pointer"
-                            title="Guardar esta ubicación en mi Libro de Direcciones"
-                          >
-                            <BookmarkPlus className="w-3 h-3" />
-                            <span>Guardar</span>
-                          </button>
-                          <a
-                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(tcLugar)}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1 px-2.5 py-1.5 bg-primary text-white dark:text-slate-950 rounded-full text-[10px] font-bold shadow-md shrink-0"
-                          >
-                            <ExternalLink className="w-3 h-3" />
-                            <span>Abrir Mapa</span>
-                          </a>
-                        </>
-                      ) : undefined
+                      // Ver comentario en el otro uso de topRightOverlay (versión mobile, más
+                      // arriba): siempre un Fragment definido para que has-top-overlay no se
+                      // alterne recién al primer click.
+                      <>
+                        {tcLugar && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setIsAddressBookOpen(true)}
+                              className="flex items-center gap-1 px-2.5 py-1.5 bg-white dark:bg-black border border-primary/30 text-primary rounded-full text-[10px] font-bold shadow-md transition-all hover:bg-primary hover:text-white cursor-pointer"
+                              title="Guardar esta ubicación en mi Libro de Direcciones"
+                            >
+                              <BookmarkPlus className="w-3 h-3" />
+                              <span>Guardar</span>
+                            </button>
+                            <a
+                              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(tcLugar)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1 px-2.5 py-1.5 bg-primary text-white dark:text-slate-950 rounded-full text-[10px] font-bold shadow-md shrink-0"
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                              <span>Abrir Mapa</span>
+                            </a>
+                          </>
+                        )}
+                      </>
                     }
                   />
                 </div>
