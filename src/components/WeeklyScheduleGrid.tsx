@@ -39,7 +39,7 @@ const CLICK_THRESHOLD_PX = 6;
 // medida que avanza el índice — acá reimplementado con aritmética RGB (en vez de la cadena CSS
 // color-mix() que usa ese archivo) para poder calcular además el color de texto legible de cada
 // bloque sin depender de poder "leer" un color-mix ya resuelto.
-function hexToRgb(hex: string): [number, number, number] {
+export function hexToRgb(hex: string): [number, number, number] {
   const clean = hex.replace("#", "").trim();
   const full = clean.length === 3 ? clean.split("").map((c) => c + c).join("") : clean;
   const n = parseInt(full, 16);
@@ -47,25 +47,25 @@ function hexToRgb(hex: string): [number, number, number] {
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
-function rgbToHex(r: number, g: number, b: number): string {
+export function rgbToHex(r: number, g: number, b: number): string {
   const toHex = (n: number) => Math.round(Math.max(0, Math.min(255, n))).toString(16).padStart(2, "0");
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 }
 
-function mixHex(colorHex: string, percent: number, mixWithHex: string): string {
+export function mixHex(colorHex: string, percent: number, mixWithHex: string): string {
   const [r1, g1, b1] = hexToRgb(colorHex);
   const [r2, g2, b2] = hexToRgb(mixWithHex);
   const t = percent / 100;
   return rgbToHex(r1 * t + r2 * (1 - t), g1 * t + g2 * (1 - t), b1 * t + b2 * (1 - t));
 }
 
-function getAccentColorHex(): string {
+export function getAccentColorHex(): string {
   if (typeof window === "undefined") return "#E09407";
   const raw = getComputedStyle(document.documentElement).getPropertyValue("--color-primary").trim();
   return raw || "#E09407";
 }
 
-function buildPalette(accentHex: string, count: number, darkMode: boolean): string[] {
+export function buildPalette(accentHex: string, count: number, darkMode: boolean): string[] {
   const total = Math.max(count, 1);
   const mixBase = darkMode ? "#27272a" : "#cbd5e1";
   return Array.from({ length: total }, (_, index) => {
@@ -76,23 +76,23 @@ function buildPalette(accentHex: string, count: number, darkMode: boolean): stri
 
 // Blanco o un gris casi negro según qué tan clara sea la mezcla — los últimos colores del
 // degradé (muy mezclados con gris claro en modo claro) quedaban con texto blanco casi invisible.
-function getReadableTextColor(hex: string): string {
+export function getReadableTextColor(hex: string): string {
   const [r, g, b] = hexToRgb(hex);
   const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
   return luminance > 0.58 ? "#1c1917" : "#ffffff";
 }
 
-const parseTimeMin = (t: string): number => {
+export const parseTimeMin = (t: string): number => {
   const [h, m] = (t || "0:0").split(":").map((n) => parseInt(n, 10) || 0);
   return h * 60 + m;
 };
-const minToTime = (min: number): string => {
+export const minToTime = (min: number): string => {
   const clamped = Math.max(0, Math.min(23 * 60 + 59, min));
   const h = Math.floor(clamped / 60);
   const m = clamped % 60;
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 };
-const formatHM = (min: number): string => {
+export const formatHM = (min: number): string => {
   const h = Math.floor(min / 60);
   const m = min % 60;
   return m === 0 ? `${h}:00` : `${h}:${String(m).padStart(2, "0")}`;
