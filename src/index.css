@@ -1355,6 +1355,17 @@ html:not(.dark) .force-solid-input-bg {
   -webkit-backdrop-filter: none !important;
 }
 
+/* NotesView.tsx FolderPicker: mismos síntomas que force-solid-bg de arriba (un fondo "sólido"
+   que en la práctica se seguía viendo translúcido). Este panel flotante es siempre oscuro, sin
+   importar el tema claro/oscuro de la app (mismo estilo que el resto de los paneles flotantes de
+   Notas), así que no puede reusar force-solid-bg (que alterna blanco/negro según tema) — fuerza
+   siempre el mismo negro. */
+.notes-folder-picker-solid {
+  background-color: #18181b !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
 html:not(.dark) .force-search-icon {
   color: var(--color-primary) !important;
   z-index: 10 !important;

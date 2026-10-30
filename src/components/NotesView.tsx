@@ -26,6 +26,7 @@ import {
   GraduationCap,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { createPortal } from "react-dom";
 import { useNotes } from "../hooks/useNotes";
 import { useNoteFolders } from "../hooks/useNoteFolders";
 import { useToast } from "../context/ToastContext";
@@ -36,6 +37,7 @@ import { SharedBadge } from "./SharedBadge";
 import { SubNav } from "./SubNav";
 import { PasswordVaultPanel } from "./PasswordVaultPanel";
 import { auth } from "../lib/firebase";
+import { getAccentColorHex, buildPalette, mixHex } from "./WeeklyScheduleGrid";
 import type { StickyNote, NoteFolder } from "../types";
 
 interface NotesViewProps {
@@ -48,54 +50,48 @@ interface NotesViewProps {
   autoOpenCompose?: number;
 }
 
-const NOTE_COLORS: Record<string, { card: string; swatch: string; label: string }> = {
-  default: {
-    card: "bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-800",
-    swatch: "bg-white dark:bg-zinc-900",
+// Paleta de color de nota: en vez de 8 colores sueltos sin relación entre sí, una escala del
+// color de acento de la app — mismo método (buildPalette, variando la mezcla del acento) que
+// "Embudo de Gastos" y los horarios usan para sus barras. El selector muestra el tono "fuerte"
+// de cada paso (swatch) para que la escala se note a simple vista; la tarjeta de la nota en sí
+// usa una versión bien suavizada de ese mismo tono (bg) — el editor de texto de adentro usa
+// siempre texto oscuro en tema claro / blanco en tema oscuro (RichTextEditor, compartido con el
+// resto de la app), así que el fondo de la tarjeta tiene que quedarse claro en tema claro y
+// oscuro en tema oscuro para seguir siendo legible, por eso no se usa el tono fuerte ahí directo.
+const NOTE_ACCENT_STEPS = 7;
+
+export interface NoteColorEntry {
+  key: string;
+  label: string;
+  swatch: string;
+  bg: string;
+  border: string;
+}
+
+export function buildNoteColorPalette(darkMode: boolean): NoteColorEntry[] {
+  const accent = getAccentColorHex();
+  const baseHex = darkMode ? "#18181b" : "#ffffff";
+  const defaultEntry: NoteColorEntry = {
+    key: "default",
     label: "Sin color",
-  },
-  red: {
-    card: "bg-red-100 dark:bg-red-950 border-red-200 dark:border-red-900",
-    swatch: "bg-red-300 dark:bg-red-700",
-    label: "Rojo",
-  },
-  orange: {
-    card: "bg-orange-100 dark:bg-orange-950 border-orange-200 dark:border-orange-900",
-    swatch: "bg-orange-300 dark:bg-orange-700",
-    label: "Naranja",
-  },
-  yellow: {
-    card: "bg-amber-100 dark:bg-amber-950 border-amber-200 dark:border-amber-900",
-    swatch: "bg-amber-300 dark:bg-amber-700",
-    label: "Amarillo",
-  },
-  green: {
-    card: "bg-emerald-100 dark:bg-emerald-950 border-emerald-200 dark:border-emerald-900",
-    swatch: "bg-emerald-300 dark:bg-emerald-700",
-    label: "Verde",
-  },
-  sky: {
-    card: "bg-sky-100 dark:bg-sky-950 border-sky-200 dark:border-sky-900",
-    swatch: "bg-sky-300 dark:bg-sky-700",
-    label: "Celeste",
-  },
-  blue: {
-    card: "bg-blue-100 dark:bg-blue-950 border-blue-200 dark:border-blue-900",
-    swatch: "bg-blue-300 dark:bg-blue-700",
-    label: "Azul",
-  },
-  violet: {
-    card: "bg-violet-100 dark:bg-violet-950 border-violet-200 dark:border-violet-900",
-    swatch: "bg-violet-300 dark:bg-violet-700",
-    label: "Violeta",
-  },
-  pink: {
-    card: "bg-pink-100 dark:bg-pink-950 border-pink-200 dark:border-pink-900",
-    swatch: "bg-pink-300 dark:bg-pink-700",
-    label: "Rosa",
-  },
-};
-const COLOR_KEYS = Object.keys(NOTE_COLORS);
+    swatch: baseHex,
+    bg: baseHex,
+    border: darkMode ? "#27272a" : "#e2e8f0",
+  };
+  const scale = buildPalette(accent, NOTE_ACCENT_STEPS, darkMode);
+  const accentEntries: NoteColorEntry[] = scale.map((hex, i) => ({
+    key: `accent${i}`,
+    label: `Tono ${i + 1}`,
+    swatch: hex,
+    bg: mixHex(hex, darkMode ? 30 : 16, baseHex),
+    border: mixHex(hex, darkMode ? 55 : 35, baseHex),
+  }));
+  return [defaultEntry, ...accentEntries];
+}
+
+export function findNoteColorEntry(palette: NoteColorEntry[], key: string | undefined): NoteColorEntry {
+  return palette.find((e) => e.key === key) || palette[0];
+}
 
 // Formas disponibles para el ícono de cada carpeta — a diferencia de antes, el ícono de una
 // carpeta SIEMPRE se pinta con el color de acento de la app (ver usos de "text-primary" más
@@ -118,7 +114,7 @@ const FOLDER_ICON_KEYS = Object.keys(FOLDER_ICONS);
 const DARK_PANEL = "bg-black/55 backdrop-blur-md rounded-2xl border border-white/10 shadow-lg";
 // Variante sólida (sin transparencia) de DARK_PANEL para el desplegable de carpetas: al ser
 // semitransparente, el texto/contenido de la nota de abajo se veía traslucir por encima.
-const DARK_PANEL_SOLID = "bg-zinc-900 rounded-2xl border border-white/10 shadow-lg";
+const DARK_PANEL_SOLID = "bg-zinc-900 notes-folder-picker-solid rounded-2xl border border-white/10 shadow-lg";
 
 type NoteMenu = "format" | "color" | "list" | "share" | "bgcolor" | "folder" | null;
 export type Draft = { title: string; text: string };
@@ -156,10 +152,12 @@ function compareNotes(a: StickyNote, b: StickyNote): number {
 }
 
 function ColorPicker({
+  palette,
   value,
   onChange,
   onClose,
 }: {
+  palette: NoteColorEntry[];
   value: string;
   onChange: (color: string) => void;
   onClose: () => void;
@@ -169,17 +167,18 @@ function ColorPicker({
       onClick={(e) => e.stopPropagation()}
       className={`absolute z-20 bottom-full right-0 mb-1.5 p-2 flex flex-wrap gap-1.5 w-36 ${DARK_PANEL}`}
     >
-      {COLOR_KEYS.map((key) => (
+      {palette.map((entry) => (
         <button
-          key={key}
+          key={entry.key}
           type="button"
-          title={NOTE_COLORS[key].label}
+          title={entry.label}
           onClick={() => {
-            onChange(key);
+            onChange(entry.key);
             onClose();
           }}
-          className={`w-6 h-6 rounded-full border border-white/20 cursor-pointer ${NOTE_COLORS[key].swatch} ${
-            value === key ? "ring-2 ring-primary ring-offset-1 ring-offset-black" : ""
+          style={{ backgroundColor: entry.swatch }}
+          className={`w-6 h-6 rounded-full border border-white/20 cursor-pointer ${
+            value === entry.key ? "ring-2 ring-primary ring-offset-1 ring-offset-black" : ""
           }`}
         />
       ))}
@@ -188,24 +187,37 @@ function ColorPicker({
 }
 
 /** Lista desplegable para asignar la carpeta de una nota (botón al final de la barra de
- *  herramientas del editor) — misma mecánica que ColorPicker. */
+ *  herramientas del editor). Se renderiza vía portal a document.body, posicionada en "fixed"
+ *  contra el rect del botón que la abre — NO como descendiente del toolbar (que tiene su propio
+ *  fondo semitransparente con backdrop-blur), así su fondo sólido queda garantizado sin que la
+ *  composición de un ancestro lo vuelva a ver translúcido. */
 function FolderPicker({
   folders,
   value,
   onChange,
   onClose,
+  anchorRect,
   align = "left",
 }: {
   folders: NoteFolder[];
   value: string | undefined;
   onChange: (folderId: string | undefined) => void;
   onClose: () => void;
+  anchorRect: DOMRect;
   align?: "left" | "right";
 }) {
-  return (
+  const style: React.CSSProperties = {
+    position: "fixed",
+    top: anchorRect.bottom + 6,
+    ...(align === "right"
+      ? { right: Math.max(12, window.innerWidth - anchorRect.right) }
+      : { left: Math.max(12, anchorRect.left) }),
+  };
+  return createPortal(
     <div
       onClick={(e) => e.stopPropagation()}
-      className={`absolute z-20 top-full ${align === "right" ? "right-0" : "left-0"} mt-1.5 p-1.5 w-48 max-h-60 overflow-y-auto space-y-0.5 ${DARK_PANEL_SOLID}`}
+      style={style}
+      className={`z-50 p-1.5 w-48 max-h-60 overflow-y-auto space-y-0.5 ${DARK_PANEL_SOLID}`}
     >
       <button
         type="button"
@@ -236,7 +248,8 @@ function FolderPicker({
       {folders.length === 0 && (
         <p className="px-2.5 py-1.5 text-[10px] text-zinc-400">Todavía no creaste ninguna carpeta.</p>
       )}
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -358,6 +371,7 @@ function NoteDetailPane({
   note,
   draft,
   folders,
+  colorPalette,
   menu,
   onSetDraft,
   onSetMenu,
@@ -373,6 +387,7 @@ function NoteDetailPane({
   note: StickyNote;
   draft: Draft | undefined;
   folders: NoteFolder[];
+  colorPalette: NoteColorEntry[];
   menu: NoteMenu;
   onSetDraft: (patch: Partial<Draft>) => void;
   onSetMenu: (menu: NoteMenu) => void;
@@ -388,10 +403,11 @@ function NoteDetailPane({
   onShare: (email: string) => Promise<void>;
   onUnshare: (email: string) => Promise<void>;
 }) {
-  const palette = NOTE_COLORS[note.color] || NOTE_COLORS.default;
+  const colorEntry = findNoteColorEntry(colorPalette, note.color);
   const titleValue = draft?.title !== undefined ? draft.title : note.title || "";
   const textValue = draft?.text !== undefined ? draft.text : note.text;
   const isSharedIn = !!note.__sharedByEmail;
+  const folderBtnRef = useRef<HTMLButtonElement>(null);
 
   // El selector de carpeta es un botón "extra" inyectado en la barra del editor (no es un menú
   // propio de RichTextEditor), así que necesita su propio cierre al hacer clic afuera.
@@ -425,7 +441,8 @@ function NoteDetailPane({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-      className={`relative rounded-2xl border p-4 shadow-sm ${palette.card}`}
+      className="relative rounded-2xl border p-4 shadow-sm"
+      style={{ backgroundColor: colorEntry.bg, borderColor: colorEntry.border }}
     >
       <AnimatePresence>
         {saveStatus !== "idle" && (
@@ -485,6 +502,7 @@ function NoteDetailPane({
           isSharedIn ? undefined : (
             <div className="relative">
               <button
+                ref={folderBtnRef}
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -497,12 +515,13 @@ function NoteDetailPane({
               >
                 <Folder className="w-4 h-4" />
               </button>
-              {menu === "folder" && (
+              {menu === "folder" && folderBtnRef.current && (
                 <FolderPicker
                   folders={folders}
                   value={note.folderId}
                   onChange={(folderId) => onUpdateNote(note.id, { folderId })}
                   onClose={() => onSetMenu(null)}
+                  anchorRect={folderBtnRef.current.getBoundingClientRect()}
                   align="right"
                 />
               )}
@@ -530,10 +549,11 @@ function NoteDetailPane({
             className="w-6 h-6 rounded-full border border-white/20 cursor-pointer flex items-center justify-center"
             title="Color"
           >
-            <span className={`w-4 h-4 rounded-full ${palette.swatch}`} />
+            <span className="w-4 h-4 rounded-full" style={{ backgroundColor: colorEntry.swatch }} />
           </button>
           {menu === "bgcolor" && (
             <ColorPicker
+              palette={colorPalette}
               value={note.color}
               onChange={(color) => onUpdateNote(note.id, { color })}
               onClose={() => onSetMenu(null)}
@@ -584,6 +604,7 @@ export function NotesView({
   } = useNotes(userId);
   const { folders, addFolder, renameFolder, setFolderIcon, deleteFolder } = useNoteFolders(userId);
   const { showToast } = useToast();
+  const notePalette = useMemo(() => buildNoteColorPalette(darkMode), [darkMode]);
 
   // The submenu ("Notas Rápidas" / "Caja Fuerte") is normally driven by the main top navbar
   // (see SUBMENUS_BY_TAB in TopNavbar.tsx), same as Turnos/Salud/etc. Fall back to local state
@@ -803,7 +824,7 @@ export function NotesView({
   // El drag-and-drop (reordenar dentro del grupo, o soltar sobre una carpeta de la izquierda)
   // sigue viviendo acá, sin cambios en la mecánica: solo cambió cómo se ve la tarjeta.
   const renderNoteListItem = (note: StickyNote, group: StickyNote[]) => {
-    const palette = NOTE_COLORS[note.color] || NOTE_COLORS.default;
+    const colorEntry = findNoteColorEntry(notePalette, note.color);
     const draft = drafts[note.id];
     const titleValue = draft?.title !== undefined ? draft.title : note.title || "";
     const textValue = draft?.text !== undefined ? draft.text : note.text;
@@ -907,11 +928,12 @@ export function NotesView({
             if (selectedNoteId !== note.id) uiSounds.expand();
             setSelectedNoteId(note.id);
           }}
-          className={`w-full text-left rounded-2xl border p-3 shadow-sm transition-all cursor-pointer ${palette.card} ${
+          className={`w-full text-left rounded-2xl border p-3 shadow-sm transition-all cursor-pointer ${
             isSelected ? "ring-2 ring-primary shadow-md" : "hover:shadow-md"
           } ${draggingId === note.id ? "opacity-30" : ""} ${dragOverId === note.id ? "ring-2 ring-primary" : ""} ${
             !isSharedIn ? "cursor-grab active:cursor-grabbing" : ""
           }`}
+          style={{ backgroundColor: colorEntry.bg, borderColor: colorEntry.border }}
         >
           {isSharedIn && (
             <div className="mb-1">
@@ -1224,6 +1246,7 @@ export function NotesView({
                 note={selectedNote}
                 draft={drafts[selectedNote.id]}
                 folders={folders}
+                colorPalette={notePalette}
                 menu={menuFor(selectedNote.id)}
                 onSetDraft={(patch) =>
                   setDrafts((prev) => ({
@@ -1303,7 +1326,13 @@ export function NotesView({
           className="fixed z-[1000] pointer-events-none w-[260px]"
           style={{ left: dragGhost.x, top: dragGhost.y, transform: "translate(-24px, -16px) rotate(-5deg)" }}
         >
-          <div className={`rounded-2xl border p-3 shadow-2xl ${NOTE_COLORS[dragGhost.note.color]?.card || NOTE_COLORS.default.card}`}>
+          <div
+            className="rounded-2xl border p-3 shadow-2xl"
+            style={(() => {
+              const entry = findNoteColorEntry(notePalette, dragGhost.note.color);
+              return { backgroundColor: entry.bg, borderColor: entry.border };
+            })()}
+          >
             <span className="text-xs font-extrabold text-zinc-900 dark:text-white truncate block">
               {dragGhost.note.title || "Sin título"}
             </span>
