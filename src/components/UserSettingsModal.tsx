@@ -1325,7 +1325,12 @@ export function UserSettingsModal({
         </div>
 
         {/* Modal Body */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
+        {/* min-h-0 es necesario: sin él, un hijo flex nunca se achica por debajo del tamaño de su
+            contenido, así que este contenedor crecía más allá del alto disponible y el
+            overflow-hidden del modal exterior (no este overflow-y-auto) terminaba recortando el
+            final del formulario — por eso el scroll interno no dejaba llegar hasta el botón de
+            "Guardar Datos Personales", quedaba cortado en vez de poder bajar hasta verlo entero. */}
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6 space-y-6">
           {/* TAB 1: PROFILE & PERSONAL DATA */}
           {activeTab === "profile" && (
             <form onSubmit={handleSaveProfile} className="space-y-6">

@@ -22,7 +22,6 @@ import { DetailedPayment, InvestmentSnapshot } from "../types";
 import { getArgentinaDateParts, formatLocalDate } from "../utils/date";
 import { useInflacionData } from "../hooks/useInflacionData";
 import { AnimatedNumber } from "./AnimatedNumber";
-import { PillFilterBar } from "./PillFilterBar";
 import { uiSounds } from "../lib/sounds";
 import { getAccentColorHex, hexToRgb, rgbToHex } from "./WeeklyScheduleGrid";
 
@@ -75,8 +74,6 @@ const formatARS = (value: number): string => {
   const sign = value < 0 ? "-" : "";
   return `${sign}$${Math.abs(Math.round(value)).toLocaleString("es-AR")}`;
 };
-
-type ViewMode = "current" | "previous" | "compare";
 
 // Mini-sparkline para el slider de inversiones: normaliza una serie de valores (pueden ser
 // negativos) a puntos dentro de un viewBox width x height, con un margen chico arriba/abajo para
@@ -151,7 +148,6 @@ export function ExpenseFunnelWidget({
   investmentSnapshots?: InvestmentSnapshot[];
 }) {
   const inflacion = useInflacionData();
-  const [viewMode, setViewMode] = useState<ViewMode>("current");
   const [hoveredCategory, setHoveredCategory] = useState<string | null>(null);
   const [pinnedCategory, setPinnedCategory] = useState<string | null>(null);
   const [investmentSlide, setInvestmentSlide] = useState(0);
@@ -180,20 +176,17 @@ export function ExpenseFunnelWidget({
     [previousTotals]
   );
 
-  const activeTotals = viewMode === "previous" ? previousTotals : currentTotals;
-  const activeGrandTotal = viewMode === "previous" ? grandTotalPrevious : grandTotalCurrent;
-
   const rows = useMemo(() => {
     return CATEGORIES.map((categoria) => {
-      const total = activeTotals[categoria] || 0;
+      const total = currentTotals[categoria] || 0;
       const prevTotal = previousTotals[categoria] || 0;
-      const share = activeGrandTotal > 0 ? (total / activeGrandTotal) * 100 : 0;
+      const share = grandTotalCurrent > 0 ? (total / grandTotalCurrent) * 100 : 0;
       const deltaPct = prevTotal > 0 ? ((total - prevTotal) / prevTotal) * 100 : total > 0 ? 100 : 0;
       return { categoria, total, prevTotal, share, deltaPct };
     })
       .filter((r) => r.total > 0 || r.prevTotal > 0)
       .sort((a, b) => b.total - a.total);
-  }, [activeTotals, previousTotals, activeGrandTotal]);
+  }, [currentTotals, previousTotals, grandTotalCurrent]);
 
   const maxTotal = rows[0]?.total || 1;
 
@@ -271,7 +264,7 @@ export function ExpenseFunnelWidget({
         darkMode ? "bg-zinc-900 border-zinc-800 text-white shadow-lg" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
       }`}
     >
-      {/* Header: título + selector de mes/comparar, igual patrón que el resto de los widgets */}
+      {/* Header: título, siempre comparando el mes actual contra el anterior */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 dark:border-zinc-800 pb-3 mb-4">
         <div className="flex items-center gap-2 min-w-0">
           <span className="p-1.5 rounded-full bg-primary/10 shrink-0 flex items-center justify-center">
@@ -280,21 +273,10 @@ export function ExpenseFunnelWidget({
           <div className="min-w-0">
             <h3 className="font-extrabold text-sm truncate">Embudo de Gastos</h3>
             <p className="text-[10px] text-zinc-400 font-bold truncate">
-              {viewMode === "previous" ? previousMonthName : currentMonthName}
-              {viewMode === "compare" ? ` frente a ${previousMonthName}` : ""} · por categoría
+              {currentMonthName} frente a {previousMonthName} · por categoría
             </p>
           </div>
         </div>
-        <PillFilterBar
-          options={[
-            { id: "current", label: currentMonthName },
-            { id: "previous", label: previousMonthName },
-            { id: "compare", label: "Comparar" },
-          ]}
-          activeValue={viewMode}
-          onChange={(v) => { setViewMode(v); uiSounds.navigate(); }}
-          layoutIdPrefix="expenseFunnelView"
-        />
       </div>
 
       {/* Dos tarjetas de contexto, adaptadas de "Conversión total" / "Mayor caída" */}
@@ -334,7 +316,7 @@ export function ExpenseFunnelWidget({
 
       {rows.length === 0 ? (
         <div className="py-10 text-center text-xs text-zinc-500 font-medium">
-          No hay gastos registrados en {viewMode === "previous" ? previousMonthName : currentMonthName} todavía.
+          No hay gastos registrados en {currentMonthName} todavía.
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-[1.3fr_1fr] gap-5 items-start">
@@ -359,11 +341,18 @@ export function ExpenseFunnelWidget({
                   className="w-full text-left cursor-pointer group"
                 >
                   <div className="flex items-center justify-between gap-2 mb-1">
-                    <span className={`flex items-center gap-1.5 text-[11px] font-bold truncate ${isSelected ? "text-primary" : "text-zinc-500 dark:text-zinc-400"}`}>
-                      {Icon && <Icon className="w-3.5 h-3.5 shrink-0" />}
-                      <span className="truncate">{row.categoria}</span>
-                      {isPinned && <Pin className="w-2.5 h-2.5 shrink-0 fill-current" />}
-                    </span>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className={`flex items-center gap-1.5 text-[11px] font-bold truncate ${isSelected ? "text-primary" : "text-zinc-500 dark:text-zinc-400"}`}>
+                        {Icon && <Icon className="w-3.5 h-3.5 shrink-0" />}
+                        <span className="truncate">{row.categoria}</span>
+                        {isPinned && <Pin className="w-2.5 h-2.5 shrink-0 fill-current" />}
+                      </span>
+                      {/* Comparación vs. el mes anterior, siempre a la derecha del nombre */}
+                      <span className={`flex items-center gap-0.5 text-[9px] font-bold shrink-0 whitespace-nowrap ${row.deltaPct > 0 ? "text-red-500" : row.deltaPct < 0 ? "text-emerald-500" : "text-zinc-400"}`}>
+                        {row.deltaPct > 0 ? <TrendingUp className="w-2.5 h-2.5" /> : row.deltaPct < 0 ? <TrendingDown className="w-2.5 h-2.5" /> : null}
+                        {row.deltaPct === 0 ? "Sin cambios" : `${row.deltaPct > 0 ? "+" : ""}${row.deltaPct.toFixed(1)}%`}
+                      </span>
+                    </div>
                     <span className="flex items-baseline gap-1.5 shrink-0">
                       {drop && (
                         <span className="px-1.5 py-0.5 rounded-full text-[8.5px] font-bold bg-primary/10 text-primary whitespace-nowrap">
@@ -390,12 +379,6 @@ export function ExpenseFunnelWidget({
                       className={`h-full rounded-full ${isSelected ? "ring-2 ring-primary/50 shadow-md" : "group-hover:brightness-110"}`}
                     />
                   </div>
-                  {viewMode === "compare" && (
-                    <span className={`flex items-center gap-0.5 text-[8.5px] font-bold mt-0.5 ${row.deltaPct > 0 ? "text-red-500" : row.deltaPct < 0 ? "text-emerald-500" : "text-zinc-400"}`}>
-                      {row.deltaPct > 0 ? <TrendingUp className="w-2.5 h-2.5" /> : row.deltaPct < 0 ? <TrendingDown className="w-2.5 h-2.5" /> : null}
-                      {row.deltaPct === 0 ? "Sin cambios" : `${row.deltaPct > 0 ? "+" : ""}${row.deltaPct.toFixed(1)}%`}
-                    </span>
-                  )}
                 </button>
               );
             })}
@@ -422,7 +405,7 @@ export function ExpenseFunnelWidget({
                     </div>
                     <p className="text-[10.5px] text-zinc-400 font-medium mt-0.5">
                       <AnimatedNumber value={selectedRow.share} format={(n) => `${n.toFixed(1)}%`} /> del gasto de{" "}
-                      {viewMode === "previous" ? previousMonthName : currentMonthName}
+                      {currentMonthName}
                     </p>
 
                     <div className={`relative h-2.5 rounded-full overflow-hidden mt-3 ${darkMode ? "bg-zinc-800" : "bg-slate-200"}`}>
@@ -436,10 +419,10 @@ export function ExpenseFunnelWidget({
 
                     <div className="flex items-center justify-between text-[10.5px] font-semibold mt-3 pt-3 border-t border-zinc-200/60 dark:border-zinc-800">
                       <span className="text-zinc-400">Resto de categorías</span>
-                      <span>{formatARS(activeGrandTotal - selectedRow.total)}</span>
+                      <span>{formatARS(grandTotalCurrent - selectedRow.total)}</span>
                     </div>
 
-                    {viewMode !== "compare" && selectedRow.prevTotal > 0 && (
+                    {selectedRow.prevTotal > 0 && (
                       <div className="flex items-center justify-between text-[10.5px] font-semibold mt-1.5">
                         <span className="text-zinc-400">{previousMonthName}</span>
                         <span>{formatARS(selectedRow.prevTotal)}</span>

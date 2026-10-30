@@ -21,6 +21,7 @@ import { useToast } from "../context/ToastContext";
 import { AddressBookModal, loadSavedAddressBook, saveAddressBook, AddressEntry } from "./AddressBookModal";
 import { UserProfileData } from "./UserSettingsModal";
 import { getAccentColorHex } from "./WeeklyScheduleGrid";
+import { fetchStreetRoute } from "../utils/routing";
 import { PillFilterBar } from "./PillFilterBar";
 import { ConfirmationModal } from "./ConfirmationModal";
 import { DetailModal } from "./DetailModal";
@@ -235,29 +236,6 @@ const FALLBACK_PLACES = [
     lon: "-68.5305",
   },
 ];
-
-// Ruta calle por calle (hogar → ubicación) vía el servicio público de OSRM (perfil "driving"),
-// devuelve la lista de puntos [lat, lon] ya en el orden que espera Leaflet. Si el servicio no
-// responde o no encuentra camino, devuelve null y el llamador se queda con la línea recta que ya
-// tenía dibujada — nunca se rompe el mapa por una falla de red.
-async function fetchStreetRoute(
-  homeLat: number,
-  homeLon: number,
-  lat: number,
-  lon: number,
-): Promise<[number, number][] | null> {
-  try {
-    const url = `https://router.project-osrm.org/route/v1/driving/${homeLon},${homeLat};${lon},${lat}?overview=full&geometries=geojson`;
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const data = await res.json();
-    const coords = data?.routes?.[0]?.geometry?.coordinates;
-    if (!Array.isArray(coords) || coords.length < 2) return null;
-    return coords.map(([lo, la]: [number, number]) => [la, lo] as [number, number]);
-  } catch {
-    return null;
-  }
-}
 
 const MapComponent = ({
   turnosCompromisos,
@@ -613,22 +591,45 @@ const MapComponent = ({
           autoClose: true,
         },
       );
-      marker.on("mouseover", () => dimOtherLocations(slug));
-      marker.on("mouseout", () => clearLocationDim());
-
       markersLayerRef.current.addLayer(marker);
       markerCount++;
+      // mouseenter/mouseleave (no mouseover/mouseout) porque el popup-card que se abre al pasar
+      // el mouse es un elemento HIJO del mismo ícono — mouseover/mouseout burbujean al entrar/salir
+      // de ese hijo y disparaban el dim/undim de forma intermitente. mouseenter/mouseleave no
+      // burbujean, así que el resaltado queda estable mientras el cursor siga sobre el pin o su
+      // popup.
+      const markerEl = marker.getElement();
+      if (markerEl) {
+        markerEl.addEventListener("mouseenter", () => dimOtherLocations(slug));
+        markerEl.addEventListener("mouseleave", () => clearLocationDim());
+      }
 
       // Ruta animada "pulso" hogar → esta ubicación (ver .route-pulse-path en index.css): se
       // dibuja y se deshace en bucle. La longitud real del trazo (distinta para cada ruta) se
-      // calcula recién cuando el <path> ya está en el DOM, por eso el rAF. Arranca como línea
-      // recta (resultado inmediato) y, si OSRM responde a tiempo, se reemplaza por el camino
-      // real calle por calle sin perder la animación ni el resaltado por hover.
+      // calcula recién cuando el <path> ya está en el DOM, por eso el rAF. No se dibuja nada
+      // hasta tener el camino real calle por calle (o, si OSRM falla, la línea recta de
+      // respaldo) — así nunca se ve el "flash" de una versión que después se reemplaza.
       if (homeCoords && markersLayerRef.current) {
         const routeClassName = `route-pulse-path route-loc-${slug}`;
-        const applyPulseStyling = (line: L.Polyline, delay: number) => {
+        const delay = (routeIndex * 0.45) % 3.6;
+        routeIndex++;
+
+        fetchStreetRoute(homeCoords.lat, homeCoords.lon, lat, lon).then((streetPath) => {
+          if (routeRunIdRef.current !== runId || !markersLayerRef.current) return;
+          const points: [number, number][] = streetPath || [
+            [homeCoords.lat, homeCoords.lon],
+            [lat, lon],
+          ];
+          const routeLine = L.polyline(points, {
+            color: routeAccentHex,
+            weight: 2.5,
+            opacity: 0.85,
+            className: routeClassName,
+            interactive: false,
+          });
+          markersLayerRef.current.addLayer(routeLine);
           requestAnimationFrame(() => {
-            const pathEl = (line as any)._path as SVGPathElement | undefined;
+            const pathEl = (routeLine as any)._path as SVGPathElement | undefined;
             if (pathEl) {
               try {
                 const length = pathEl.getTotalLength();
@@ -637,38 +638,6 @@ const MapComponent = ({
               } catch {}
             }
           });
-        };
-
-        let routeLine = L.polyline(
-          [
-            [homeCoords.lat, homeCoords.lon],
-            [lat, lon],
-          ],
-          {
-            color: routeAccentHex,
-            weight: 2.5,
-            opacity: 0.85,
-            className: routeClassName,
-            interactive: false,
-          },
-        );
-        markersLayerRef.current.addLayer(routeLine);
-        const delay = (routeIndex * 0.45) % 3.6;
-        routeIndex++;
-        applyPulseStyling(routeLine, delay);
-
-        fetchStreetRoute(homeCoords.lat, homeCoords.lon, lat, lon).then((streetPath) => {
-          if (routeRunIdRef.current !== runId || !streetPath || !markersLayerRef.current) return;
-          markersLayerRef.current.removeLayer(routeLine);
-          routeLine = L.polyline(streetPath, {
-            color: routeAccentHex,
-            weight: 2.5,
-            opacity: 0.85,
-            className: routeClassName,
-            interactive: false,
-          });
-          markersLayerRef.current.addLayer(routeLine);
-          applyPulseStyling(routeLine, delay);
         });
       }
     });
@@ -1229,6 +1198,15 @@ export default function AppointmentsView({
   const [modalError, setModalError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const activeUserId = (userEmail || auth.currentUser?.email || auth.currentUser?.uid || "hernanmaximiliano10@gmail.com").toLowerCase().trim();
+
+  // Dirección Personal (Ajustes & Configuración) para previsualizar la ruta animada hogar →
+  // destino en el mapa de "Cargar Registro de Turno y Compromiso" (mismo origen que usa el Mapa
+  // de Localizaciones Programadas).
+  const homeCoordsForPreview = useMemo(() => {
+    const homeLat = userProfile?.lat !== undefined && userProfile?.lat !== null ? Number(userProfile.lat) : NaN;
+    const homeLon = userProfile?.lon !== undefined && userProfile?.lon !== null ? Number(userProfile.lon) : NaN;
+    return !isNaN(homeLat) && !isNaN(homeLon) && (homeLat !== 0 || homeLon !== 0) ? { lat: homeLat, lon: homeLon } : null;
+  }, [userProfile?.lat, userProfile?.lon]);
 
   // Categorías de Turno/Compromiso: mientras la suscripción de Firestore todavía no entregó
   // nada (o para usuarios nuevos), se usan las 6 categorías que ya existían hardcodeadas.
@@ -4423,6 +4401,8 @@ export default function AppointmentsView({
                           setTcLon(selected.lon);
                         }}
                         heightClass="h-48"
+                        darkMode={darkMode}
+                        homeCoords={homeCoordsForPreview}
                       />
 
                       {tcLugar && (
@@ -4710,6 +4690,8 @@ export default function AppointmentsView({
                       setTcLon(selected.lon);
                     }}
                     heightClass="h-[340px]"
+                    darkMode={darkMode}
+                    homeCoords={homeCoordsForPreview}
                   />
 
                   {tcLugar && (
