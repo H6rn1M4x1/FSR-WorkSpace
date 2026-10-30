@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   StickyNote as StickyNoteIcon,
   KeyRound,
@@ -14,6 +14,7 @@ import {
   FolderPlus,
   ChevronDown,
   Layers,
+  Loader2,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useNotes } from "../hooks/useNotes";
@@ -105,6 +106,9 @@ const FOLDER_COLOR_KEYS = Object.keys(FOLDER_COLORS);
 // The dark, semi-transparent "floating pill" look requested for every icon toolbar and
 // popover in this view, so icons never sit directly on a note's color with nothing behind them.
 const DARK_PANEL = "bg-black/55 backdrop-blur-md rounded-2xl border border-white/10 shadow-lg";
+// Variante sólida (sin transparencia) de DARK_PANEL para el desplegable de carpetas: al ser
+// semitransparente, el texto/contenido de la nota de abajo se veía traslucir por encima.
+const DARK_PANEL_SOLID = "bg-zinc-900 rounded-2xl border border-white/10 shadow-lg";
 
 type NoteMenu = "format" | "color" | "list" | "share" | "bgcolor" | "folder" | null;
 export type Draft = { title: string; text: string };
@@ -191,7 +195,7 @@ function FolderPicker({
   return (
     <div
       onClick={(e) => e.stopPropagation()}
-      className={`absolute z-20 top-full ${align === "right" ? "right-0" : "left-0"} mt-1.5 p-1.5 w-48 max-h-60 overflow-y-auto space-y-0.5 ${DARK_PANEL}`}
+      className={`absolute z-20 top-full ${align === "right" ? "right-0" : "left-0"} mt-1.5 p-1.5 w-48 max-h-60 overflow-y-auto space-y-0.5 ${DARK_PANEL_SOLID}`}
     >
       <button
         type="button"
@@ -366,7 +370,7 @@ function NoteDetailPane({
     id: string,
     patch: Partial<Pick<StickyNote, "title" | "text" | "color" | "pinned" | "attachments" | "order" | "folderId">>
   ) => Promise<void>;
-  onSaveDraft: (patch: Draft) => void;
+  onSaveDraft: (patch: Draft) => void | Promise<void>;
   onTogglePin: () => void;
   onDelete: () => void;
   recipients: string[];
@@ -388,13 +392,52 @@ function NoteDetailPane({
     return () => window.removeEventListener("click", close);
   }, [menu, onSetMenu]);
 
+  // Indicador de guardado (círculo girando → palomita) en la esquina superior derecha de la nota
+  // abierta: envuelve onSaveDraft (disparado por SaveOnIdle más abajo) para reflejar en pantalla
+  // cuándo el guardado automático está en curso y cuándo terminó.
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const savedResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (savedResetRef.current) clearTimeout(savedResetRef.current); }, []);
+  const handleSaveDraft = useCallback(
+    (patch: Draft) => {
+      setSaveStatus("saving");
+      Promise.resolve(onSaveDraft(patch)).then(() => {
+        setSaveStatus("saved");
+        if (savedResetRef.current) clearTimeout(savedResetRef.current);
+        savedResetRef.current = setTimeout(() => setSaveStatus("idle"), 1500);
+      });
+    },
+    [onSaveDraft]
+  );
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-      className={`rounded-2xl border p-4 shadow-sm ${palette.card}`}
+      className={`relative rounded-2xl border p-4 shadow-sm ${palette.card}`}
     >
+      <AnimatePresence>
+        {saveStatus !== "idle" && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.7 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.7 }}
+            transition={{ duration: 0.18 }}
+            className="absolute top-3 right-3 z-10 w-6 h-6 rounded-full flex items-center justify-center"
+            title={saveStatus === "saving" ? "Guardando..." : "Guardado"}
+          >
+            {saveStatus === "saving" ? (
+              <Loader2 className="w-5 h-5 text-primary animate-spin" />
+            ) : (
+              <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center">
+                <Check className="w-3 h-3 text-white" strokeWidth={3} />
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {isSharedIn && (
         <div className="mb-2">
           <SharedBadge item={note} />
@@ -462,7 +505,7 @@ function NoteDetailPane({
       <SaveOnIdle
         draft={{ title: titleValue, text: textValue }}
         original={{ title: note.title || "", text: note.text }}
-        onSave={onSaveDraft}
+        onSave={handleSaveDraft}
       />
 
       <div className="flex items-center justify-between mt-3">
@@ -1122,7 +1165,7 @@ export function NotesView({
               type="button"
               whileTap={{ scale: 0.98 }}
               onClick={handleCreateNote}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl border border-dashed border-primary/40 text-primary text-xs font-bold hover:bg-primary/5 cursor-pointer transition-colors"
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-primary text-white dark:text-zinc-950 text-xs font-bold hover:bg-primary/90 cursor-pointer transition-colors shadow-sm"
             >
               <Plus className="w-4 h-4" /> Nueva nota
             </motion.button>
