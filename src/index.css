@@ -1463,6 +1463,13 @@ path.route-pulse-path.map-loc-dimmed {
   transition: filter 0.2s ease, opacity 0.2s ease;
 }
 
+/* Clic para "fijar" una ubicación del Mapa de Localizaciones Programadas: la tarjeta de
+   información queda abierta con el MISMO estilo que al pasar el mouse (misma .map-loc-popup-card,
+   normalmente oculta vía la utilidad "hidden" de Tailwind hasta el :hover) hasta deseleccionar. */
+.map-loc-marker.map-loc-selected .map-loc-popup-card {
+  display: block !important;
+}
+
 /* Todos los botones crecen un poco al pasar el mouse y se achican al presionar — salvo que ya
    traigan su propia escala con una utilidad de Tailwind (hover:scale-*), que por ser una clase
    pesa más que este selector de elemento y gana sola, sin pisarse. El escape hatch .no-hover-scale

@@ -611,6 +611,10 @@ export default function TopNavbar({
                     setCurrentTab(item.id);
                     setShowNotifications(false);
                     setShowChat(false);
+                    // Si Ajustes & Configuración está abierto y el usuario navega a otra sección
+                    // desde el nav principal, el modal se cierra solo en vez de quedar flotando
+                    // sobre la nueva página.
+                    if (isSettingsOpen && onOpenSettings) onOpenSettings();
                   }}
                   className={`relative flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors duration-300 cursor-pointer whitespace-nowrap z-10 ${
                     isActive
