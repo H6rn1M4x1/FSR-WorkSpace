@@ -2567,6 +2567,7 @@ export default function App() {
                   itemsIShared={itemsIShared}
                   darkMode={darkMode}
                   userEmail={user?.email || userProfile?.email || "hernanmaximiliano10@gmail.com"}
+                  userProfile={userProfile}
                   appointments={appointmentsWithShared}
                   setAppointments={setAppointments}
                   routines={routines}

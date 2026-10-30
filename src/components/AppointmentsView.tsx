@@ -19,6 +19,8 @@ import { db } from "../lib/firebase"; // TODO Fase 2: migrar a Supabase
 import { LocationPickerMap } from "./LocationPickerMap";
 import { useToast } from "../context/ToastContext";
 import { AddressBookModal, loadSavedAddressBook, saveAddressBook, AddressEntry } from "./AddressBookModal";
+import { UserProfileData } from "./UserSettingsModal";
+import { getAccentColorHex } from "./WeeklyScheduleGrid";
 import { PillFilterBar } from "./PillFilterBar";
 import { ConfirmationModal } from "./ConfirmationModal";
 import { DetailModal } from "./DetailModal";
@@ -239,11 +241,13 @@ const MapComponent = ({
   locationCoords,
   darkMode,
   getCategoryLabel,
+  userProfile,
 }: {
   turnosCompromisos: TurnoCompromiso[];
   locationCoords: { [lugar: string]: { lat: number; lon: number } };
   darkMode: boolean;
   getCategoryLabel: (categoria: string) => string;
+  userProfile?: UserProfileData | null;
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
@@ -381,6 +385,36 @@ const MapComponent = ({
     });
 
     let markerCount = 0;
+    let routeIndex = 0;
+
+    // Dirección Personal (Ajustes & Configuración) como origen de las rutas animadas — si no
+    // tiene lat/lon guardados todavía (nunca la buscó en el mapa de Ajustes), simplemente no se
+    // dibuja ninguna ruta, el resto del mapa sigue funcionando igual.
+    const homeLat = userProfile?.lat !== undefined && userProfile?.lat !== null ? Number(userProfile.lat) : NaN;
+    const homeLon = userProfile?.lon !== undefined && userProfile?.lon !== null ? Number(userProfile.lon) : NaN;
+    const homeCoords =
+      !isNaN(homeLat) && !isNaN(homeLon) && (homeLat !== 0 || homeLon !== 0) ? { lat: homeLat, lon: homeLon } : null;
+    const routeAccentHex = getAccentColorHex();
+
+    if (homeCoords) {
+      const homeMarkerHtml = `
+        <div class="relative group cursor-pointer inline-block">
+          <div class="w-7 h-7 rounded-full shadow-md flex items-center justify-center" style="background:${routeAccentHex};border:2px solid ${darkMode ? "#18181b" : "#ffffff"};">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          </div>
+          <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-[9999] px-2.5 py-1.5 rounded-xl text-[11px] font-bold whitespace-nowrap shadow-lg" style="background:${darkMode ? "rgba(24,24,27,0.95)" : "rgba(255,255,255,0.95)"};color:${darkMode ? "#fff" : "#0f172a"};">
+            Mi hogar
+          </div>
+        </div>
+      `;
+      const homeIcon = L.divIcon({
+        html: homeMarkerHtml,
+        className: "custom-google-pin",
+        iconSize: [24, 24],
+        iconAnchor: [12, 12],
+      });
+      markersLayerRef.current.addLayer(L.marker([homeCoords.lat, homeCoords.lon], { icon: homeIcon, zIndexOffset: 1000 }));
+    }
 
     const headingColor = darkMode ? "text-zinc-100" : "text-slate-900";
     const subTextColor = darkMode ? "text-zinc-400" : "text-slate-500";
@@ -533,6 +567,38 @@ const MapComponent = ({
 
       markersLayerRef.current.addLayer(marker);
       markerCount++;
+
+      // Ruta animada "pulso" hogar → esta ubicación (ver .route-pulse-path en index.css): se
+      // dibuja y se deshace en bucle. La longitud real del trazo (distinta para cada ruta) se
+      // calcula recién cuando el <path> ya está en el DOM, por eso el rAF.
+      if (homeCoords && markersLayerRef.current) {
+        const routeLine = L.polyline(
+          [
+            [homeCoords.lat, homeCoords.lon],
+            [lat, lon],
+          ],
+          {
+            color: routeAccentHex,
+            weight: 2.5,
+            opacity: 0.85,
+            className: "route-pulse-path",
+            interactive: false,
+          },
+        );
+        markersLayerRef.current.addLayer(routeLine);
+        const delay = (routeIndex * 0.45) % 3.6;
+        routeIndex++;
+        requestAnimationFrame(() => {
+          const pathEl = (routeLine as any)._path as SVGPathElement | undefined;
+          if (pathEl) {
+            try {
+              const length = pathEl.getTotalLength();
+              pathEl.style.setProperty("--pulse-length", String(length));
+              pathEl.style.animationDelay = `${delay}s`;
+            } catch {}
+          }
+        });
+      }
     });
 
       if (markerCount > 0 && mapInstanceRef.current && markersLayerRef.current && !hasFitBoundsOnceRef.current) {
@@ -560,7 +626,7 @@ const MapComponent = ({
     } catch (err) {
       console.warn("Error updating markers on map:", err);
     }
-  }, [turnosCompromisos, locationCoords, darkMode, getCategoryLabel]);
+  }, [turnosCompromisos, locationCoords, darkMode, getCategoryLabel, userProfile]);
 
   return (
     <div className="relative w-full h-[380px] min-h-[380px] rounded-3xl overflow-hidden border border-slate-200/80 dark:border-zinc-800 shadow-md">
@@ -577,6 +643,9 @@ interface AppointmentsViewProps {
   itemsIShared?: any[];
   darkMode: boolean;
   userEmail?: string;
+  /** Dirección Personal guardada en Ajustes & Configuración — se usa como origen de las rutas
+   *  animadas del Mapa de Localizaciones Programadas (hogar → cada turno agendado). */
+  userProfile?: UserProfileData | null;
   appointments: Appointment[];
   setAppointments: React.Dispatch<React.SetStateAction<Appointment[]>>;
   routines: RoutineLog[];
@@ -1058,6 +1127,7 @@ export const getTurnoCategoryIcon = (category: string) => {
 export default function AppointmentsView({
   darkMode,
   userEmail,
+  userProfile,
   appointments,
   setAppointments,
   routines,
@@ -3273,6 +3343,7 @@ export default function AppointmentsView({
               locationCoords={locationCoords}
               darkMode={darkMode}
               getCategoryLabel={getCategoryLabel}
+              userProfile={userProfile}
             />
           </div>
         </div>

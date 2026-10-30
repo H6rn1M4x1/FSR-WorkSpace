@@ -1422,6 +1422,35 @@ html {
   }
 }
 
+/* Línea de ruta "pulso" en el Mapa de Localizaciones Programadas (AppointmentsView.tsx):
+   el trazo se dibuja desde el hogar hasta cada ubicación y después se deshace, en bucle — un
+   pincel de guiones cuya longitud total (--pulse-length, calculada en JS con getTotalLength())
+   se usa como stroke-dasharray/dashoffset, animando el offset de "escondido" a "dibujado
+   completo" y de vuelta, con la opacidad subiendo y bajando al mismo ritmo para que se sienta
+   como un pulso y no como un simple barrido. */
+@keyframes route-pulse-draw {
+  0% { stroke-dashoffset: var(--pulse-length, 600); opacity: 0; }
+  12% { opacity: 0.9; }
+  45% { stroke-dashoffset: 0; opacity: 0.9; }
+  68% { stroke-dashoffset: 0; opacity: 0.9; }
+  92% { opacity: 0; }
+  100% { stroke-dashoffset: calc(var(--pulse-length, 600) * -1); opacity: 0; }
+}
+
+.route-pulse-path {
+  stroke-dasharray: var(--pulse-length, 600);
+  stroke-dashoffset: var(--pulse-length, 600);
+  animation: route-pulse-draw 3.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .route-pulse-path {
+    animation: none;
+    stroke-dashoffset: 0;
+    opacity: 0.55;
+  }
+}
+
 /* Todos los botones crecen un poco al pasar el mouse y se achican al presionar — salvo que ya
    traigan su propia escala con una utilidad de Tailwind (hover:scale-*), que por ser una clase
    pesa más que este selector de elemento y gana sola, sin pisarse. El escape hatch .no-hover-scale
