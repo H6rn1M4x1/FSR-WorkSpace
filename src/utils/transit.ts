@@ -39,27 +39,27 @@ export interface ConnectingTransitLine {
 // parada de esa misma línea cerca de home también, así se respeta el recorrido real en vez de
 // sugerir una línea que simplemente tiene UNA parada cerca del destino pero nunca pasa por casa.
 //
-// maxWalkKm se ajustó de 3km a 1.5km (una caminata razonable hasta una parada, no "en el mismo
-// departamento") — con 3km, dos paradas del dataset que simplemente quedaban en el mismo barrio
-// general (pero de líneas que en la realidad no pasan por ahí) calificaban como "cerca" y
-// terminaban apareciendo como opciones falsas. limit bajó de 6 a 4 para que, entre las que sí
-// califican, se prioricen siempre las más cercanas en el resultado (el orden ya es por distancia
-// combinada ascendente).
+// El radio de "cerca" escala en vez de ser fijo: arranca en 1.5km (una caminata razonable hasta
+// una parada) y, SOLO si con eso no aparece ninguna línea, lo va agrandando (2.5km, luego 4km)
+// hasta encontrar algo — así, para un destino en el microcentro (con varias paradas a pocas
+// cuadras) se queda con el radio chico y preciso, pero para un destino lejos de cualquier parada
+// del dataset (que es chico, no cubre toda Gran San Juan) igual se muestra la mejor opción
+// disponible en vez de no mostrar nada.
+const WALK_RADII_KM = [1.5, 2.5, 4];
+
 export function findConnectingTransitLines(
   homeLat: number,
   homeLon: number,
   destLat: number,
   destLon: number,
-  maxWalkKm = 1.5,
   limit = 4
 ): ConnectingTransitLine[] {
-  const results: ConnectingTransitLine[] = [];
+  const candidates: ConnectingTransitLine[] = [];
   RED_TULUM_LINES.forEach((line) => {
     const home = nearestStop(line.stops, homeLat, homeLon);
     const dest = nearestStop(line.stops, destLat, destLon);
     if (!home || !dest) return;
-    if (home.distanceKm > maxWalkKm || dest.distanceKm > maxWalkKm) return;
-    results.push({
+    candidates.push({
       code: line.code,
       line: line.line,
       description: line.description,
@@ -69,5 +69,11 @@ export function findConnectingTransitLines(
       destDistanceKm: dest.distanceKm,
     });
   });
-  return results.sort((a, b) => a.homeDistanceKm + a.destDistanceKm - (b.homeDistanceKm + b.destDistanceKm)).slice(0, limit);
+  candidates.sort((a, b) => a.homeDistanceKm + a.destDistanceKm - (b.homeDistanceKm + b.destDistanceKm));
+
+  for (const maxWalkKm of WALK_RADII_KM) {
+    const matches = candidates.filter((c) => c.homeDistanceKm <= maxWalkKm && c.destDistanceKm <= maxWalkKm);
+    if (matches.length > 0) return matches.slice(0, limit);
+  }
+  return [];
 }
