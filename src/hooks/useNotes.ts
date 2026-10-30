@@ -23,8 +23,9 @@ interface UseNotesResult {
     html: string,
     color: string,
     attachments?: { name: string; url: string }[],
-    folderId?: string
-  ) => Promise<void>;
+    folderId?: string,
+    allowEmpty?: boolean
+  ) => Promise<StickyNote | null>;
   updateNote: (
     id: string,
     patch: Partial<Pick<StickyNote, "title" | "text" | "color" | "pinned" | "attachments" | "order" | "folderId">>
@@ -83,10 +84,11 @@ export function useNotes(userId: string | null | undefined): UseNotesResult {
       html: string,
       color: string,
       attachments?: { name: string; url: string }[],
-      folderId?: string
-    ) => {
-      if (!userId) return;
-      if (!title.trim() && !stripHtml(html) && !(attachments && attachments.length)) return;
+      folderId?: string,
+      allowEmpty?: boolean
+    ): Promise<StickyNote | null> => {
+      if (!userId) return null;
+      if (!allowEmpty && !title.trim() && !stripHtml(html) && !(attachments && attachments.length)) return null;
       const now = Date.now();
       // New notes get the lowest order so far minus one, so they show up first (top-left) —
       // same feel as Google Keep, where a fresh note always appears before older ones.
@@ -104,6 +106,7 @@ export function useNotes(userId: string | null | undefined): UseNotesResult {
         updatedAt: now,
       };
       await saveNote(userId, note);
+      return note;
     },
     [userId, ownNotes]
   );
