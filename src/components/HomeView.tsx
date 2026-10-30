@@ -10,6 +10,7 @@ import { TEAMS } from "../data/teams";
 import { FavoriteTeamWidget } from "./FavoriteTeamWidget";
 import { WeatherWidget } from "./WeatherWidget";
 import { QuickNotesMiniWidget } from "./QuickNotesMiniWidget";
+import { ExpenseFunnelWidget } from "./ExpenseFunnelWidget";
 import { PillFilterBar } from "./PillFilterBar";
 import { getMatchTeamLogos, syncMonthlyMatches } from "../lib/matchScheduler";
 import { motion, AnimatePresence } from "motion/react";
@@ -3602,6 +3603,11 @@ export default function HomeView({
             })()}
           />
         </div>
+      </div>
+
+      {/* Embudo de Gastos — gastos por categoría del mes, arriba de Notas Rápidas */}
+      <div className="w-full relative z-30">
+        <ExpenseFunnelWidget detailedPayments={detailedPayments} darkMode={darkMode} />
       </div>
 
       {/* Miniatura de Notas Rápidas */}
