@@ -22,6 +22,7 @@ import { AddressBookModal, loadSavedAddressBook, saveAddressBook, AddressEntry }
 import { UserProfileData } from "./UserSettingsModal";
 import { getAccentColorHex } from "./WeeklyScheduleGrid";
 import { fetchStreetRoute } from "../utils/routing";
+import { findNearestTransitLines } from "../utils/transit";
 import { PillFilterBar } from "./PillFilterBar";
 import { ConfirmationModal } from "./ConfirmationModal";
 import { DetailModal } from "./DetailModal";
@@ -68,6 +69,7 @@ import {
   UtensilsCrossed,
   GraduationCap,
   Shield,
+  Bus,
 } from "lucide-react";
 import {
   Appointment,
@@ -1595,6 +1597,14 @@ export default function AppointmentsView({
   const [tcPedido, setTcPedido] = useState<string | undefined>(undefined);
   const [tcLat, setTcLat] = useState<number | undefined>(undefined);
   const [tcLon, setTcLon] = useState<number | undefined>(undefined);
+
+  // Colectivos de Red Tulum (San Juan) con la parada más cercana a la ubicación elegida para el
+  // turno/compromiso — dataset chico armado a mano (ver src/data/redTulumLines.ts), San Juan no
+  // tiene un feed de datos de transporte público abierto ni en vivo.
+  const nearestTransitLines = useMemo(() => {
+    if (tcLat === undefined || tcLon === undefined || isNaN(tcLat) || isNaN(tcLon)) return [];
+    return findNearestTransitLines(tcLat, tcLon, 3);
+  }, [tcLat, tcLon]);
 
   // Status Filter state
   const [statusFilter, setStatusFilter] = useState<string>("Pendiente");
@@ -4516,6 +4526,28 @@ export default function AppointmentsView({
                           </div>
                         </div>
                       )}
+
+                      {nearestTransitLines.length > 0 && (
+                        <div className={`p-2.5 rounded-xl border text-[11px] ${darkMode ? "bg-zinc-900/60 border-zinc-800" : "bg-slate-50 border-slate-200"}`}>
+                          <div className="flex items-center gap-1.5 mb-1.5 text-zinc-400 font-bold uppercase tracking-widest text-[9px]">
+                            <Bus className="w-3 h-3" />
+                            <span>Colectivos cercanos (Red Tulum, aprox.)</span>
+                          </div>
+                          <div className="space-y-1.5">
+                            {nearestTransitLines.map((r) => (
+                              <div key={r.line} className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  <span className="font-bold text-primary">{r.line}</span>
+                                  <p className="text-zinc-400 truncate">{r.stop.name}{r.stop.approx ? " (aprox.)" : ""}</p>
+                                </div>
+                                <span className="shrink-0 font-bold whitespace-nowrap">
+                                  {r.distanceKm < 1 ? `${Math.round(r.distanceKm * 1000)} m` : `${r.distanceKm.toFixed(1)} km`}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -4802,6 +4834,28 @@ export default function AppointmentsView({
                           <ExternalLink className="w-3 h-3" />
                           <span>Abrir Mapa</span>
                         </a>
+                      </div>
+                    </div>
+                  )}
+
+                  {nearestTransitLines.length > 0 && (
+                    <div className={`p-2.5 rounded-xl border text-[11px] ${darkMode ? "bg-zinc-900/60 border-zinc-800" : "bg-slate-50 border-slate-200"}`}>
+                      <div className="flex items-center gap-1.5 mb-1.5 text-zinc-400 font-bold uppercase tracking-widest text-[9px]">
+                        <Bus className="w-3 h-3" />
+                        <span>Colectivos cercanos (Red Tulum, aprox.)</span>
+                      </div>
+                      <div className="space-y-1.5">
+                        {nearestTransitLines.map((r) => (
+                          <div key={r.line} className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <span className="font-bold text-primary">{r.line}</span>
+                              <p className="text-zinc-400 truncate">{r.stop.name}{r.stop.approx ? " (aprox.)" : ""}</p>
+                            </div>
+                            <span className="shrink-0 font-bold whitespace-nowrap">
+                              {r.distanceKm < 1 ? `${Math.round(r.distanceKm * 1000)} m` : `${r.distanceKm.toFixed(1)} km`}
+                            </span>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   )}
