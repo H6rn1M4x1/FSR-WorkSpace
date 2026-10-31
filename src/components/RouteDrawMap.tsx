@@ -127,8 +127,13 @@ export const RouteDrawMap: React.FC<RouteDrawMapProps> = ({ darkMode, onRouteCom
       zoom: 15,
       zoomControl: false,
       attributionControl: false,
-      dragging: false,
     });
+
+    // El botón izquierdo queda libre para desplazarse por el mapa (paneo normal de Leaflet); el
+    // dibujo del recorrido pasa al botón derecho — evita que mover el mapa para ver mejor una
+    // zona termine, sin querer, agregando un tramo de ruta. Bloquea el menú contextual del
+    // navegador sobre el mapa, que si no se dispararía al soltar el botón derecho.
+    map.getContainer().addEventListener("contextmenu", (e) => e.preventDefault());
 
     L.control.zoom({ position: "topright" }).addTo(map);
     L.control.attribution({ position: "bottomleft", prefix: false }).addTo(map);
@@ -188,6 +193,9 @@ export const RouteDrawMap: React.FC<RouteDrawMapProps> = ({ darkMode, onRouteCom
     };
 
     const handleDown = (e: L.LeafletMouseEvent) => {
+      // Solo el botón derecho dibuja — el izquierdo quedó libre para el paneo nativo de Leaflet.
+      if (e.originalEvent.button !== 2) return;
+      e.originalEvent.preventDefault();
       if (!hasRouteRef.current) {
         clearLayers();
         pointsRef.current = [];
@@ -302,8 +310,9 @@ export const RouteDrawMap: React.FC<RouteDrawMapProps> = ({ darkMode, onRouteCom
     <div>
       <p className="text-[11px] text-slate-500 dark:text-zinc-400 flex items-center gap-1.5 mb-1.5">
         <Route className="w-3.5 h-3.5 shrink-0 text-primary" />
-        Mantené presionado el punto de partida y arrastrá hasta el de llegada. Podés soltar y
-        volver a presionar para seguir dibujando desde ahí.
+        Con el botón derecho mantené presionado el punto de partida y arrastrá hasta el de
+        llegada (podés soltar y volver a presionar para seguir dibujando desde ahí). El botón
+        izquierdo desplaza el mapa.
       </p>
       <div className="w-full rounded-2xl border border-primary/30 dark:border-primary/20 bg-slate-50 dark:bg-zinc-900/80 shadow-sm ring-1 ring-primary/10 p-2">
         <div className="relative w-full rounded-xl overflow-hidden">
