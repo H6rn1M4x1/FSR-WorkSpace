@@ -10,6 +10,7 @@ import { createPortal } from "react-dom";
 import { ConfirmationModal } from "./ConfirmationModal";
 import { DetailedPayment } from "../types";
 import { SmartDateTimePicker } from "./SmartDateTimePicker";
+import { PaymentMethodPicker } from "./PaymentMethodPicker";
 import { CurrencyInput } from "./CurrencyInput";
 import { parseFormattedNumber, formatNumberToDisplay } from "../lib/numberFormat";
 import { processAndCreateRecurringPayments } from "../utils/recurringPayments";
@@ -636,6 +637,8 @@ export default function PaymentsTable({
   const [montoAPagar, setMontoAPagar] = useState("");
   const [pagoRecurrente, setPagoRecurrente] = useState(false);
   const [conQuePagar, setConQuePagar] = useState("");
+  // Mismo fallback que el resto del archivo para identificar al usuario ante Firestore.
+  const paymentMethodsUserId = userEmail || "hernanmaximiliano10@gmail.com";
   const [dondePagar, setDondePagar] = useState("");
   const [facturaFile, setFacturaFile] = useState<File | null>(null);
   const [comprobanteFile, setComprobanteFile] = useState<File | null>(null);
@@ -984,7 +987,7 @@ export default function PaymentsTable({
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, delay: 0.12, ease: [0.16, 1, 0.3, 1] }}
-      className="grid grid-cols-2 gap-3"
+      className="space-y-3"
     >
       {categoria === "Tarjeta de Credito" && (
         <div>
@@ -1003,28 +1006,13 @@ export default function PaymentsTable({
           />
         </div>
       )}
-      <div
-        className={
-          categoria !== "Tarjeta de Credito" ? "col-span-1" : ""
-        }
-      >
-        <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
-          ¿Con qué pagar?
-        </label>
-        <input
-          type="text"
-          value={conQuePagar}
-          onChange={(e) => setConQuePagar(e.target.value)}
-          className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-zinc-950/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white outline-none transition-all text-sm focus:border-slate-400 dark:focus:border-zinc-700"
-        />
-      </div>
-      <div
-        className={
-          categoria !== "Tarjeta de Credito"
-            ? "col-span-1"
-            : "col-span-2"
-        }
-      >
+      <PaymentMethodPicker
+        userId={paymentMethodsUserId}
+        darkMode={darkMode}
+        value={conQuePagar}
+        onChange={setConQuePagar}
+      />
+      <div>
         <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
           ¿Dónde pagar?
         </label>
