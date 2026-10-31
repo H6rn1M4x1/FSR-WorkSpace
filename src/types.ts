@@ -68,6 +68,27 @@ export interface DetailedPayment {
   observaciones?: string;
 }
 
+export type CardBrand = "visa" | "mastercard" | "amex" | "diners" | "discover" | "cabal" | "naranja" | "otra";
+
+/** Tarjeta/cuenta guardada en la "billetera visual" de Finanzas — Pagos Mensuales la usa para
+ *  elegir "¿Con qué pagar?" de forma visual en vez de tipearlo cada vez. */
+export interface PaymentMethodCard {
+  id: string;
+  tipo: "credito" | "debito" | "transferencia";
+  titular: string;
+  banco: string;
+  /** Solo tarjetas (crédito/débito) — nunca se guarda el número completo, solo estos 4 dígitos. */
+  last4?: string;
+  /** Solo tarjetas — MM/AA. */
+  vencimiento?: string;
+  /** Solo transferencia. */
+  alias?: string;
+  marca?: CardBrand;
+  order?: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface GastoVario {
   id: string;
   descripcion: string; // Texto

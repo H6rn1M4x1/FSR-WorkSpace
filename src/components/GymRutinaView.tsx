@@ -76,6 +76,7 @@ import { generateUniqueId } from "../utils/id";
 import { getLocalDateString } from "../utils/date";
 import { uiSounds } from "../lib/sounds";
 import { GymScheduleGrid, GymScheduleOption, GymScheduleCreatePayload, GymScheduleBatch } from "./GymScheduleGrid";
+import { GymAIAnalysisPanel } from "./GymAIAnalysisPanel";
 
 interface GymRutinaViewProps {
   darkMode: boolean;
@@ -1407,6 +1408,17 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
     setShowRoutineModal(true);
   };
 
+  // "Crear esta rutina en el Constructor" del panel de análisis IA (Progreso y Métricas) —
+  // mismo mecanismo que handleOpenNewRoutineModal/handleEditRoutine: prellena el Constructor de
+  // Rutinas y deja que el usuario la revise/ajuste antes de guardarla (el guardado en sí ya lo
+  // resuelve el onSaveRoutine existente del modal, hacia "Mis Rutinas").
+  const handleUseSuggestedRoutine = (routine: Partial<RutinaGimnasio>, exercises: EjercicioRutina[]) => {
+    setEditingRoutine(routine);
+    setRoutineFormExercises(exercises);
+    setShowRoutineModal(true);
+    setActiveTab("rutinas");
+  };
+
   const handleEditRoutine = (rutina: RutinaGimnasio) => {
     setEditingRoutine(rutina);
     setRoutineFormExercises(rutina.ejercicios || []);
@@ -2696,6 +2708,14 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
       {/* --- VISTA 4: GRÁFICO DE PROGRESO Y MÉTRICAS POR EJERCICIO (RECHARTS) --- */}
       {activeTab === "progreso" && (
         <div className="space-y-6 text-slate-800 dark:text-zinc-100 scroll-reveal">
+          <GymAIAnalysisPanel
+            darkMode={darkMode}
+            registros={uniqueRegistros}
+            allExercises={allExercises}
+            showToast={showToast}
+            onUseSuggestedRoutine={handleUseSuggestedRoutine}
+          />
+
           {/* CONTROL Y FILTROS DE EJERCICIO */}
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-zinc-200/60 dark:border-zinc-800/60 pb-5">
             <div>
