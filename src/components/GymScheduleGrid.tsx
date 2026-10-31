@@ -194,14 +194,20 @@ export function GymScheduleGrid({
     return { calorias, tiempoMovimiento: formatMinutesLabel(minutes), puntos: minutes };
   };
 
-  const applyEstimate = (opt: GymScheduleOption | null, minutes: number) => {
+  const applyEstimate = (opt: GymScheduleOption | null, minutes: number, preserveDistance = false) => {
     const est = estimateForOption(opt, minutes);
     setPanelCalorias(est.calorias || "");
-    setPanelPasos("");
-    setPanelDistancia("");
     setPanelTiempoMovimiento(est.tiempoMovimiento);
-    setPanelFrecuencia("");
     setPanelPuntos(est.puntos);
+    if (preserveDistance && opt?.isDistanceBased && panelDistancia !== "") {
+      // Repintar el rango de hora no debe borrar una ruta ya dibujada en el mapa — solo
+      // recalcula el ritmo (Frecuencia) para la nueva duración, igual que handleRouteComplete.
+      setPanelFrecuencia(formatPace(minutes, Number(panelDistancia)));
+    } else {
+      setPanelPasos("");
+      setPanelDistancia("");
+      setPanelFrecuencia("");
+    }
   };
 
   const handleSelectOption = (key: string) => {
@@ -259,7 +265,7 @@ export function GymScheduleGrid({
       setPanelDayIdx(dayIdx);
       setPanelHoraInicio(minToTime(lo));
       setPanelHoraFin(minToTime(hi));
-      applyEstimate(selectedOption, hi - lo);
+      applyEstimate(selectedOption, hi - lo, true);
       setHasPendingDraft(true);
     },
     [gridEndMin, selectedOption],
