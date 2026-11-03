@@ -120,6 +120,7 @@ export const FavoriteTeamWidget: React.FC<FavoriteTeamWidgetProps> = ({
               month: "short",
               hour: "2-digit",
               minute: "2-digit",
+              hour12: false,
             }),
             venue: comp?.venue?.fullName || comp?.venue?.displayName || getStadiumForTeam(homeName),
             // "ev.league?.name" no se usa acá: confirmado en vivo (ver "Eventos deportivos")
@@ -156,6 +157,7 @@ export const FavoriteTeamWidget: React.FC<FavoriteTeamWidgetProps> = ({
               month: "short",
               hour: "2-digit",
               minute: "2-digit",
+              hour12: false,
             }),
             venue: ev.venue || getStadiumForTeam(ev.homeTeam),
             competition: ev.competitionName,
@@ -212,7 +214,7 @@ export const FavoriteTeamWidget: React.FC<FavoriteTeamWidgetProps> = ({
               status: "live",
               statusText: comp?.status?.type?.shortDetail || comp?.status?.type?.description || "",
               clock: comp?.status?.displayClock || `${comp?.status?.clock || 0}'`,
-              dateStr: new Date(ev.date).toLocaleDateString("es-AR", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }),
+              dateStr: new Date(ev.date).toLocaleDateString("es-AR", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false }),
               venue: comp?.venue?.fullName || comp?.venue?.displayName || getStadiumForTeam(homeName),
               // teamObj?.league primero: el nombre que da ESPN acá (liveData.leagues[0].name)
               // viene mezclado medio en inglés medio en español (ej. "Argentine Liga
@@ -504,7 +506,7 @@ export const FavoriteTeamWidget: React.FC<FavoriteTeamWidgetProps> = ({
         <div className="mt-2.5 pt-2 border-t border-zinc-100 dark:border-zinc-800">
           <div className="flex items-center justify-between text-xs bg-white dark:bg-zinc-950 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors rounded-xl px-2.5 py-1.5 border border-zinc-200 dark:border-zinc-800">
             <div className="flex items-center gap-1">
-              <Trophy className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+              <Trophy className="w-3.5 h-3.5 text-primary shrink-0" />
               <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
                 Último:
               </span>

@@ -28,10 +28,15 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
  * Sube el Comprobante de Pago o la Factura Emitida a Supabase Storage y devuelve su URL pública.
  * Si el archivo es una imagen (la mayoría de los casos: una foto del comprobante) se recomprime
  * antes de subir para que pese bastante menos; los PDF se suben tal cual, ya livianos de por sí.
+ *
+ * `desiredFileName` (opcional, con extensión incluida) reemplaza el nombre original del archivo
+ * subido en la URL pública — así, al abrir/descargar el archivo más adelante, el navegador lo
+ * guarda con ESE nombre (p. ej. "Noviembre 2026 - Claude Code.pdf") en vez del nombre que traía
+ * el archivo original (algo tipo "IMG_20261103.pdf", imposible de identificar después).
  */
-export async function uploadPaymentDocument(folder: string, file: File): Promise<string> {
+export async function uploadPaymentDocument(folder: string, file: File, desiredFileName?: string): Promise<string> {
   const fileToUpload = await compressImageFile(file);
-  const safeName = fileToUpload.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const safeName = (desiredFileName || fileToUpload.name).replace(/[^a-zA-Z0-9._-]/g, "_");
   const path = `${folder}/${Date.now()}_${safeName}`;
   try {
     const { error: uploadError } = await withTimeout(

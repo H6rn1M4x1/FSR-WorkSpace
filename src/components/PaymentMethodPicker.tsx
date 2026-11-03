@@ -5,52 +5,52 @@ import { CreditCard, Landmark, Plus, X, Trash2, Check } from "lucide-react";
 import { usePaymentMethods } from "../hooks/usePaymentMethods";
 import { CARD_BRAND_META } from "../utils/cardBrand";
 import { getBankBadge } from "../utils/bankBadge";
+import { getBankIconUrl, BANCOS_CON_ICONO } from "../utils/bankIcons";
 import type { CardBrand, PaymentMethodCard } from "../types";
 import { uiSounds } from "../lib/sounds";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import { CustomSelect } from "./CustomSelect";
 
-// Bancos y billeteras virtuales comunes de Argentina, solo para sugerir mientras se tipea — el
-// campo sigue siendo texto libre, así que cualquier otro nombre se puede escribir igual.
-const BANCOS_COMUNES = [
+// Bancos y billeteras virtuales de Argentina para sugerir mientras se tipea — el campo sigue
+// siendo texto libre, así que cualquier otro nombre se puede escribir igual. La lista sale de
+// BANCOS_CON_ICONO (los que tienen ícono real de icons.com.ar, ver bankIcons.ts) más un par que
+// ese sitio no tiene (caen en la insignia de iniciales de BankBadge en vez de un ícono real).
+// Los más usados van primero — BANCOS_CON_ICONO está en orden alfabético, así que sin esto las
+// primeras 6 sugerencias (con el campo vacío) serían, por ejemplo, "AstroPay"/"Banco Bica" en vez
+// de los bancos/billeteras que la mayoría realmente busca.
+const BANCOS_MAS_USADOS = [
+  "Mercado Pago",
   "Banco Nación",
-  "Banco Provincia",
   "Banco Galicia",
   "Banco Santander",
   "BBVA",
-  "Banco Macro",
-  "Banco Supervielle",
-  "Banco Credicoop",
-  "Banco Ciudad",
-  "Banco Patagonia",
-  "Banco Comafi",
-  "Banco Hipotecario",
-  "Banco San Juan",
-  "ICBC",
-  "HSBC",
-  "Banco Columbia",
-  "Brubank",
-  "Mercado Pago",
   "Ualá",
-  "Naranja X",
-  "Banco del Sol",
-  "Lemon",
-  "Personal Pay",
-  "MODO",
-  "Cuenta DNI",
-  "Belo",
-  "Prex",
+];
+const BANCOS_COMUNES = [
+  ...BANCOS_MAS_USADOS,
+  ...BANCOS_CON_ICONO.filter((b) => !BANCOS_MAS_USADOS.includes(b)),
   "Rebanking",
   "Cocos Pay",
 ];
 
 function BankBadge({ name, size = "sm" }: { name: string; size?: "sm" | "md" }) {
   if (!name.trim()) return null;
+  const iconUrl = getBankIconUrl(name);
+  const dim = size === "sm" ? "w-4 h-4" : "w-5 h-5";
+  if (iconUrl) {
+    return (
+      <img
+        src={iconUrl}
+        alt=""
+        className={`inline-block shrink-0 rounded-full object-cover ${dim}`}
+      />
+    );
+  }
   const { initials, color, textDark } = getBankBadge(name);
   return (
     <span
-      className={`inline-flex items-center justify-center shrink-0 rounded-full font-black ${
-        size === "sm" ? "w-4 h-4 text-[7px]" : "w-5 h-5 text-[9px]"
+      className={`inline-flex items-center justify-center shrink-0 rounded-full font-black ${dim} ${
+        size === "sm" ? "text-[7px]" : "text-[9px]"
       } ${textDark ? "text-black/80" : "text-white"}`}
       style={{ backgroundColor: color }}
     >
@@ -124,8 +124,8 @@ function WalletCard({
         )}
       </div>
       <div>
-        <p className="text-white text-xs font-bold tracking-wider">
-          {card.tipo === "transferencia" ? card.alias || "Sin alias" : `•••• ${card.last4 || "----"}`}
+        <p className="text-white text-[11px] font-bold tracking-wide whitespace-nowrap overflow-hidden text-ellipsis">
+          {card.tipo === "transferencia" ? card.alias || "Sin alias" : `•••• •••• •••• ${card.last4 || "----"}`}
         </p>
         <div className="flex items-center justify-between gap-2 mt-0.5">
           <span className="text-white/80 text-[10px] font-semibold truncate">{card.titular}</span>
@@ -256,7 +256,7 @@ function CreateCardModal({ darkMode, onClose, onCreate }: { darkMode: boolean; o
               <BrandBadge marca={marca || undefined} tipo={tipo} />
             </div>
             <p className="text-white text-sm font-bold tracking-wider">
-              {tipo === "transferencia" ? alias || "alias.de.ejemplo" : `•••• ${last4 || "----"}`}
+              {tipo === "transferencia" ? alias || "alias.de.ejemplo" : `•••• •••• •••• ${last4 || "----"}`}
             </p>
             <div className="flex items-center justify-between gap-2 mt-1">
               <span className="text-white/80 text-[11px] font-semibold truncate">{titular || "Nombre del titular"}</span>
@@ -393,7 +393,10 @@ export function PaymentMethodPicker({
       <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1.5">
         ¿Con qué pagar?
       </label>
-      <div className="flex items-stretch gap-2.5 overflow-x-auto pb-1.5">
+      {/* p-1.5 en vez de solo pb-1.5: sin margen a los costados, el borde punteado del botón
+          "Nueva" (el único elemento cuando todavía no hay tarjetas guardadas) queda pegado al
+          borde del contenedor con overflow-x-auto y se corta visualmente. */}
+      <div className="flex items-stretch gap-2.5 overflow-x-auto p-1.5 -m-1.5">
         {cards.map((card) => (
           <WalletCard
             key={card.id}

@@ -8,6 +8,7 @@ import { processAndCreateRecurringPayments, normalizeDateComponents } from "../u
 import { CurrencyInput } from "./CurrencyInput";
 import { parseFormattedNumber, formatNumberToDisplay } from "../lib/numberFormat";
 import { WorkspaceService } from "../lib/workspace";
+import { buildPaymentFileName, guessExtFromDataUrl } from "../utils/paymentFileName";
 import React, { useState, useEffect, useRef } from "react";
 import { AnimatedNumber } from "./AnimatedNumber";
 import { useInflacionData } from "../hooks/useInflacionData";
@@ -1248,6 +1249,25 @@ export default function FinanceView({
     0,
   );
 
+  // Presupuesto mensual total — reusa el mismo state "budgets" (ya sincronizado con Firestore
+  // desde App.tsx) con una sola entrada de categoría especial "__mensual__", en vez de agregar un
+  // campo nuevo: ese state ya existía (tipado para presupuestos por categoría) pero no tenía
+  // ninguna UI que lo usara. Reemplaza "Controles de Exportación e Informes".
+  const PRESUPUESTO_MENSUAL_ID = "__mensual__";
+  const presupuestoMensual = budgets.find((b) => b.category === PRESUPUESTO_MENSUAL_ID)?.limit;
+  const restantePorGastar = presupuestoMensual !== undefined ? presupuestoMensual - totalSpent : null;
+  const [editingPresupuesto, setEditingPresupuesto] = useState(false);
+  const [presupuestoInput, setPresupuestoInput] = useState("");
+  const handleSavePresupuesto = () => {
+    const val = parseFormattedNumber(presupuestoInput);
+    if (!val || val <= 0) return;
+    setBudgets((prev) => {
+      const next = prev.filter((b) => b.category !== PRESUPUESTO_MENSUAL_ID);
+      return [...next, { id: PRESUPUESTO_MENSUAL_ID, category: PRESUPUESTO_MENSUAL_ID, limit: val, spent: 0 }];
+    });
+    setEditingPresupuesto(false);
+  };
+
   const formatCurrency = (val: number) => {
     return (
       "AR$ " +
@@ -1522,11 +1542,17 @@ export default function FinanceView({
         reader.readAsDataURL(file);
       });
 
+      const existingForName = detailedPayments.find((p) => p.id === paymentId);
+      const ext = file.name.includes(".") ? file.name.slice(file.name.lastIndexOf(".") + 1) : "";
+      const uploadFileName = existingForName
+        ? buildPaymentFileName(existingForName.fechaVencimiento, existingForName.descripcion, ext)
+        : file.name;
+
       let url = base64Data;
       let viaGoogleDrive = false;
       if (token) {
         const result = await WorkspaceService.uploadFileToDrive(
-          file.name,
+          uploadFileName,
           file.type || "application/octet-stream",
           base64Data,
           token,
@@ -2394,7 +2420,7 @@ export default function FinanceView({
                                               <div className="flex items-center gap-1">
                                                 <button
                                                   type="button"
-                                                  onClick={() => openStoredDetailedPaymentFile(p.facturaEmitida!, `factura-${p.descripcion}`)}
+                                                  onClick={() => openStoredDetailedPaymentFile(p.facturaEmitida!, buildPaymentFileName(p.fechaVencimiento, p.descripcion, guessExtFromDataUrl(p.facturaEmitida!)))}
                                                   className="flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-lg text-[10px] font-extrabold hover:underline cursor-pointer"
                                                 >
                                                   <FileDown className="w-3 h-3" />
@@ -2430,7 +2456,7 @@ export default function FinanceView({
                                               <div className="flex items-center gap-1">
                                                 <button
                                                   type="button"
-                                                  onClick={() => openStoredDetailedPaymentFile(p.comprobantePago!, `comprobante-${p.descripcion}`)}
+                                                  onClick={() => openStoredDetailedPaymentFile(p.comprobantePago!, buildPaymentFileName(p.fechaVencimiento, p.descripcion, guessExtFromDataUrl(p.comprobantePago!)))}
                                                   className="flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-lg text-[10px] font-extrabold hover:underline cursor-pointer"
                                                 >
                                                   <FileDown className="w-3 h-3" />
@@ -2668,7 +2694,7 @@ export default function FinanceView({
                                               <div className="flex items-center gap-1">
                                                 <button
                                                   type="button"
-                                                  onClick={() => openStoredDetailedPaymentFile(p.facturaEmitida!, `factura-${p.descripcion}`)}
+                                                  onClick={() => openStoredDetailedPaymentFile(p.facturaEmitida!, buildPaymentFileName(p.fechaVencimiento, p.descripcion, guessExtFromDataUrl(p.facturaEmitida!)))}
                                                   className="flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-lg text-[10px] font-extrabold hover:underline cursor-pointer"
                                                 >
                                                   <FileDown className="w-3 h-3" />
@@ -2704,7 +2730,7 @@ export default function FinanceView({
                                               <div className="flex items-center gap-1">
                                                 <button
                                                   type="button"
-                                                  onClick={() => openStoredDetailedPaymentFile(p.comprobantePago!, `comprobante-${p.descripcion}`)}
+                                                  onClick={() => openStoredDetailedPaymentFile(p.comprobantePago!, buildPaymentFileName(p.fechaVencimiento, p.descripcion, guessExtFromDataUrl(p.comprobantePago!)))}
                                                   className="flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-lg text-[10px] font-extrabold hover:underline cursor-pointer"
                                                 >
                                                   <FileDown className="w-3 h-3" />
@@ -2763,6 +2789,40 @@ export default function FinanceView({
                     : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
                 }`}
               >
+                {/* Título + exportar/enviar reporte — antes era su propia tarjeta grande
+                    ("Controles de Exportación e Informes"); ahora es una fila de acciones
+                    compacta para dejarle el protagonismo a "Te queda por gastar". */}
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="font-extrabold text-sm dark:text-white">Resumen del Mes</h3>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      onClick={handleExportCSV}
+                      className="p-2 rounded-xl bg-slate-200/40 hover:bg-slate-200 dark:bg-zinc-800/40 dark:hover:bg-zinc-800 border border-slate-200/50 dark:border-zinc-700/40 text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-all cursor-pointer"
+                      title="Descargar en formato CSV"
+                    >
+                      <FileDown className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={handleSheetsExport}
+                      disabled={exportingSheets}
+                      className="p-2 rounded-xl bg-primary hover:bg-primary text-white dark:text-blue-950 transition-all cursor-pointer shadow-xs disabled:opacity-50"
+                      title="Sincronizar reporte con Google Sheets"
+                    >
+                      <CloudUpload className={`w-4 h-4 ${exportingSheets ? "animate-spin" : ""}`} />
+                    </button>
+                    <motion.button
+                      whileHover={{ scale: 1.04 }}
+                      whileTap={{ scale: 0.94 }}
+                      onClick={() => setShowEmailModal(true)}
+                      disabled={sendingEmail}
+                      className="p-2 rounded-xl bg-primary hover:bg-primary text-white dark:text-blue-950 transition-all cursor-pointer shadow-xs disabled:opacity-50"
+                      title="Enviar reporte por Correo Electrónico"
+                    >
+                      <Mail className={`w-4 h-4 ${sendingEmail ? "animate-spin" : ""}`} />
+                    </motion.button>
+                  </div>
+                </div>
+
                 {/* Top Metrics Row */}
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                   {/* Total Gastado */}
@@ -2785,67 +2845,79 @@ export default function FinanceView({
                     </h3>
                   </div>
 
-                  {/* Controles de Exportación e Informes */}
+                  {/* Te queda por gastar — reemplaza "Controles de Exportación e Informes" */}
                   <div className="lg:col-span-2 p-5 rounded-2xl bg-slate-50 dark:bg-black border border-slate-200/80 dark:border-zinc-800/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-zinc-900 dark:text-white shadow-xs">
-                    <div>
-                      <h4 className="font-extrabold text-sm dark:text-white">
-                        Controles de Exportación e Informes
-                      </h4>
-                      <p className="text-xs text-zinc-400 mt-1">
-                        Envía tus resúmenes financieros de forma segura
-                      </p>
-                    </div>
-                    <div className="flex gap-2 shrink-0 w-full sm:w-auto mt-2 sm:mt-0">
-                      <button
-                        onClick={handleExportCSV}
-                        className="p-3 rounded-xl bg-slate-200/40 hover:bg-slate-200 dark:bg-zinc-800/40 dark:hover:bg-zinc-800 border border-slate-200/50 dark:border-zinc-700/40 text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-all cursor-pointer"
-                        title="Descargar en formato CSV"
-                      >
-                        <FileDown className="w-5 h-5" />
-                      </button>
-                      <button
-                        onClick={handleSheetsExport}
-                        disabled={exportingSheets}
-                        className="p-3 rounded-xl bg-primary hover:bg-primary text-white dark:text-blue-950 transition-all cursor-pointer shadow-lg shadow-primary/10 disabled:opacity-50"
-                        title="Sincronizar reporte con Google Sheets"
-                      >
-                        <CloudUpload
-                          className={`w-5 h-5 ${exportingSheets ? "animate-spin" : ""}`}
-                        />
-                      </button>
-                      <motion.button
-                        whileHover={{ scale: 1.04 }}
-                        whileTap={{ scale: 0.94 }}
-                        onClick={() => setShowEmailModal(true)}
-                        disabled={sendingEmail}
-                        className="p-3 rounded-xl bg-primary hover:bg-primary text-white dark:text-blue-950 transition-all cursor-pointer shadow-lg shadow-primary/20 disabled:opacity-50"
-                        title="Enviar reporte por Correo Electrónico"
-                      >
-                        <Mail
-                          className={`w-5 h-5 ${sendingEmail ? "animate-spin" : ""}`}
-                        />
-                      </motion.button>
-                    </div>
+                    {editingPresupuesto ? (
+                      <div className="flex items-center gap-2 w-full">
+                        <div className="flex-1">
+                          <span className="text-xs text-zinc-400 font-bold uppercase tracking-wider">
+                            Presupuesto mensual
+                          </span>
+                          <CurrencyInput
+                            value={presupuestoInput}
+                            onChange={setPresupuestoInput}
+                            placeholder="Ej: 500.000,00"
+                            autoFocus
+                            className="w-full mt-1 px-3 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-zinc-900 dark:text-white outline-none text-sm font-bold focus:border-primary"
+                            onKeyDown={(e) => { if (e.key === "Enter") handleSavePresupuesto(); }}
+                          />
+                        </div>
+                        <button
+                          onClick={handleSavePresupuesto}
+                          className="shrink-0 p-3 rounded-xl bg-primary hover:bg-primary text-white dark:text-blue-950 transition-all cursor-pointer shadow-lg shadow-primary/10"
+                          title="Guardar presupuesto"
+                        >
+                          <Check className="w-5 h-5" />
+                        </button>
+                        <button
+                          onClick={() => setEditingPresupuesto(false)}
+                          className="shrink-0 p-3 rounded-xl bg-slate-200/40 hover:bg-slate-200 dark:bg-zinc-800/40 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 transition-all cursor-pointer"
+                          title="Cancelar"
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <div>
+                          <span className="text-xs text-zinc-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                            <Wallet className="w-3.5 h-3.5" /> Te queda por gastar este mes
+                          </span>
+                          {restantePorGastar !== null ? (
+                            <h3 className={`text-2xl font-black font-mono mt-1 ${restantePorGastar < 0 ? "text-red-500" : "text-emerald-500"}`}>
+                              <AnimatedNumber value={restantePorGastar} format={formatCurrency} />
+                            </h3>
+                          ) : (
+                            <p className="text-xs text-zinc-400 mt-1">
+                              Todavía no configuraste un presupuesto mensual.
+                            </p>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => {
+                            setPresupuestoInput(presupuestoMensual ? formatNumberToDisplay(presupuestoMensual) : "");
+                            setEditingPresupuesto(true);
+                          }}
+                          className="shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-200/40 hover:bg-slate-200 dark:bg-zinc-800/40 dark:hover:bg-zinc-800 border border-slate-200/50 dark:border-zinc-700/40 text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-all cursor-pointer text-xs font-bold"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                          {presupuestoMensual ? "Editar" : "Configurar"}
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
 
                 {/* Bottom Visualizations Row */}
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                  {/* Distribución de Gastos Varios / por Categoria fusionados en un slider, a la
-                      izquierda, ocupando el espacio combinado de los dos paneles originales. */}
+                  {/* Distribución por Categoria / de Gastos Varios fusionados en un slider, a la
+                      izquierda, ocupando el espacio combinado de los dos paneles originales. Por
+                      Categoria primero: es el desglose más general (todos los pagos), Gastos
+                      Varios es el más específico/secundario. */}
                   <div className="lg:col-span-2">
                     <DonutSlider
                       darkMode={darkMode}
                       slides={[
-                        {
-                          icon: <PieChart className="w-5 h-5 text-primary" />,
-                          title: "Distribución de Gastos Varios",
-                          data: activeGastosVariosCategories
-                            .map((cat) => ({ name: cat, value: gastosVariosCategoryTotals[cat] || 0 }))
-                            .filter((item) => item.value > 0),
-                          total: totalGastosVarios,
-                          formatValue: formatCurrency,
-                        },
                         {
                           icon: <PieChart className="w-5 h-5 text-primary" />,
                           title: "Distribución por Categoria",
@@ -2853,6 +2925,15 @@ export default function FinanceView({
                             .map((cat) => ({ name: cat, value: categoryDetailedTotals[cat] || 0 }))
                             .filter((item) => item.value > 0),
                           total: totalSpent,
+                          formatValue: formatCurrency,
+                        },
+                        {
+                          icon: <PieChart className="w-5 h-5 text-primary" />,
+                          title: "Distribución de Gastos Varios",
+                          data: activeGastosVariosCategories
+                            .map((cat) => ({ name: cat, value: gastosVariosCategoryTotals[cat] || 0 }))
+                            .filter((item) => item.value > 0),
+                          total: totalGastosVarios,
                           formatValue: formatCurrency,
                         },
                       ]}

@@ -249,6 +249,25 @@ export const SmartDateTimePicker: React.FC<SmartDateTimePickerProps> = ({
     return true;
   };
 
+  // El cálculo de "espacio disponible debajo" usaba solo window.innerHeight — eso alcanza para no
+  // salirse de la ventana, pero no para un modal con footer de acciones fijo FUERA del área con
+  // scroll (como "Cargar Registro de Turno y Compromiso"): el popover podía terminar tapando ese
+  // footer aunque, visto contra toda la ventana, "entrara" de sobra. Si el campo vive dentro de un
+  // ancestro con scroll propio, el límite real para abrir hacia abajo es el borde inferior de ESE
+  // ancestro, no el de la ventana.
+  const getEffectiveBottomBound = (el: HTMLElement): number => {
+    let bound = window.innerHeight;
+    let parent = el.parentElement;
+    while (parent && parent !== document.body && parent !== document.documentElement) {
+      const style = window.getComputedStyle(parent);
+      if (style.overflowY === "auto" || style.overflowY === "scroll") {
+        bound = Math.min(bound, parent.getBoundingClientRect().bottom);
+      }
+      parent = parent.parentElement;
+    }
+    return bound;
+  };
+
   const computePopoverPosition = (): PopoverPosition | null => {
     if (!containerRef.current) return null;
     const rect = containerRef.current.getBoundingClientRect();
@@ -285,7 +304,7 @@ export const SmartDateTimePicker: React.FC<SmartDateTimePickerProps> = ({
 
       const estimatedHeight = hasTime ? 370 : 290;
       const popoverHeight = popoverRef.current?.offsetHeight || estimatedHeight;
-      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceBelow = getEffectiveBottomBound(containerRef.current) - rect.bottom;
       const spaceAbove = rect.top;
 
       // Detect before opening if it fits below or should open upwards
