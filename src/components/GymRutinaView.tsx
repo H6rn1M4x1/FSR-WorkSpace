@@ -95,6 +95,11 @@ interface GymRutinaViewProps {
   onEditActividad?: (act: DeporteActividad) => void;
   activeTab?: "rutinas" | "logger" | "tecnica" | "progreso" | "historial";
   onActiveTabChange?: (tab: "rutinas" | "logger" | "tecnica" | "progreso" | "historial") => void;
+  // Peso actual y su historial (Ajustes > Salud y Datos Físicos / Mediciones Corporales de
+  // HealthView) — se los pasa al panel de análisis con IA de Progreso y Métricas, para que pueda
+  // evaluar el progreso mensual de peso real sin que GymRutinaView tenga que duplicar esa lógica.
+  currentWeightKg?: number;
+  weightHistory?: { fecha: string; peso: number }[];
 }
 
 // Grupos musculares requeridos
@@ -608,7 +613,9 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
   onDeleteActividad,
   onEditActividad,
   activeTab: propActiveTab,
-  onActiveTabChange
+  onActiveTabChange,
+  currentWeightKg,
+  weightHistory = [],
 }) => {
   const userId = getEffectiveUserId(userEmail);
 
@@ -2707,15 +2714,25 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
 
       {/* --- VISTA 4: GRÁFICO DE PROGRESO Y MÉTRICAS POR EJERCICIO (RECHARTS) --- */}
       {activeTab === "progreso" && (
-        <div className="space-y-6 text-slate-800 dark:text-zinc-100 scroll-reveal">
+        <div className="text-slate-800 dark:text-zinc-100 scroll-reveal">
+          {/* Dos columnas independientes a partir de xl: el entrenador IA a la izquierda, el
+              gráfico de progreso por ejercicio a la derecha — antes vivían apilados en una sola
+              columna, como si fueran parte de lo mismo. */}
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+          <div>
           <GymAIAnalysisPanel
             darkMode={darkMode}
+            userId={userId}
             registros={uniqueRegistros}
             allExercises={allExercises}
+            currentWeightKg={currentWeightKg}
+            weightHistory={weightHistory}
             showToast={showToast}
             onUseSuggestedRoutine={handleUseSuggestedRoutine}
           />
+          </div>
 
+          <div className="space-y-6">
           {/* CONTROL Y FILTROS DE EJERCICIO */}
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-zinc-200/60 dark:border-zinc-800/60 pb-5">
             <div>
@@ -2916,6 +2933,8 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
                 />
               </AreaChart>
             </ResponsiveContainer>
+          </div>
+          </div>
           </div>
           </div>
         </div>
