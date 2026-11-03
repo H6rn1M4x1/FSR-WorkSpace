@@ -36,8 +36,15 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
  */
 export async function uploadPaymentDocument(folder: string, file: File, desiredFileName?: string): Promise<string> {
   const fileToUpload = await compressImageFile(file);
-  const safeName = (desiredFileName || fileToUpload.name).replace(/[^a-zA-Z0-9._-]/g, "_");
-  const path = `${folder}/${Date.now()}_${safeName}`;
+  // Solo se sacan los caracteres realmente inválidos en un nombre de archivo — espacios,
+  // paréntesis y acentos se dejan tal cual para que el nombre descargado se vea igual al elegido
+  // (antes CUALQUIER caracter fuera de [a-zA-Z0-9._-] se convertía en "_", así que "Factura
+  // Emitida)" terminaba como "_Factura_Emitida_"). El timestamp para que no choque con otro
+  // archivo va en su PROPIA carpeta, no pegado al nombre — el navegador solo usa el último tramo
+  // de la URL como nombre sugerido al descargar, así que de esta forma no aparece ningún número
+  // delante del nombre.
+  const safeName = (desiredFileName || fileToUpload.name).replace(/[\\/:*?"<>|#%]/g, "").trim();
+  const path = `${folder}/${Date.now()}/${safeName}`;
   try {
     const { error: uploadError } = await withTimeout(
       supabase.storage.from(PAYMENT_DOCUMENTS_BUCKET).upload(path, fileToUpload, {
