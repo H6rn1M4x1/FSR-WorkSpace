@@ -135,6 +135,10 @@ interface PopoverPosition {
   width: number;
   placement: "top" | "bottom";
   isMobile: boolean;
+  /** Alto máximo disponible real (contra el borde del contenedor con scroll más cercano, o la
+   * ventana si no hay uno) — sin esto, un popover más alto que el espacio disponible queda
+   * cortado/tapando lo que esté debajo en vez de scrollear internamente. */
+  maxHeight: number;
 }
 
 export const SmartDateTimePicker: React.FC<SmartDateTimePickerProps> = ({
@@ -291,6 +295,7 @@ export const SmartDateTimePicker: React.FC<SmartDateTimePickerProps> = ({
         width: popoverWidth,
         placement: "bottom",
         isMobile,
+        maxHeight: window.innerHeight - top - 16,
       };
     } else {
       // Desktop: Guarantee ample width (at least 280px) so calendar and time selector are never cramped
@@ -313,21 +318,25 @@ export const SmartDateTimePicker: React.FC<SmartDateTimePickerProps> = ({
 
       if (openUpwards) {
         // Position cleanly above the input box (never overlapping)
+        const bottom = Math.max(8, window.innerHeight - rect.top + 6);
         return {
-          bottom: Math.max(8, window.innerHeight - rect.top + 6),
+          bottom,
           left,
           width: popoverWidth,
           placement: "top",
           isMobile: false,
+          maxHeight: window.innerHeight - bottom - 8,
         };
       } else {
         // Position cleanly below the input box (never overlapping)
+        const top = rect.bottom + 6;
         return {
-          top: rect.bottom + 6,
+          top,
           left,
           width: popoverWidth,
           placement: "bottom",
           isMobile: false,
+          maxHeight: getEffectiveBottomBound(containerRef.current) - top - 8,
         };
       }
     }
@@ -659,9 +668,10 @@ export const SmartDateTimePicker: React.FC<SmartDateTimePickerProps> = ({
                     : {}),
                   left: `${popoverPosition.left}px`,
                   width: `${popoverPosition.width}px`,
+                  maxHeight: `${Math.max(120, popoverPosition.maxHeight)}px`,
                   zIndex: 99999,
                 }}
-                className="bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl p-3 shadow-2xl text-zinc-900 dark:text-zinc-100 flex flex-col gap-1.5 font-sans select-none datetime-picker-popover"
+                className="bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl p-3 shadow-2xl text-zinc-900 dark:text-zinc-100 flex flex-col gap-1.5 font-sans select-none datetime-picker-popover overflow-y-auto scrollbar-thin"
               >
                 {/* Month and Year Navigation */}
                 <div className="flex items-center justify-between px-0.5 gap-1 py-0.5">

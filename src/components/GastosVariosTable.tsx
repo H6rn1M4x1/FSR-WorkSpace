@@ -292,7 +292,12 @@ export default function GastosVariosTable({
   userEmail,
 }: GastosVariosTableProps) {
   const { showToast } = useToast();
-  const gastosTableLoading = useBriefLoading([gastosVarios]);
+  // [] y no [gastosVarios]: con el array de datos como dep, cualquier cambio (agregar, editar,
+  // borrar un gasto) disparaba de nuevo el esqueleto sobre toda la tabla — este componente ya se
+  // desmonta/remonta solo al entrar/salir de esta sub-pestaña (ver el AnimatePresence con
+  // key="gastos_varios_view" en FinanceView.tsx), así que deps vacíos alcanzan para mostrar el
+  // esqueleto una vez por cada vez que se entra, sin repetirlo por cada cambio de datos.
+  const gastosTableLoading = useBriefLoading([]);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   // State

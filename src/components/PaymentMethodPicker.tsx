@@ -15,23 +15,10 @@ import { CustomSelect } from "./CustomSelect";
 // siendo texto libre, así que cualquier otro nombre se puede escribir igual. La lista sale de
 // BANCOS_CON_ICONO (los que tienen ícono real de icons.com.ar, ver bankIcons.ts) más un par que
 // ese sitio no tiene (caen en la insignia de iniciales de BankBadge en vez de un ícono real).
-// Los más usados van primero — BANCOS_CON_ICONO está en orden alfabético, así que sin esto las
-// primeras 6 sugerencias (con el campo vacío) serían, por ejemplo, "AstroPay"/"Banco Bica" en vez
-// de los bancos/billeteras que la mayoría realmente busca.
-const BANCOS_MAS_USADOS = [
-  "Mercado Pago",
-  "Banco Nación",
-  "Banco Galicia",
-  "Banco Santander",
-  "BBVA",
-  "Ualá",
-];
-const BANCOS_COMUNES = [
-  ...BANCOS_MAS_USADOS,
-  ...BANCOS_CON_ICONO.filter((b) => !BANCOS_MAS_USADOS.includes(b)),
-  "Rebanking",
-  "Cocos Pay",
-];
+// Orden alfabético (localeCompare "es" para que los acentos no desordenen, ej. "Ualá").
+const BANCOS_COMUNES = [...BANCOS_CON_ICONO, "Rebanking", "Cocos Pay"].sort((a, b) =>
+  a.localeCompare(b, "es"),
+);
 
 function BankBadge({ name, size = "sm" }: { name: string; size?: "sm" | "md" }) {
   if (!name.trim()) return null;
@@ -142,10 +129,13 @@ function WalletCard({
 
 function BankNameInput({ value, onChange, darkMode }: { value: string; onChange: (v: string) => void; darkMode: boolean }) {
   const [focused, setFocused] = useState(false);
+  // Sin tope: antes se cortaba en 6 sugerencias y no había forma de ver el resto de la lista. Ya
+  // están en orden alfabético (BANCOS_COMUNES) y el contenedor de abajo scrollea (con scroll
+  // invisible) para mostrarlas todas — "primeras 3 visibles, el resto scrolleando".
   const suggestions = useMemo(() => {
     const q = value.trim().toLowerCase();
-    if (!q) return BANCOS_COMUNES.slice(0, 6);
-    return BANCOS_COMUNES.filter((b) => b.toLowerCase().includes(q)).slice(0, 6);
+    if (!q) return BANCOS_COMUNES;
+    return BANCOS_COMUNES.filter((b) => b.toLowerCase().includes(q));
   }, [value]);
 
   return (
@@ -159,29 +149,38 @@ function BankNameInput({ value, onChange, darkMode }: { value: string; onChange:
         placeholder="Ej: Banco Galicia"
         className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-zinc-950/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white outline-none transition-all text-sm focus:border-primary"
       />
-      {focused && suggestions.length > 0 && (
-        <div
-          className={`force-solid-bg absolute z-20 top-full left-0 right-0 mt-1 p-1 rounded-xl border shadow-lg max-h-40 overflow-y-auto ${
-            darkMode ? "border-zinc-800" : "border-slate-200"
-          }`}
-        >
-          {suggestions.map((b) => (
-            <button
-              key={b}
-              type="button"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                onChange(b);
-                setFocused(false);
-              }}
-              className="w-full flex items-center gap-1.5 text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 dark:text-zinc-200 hover:bg-primary/10 hover:text-primary cursor-pointer"
-            >
-              <BankBadge name={b} />
-              {b}
-            </button>
-          ))}
-        </div>
-      )}
+      <AnimatePresence>
+        {focused && suggestions.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
+            className={`force-solid-bg absolute z-20 top-full left-0 right-0 mt-1 p-1 rounded-xl border shadow-lg max-h-40 overflow-y-auto scrollbar-thin ${
+              darkMode ? "border-zinc-800" : "border-slate-200"
+            }`}
+          >
+            {suggestions.map((b, i) => (
+              <motion.button
+                key={b}
+                type="button"
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.15, delay: Math.min(i, 8) * 0.02 }}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  onChange(b);
+                  setFocused(false);
+                }}
+                className="w-full flex items-center gap-1.5 text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 dark:text-zinc-200 hover:bg-primary/10 hover:text-primary cursor-pointer"
+              >
+                <BankBadge name={b} />
+                {b}
+              </motion.button>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

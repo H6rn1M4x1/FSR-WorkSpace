@@ -2650,7 +2650,12 @@ export default function AppointmentsView({
     });
   }, [uniqueTurnosCompromisos]);
 
-  const turnosTableLoading = useBriefLoading([sortedTurnosCompromisos]);
+  // [] y no [sortedTurnosCompromisos]: con el array derivado como dep, cualquier cambio (agregar,
+  // editar, borrar un turno) disparaba de nuevo el esqueleto sobre toda la tabla — esta vista ya
+  // se desmonta/remonta sola al cambiar de pestaña (key={activeTab} más arriba), así que deps
+  // vacíos alcanzan para mostrar el esqueleto una vez por cada vez que se entra, sin repetirlo
+  // por cada cambio de datos.
+  const turnosTableLoading = useBriefLoading([]);
 
   // Mismo filtro (estado + búsqueda) que ya usaba la tabla de Turnos y Compromisos — se extrajo
   // para que la tarjeta de mobile (md:hidden) filtre exactamente igual sin duplicar la lógica.

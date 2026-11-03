@@ -13,22 +13,34 @@ const MONTHS_ES = [
   "Diciembre",
 ];
 
+const FIELD_LABELS = {
+  facturaEmitida: "Factura Emitida",
+  comprobantePago: "Comprobante de Pago",
+} as const;
+
+function sanitize(s: string): string {
+  return (s || "").replace(/[\\/:*?"<>|]/g, "").trim();
+}
+
 /**
- * Nombre de archivo para el Comprobante de Pago / Factura Emitida de un pago: "<Mes> <Año> -
- * <descripción del pago>" en vez del nombre original que trae el archivo subido (algo tipo
- * "IMG_20261103.pdf", imposible de identificar después) — así, al descargarlo más adelante, ya
- * queda claro a qué pago corresponde sin tener que abrirlo. Usado tanto por FinanceView.tsx
- * (adjuntos vía Google Drive / base64) como por PaymentsTable.tsx (vía Supabase Storage).
+ * Nombre de archivo para el Comprobante de Pago / Factura Emitida de un pago: "<descripción> -
+ * <categoría> - <Mes Año> (<Comprobante de Pago|Factura Emitida>)" (ej. "Ualá - Prestamos -
+ * Noviembre 2026 (Comprobante de Pago)") en vez del nombre original que trae el archivo subido
+ * (algo tipo "IMG_20261103.pdf", imposible de identificar después). Usado tanto por
+ * FinanceView.tsx (adjuntos vía Google Drive / base64) como por PaymentsTable.tsx (vía Supabase
+ * Storage).
  */
 export function buildPaymentFileName(
-  fechaVencimiento: string,
   descripcion: string,
+  categoria: string,
+  fechaVencimiento: string,
+  field: keyof typeof FIELD_LABELS,
   ext: string,
 ): string {
   const [y, m] = fechaVencimiento.split("-").map(Number);
   const mesAno = m >= 1 && m <= 12 ? `${MONTHS_ES[m - 1]} ${y}` : "";
-  const titulo = (descripcion || "Pago").replace(/[\\/:*?"<>|]/g, "").trim();
-  const base = mesAno ? `${mesAno} - ${titulo}` : titulo;
+  const parts = [sanitize(descripcion) || "Pago", sanitize(categoria), mesAno].filter(Boolean);
+  const base = `${parts.join(" - ")} (${FIELD_LABELS[field]})`;
   return ext ? `${base}.${ext}` : base;
 }
 

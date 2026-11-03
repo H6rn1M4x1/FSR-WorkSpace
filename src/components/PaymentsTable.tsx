@@ -409,7 +409,15 @@ export default function PaymentsTable({
   onQuickEditHandled,
 }: PaymentsTableProps) {
   const { showToast } = useToast();
-  const paymentsTableLoading = useBriefLoading([payments]);
+  // Antes el dep era [payments]: como PaymentsTable queda montado mientras se está en "Gastos
+  // Mensuales" y `payments` es un array de React (nueva referencia en CADA actualización —
+  // marcar un pago como pagado, subir un comprobante, etc.), cualquier acción disparaba de nuevo
+  // el esqueleto de carga sobre toda la tabla — "se recarga" al apretar casi cualquier cosa. El
+  // componente ya se desmonta/remonta solo al entrar/salir de esta sub-pestaña (ver el
+  // AnimatePresence con key="todos_pagos_view" en FinanceView.tsx), así que deps vacíos alcanzan
+  // para seguir mostrando el esqueleto una vez por cada vez que se entra a la tabla, sin
+  // repetirlo por cada cambio de datos mientras ya se está ahí.
+  const paymentsTableLoading = useBriefLoading([]);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showAddPayment, setShowAddPayment] = useState(false);
@@ -607,7 +615,7 @@ export default function PaymentsTable({
       const updatedPaymentForName = payments.find((p) => p.id === paymentId);
       const ext = file.name.includes(".") ? file.name.slice(file.name.lastIndexOf(".") + 1) : "";
       const desiredFileName = updatedPaymentForName
-        ? buildPaymentFileName(updatedPaymentForName.fechaVencimiento, updatedPaymentForName.descripcion, ext)
+        ? buildPaymentFileName(updatedPaymentForName.descripcion, updatedPaymentForName.categoria, updatedPaymentForName.fechaVencimiento, field, ext)
         : undefined;
       const url = await uploadPaymentDocument(
         field === "facturaEmitida" ? "facturas" : "comprobantes",
@@ -720,7 +728,7 @@ export default function PaymentsTable({
         facturaEmitida = await uploadPaymentDocument(
           "facturas",
           facturaFile,
-          buildPaymentFileName(fechaVencimiento, descripcion, ext),
+          buildPaymentFileName(descripcion, categoria, fechaVencimiento, "facturaEmitida", ext),
         );
       }
       if (comprobanteFile) {
@@ -728,7 +736,7 @@ export default function PaymentsTable({
         comprobantePago = await uploadPaymentDocument(
           "comprobantes",
           comprobanteFile,
-          buildPaymentFileName(fechaVencimiento, descripcion, ext),
+          buildPaymentFileName(descripcion, categoria, fechaVencimiento, "comprobantePago", ext),
         );
       }
 
@@ -1368,7 +1376,7 @@ export default function PaymentsTable({
                         <div className="flex items-center justify-center gap-1.5">
                           <button
                             type="button"
-                            onClick={() => openStoredFile(p.facturaEmitida!, buildPaymentFileName(p.fechaVencimiento, p.descripcion, guessExtFromDataUrl(p.facturaEmitida!)))}
+                            onClick={() => openStoredFile(p.facturaEmitida!, buildPaymentFileName(p.descripcion, p.categoria, p.fechaVencimiento, "facturaEmitida", guessExtFromDataUrl(p.facturaEmitida!)))}
                             className="flex items-center gap-1 px-2 py-1 bg-primary/10 dark:bg-primary/10 text-primary dark:text-primary rounded-lg text-[10px] font-extrabold hover:underline transition-all cursor-pointer"
                           >
                             <FileDown className="w-3 h-3" />
@@ -1426,7 +1434,7 @@ export default function PaymentsTable({
                         <div className="flex items-center justify-center gap-1.5">
                           <button
                             type="button"
-                            onClick={() => openStoredFile(p.comprobantePago!, buildPaymentFileName(p.fechaVencimiento, p.descripcion, guessExtFromDataUrl(p.comprobantePago!)))}
+                            onClick={() => openStoredFile(p.comprobantePago!, buildPaymentFileName(p.descripcion, p.categoria, p.fechaVencimiento, "comprobantePago", guessExtFromDataUrl(p.comprobantePago!)))}
                             className="flex items-center gap-1 px-2 py-1 bg-primary/10 dark:bg-primary/10 text-primary dark:text-primary rounded-lg text-[10px] font-extrabold hover:underline transition-all cursor-pointer"
                           >
                             <FileDown className="w-3 h-3" />

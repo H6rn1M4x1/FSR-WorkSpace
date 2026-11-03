@@ -186,7 +186,12 @@ export default function CotizacionesAccionesTable({
   darkMode,
   onExportSheets,
 }: CotizacionesAccionesTableProps) {
-  const cotizacionesTableLoading = useBriefLoading([cotizaciones]);
+  // [] y no [cotizaciones]: con el array de datos como dep, cualquier cambio disparaba de nuevo
+  // el esqueleto sobre toda la tabla — este componente ya se desmonta/remonta solo al entrar/
+  // salir de esta sub-pestaña (ver el AnimatePresence con key="acciones_view" en
+  // FinanceView.tsx), así que deps vacíos alcanzan para mostrar el esqueleto una vez por cada vez
+  // que se entra, sin repetirlo por cada cambio de datos.
+  const cotizacionesTableLoading = useBriefLoading([]);
   // Search & Filters State
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedPanel, setSelectedPanel] = useState("TODOS");
