@@ -170,6 +170,17 @@ export function GymScheduleGrid({
   const [hasPendingDraft, setHasPendingDraft] = useState(false);
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
 
+  // commitCreate (más abajo) es un useCallback con deps [gridEndMin, selectedOption] — ninguna
+  // de las dos cambia al dibujar una ruta en el mapa, así que casi siempre sigue siendo la MISMA
+  // closure de antes de dibujarla, con panelDistancia todavía en "" "congelado" de ese momento.
+  // Leer panelDistancia desde un ref en vez de la variable de estado directamente evita ese
+  // closure obsoleto: el ref siempre tiene el valor más reciente, sin importar qué tan vieja sea
+  // la closure que lo lee.
+  const panelDistanciaRef = useRef(panelDistancia);
+  useEffect(() => {
+    panelDistanciaRef.current = panelDistancia;
+  }, [panelDistancia]);
+
   const selectedOption = useMemo(
     () => options.find((o) => o.key === selectedOptionKey) || null,
     [options, selectedOptionKey]
@@ -199,10 +210,12 @@ export function GymScheduleGrid({
     setPanelCalorias(est.calorias || "");
     setPanelTiempoMovimiento(est.tiempoMovimiento);
     setPanelPuntos(est.puntos);
-    if (preserveDistance && opt?.isDistanceBased && panelDistancia !== "") {
+    if (preserveDistance && opt?.isDistanceBased && panelDistanciaRef.current !== "") {
       // Repintar el rango de hora no debe borrar una ruta ya dibujada en el mapa — solo
       // recalcula el ritmo (Frecuencia) para la nueva duración, igual que handleRouteComplete.
-      setPanelFrecuencia(formatPace(minutes, Number(panelDistancia)));
+      // Lee del ref (no de panelDistancia directo) porque el llamador (commitCreate) puede traer
+      // una closure vieja — ver comentario en panelDistanciaRef.
+      setPanelFrecuencia(formatPace(minutes, Number(panelDistanciaRef.current)));
     } else {
       setPanelPasos("");
       setPanelDistancia("");

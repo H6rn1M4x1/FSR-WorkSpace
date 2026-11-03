@@ -202,7 +202,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                   width: `${popoverPosition.width}px`,
                   zIndex: 99999,
                 }}
-                className="bg-white dark:bg-black/85 backdrop-blur-md border border-slate-200 dark:border-zinc-800 rounded-xl shadow-2xl max-h-60 flex flex-col overflow-hidden"
+                className="force-solid-bg border border-slate-200 dark:border-zinc-800 rounded-xl shadow-2xl max-h-60 flex flex-col overflow-hidden"
               >
                 {/* El buscador queda fijo arriba (fuera del área con scroll) para no perderlo de
                     vista al desplazarse por una lista larga de opciones. */}

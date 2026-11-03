@@ -3,13 +3,15 @@ import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { CreditCard, Landmark, Plus, X, Trash2, Check } from "lucide-react";
 import { usePaymentMethods } from "../hooks/usePaymentMethods";
-import { detectCardBrand, CARD_BRAND_META } from "../utils/cardBrand";
+import { CARD_BRAND_META } from "../utils/cardBrand";
+import { getBankBadge } from "../utils/bankBadge";
 import type { CardBrand, PaymentMethodCard } from "../types";
 import { uiSounds } from "../lib/sounds";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
+import { CustomSelect } from "./CustomSelect";
 
-// Bancos y entidades comunes de Argentina, solo para sugerir mientras se tipea — el campo sigue
-// siendo texto libre, así que cualquier otro nombre se puede escribir igual.
+// Bancos y billeteras virtuales comunes de Argentina, solo para sugerir mientras se tipea — el
+// campo sigue siendo texto libre, así que cualquier otro nombre se puede escribir igual.
 const BANCOS_COMUNES = [
   "Banco Nación",
   "Banco Provincia",
@@ -32,7 +34,30 @@ const BANCOS_COMUNES = [
   "Ualá",
   "Naranja X",
   "Banco del Sol",
+  "Lemon",
+  "Personal Pay",
+  "MODO",
+  "Cuenta DNI",
+  "Belo",
+  "Prex",
+  "Rebanking",
+  "Cocos Pay",
 ];
+
+function BankBadge({ name, size = "sm" }: { name: string; size?: "sm" | "md" }) {
+  if (!name.trim()) return null;
+  const { initials, color, textDark } = getBankBadge(name);
+  return (
+    <span
+      className={`inline-flex items-center justify-center shrink-0 rounded-full font-black ${
+        size === "sm" ? "w-4 h-4 text-[7px]" : "w-5 h-5 text-[9px]"
+      } ${textDark ? "text-black/80" : "text-white"}`}
+      style={{ backgroundColor: color }}
+    >
+      {initials}
+    </span>
+  );
+}
 
 function describeCard(card: PaymentMethodCard): string {
   const marcaLabel = card.marca ? CARD_BRAND_META[card.marca].label : "";
@@ -106,7 +131,10 @@ function WalletCard({
           <span className="text-white/80 text-[10px] font-semibold truncate">{card.titular}</span>
           {card.vencimiento && <span className="text-white/70 text-[9px] font-bold shrink-0">{card.vencimiento}</span>}
         </div>
-        <p className="text-white/60 text-[9px] font-bold truncate mt-0.5">{card.banco}</p>
+        <p className="text-white/60 text-[9px] font-bold truncate mt-0.5 flex items-center gap-1">
+          <BankBadge name={card.banco} />
+          <span className="truncate">{card.banco}</span>
+        </p>
       </div>
     </motion.button>
   );
@@ -133,8 +161,8 @@ function BankNameInput({ value, onChange, darkMode }: { value: string; onChange:
       />
       {focused && suggestions.length > 0 && (
         <div
-          className={`absolute z-20 top-full left-0 right-0 mt-1 p-1 rounded-xl border shadow-lg max-h-40 overflow-y-auto ${
-            darkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-slate-200"
+          className={`force-solid-bg absolute z-20 top-full left-0 right-0 mt-1 p-1 rounded-xl border shadow-lg max-h-40 overflow-y-auto ${
+            darkMode ? "border-zinc-800" : "border-slate-200"
           }`}
         >
           {suggestions.map((b) => (
@@ -146,8 +174,9 @@ function BankNameInput({ value, onChange, darkMode }: { value: string; onChange:
                 onChange(b);
                 setFocused(false);
               }}
-              className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 dark:text-zinc-200 hover:bg-primary/10 hover:text-primary cursor-pointer"
+              className="w-full flex items-center gap-1.5 text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 dark:text-zinc-200 hover:bg-primary/10 hover:text-primary cursor-pointer"
             >
+              <BankBadge name={b} />
               {b}
             </button>
           ))}
@@ -162,19 +191,17 @@ function CreateCardModal({ darkMode, onClose, onCreate }: { darkMode: boolean; o
   const [tipo, setTipo] = useState<PaymentMethodCard["tipo"]>("credito");
   const [titular, setTitular] = useState("");
   const [banco, setBanco] = useState("");
-  const [numero, setNumero] = useState("");
+  const [last4Input, setLast4Input] = useState("");
   const [vencimiento, setVencimiento] = useState("");
   const [alias, setAlias] = useState("");
-  const [marcaOverride, setMarcaOverride] = useState<CardBrand | null>(null);
+  const [marca, setMarca] = useState<CardBrand | null>(null);
 
-  const detected = useMemo(() => detectCardBrand(numero), [numero]);
-  const marca = marcaOverride || detected;
-  const last4 = numero.replace(/\D/g, "").slice(-4);
+  const last4 = last4Input.replace(/\D/g, "").slice(0, 4);
 
   const isValid =
     titular.trim().length > 0 &&
     banco.trim().length > 0 &&
-    (tipo === "transferencia" ? alias.trim().length > 0 : last4.length === 4);
+    (tipo === "transferencia" ? alias.trim().length > 0 : last4.length === 4 && !!marca);
 
   const handleSubmit = () => {
     if (!isValid) return;
@@ -186,7 +213,7 @@ function CreateCardModal({ darkMode, onClose, onCreate }: { darkMode: boolean; o
       banco: banco.trim(),
       ...(tipo === "transferencia"
         ? { alias: alias.trim() }
-        : { last4, vencimiento: vencimiento.trim() || undefined, marca: marca || "otra" }),
+        : { last4, vencimiento: vencimiento.trim() || undefined, marca: marca as CardBrand }),
     });
   };
 
@@ -290,23 +317,20 @@ function CreateCardModal({ darkMode, onClose, onCreate }: { darkMode: boolean; o
             </div>
           ) : (
             <>
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
-                  Número de tarjeta
-                </label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={numero}
-                  onChange={(e) => setNumero(e.target.value.replace(/[^\d\s]/g, "").slice(0, 23))}
-                  placeholder="•••• •••• •••• ••••"
-                  className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-zinc-950/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white outline-none transition-all text-sm focus:border-primary"
-                />
-                <p className="text-[10px] text-slate-400 dark:text-zinc-500 mt-1">
-                  Solo se guardan los últimos 4 dígitos — el número completo es nada más para detectar la marca.
-                </p>
-              </div>
               <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
+                    Últimos 4 dígitos
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={last4Input}
+                    onChange={(e) => setLast4Input(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                    placeholder="1234"
+                    className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-zinc-950/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white outline-none transition-all text-sm focus:border-primary tracking-widest"
+                  />
+                </div>
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
                     Vencimiento
@@ -319,23 +343,18 @@ function CreateCardModal({ darkMode, onClose, onCreate }: { darkMode: boolean; o
                     className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-zinc-950/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white outline-none transition-all text-sm focus:border-primary"
                   />
                 </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
-                    Marca
-                  </label>
-                  <select
-                    value={marca || ""}
-                    onChange={(e) => setMarcaOverride((e.target.value || null) as CardBrand | null)}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-zinc-950/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white outline-none transition-all text-sm focus:border-primary"
-                  >
-                    <option value="">Detectar sola...</option>
-                    {Object.entries(CARD_BRAND_META).map(([key, meta]) => (
-                      <option key={key} value={key}>
-                        {meta.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
+                  Marca
+                </label>
+                <CustomSelect
+                  value={marca || ""}
+                  onChange={(v) => setMarca((v || null) as CardBrand | null)}
+                  options={Object.entries(CARD_BRAND_META).map(([key, meta]) => ({ value: key, label: meta.label }))}
+                  placeholder="Elegí la marca..."
+                  size="sm"
+                />
               </div>
             </>
           )}

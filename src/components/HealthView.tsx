@@ -5112,6 +5112,8 @@ export default function HealthView({
                   setDeportesActividades={setDeportesActividades}
                   onDeleteActividad={handleDeleteActividad}
                   onEditActividad={handleEditActividad}
+                  currentWeightKg={currentWeight}
+                  weightHistory={medidasHistory}
                 />
               </motion.div>
             )}
