@@ -14,6 +14,7 @@ import { PaymentMethodPicker } from "./PaymentMethodPicker";
 import { CurrencyInput } from "./CurrencyInput";
 import { parseFormattedNumber, formatNumberToDisplay } from "../lib/numberFormat";
 import { processAndCreateRecurringPayments } from "../utils/recurringPayments";
+import { buildPaymentFileName, guessExtFromDataUrl } from "../utils/paymentFileName";
 import {
   Plus,
   Trash2,
@@ -322,19 +323,19 @@ const BigToggle: React.FC<{
       type="button"
       data-sound="toggle"
       onClick={() => onChange(!checked)}
-      className={`flex-1 flex items-center justify-between gap-2 px-3.5 py-3 rounded-2xl border transition-colors cursor-pointer focus:outline-none ${
+      className={`flex-1 min-w-0 flex items-center justify-between gap-1.5 px-2.5 sm:px-3.5 py-3 rounded-2xl border transition-colors cursor-pointer focus:outline-none ${
         checked
           ? "bg-primary/10 border-primary/30"
           : "bg-slate-100 dark:bg-zinc-800 border-slate-200 dark:border-zinc-700"
       }`}
     >
       <span
-        className={`flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide ${
+        className={`flex items-center gap-1.5 min-w-0 text-[10px] sm:text-[11px] font-bold uppercase tracking-wide truncate ${
           checked ? "text-primary" : "text-slate-500 dark:text-zinc-400"
         }`}
       >
-        {checked && <Icon className="w-3.5 h-3.5" />}
-        {checked ? onLabel : offLabel}
+        {checked && <Icon className="w-3.5 h-3.5 shrink-0" />}
+        <span className="truncate">{checked ? onLabel : offLabel}</span>
       </span>
       <span
         className={`relative w-10 h-6 rounded-full transition-colors shrink-0 ${
@@ -603,9 +604,15 @@ export default function PaymentsTable({
 
     try {
       const userId = userEmail || "hernanmaximiliano10@gmail.com";
+      const updatedPaymentForName = payments.find((p) => p.id === paymentId);
+      const ext = file.name.includes(".") ? file.name.slice(file.name.lastIndexOf(".") + 1) : "";
+      const desiredFileName = updatedPaymentForName
+        ? buildPaymentFileName(updatedPaymentForName.fechaVencimiento, updatedPaymentForName.descripcion, ext)
+        : undefined;
       const url = await uploadPaymentDocument(
         field === "facturaEmitida" ? "facturas" : "comprobantes",
         file,
+        desiredFileName,
       );
 
       const updatedPayment = payments.find((p) => p.id === paymentId);
@@ -709,10 +716,20 @@ export default function PaymentsTable({
       let comprobantePago = existingPayment?.comprobantePago;
 
       if (facturaFile) {
-        facturaEmitida = await uploadPaymentDocument("facturas", facturaFile);
+        const ext = facturaFile.name.includes(".") ? facturaFile.name.slice(facturaFile.name.lastIndexOf(".") + 1) : "";
+        facturaEmitida = await uploadPaymentDocument(
+          "facturas",
+          facturaFile,
+          buildPaymentFileName(fechaVencimiento, descripcion, ext),
+        );
       }
       if (comprobanteFile) {
-        comprobantePago = await uploadPaymentDocument("comprobantes", comprobanteFile);
+        const ext = comprobanteFile.name.includes(".") ? comprobanteFile.name.slice(comprobanteFile.name.lastIndexOf(".") + 1) : "";
+        comprobantePago = await uploadPaymentDocument(
+          "comprobantes",
+          comprobanteFile,
+          buildPaymentFileName(fechaVencimiento, descripcion, ext),
+        );
       }
 
       const paymentData: DetailedPayment = {
@@ -1351,7 +1368,7 @@ export default function PaymentsTable({
                         <div className="flex items-center justify-center gap-1.5">
                           <button
                             type="button"
-                            onClick={() => openStoredFile(p.facturaEmitida!, `factura-${p.descripcion}`)}
+                            onClick={() => openStoredFile(p.facturaEmitida!, buildPaymentFileName(p.fechaVencimiento, p.descripcion, guessExtFromDataUrl(p.facturaEmitida!)))}
                             className="flex items-center gap-1 px-2 py-1 bg-primary/10 dark:bg-primary/10 text-primary dark:text-primary rounded-lg text-[10px] font-extrabold hover:underline transition-all cursor-pointer"
                           >
                             <FileDown className="w-3 h-3" />
@@ -1409,7 +1426,7 @@ export default function PaymentsTable({
                         <div className="flex items-center justify-center gap-1.5">
                           <button
                             type="button"
-                            onClick={() => openStoredFile(p.comprobantePago!, `comprobante-${p.descripcion}`)}
+                            onClick={() => openStoredFile(p.comprobantePago!, buildPaymentFileName(p.fechaVencimiento, p.descripcion, guessExtFromDataUrl(p.comprobantePago!)))}
                             className="flex items-center gap-1 px-2 py-1 bg-primary/10 dark:bg-primary/10 text-primary dark:text-primary rounded-lg text-[10px] font-extrabold hover:underline transition-all cursor-pointer"
                           >
                             <FileDown className="w-3 h-3" />

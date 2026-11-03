@@ -1656,6 +1656,27 @@ export default function AcademicView({
     successMessage?: string,
   ) => {
     if (toDelete.length === 0 && toUpsert.length === 0) return;
+    // Un borrado "puro" (sin nada para reemplazarlo, como al arrastrar un bloque existente hacia
+    // afuera de la grilla) pide confirmación igual que handleDeleteHorario — a diferencia de
+    // redimensionar o pintar encima de un bloque (que sí tienen upsert y quedan silenciosos,
+    // como antes, porque no borran información sin dejar algo en su lugar).
+    if (toDelete.length > 0 && toUpsert.length === 0) {
+      askConfirmation(
+        "Confirmar Eliminación",
+        toDelete.length === 1
+          ? "¿Estás seguro de que deseas eliminar este horario? Esta acción no se puede deshacer."
+          : `¿Estás seguro de que deseas eliminar estos ${toDelete.length} horarios? Esta acción no se puede deshacer.`,
+        () => commitHorarioBatchUpdate({ toDelete, toUpsert }, successMessage),
+      );
+      return;
+    }
+    await commitHorarioBatchUpdate({ toDelete, toUpsert }, successMessage);
+  };
+
+  const commitHorarioBatchUpdate = async (
+    { toDelete, toUpsert }: WeeklyScheduleGridBatch,
+    successMessage?: string,
+  ) => {
     setHorarios((prev) => {
       let next = prev.filter((h) => !toDelete.includes(h.id));
       toUpsert.forEach((item) => {
