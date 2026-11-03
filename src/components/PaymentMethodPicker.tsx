@@ -1,7 +1,7 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
-import { CreditCard, Landmark, Plus, X, Trash2, Check } from "lucide-react";
+import { CreditCard, Landmark, Plus, X, Trash2, Check, Pencil } from "lucide-react";
 import { usePaymentMethods } from "../hooks/usePaymentMethods";
 import { CARD_BRAND_META } from "../utils/cardBrand";
 import { getBankBadge } from "../utils/bankBadge";
@@ -69,46 +69,61 @@ function BrandBadge({ marca, tipo }: { marca?: CardBrand; tipo: PaymentMethodCar
   return <span className="text-[11px] font-black uppercase tracking-wide text-white/90">{CARD_BRAND_META[marca].label}</span>;
 }
 
-function WalletCard({
+// Contenido visual puro de una tarjeta de la billetera — sin el wrapper interactivo (botón para
+// la fila simple, motion.div con drag para el carrusel apilado), así los dos lo reusan sin
+// duplicar el diseño. Editar/Eliminar quedan siempre visibles (no solo al hacer hover, que en
+// pantallas táctiles nunca se llega a disparar) junto a la palomita de selección.
+function WalletCardFace({
   card,
   selected,
-  onClick,
+  onEdit,
   onDelete,
 }: {
   card: PaymentMethodCard;
   selected: boolean;
-  onClick: () => void;
+  onEdit: () => void;
   onDelete: () => void;
 }) {
   const gradient = card.tipo === "transferencia" ? "from-emerald-700 to-emerald-900" : card.marca ? CARD_BRAND_META[card.marca].gradient : CARD_BRAND_META.otra.gradient;
   return (
-    <motion.button
-      type="button"
-      whileTap={{ scale: 0.97 }}
-      onClick={onClick}
-      className={`group relative shrink-0 w-48 h-28 rounded-2xl p-3.5 flex flex-col justify-between text-left bg-gradient-to-br ${gradient} shadow-md cursor-pointer transition-all ${
-        selected ? "ring-2 ring-primary ring-offset-2 ring-offset-white dark:ring-offset-zinc-950" : "hover:scale-[1.02]"
+    <div
+      className={`relative w-48 h-28 rounded-2xl p-3.5 flex flex-col justify-between text-left bg-gradient-to-br ${gradient} shadow-md select-none ${
+        selected ? "ring-2 ring-primary ring-offset-2 ring-offset-white dark:ring-offset-zinc-950" : ""
       }`}
     >
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between gap-1">
         <BrandBadge marca={card.marca} tipo={card.tipo} />
-        {selected ? (
-          <span className="w-4 h-4 rounded-full bg-white flex items-center justify-center shrink-0">
-            <Check className="w-2.5 h-2.5 text-emerald-600" strokeWidth={4} />
-          </span>
-        ) : (
+        <div className="flex items-center gap-1 shrink-0">
           <button
             type="button"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit();
+            }}
+            title="Editar"
+            className="p-1 rounded-full hover:bg-black/20 cursor-pointer"
+          >
+            <Pencil className="w-3 h-3 text-white/80" />
+          </button>
+          <button
+            type="button"
+            onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation();
               onDelete();
             }}
             title="Eliminar"
-            className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-full hover:bg-black/20 cursor-pointer"
+            className="p-1 rounded-full hover:bg-black/20 cursor-pointer"
           >
             <Trash2 className="w-3 h-3 text-white/80" />
           </button>
-        )}
+          {selected && (
+            <span className="w-4 h-4 rounded-full bg-white flex items-center justify-center shrink-0">
+              <Check className="w-2.5 h-2.5 text-emerald-600" strokeWidth={4} />
+            </span>
+          )}
+        </div>
       </div>
       <div>
         <p className="text-white text-[11px] font-bold tracking-wide whitespace-nowrap overflow-hidden text-ellipsis">
@@ -123,7 +138,133 @@ function WalletCard({
           <span className="truncate">{card.banco}</span>
         </p>
       </div>
+    </div>
+  );
+}
+
+// Fila simple (3 tarjetas o menos): un botón por tarjeta, sin nada de carrusel — WalletCardStack
+// se encarga de eso recién cuando hace falta.
+function WalletCard({
+  card,
+  selected,
+  onClick,
+  onEdit,
+  onDelete,
+}: {
+  card: PaymentMethodCard;
+  selected: boolean;
+  onClick: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <motion.button
+      type="button"
+      whileTap={{ scale: 0.97 }}
+      onClick={onClick}
+      className={`shrink-0 cursor-pointer transition-transform ${selected ? "" : "hover:scale-[1.02]"}`}
+    >
+      <WalletCardFace card={card} selected={selected} onEdit={onEdit} onDelete={onDelete} />
     </motion.button>
+  );
+}
+
+// Carrusel apilado (más de 3 tarjetas): la seleccionada queda fija a la izquierda (con animación
+// de "layout" compartida — la misma tarjeta, con el mismo layoutId, puede estar en el carrusel un
+// momento y en el slot fijo al siguiente, y framer-motion anima la transición entre los dos solo
+// sin que haga falta calcular la posición a mano); el resto se ve apilada atrás, tocando la de
+// adelante se selecciona y arrastrándola (mantener presionado y deslizar) se pasa a la siguiente/
+// anterior sin que el contenedor cambie de tamaño ni corra el resto del formulario.
+function WalletCardStack({
+  cards,
+  selectedId,
+  onSelect,
+  onEdit,
+  onDelete,
+}: {
+  cards: PaymentMethodCard[];
+  selectedId: string | null;
+  onSelect: (card: PaymentMethodCard) => void;
+  onEdit: (card: PaymentMethodCard) => void;
+  onDelete: (id: string) => void;
+}) {
+  const selected = selectedId ? cards.find((c) => c.id === selectedId) || null : null;
+  const others = useMemo(() => cards.filter((c) => c.id !== selectedId), [cards, selectedId]);
+  const [frontIndex, setFrontIndex] = useState(0);
+
+  useEffect(() => {
+    if (frontIndex >= others.length) setFrontIndex(0);
+  }, [others.length, frontIndex]);
+
+  const cycle = (dir: 1 | -1) => {
+    if (others.length <= 1) return;
+    setFrontIndex((i) => (i + dir + others.length) % others.length);
+    uiSounds.toggle();
+    if (navigator.vibrate) navigator.vibrate(6);
+  };
+
+  return (
+    <div className="flex items-stretch gap-3">
+      {selected && (
+        <motion.div
+          layoutId={`walletcard-${selected.id}`}
+          transition={{ type: "spring", stiffness: 420, damping: 34 }}
+          className="shrink-0"
+        >
+          <WalletCardFace
+            card={selected}
+            selected
+            onEdit={() => onEdit(selected)}
+            onDelete={() => onDelete(selected.id)}
+          />
+        </motion.div>
+      )}
+      {others.length > 0 && (
+        <div className="relative w-48 h-28 shrink-0">
+          {others.map((card, i) => {
+            const pos = (i - frontIndex + others.length) % others.length;
+            if (pos > 2) return null; // solo se ven 3 apiladas atrás, el resto se alcanza arrastrando
+            const isFront = pos === 0;
+            return (
+              <motion.div
+                key={card.id}
+                layoutId={`walletcard-${card.id}`}
+                drag={isFront ? "x" : false}
+                dragElastic={0.6}
+                dragConstraints={{ left: 0, right: 0 }}
+                dragSnapToOrigin
+                onDragEnd={(_, info) => {
+                  if (info.offset.x < -50) cycle(1);
+                  else if (info.offset.x > 50) cycle(-1);
+                }}
+                onTap={() => {
+                  if (!isFront) return;
+                  uiSounds.toggle();
+                  if (navigator.vibrate) navigator.vibrate(8);
+                  onSelect(card);
+                }}
+                animate={{
+                  x: pos * 10,
+                  y: pos * 5,
+                  scale: 1 - pos * 0.05,
+                  opacity: 1 - pos * 0.25,
+                }}
+                transition={{ type: "spring", stiffness: 420, damping: 34 }}
+                className="absolute inset-0 cursor-grab active:cursor-grabbing"
+                style={{ zIndex: 10 - pos, touchAction: "pan-y" }}
+              >
+                <WalletCardFace
+                  card={card}
+                  selected={false}
+                  onEdit={() => onEdit(card)}
+                  onDelete={() => onDelete(card.id)}
+                />
+              </motion.div>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -185,15 +326,26 @@ function BankNameInput({ value, onChange, darkMode }: { value: string; onChange:
   );
 }
 
-function CreateCardModal({ darkMode, onClose, onCreate }: { darkMode: boolean; onClose: () => void; onCreate: (card: Omit<PaymentMethodCard, "id" | "order" | "createdAt" | "updatedAt">) => void }) {
+function CreateCardModal({
+  darkMode,
+  editingCard,
+  onClose,
+  onSubmit,
+}: {
+  darkMode: boolean;
+  editingCard?: PaymentMethodCard | null;
+  onClose: () => void;
+  onSubmit: (card: Omit<PaymentMethodCard, "id" | "order" | "createdAt" | "updatedAt">) => void;
+}) {
   useLockBodyScroll(true);
-  const [tipo, setTipo] = useState<PaymentMethodCard["tipo"]>("credito");
-  const [titular, setTitular] = useState("");
-  const [banco, setBanco] = useState("");
-  const [last4Input, setLast4Input] = useState("");
-  const [vencimiento, setVencimiento] = useState("");
-  const [alias, setAlias] = useState("");
-  const [marca, setMarca] = useState<CardBrand | null>(null);
+  const isEditing = !!editingCard;
+  const [tipo, setTipo] = useState<PaymentMethodCard["tipo"]>(editingCard?.tipo || "credito");
+  const [titular, setTitular] = useState(editingCard?.titular || "");
+  const [banco, setBanco] = useState(editingCard?.banco || "");
+  const [last4Input, setLast4Input] = useState(editingCard?.last4 || "");
+  const [vencimiento, setVencimiento] = useState(editingCard?.vencimiento || "");
+  const [alias, setAlias] = useState(editingCard?.alias || "");
+  const [marca, setMarca] = useState<CardBrand | null>(editingCard?.marca || null);
 
   const last4 = last4Input.replace(/\D/g, "").slice(0, 4);
 
@@ -206,7 +358,7 @@ function CreateCardModal({ darkMode, onClose, onCreate }: { darkMode: boolean; o
     if (!isValid) return;
     uiSounds.save();
     if (navigator.vibrate) navigator.vibrate(12);
-    onCreate({
+    onSubmit({
       tipo,
       titular: titular.trim(),
       banco: banco.trim(),
@@ -238,7 +390,7 @@ function CreateCardModal({ darkMode, onClose, onCreate }: { darkMode: boolean; o
         >
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-black flex items-center gap-2">
-              <CreditCard className="w-4 h-4 text-primary" /> Nueva tarjeta / cuenta
+              <CreditCard className="w-4 h-4 text-primary" /> {isEditing ? "Editar tarjeta / cuenta" : "Nueva tarjeta / cuenta"}
             </h3>
             <button type="button" onClick={onClose} className="p-1.5 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 cursor-pointer">
               <X className="w-4 h-4" />
@@ -364,7 +516,7 @@ function CreateCardModal({ darkMode, onClose, onCreate }: { darkMode: boolean; o
             disabled={!isValid}
             className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-primary text-white text-xs font-extrabold hover:bg-primary/90 cursor-pointer transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            <Plus className="w-4 h-4" /> Guardar tarjeta
+            <Plus className="w-4 h-4" /> {isEditing ? "Guardar cambios" : "Guardar tarjeta"}
           </button>
         </motion.div>
       </motion.div>
@@ -378,54 +530,93 @@ export function PaymentMethodPicker({
   darkMode,
   value,
   onChange,
+  onCardChange,
 }: {
   userId: string;
   darkMode: boolean;
   value: string;
   onChange: (description: string) => void;
+  /** Se dispara con la tarjeta completa cada vez que se elige o se crea/edita una — para que
+   * quien use el picker (ej. "Método de Pago" en Agregar Pago) pueda reaccionar a datos que el
+   * string de `value` no trae, como el tipo de tarjeta. */
+  onCardChange?: (card: PaymentMethodCard) => void;
 }) {
-  const { cards, addCard, deleteCard } = usePaymentMethods(userId);
+  const { cards, addCard, updateCard, deleteCard } = usePaymentMethods(userId);
   const [showCreate, setShowCreate] = useState(false);
+  const [editingCard, setEditingCard] = useState<PaymentMethodCard | null>(null);
+
+  const selectedCard = cards.find((c) => describeCard(c) === value) || null;
+  // El string largo de describeCard() (ej. "Visa Crédito •••• 3248 - ... (Lemon)") es para la
+  // tabla de pagos, no para que se vea repetido en este campo de texto libre — acá, con una
+  // tarjeta elegida, el resaltado de la propia tarjeta ya deja claro cuál está seleccionada.
+  const freeTextValue = selectedCard ? "" : value;
+
+  const selectCard = (card: PaymentMethodCard) => {
+    onChange(describeCard(card));
+    onCardChange?.(card);
+  };
 
   return (
     <div>
       <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1.5">
         ¿Con qué pagar?
       </label>
-      {/* p-1.5 en vez de solo pb-1.5: sin margen a los costados, el borde punteado del botón
-          "Nueva" (el único elemento cuando todavía no hay tarjetas guardadas) queda pegado al
-          borde del contenedor con overflow-x-auto y se corta visualmente. */}
-      <div className="flex items-stretch gap-2.5 overflow-x-auto p-1.5 -m-1.5">
-        {cards.map((card) => (
-          <WalletCard
-            key={card.id}
-            card={card}
-            selected={value === describeCard(card)}
-            onClick={() => {
-              uiSounds.toggle();
-              if (navigator.vibrate) navigator.vibrate(8);
-              onChange(describeCard(card));
-            }}
-            onDelete={() => deleteCard(card.id)}
+      {/* 3 tarjetas o menos: fila simple. Más de 3: carrusel apilado (WalletCardStack) para que
+          agregar tarjetas no seguir agrandando el bloque ni corriendo el resto del formulario. */}
+      {cards.length <= 3 ? (
+        <div className="flex items-stretch gap-2.5 overflow-x-auto p-1.5 -m-1.5">
+          {cards.map((card) => (
+            <WalletCard
+              key={card.id}
+              card={card}
+              selected={value === describeCard(card)}
+              onClick={() => {
+                uiSounds.toggle();
+                if (navigator.vibrate) navigator.vibrate(8);
+                selectCard(card);
+              }}
+              onEdit={() => setEditingCard(card)}
+              onDelete={() => deleteCard(card.id)}
+            />
+          ))}
+          <button
+            type="button"
+            onClick={() => setShowCreate(true)}
+            className={`shrink-0 w-28 h-28 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all ${
+              darkMode ? "border-zinc-700 text-zinc-400 hover:border-primary hover:text-primary" : "border-slate-300 text-slate-400 hover:border-primary hover:text-primary"
+            }`}
+          >
+            <Plus className="w-5 h-5" />
+            <span className="text-[10px] font-bold">Nueva</span>
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-stretch gap-2.5 p-1.5 -m-1.5">
+          <WalletCardStack
+            cards={cards}
+            selectedId={selectedCard?.id || null}
+            onSelect={selectCard}
+            onEdit={setEditingCard}
+            onDelete={(id) => deleteCard(id)}
           />
-        ))}
-        <button
-          type="button"
-          onClick={() => setShowCreate(true)}
-          className={`shrink-0 w-28 h-28 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all ${
-            darkMode ? "border-zinc-700 text-zinc-400 hover:border-primary hover:text-primary" : "border-slate-300 text-slate-400 hover:border-primary hover:text-primary"
-          }`}
-        >
-          <Plus className="w-5 h-5" />
-          <span className="text-[10px] font-bold">Nueva</span>
-        </button>
-      </div>
+          <button
+            type="button"
+            onClick={() => setShowCreate(true)}
+            className={`shrink-0 w-14 h-28 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-1 cursor-pointer transition-all ${
+              darkMode ? "border-zinc-700 text-zinc-400 hover:border-primary hover:text-primary" : "border-slate-300 text-slate-400 hover:border-primary hover:text-primary"
+            }`}
+            title="Nueva tarjeta"
+          >
+            <Plus className="w-5 h-5" />
+          </button>
+        </div>
+      )}
 
       {/* El valor sigue siendo texto editable a mano, por si se quiere aclarar algo puntual sin
           crear una tarjeta nueva en la billetera. */}
       <input
         type="text"
-        value={value}
+        value={freeTextValue}
         onChange={(e) => onChange(e.target.value)}
         placeholder="O escribí acá directamente..."
         className="w-full mt-2 px-3 py-2 rounded-lg bg-slate-50 dark:bg-zinc-950/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white outline-none transition-all text-sm focus:border-primary"
@@ -435,10 +626,26 @@ export function PaymentMethodPicker({
         <CreateCardModal
           darkMode={darkMode}
           onClose={() => setShowCreate(false)}
-          onCreate={async (card) => {
+          onSubmit={async (card) => {
             const created = await addCard(card);
             setShowCreate(false);
-            if (created) onChange(describeCard(created));
+            if (created) selectCard(created);
+          }}
+        />
+      )}
+
+      {editingCard && (
+        <CreateCardModal
+          darkMode={darkMode}
+          editingCard={editingCard}
+          onClose={() => setEditingCard(null)}
+          onSubmit={async (card) => {
+            const updated = await updateCard(editingCard.id, card);
+            setEditingCard(null);
+            // Si la tarjeta editada era la elegida, el string de describeCard() puede haber
+            // cambiado (ej. cambió el banco) — hay que refrescar `value` para que siga apuntando
+            // a la misma tarjeta en vez de quedar con una descripción vieja que ya no matchea.
+            if (updated && value === describeCard(editingCard)) selectCard(updated);
           }}
         />
       )}

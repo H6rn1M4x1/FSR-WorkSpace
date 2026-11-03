@@ -9,6 +9,7 @@ import type { PaymentMethodCard } from "../types";
 interface UsePaymentMethodsResult {
   cards: PaymentMethodCard[]; // ordenadas por "order"
   addCard: (card: Omit<PaymentMethodCard, "id" | "order" | "createdAt" | "updatedAt">) => Promise<PaymentMethodCard | null>;
+  updateCard: (id: string, card: Omit<PaymentMethodCard, "id" | "order" | "createdAt" | "updatedAt">) => Promise<PaymentMethodCard | null>;
   deleteCard: (id: string) => Promise<void>;
 }
 
@@ -41,6 +42,24 @@ export function usePaymentMethods(userId: string | null | undefined): UsePayment
     [userId, cards]
   );
 
+  const updateCard = useCallback(
+    async (id: string, card: Omit<PaymentMethodCard, "id" | "order" | "createdAt" | "updatedAt">): Promise<PaymentMethodCard | null> => {
+      if (!userId) return null;
+      const existing = cards.find((c) => c.id === id);
+      if (!existing) return null;
+      const updated: PaymentMethodCard = {
+        ...card,
+        id,
+        order: existing.order,
+        createdAt: existing.createdAt,
+        updatedAt: Date.now(),
+      };
+      await savePaymentMethod(userId, updated);
+      return updated;
+    },
+    [userId, cards]
+  );
+
   const deleteCard = useCallback(
     async (id: string) => {
       if (!userId) return;
@@ -55,7 +74,7 @@ export function usePaymentMethods(userId: string | null | undefined): UsePayment
   );
 
   return useMemo(
-    () => ({ cards: sortedCards, addCard, deleteCard }),
-    [sortedCards, addCard, deleteCard]
+    () => ({ cards: sortedCards, addCard, updateCard, deleteCard }),
+    [sortedCards, addCard, updateCard, deleteCard]
   );
 }

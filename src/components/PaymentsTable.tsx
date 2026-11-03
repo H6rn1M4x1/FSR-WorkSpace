@@ -8,9 +8,11 @@ import { useToast } from "../context/ToastContext";
 import { motion, AnimatePresence } from "motion/react";
 import { createPortal } from "react-dom";
 import { ConfirmationModal } from "./ConfirmationModal";
+import { DetailModal } from "./DetailModal";
 import { DetailedPayment } from "../types";
 import { SmartDateTimePicker } from "./SmartDateTimePicker";
 import { PaymentMethodPicker } from "./PaymentMethodPicker";
+import { RichTextEditor } from "./RichTextEditor";
 import { CurrencyInput } from "./CurrencyInput";
 import { parseFormattedNumber, formatNumberToDisplay } from "../lib/numberFormat";
 import { processAndCreateRecurringPayments } from "../utils/recurringPayments";
@@ -422,6 +424,10 @@ export default function PaymentsTable({
   const [isDeleting, setIsDeleting] = useState(false);
   const [showAddPayment, setShowAddPayment] = useState(false);
   const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
+  // Tocar el nombre en "Detalle" (tabla de escritorio) abre esto — toda la info del pago, con
+  // Editar (vía el lápiz del propio DetailModal) y Eliminar, sin tener que scrollear hasta la
+  // columna de Acciones al final de la tabla.
+  const [detailPaymentId, setDetailPaymentId] = useState<string | null>(null);
 
   // Botón "Agendar" de Inicio: abre directo este mismo formulario de "Agregar Pago".
   useEffect(() => {
@@ -873,20 +879,30 @@ export default function PaymentsTable({
             {descripcion || "Nuevo pago"}
           </h4>
         </div>
-        <motion.button
-          type="submit"
-          whileHover={{ scale: 1.03 }}
-          whileTap={{ scale: 0.96 }}
-          disabled={isSaving}
-          className="shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-primary hover:bg-primary-hover text-white dark:text-blue-950 text-[11px] font-bold shadow-sm transition-all cursor-pointer disabled:opacity-60"
-        >
-          {isSaving ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-          ) : (
-            <Save className="w-3.5 h-3.5" />
-          )}
-          {isSaving ? "Guardando..." : "Guardar"}
-        </motion.button>
+        <div className="shrink-0 flex items-center gap-2">
+          <button
+            type="button"
+            disabled={isSaving}
+            onClick={() => { if (!isSaving) resetForm(); }}
+            className="px-3 py-1.5 rounded-full text-[11px] font-bold text-slate-500 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white transition-all cursor-pointer disabled:opacity-50"
+          >
+            Cancelar
+          </button>
+          <motion.button
+            type="submit"
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.96 }}
+            disabled={isSaving}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-primary hover:bg-primary-hover text-white dark:text-blue-950 text-[11px] font-bold shadow-sm transition-all cursor-pointer disabled:opacity-60"
+          >
+            {isSaving ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Save className="w-3.5 h-3.5" />
+            )}
+            {isSaving ? "Guardando..." : "Guardar"}
+          </motion.button>
+        </div>
       </div>
 
       {/* Pagado/Impago y Recurrente/Único: mismo tamaño, ocupando todo el
@@ -974,6 +990,7 @@ export default function PaymentsTable({
           value={fechaVencimiento}
           onChange={(val) => setFechaVencimiento(val)}
           required
+          showTimeOption={false}
         />
       </div>
       {categoria === "Tarjeta de Credito" ? (
@@ -1036,17 +1053,25 @@ export default function PaymentsTable({
         darkMode={darkMode}
         value={conQuePagar}
         onChange={setConQuePagar}
+        onCardChange={(card) => {
+          // No hay una opción "Tarjeta de Crédito" en este campo (ver las options de abajo) —
+          // crédito y débito caen en la única opción de tarjeta disponible, transferencia en la
+          // suya. El objetivo es que el usuario no tenga que tocar este select a mano después de
+          // elegir con qué pagar, no inventar una opción nueva fuera de lo pedido.
+          setMetodoPago(card.tipo === "transferencia" ? "Transferencia Bancaria" : "Tarjeta de Debito");
+        }}
       />
       <div>
         <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
           ¿Dónde pagar?
         </label>
-        <input
-          type="text"
-          value={dondePagar}
-          onChange={(e) => setDondePagar(e.target.value)}
-          className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-zinc-950/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white outline-none transition-all text-sm focus:border-slate-400 dark:focus:border-zinc-700"
-        />
+        <div className="rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-black/20 p-1">
+          <RichTextEditor
+            value={dondePagar}
+            onChange={setDondePagar}
+            placeholder="Ej: sucursal, app, página web..."
+          />
+        </div>
       </div>
     </motion.div>
   );
@@ -1094,17 +1119,6 @@ export default function PaymentsTable({
         onSelect={setFacturaFile}
       />
     </motion.div>
-  );
-
-  const blockCancelar = (
-    <button
-      type="button"
-      disabled={isSaving}
-      onClick={() => { if (!isSaving) resetForm(); }}
-      className="text-xs font-semibold text-slate-500 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white transition-all cursor-pointer disabled:opacity-50"
-    >
-      Cancelar
-    </button>
   );
 
   return (
@@ -1308,7 +1322,14 @@ export default function PaymentsTable({
                       />
                     </td>
                     <td className="px-3 py-3.5 md:sticky md:left-[80px] z-20 bg-white dark:bg-zinc-950 group-hover:bg-slate-100 dark:group-hover:bg-zinc-900 transition-colors min-w-[180px] w-[180px] max-w-[180px] font-semibold text-slate-900 dark:text-zinc-100 break-words">
-                      {p.descripcion}
+                      <button
+                        type="button"
+                        onClick={() => setDetailPaymentId(p.id)}
+                        title="Ver detalle"
+                        className="text-left hover:text-primary hover:underline cursor-pointer"
+                      >
+                        {p.descripcion}
+                      </button>
                     </td>
                     <td className="px-3 py-3.5 md:sticky md:left-[260px] z-20 bg-white dark:bg-zinc-950 group-hover:bg-slate-100 dark:group-hover:bg-zinc-900 transition-colors min-w-[130px] w-[130px] max-w-[130px]">
                       <span
@@ -1489,7 +1510,14 @@ export default function PaymentsTable({
                       {p.conQuePagar || "-"}
                     </td>
                     <td className="px-6 py-4 text-slate-500 dark:text-zinc-400 font-medium">
-                      {p.dondePagar || "-"}
+                      {p.dondePagar ? (
+                        <div
+                          className="prose dark:prose-invert prose-sm max-w-none line-clamp-1 [&_*]:!text-inherit"
+                          dangerouslySetInnerHTML={{ __html: p.dondePagar }}
+                        />
+                      ) : (
+                        "-"
+                      )}
                     </td>
                     <td className="px-6 py-4 font-bold text-xs whitespace-nowrap">
                       <span
@@ -1627,9 +1655,12 @@ export default function PaymentsTable({
                       </span>
                     )}
                     {p.dondePagar && (
-                      <span className="flex items-center gap-1 truncate">
+                      <span className="flex items-center gap-1 min-w-0 truncate">
                         <MapPin className="w-3 h-3 shrink-0" />
-                        {p.dondePagar}
+                        <span
+                          className="prose dark:prose-invert prose-sm max-w-none [&_*]:!text-inherit [&_*]:!inline"
+                          dangerouslySetInnerHTML={{ __html: p.dondePagar }}
+                        />
                       </span>
                     )}
                   </div>
@@ -1745,7 +1776,6 @@ export default function PaymentsTable({
                     {blockConDondePagar}
                     {blockContenido}
                     {blockUploads}
-                    {blockCancelar}
                   </div>
 
                   {/* Desktop: dos columnas independientes (cada una con su propio alto, sin
@@ -1766,18 +1796,104 @@ export default function PaymentsTable({
                 </form>
               </div>
 
-              {/* Cancelar en PC: fijo en la esquina inferior izquierda del modal (no se mueve
-                  con el scroll del contenido ni con la altura de ninguna columna). En mobile
-                  sigue siendo el último elemento de la lista apilada (ver blockCancelar arriba). */}
-              <div className="hidden lg:block lg:absolute lg:bottom-4 lg:left-6 lg:z-10 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-sm rounded-full px-1">
-                {blockCancelar}
-              </div>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>,
       document.body,
     )}
+
+      {/* Detalle del pago — se abre tocando el nombre en la columna "Detalle" de la tabla de
+          escritorio, sin tener que scrollear hasta la columna de Acciones al final. */}
+      {(() => {
+        const detailPayment = detailPaymentId ? payments.find((p) => p.id === detailPaymentId) || null : null;
+        return (
+          <DetailModal
+            isOpen={!!detailPayment}
+            onClose={() => setDetailPaymentId(null)}
+            title={detailPayment?.descripcion}
+            icon={Receipt}
+            onEdit={detailPayment ? () => handleEdit(detailPayment) : undefined}
+          >
+            {detailPayment && (
+              <div className="flex flex-col gap-3">
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
+                    Fechas (Vencimiento / Cierre)
+                  </span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    Vence: {formatFechaDMY(detailPayment.fechaVencimiento)}
+                    {detailPayment.fechaCierre ? ` • Cierre: ${formatFechaDMY(detailPayment.fechaCierre)}` : ""}
+                  </span>
+                </div>
+
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
+                    Categoría / Monto
+                  </span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {detailPayment.categoria} • AR$ {new Intl.NumberFormat("es-AR", { minimumFractionDigits: 2 }).format(detailPayment.montoAPagar)}
+                  </span>
+                </div>
+
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
+                    Método de Pago
+                  </span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {detailPayment.metodoPago || "Debito Automatico"}
+                    {detailPayment.conQuePagar ? ` (${detailPayment.conQuePagar})` : ""}
+                  </span>
+                </div>
+
+                {detailPayment.dondePagar && (
+                  <div>
+                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
+                      Dónde pagar
+                    </span>
+                    <div
+                      className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words pl-2 prose dark:prose-invert prose-sm max-w-none [&_*]:!text-inherit"
+                      dangerouslySetInnerHTML={{ __html: detailPayment.dondePagar }}
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
+                    Recurrencia y Estado
+                  </span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {detailPayment.pagoRecurrente ? "Pago Recurrente" : "Pago Único"} • {computeEstado(detailPayment)}
+                  </span>
+                </div>
+
+                {detailPayment.observaciones && (
+                  <div>
+                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
+                      Contenido / Notas
+                    </span>
+                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2 whitespace-pre-wrap">
+                      {detailPayment.observaciones}
+                    </span>
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const id = detailPayment.id;
+                    setDetailPaymentId(null);
+                    handleDelete(id);
+                  }}
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[11px] font-bold transition-all cursor-pointer mt-1"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Eliminar pago
+                </button>
+              </div>
+            )}
+          </DetailModal>
+        );
+      })()}
 
       {/* CUSTOM CONFIRMATION DIALOG MODAL CON ANIMACIÓN & ESTADO ELIMINANDO */}
       <ConfirmationModal
