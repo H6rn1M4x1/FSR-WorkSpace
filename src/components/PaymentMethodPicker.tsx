@@ -144,16 +144,14 @@ function WalletCardFace({
   );
 }
 
-// Carrusel apilado: SIEMPRE una sola pila (nunca una fila que se va agrandando a la derecha a
-// medida que se agregan tarjetas) — la elegida es la que está "adelante" (pos 0, igual de grande
-// que las demás, bien visible); el resto se ve apilada detrás suyo, cada una un poco más corrida
-// y transparente, así se nota de entrada que hay más para recorrer. Tocar una tarjeta de atrás
-// (la parte que asoma, no tapada por la de adelante) la trae al frente y la selecciona; mantener
-// presionada la de adelante y arrastrarla pasa a la siguiente/anterior — mismo resultado, otro
-// gesto. El contenedor crece (hasta un máximo) para usar el ancho disponible en su fila —
-// mientras más lugar haya, más se corre cada tarjeta de atrás, para que se note bien que hay más
-// detrás y sea fácil agarrarla — pero nunca se sale de su propia fila ni corre el resto del
-// formulario (eso lo sigue garantizando el layout flex de quien lo usa).
+// Carrusel centrado estilo Mercado Pago (ver referencia en video): la tarjeta elegida queda
+// nítida y centrada; el vecino inmediato de cada lado asoma recortado por el borde del
+// contenedor, difuminado (blur) y un poco más chico/transparente — eso es lo que avisa que hay
+// más para recorrer, no una pila detrás. Deslizar (mantener presionado y arrastrar la tarjeta
+// activa) pasa a la siguiente/anterior, con sonido y vibración al asentarse; tocar el pedacito
+// visible de un vecino también la trae al frente. Abajo, puntitos de paginación — el de la
+// tarjeta activa es una píldora, los demás son círculos que se achican cuanto más lejos están
+// (mismo efecto que el indicador de la referencia).
 const CARD_WIDTH = 192; // w-48
 function WalletCardStack({
   cards,
@@ -171,7 +169,7 @@ function WalletCardStack({
   const selectedIndex = selectedId ? cards.findIndex((c) => c.id === selectedId) : -1;
   const [frontIndex, setFrontIndex] = useState(selectedIndex >= 0 ? selectedIndex : 0);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [containerWidth, setContainerWidth] = useState(CARD_WIDTH);
+  const [containerWidth, setContainerWidth] = useState(CARD_WIDTH + 64);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -185,7 +183,7 @@ function WalletCardStack({
   }, []);
 
   // Si la tarjeta elegida cambia desde afuera (ej. se crea una nueva y queda seleccionada), el
-  // frente de la pila la sigue.
+  // carrusel la sigue.
   useEffect(() => {
     if (selectedIndex >= 0) setFrontIndex(selectedIndex);
   }, [selectedIndex]);
@@ -208,53 +206,76 @@ function WalletCardStack({
 
   if (cards.length === 0) return null;
 
-  // Hasta 2 tarjetas apiladas detrás de la de adelante quedan visibles (el resto se alcanza
-  // girando la pila) — el espacio libre del contenedor (más allá de lo que ocupa la tarjeta de
-  // adelante) se reparte entre esas, con un piso y un techo para que ni se aplaste con un
-  // contenedor angosto ni quede absurdamente separada con uno muy ancho.
-  const maxPeek = Math.min(2, cards.length - 1);
-  const peekOffset = maxPeek > 0 ? Math.min(100, Math.max(28, (containerWidth - CARD_WIDTH) / maxPeek)) : 0;
+  // Cuánto asoma cada vecino por el borde del contenedor — con un piso y un techo para que no se
+  // aplaste en un contenedor angosto ni quede separado de más en uno muy ancho.
+  const peek = Math.min(56, Math.max(20, (containerWidth - CARD_WIDTH) / 2));
 
   return (
-    <div ref={containerRef} className="relative flex-1 min-w-[192px] max-w-[460px] h-28">
-      {cards.map((card, i) => {
-        const pos = (i - frontIndex + cards.length) % cards.length;
-        if (pos > 2) return null; // 3 tarjetas apiladas detrás como máximo; el resto se alcanza girando la pila
-        const isFront = pos === 0;
-        const canDrag = isFront && cards.length > 1;
-        return (
-          <motion.div
-            key={card.id}
-            drag={canDrag ? "x" : false}
-            dragElastic={0.6}
-            dragConstraints={{ left: 0, right: 0 }}
-            dragSnapToOrigin
-            onDragEnd={(_, info) => {
-              if (info.offset.x < -50) cycle(1);
-              else if (info.offset.x > 50) cycle(-1);
-            }}
-            onTap={() => {
-              if (!isFront) bringToFront(i);
-            }}
-            animate={{
-              x: pos * peekOffset,
-              y: pos * 8,
-              scale: 1 - pos * 0.06,
-              opacity: 1 - pos * 0.3,
-            }}
-            transition={{ type: "spring", stiffness: 420, damping: 34 }}
-            className={`absolute top-0 left-0 w-48 ${canDrag ? "cursor-grab active:cursor-grabbing" : isFront ? "" : "cursor-pointer"}`}
-            style={{ zIndex: 10 - pos, touchAction: "pan-y" }}
-          >
-            <WalletCardFace
-              card={card}
-              selected={isFront}
-              onEdit={() => onEdit(card)}
-              onDelete={() => onDelete(card)}
-            />
-          </motion.div>
-        );
-      })}
+    <div>
+      <div ref={containerRef} className="relative w-full max-w-[320px] h-28 overflow-hidden">
+        {cards.map((card, i) => {
+          const offset = i - frontIndex;
+          if (Math.abs(offset) > 1) return null; // solo el vecino inmediato de cada lado, como en la referencia
+          const isActive = offset === 0;
+          const canDrag = isActive && cards.length > 1;
+          return (
+            <motion.div
+              key={card.id}
+              drag={canDrag ? "x" : false}
+              dragElastic={0.5}
+              dragConstraints={{ left: 0, right: 0 }}
+              dragSnapToOrigin
+              onDragEnd={(_, info) => {
+                if (info.offset.x < -60) cycle(1);
+                else if (info.offset.x > 60) cycle(-1);
+              }}
+              onTap={() => {
+                if (!isActive) bringToFront(i);
+              }}
+              animate={{
+                x: offset * (CARD_WIDTH / 2 + peek),
+                scale: isActive ? 1 : 0.92,
+                opacity: isActive ? 1 : 0.55,
+                filter: isActive ? "blur(0px)" : "blur(3px)",
+              }}
+              transition={{ type: "spring", stiffness: 380, damping: 32 }}
+              className={`absolute top-0 left-1/2 -ml-24 w-48 ${canDrag ? "cursor-grab active:cursor-grabbing" : isActive ? "" : "cursor-pointer"}`}
+              style={{ zIndex: isActive ? 10 : 5, touchAction: "pan-y" }}
+            >
+              <WalletCardFace
+                card={card}
+                selected={isActive}
+                onEdit={() => onEdit(card)}
+                onDelete={() => onDelete(card)}
+              />
+            </motion.div>
+          );
+        })}
+      </div>
+
+      {cards.length > 1 && (
+        <div className="flex items-center justify-center gap-1.5 mt-2.5">
+          {cards.map((card, i) => {
+            const dist = Math.abs(i - frontIndex);
+            const isActive = i === frontIndex;
+            return (
+              <button
+                key={card.id}
+                type="button"
+                onClick={() => bringToFront(i)}
+                title={card.banco}
+                className={`rounded-full shrink-0 transition-all duration-200 cursor-pointer ${
+                  isActive
+                    ? "w-5 h-1.5 bg-primary"
+                    : dist === 1
+                      ? "w-1.5 h-1.5 bg-slate-300 dark:bg-zinc-600"
+                      : "w-1 h-1 bg-slate-300 dark:bg-zinc-700"
+                }`}
+              />
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -547,10 +568,10 @@ export function PaymentMethodPicker({
 
   return (
     <div>
-      <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1.5">
+      <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-3">
         ¿Con qué pagar?
       </label>
-      <div className="flex items-stretch gap-2.5 p-1.5 -m-1.5">
+      <div className="flex items-start gap-2.5 p-1.5 -m-1.5">
         <WalletCardStack
           cards={cards}
           selectedId={selectedCard?.id || null}
