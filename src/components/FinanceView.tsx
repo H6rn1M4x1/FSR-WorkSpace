@@ -56,8 +56,8 @@ import {
   Loader2,
   Calculator,
   ExternalLink,
-  Search,
   Pencil,
+  CheckSquare,
 } from "lucide-react";
 import {
   Invoice,
@@ -2289,50 +2289,28 @@ export default function FinanceView({
                                   </span>
                                 </div>
 
-                                <div className="flex items-center justify-between gap-2">
-                                  <div
-                                    className="text-xs font-extrabold text-black dark:text-zinc-100 truncate flex items-center gap-1.5 min-w-0"
-                                    style={{
-                                      color: darkMode ? "#f4f4f5" : "#000000",
-                                    }}
-                                  >
-                                    <PaymentIconGlyph
-                                      iconId={getEffectivePaymentIconId(p)}
-                                      colorId={p.iconoColor}
-                                      className={`w-3.5 h-3.5 shrink-0 self-center ${p.iconoColor ? "" : "text-primary"}`}
-                                    />
-                                    <span className="self-center translate-y-[0.5px] truncate">{p.descripcion}</span>
-                                    <SharedBadge
-                                      item={p}
-                                      isSharedOut={isSharedOut("detailed_payments", p.id)}
-                                      sharedOutWith={sharedOutWith("detailed_payments", p.id)}
-                                    />
-                                  </div>
-                                  <div className="flex items-center gap-1 shrink-0">
-                                    <button
-                                      type="button"
-                                      onClick={(e) => { e.stopPropagation(); handleEditPaymentCard(p.id); }}
-                                      className="p-0.5 rounded hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
-                                      title="Editar"
-                                    >
-                                      <Pencil className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={(e) => { e.stopPropagation(); setExpandedPaymentId(isExpanded ? null : p.id); }}
-                                      className="p-0.5 rounded hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
-                                      title="Ver detalles"
-                                    >
-                                      <Search className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
-                                </div>
+                                <p className="flex items-center gap-1.5 font-extrabold text-sm text-slate-900 dark:text-zinc-100 truncate">
+                                  <PaymentIconGlyph
+                                    iconId={getEffectivePaymentIconId(p)}
+                                    colorId={p.iconoColor}
+                                    className={`w-3.5 h-3.5 shrink-0 ${p.iconoColor ? "" : "text-primary"}`}
+                                  />
+                                  <span className="truncate">{p.descripcion}</span>
+                                  <SharedBadge
+                                    item={p}
+                                    isSharedOut={isSharedOut("detailed_payments", p.id)}
+                                    sharedOutWith={sharedOutWith("detailed_payments", p.id)}
+                                  />
+                                </p>
 
                                 <div className="flex items-end justify-between gap-3">
-                                  <span className="text-[10px] text-zinc-500 font-medium">
-                                    {formatFechaDMY(p.fechaVencimiento)}
-                                  </span>
-                                  <span className="text-xs font-extrabold text-primary font-mono">
+                                  <div className="flex items-center gap-1.5 text-xs font-semibold">
+                                    <Calendar className="w-3.5 h-3.5 shrink-0 text-slate-400 dark:text-zinc-500" />
+                                    <span className="text-slate-500 dark:text-zinc-400">
+                                      {formatFechaDMY(p.fechaVencimiento)}
+                                    </span>
+                                  </div>
+                                  <span className="font-mono font-bold text-base text-slate-900 dark:text-zinc-100">
                                     {formatCurrency(p.montoAPagar)}
                                   </span>
                                 </div>
@@ -2345,22 +2323,32 @@ export default function FinanceView({
                                 )}
 
                                 <div
-                                  className="flex items-center gap-2 pt-1 border-t border-slate-100 dark:border-zinc-900/60"
+                                  className="flex items-center gap-2 mt-1 pt-3 border-t border-slate-100 dark:border-zinc-900/60"
                                   onClick={(e) => e.stopPropagation()}
                                 >
                                   <button
                                     onClick={() =>
                                       handlePayDetailedPayment(p.id)
                                     }
-                                    className="flex-1 px-2.5 py-1.5 rounded-full bg-primary hover:bg-primary-hover text-white dark:text-blue-950 text-[10px] font-bold cursor-pointer transition-all"
+                                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold bg-primary text-white dark:text-black cursor-pointer transition-all active:scale-95"
                                   >
+                                    <CheckSquare className="w-3.5 h-3.5" />
                                     Pagar
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleEditPaymentCard(p.id)}
+                                    className={`p-2.5 rounded-xl cursor-pointer transition-all active:scale-95 ${darkMode ? "bg-zinc-800 text-zinc-300" : "bg-slate-100 text-slate-600"}`}
+                                    title="Editar"
+                                  >
+                                    <Pencil className="w-3.5 h-3.5" />
                                   </button>
                                   <button
                                     onClick={() =>
                                       handleDeleteDetailedPayment(p.id)
                                     }
-                                    className="p-1.5 text-red-500 hover:bg-red-500/10 rounded-lg transition-all cursor-pointer"
+                                    className="p-2.5 rounded-xl bg-red-500/10 text-red-500 cursor-pointer transition-all active:scale-95"
+                                    title="Eliminar"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </button>
@@ -2611,50 +2599,28 @@ export default function FinanceView({
                                   </span>
                                 </div>
 
-                                <div className="flex items-center justify-between gap-2">
-                                  <div
-                                    className="text-xs font-extrabold text-black dark:text-zinc-100 truncate flex items-center gap-1.5 min-w-0"
-                                    style={{
-                                      color: darkMode ? "#f4f4f5" : "#000000",
-                                    }}
-                                  >
-                                    <PaymentIconGlyph
-                                      iconId={getEffectivePaymentIconId(p)}
-                                      colorId={p.iconoColor}
-                                      className={`w-3.5 h-3.5 shrink-0 self-center ${p.iconoColor ? "" : "text-primary"}`}
-                                    />
-                                    <span className="self-center translate-y-[0.5px] truncate">{p.descripcion}</span>
-                                    <SharedBadge
-                                      item={p}
-                                      isSharedOut={isSharedOut("detailed_payments", p.id)}
-                                      sharedOutWith={sharedOutWith("detailed_payments", p.id)}
-                                    />
-                                  </div>
-                                  <div className="flex items-center gap-1 shrink-0">
-                                    <button
-                                      type="button"
-                                      onClick={(e) => { e.stopPropagation(); handleEditPaymentCard(p.id); }}
-                                      className="p-0.5 rounded hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
-                                      title="Editar"
-                                    >
-                                      <Pencil className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={(e) => { e.stopPropagation(); setExpandedPaymentId(isExpanded ? null : p.id); }}
-                                      className="p-0.5 rounded hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
-                                      title="Ver detalles"
-                                    >
-                                      <Search className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
-                                </div>
+                                <p className="flex items-center gap-1.5 font-extrabold text-sm text-slate-900 dark:text-zinc-100 truncate">
+                                  <PaymentIconGlyph
+                                    iconId={getEffectivePaymentIconId(p)}
+                                    colorId={p.iconoColor}
+                                    className={`w-3.5 h-3.5 shrink-0 ${p.iconoColor ? "" : "text-primary"}`}
+                                  />
+                                  <span className="truncate">{p.descripcion}</span>
+                                  <SharedBadge
+                                    item={p}
+                                    isSharedOut={isSharedOut("detailed_payments", p.id)}
+                                    sharedOutWith={sharedOutWith("detailed_payments", p.id)}
+                                  />
+                                </p>
 
                                 <div className="flex items-end justify-between gap-3">
-                                  <span className="text-[10px] text-zinc-500 font-medium">
-                                    {formatFechaDMY(p.fechaVencimiento)}
-                                  </span>
-                                  <span className="text-xs font-extrabold text-primary font-mono">
+                                  <div className="flex items-center gap-1.5 text-xs font-semibold">
+                                    <Calendar className="w-3.5 h-3.5 shrink-0 text-slate-400 dark:text-zinc-500" />
+                                    <span className="text-slate-500 dark:text-zinc-400">
+                                      {formatFechaDMY(p.fechaVencimiento)}
+                                    </span>
+                                  </div>
+                                  <span className="font-mono font-bold text-base text-slate-900 dark:text-zinc-100">
                                     {formatCurrency(p.montoAPagar)}
                                   </span>
                                 </div>
@@ -2667,14 +2633,24 @@ export default function FinanceView({
                                 )}
 
                                 <div
-                                  className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100 dark:border-zinc-900/60"
+                                  className="flex items-center gap-2 mt-1 pt-3 border-t border-slate-100 dark:border-zinc-900/60"
                                   onClick={(e) => e.stopPropagation()}
                                 >
+                                  <button
+                                    type="button"
+                                    onClick={() => handleEditPaymentCard(p.id)}
+                                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold cursor-pointer transition-all active:scale-95 ${darkMode ? "bg-zinc-800 text-zinc-300" : "bg-slate-100 text-slate-600"}`}
+                                    title="Editar"
+                                  >
+                                    <Pencil className="w-3.5 h-3.5" />
+                                    Editar
+                                  </button>
                                   <button
                                     onClick={() =>
                                       handleDeleteDetailedPayment(p.id)
                                     }
-                                    className="p-1.5 text-red-500 hover:bg-red-500/10 rounded-lg transition-all cursor-pointer"
+                                    className="p-2.5 rounded-xl bg-red-500/10 text-red-500 cursor-pointer transition-all active:scale-95"
+                                    title="Eliminar"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </button>
