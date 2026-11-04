@@ -190,29 +190,16 @@ function PaymentMethodCardStripContent({ card }: { card: PaymentMethodCard }) {
   );
 }
 
-// Franja alargada "flotante", con su propio contorno redondeado — para usarla suelta, no pegada
-// al borde de otra tarjeta/nota.
+// Franja alargada "flotante", con su propio contorno redondeado (todas las esquinas, como la
+// caja de arriba) y una animación chica al pasar el mouse por encima — para mostrar "con qué se
+// paga" como su propia tarjetita separada, no pegada al borde de la nota de arriba.
 export function PaymentMethodCardStrip({ card }: { card: PaymentMethodCard }) {
-  const gradient = card.tipo === "transferencia" ? "from-emerald-700 to-emerald-900" : card.marca ? CARD_BRAND_META[card.marca].gradient : CARD_BRAND_META.otra.gradient;
-  return (
-    <div className={`w-full rounded-xl bg-gradient-to-br ${gradient} shadow-sm select-none`}>
-      <PaymentMethodCardStripContent card={card} />
-    </div>
-  );
-}
-
-// La misma franja, pero "asomando" pegada al fondo de una nota en vez de ser un bloque aparte: sin
-// esquinas ni borde propios arriba, al ras de los costados y del fondo de la nota que la contiene
-// (así se nota que sigue siendo parte de la misma tarjeta), con esquinas redondeadas solo abajo
-// para continuar la silueta general. `bleed` son las clases de margen negativo que cancelan el
-// padding del contenedor que la llama (ej. "-mx-4 -mb-4" para un contenedor con p-4).
-export function PaymentMethodCardPeek({ card, bleed }: { card: PaymentMethodCard; bleed: string }) {
   const gradient = card.tipo === "transferencia" ? "from-emerald-700 to-emerald-900" : card.marca ? CARD_BRAND_META[card.marca].gradient : CARD_BRAND_META.otra.gradient;
   return (
     <motion.div
       whileHover={{ scale: 1.015, filter: "brightness(1.12)" }}
       transition={{ type: "spring", stiffness: 400, damping: 22 }}
-      className={`${bleed} rounded-b-2xl bg-gradient-to-br ${gradient} select-none`}
+      className={`w-full rounded-xl bg-gradient-to-br ${gradient} shadow-sm select-none`}
     >
       <PaymentMethodCardStripContent card={card} />
     </motion.div>
@@ -221,35 +208,29 @@ export function PaymentMethodCardPeek({ card, bleed }: { card: PaymentMethodCard
 
 // Resuelve el método de pago elegido en un pago (el texto guardado en `conQuePagar`, igual al que
 // arma describeCard) contra la billetera actual del usuario y lo muestra con su identidad visual
-// real — "compact" para el detalle de un pago (la tarjeta tal cual se ve al crearla), "strip" para
-// una franja horizontal propia, y "peek" para que asome detrás del borde redondeado de abajo de
-// una nota (ver PaymentMethodCardPeek). Si no hay ninguna tarjeta que coincida (método viejo
-// tipeado a mano, o la tarjeta ya se borró), "peek" no muestra nada (no hay nada que asomar) y los
-// demás caen a mostrar el texto plano.
+// real — "compact" para el detalle de un pago (la tarjeta tal cual se ve al crearla) y "strip"
+// para la franja horizontal propia. Si no hay ninguna tarjeta que coincida (método viejo tipeado
+// a mano, o la tarjeta ya se borró), cae a mostrar el texto plano.
 export function PaymentMethodCardResolved({
   userId,
   describedCard,
   variant = "compact",
   fallbackText,
-  peekBleed,
 }: {
   userId: string;
   describedCard: string;
-  variant?: "compact" | "strip" | "peek";
+  variant?: "compact" | "strip";
   fallbackText?: string;
-  peekBleed?: string;
 }) {
   const { cards } = usePaymentMethods(userId);
   const card = describedCard ? cards.find((c) => describeCard(c) === describedCard) : undefined;
   if (!card) {
-    if (variant === "peek") return null;
     return (
       <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block">
         {fallbackText ?? describedCard ?? "—"}
       </span>
     );
   }
-  if (variant === "peek") return <PaymentMethodCardPeek card={card} bleed={peekBleed || "-mx-4 -mb-4"} />;
   return variant === "strip" ? <PaymentMethodCardStrip card={card} /> : <WalletCardFace card={card} selected={false} />;
 }
 

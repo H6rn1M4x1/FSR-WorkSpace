@@ -1734,12 +1734,11 @@ export default function PaymentsTable({
                 </div>
 
                 {p.conQuePagar && (
-                  <div className="mt-3.5" onClick={(e) => e.stopPropagation()}>
+                  <div className="mt-2" onClick={(e) => e.stopPropagation()}>
                     <PaymentMethodCardResolved
                       userId={paymentMethodsUserId}
                       describedCard={p.conQuePagar}
-                      variant="peek"
-                      peekBleed="-mx-4 -mb-4"
+                      variant="strip"
                     />
                   </div>
                 )}

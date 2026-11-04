@@ -2355,12 +2355,11 @@ export default function FinanceView({
                                 </div>
 
                                 {p.conQuePagar && (
-                                  <div onClick={(e) => e.stopPropagation()}>
+                                  <div className="mt-1" onClick={(e) => e.stopPropagation()}>
                                     <PaymentMethodCardResolved
                                       userId={userEmail || "hernanmaximiliano10@gmail.com"}
                                       describedCard={p.conQuePagar}
-                                      variant="peek"
-                                      peekBleed="-mx-3.5 -mb-3.5"
+                                      variant="strip"
                                     />
                                   </div>
                                 )}
@@ -2657,12 +2656,11 @@ export default function FinanceView({
                                 </div>
 
                                 {p.conQuePagar && (
-                                  <div onClick={(e) => e.stopPropagation()}>
+                                  <div className="mt-1" onClick={(e) => e.stopPropagation()}>
                                     <PaymentMethodCardResolved
                                       userId={userEmail || "hernanmaximiliano10@gmail.com"}
                                       describedCard={p.conQuePagar}
-                                      variant="peek"
-                                      peekBleed="-mx-3.5 -mb-3.5"
+                                      variant="strip"
                                     />
                                   </div>
                                 )}
