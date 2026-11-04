@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { CreditCard, Landmark, Plus, X, Trash2, Check, Pencil } from "lucide-react";
@@ -150,8 +150,11 @@ function WalletCardFace({
 // y transparente, así se nota de entrada que hay más para recorrer. Tocar una tarjeta de atrás
 // (la parte que asoma, no tapada por la de adelante) la trae al frente y la selecciona; mantener
 // presionada la de adelante y arrastrarla pasa a la siguiente/anterior — mismo resultado, otro
-// gesto. Todo dentro de un único contenedor de tamaño fijo (w-48 h-28): agregar tarjetas nunca
-// corre el resto del formulario.
+// gesto. El contenedor crece (hasta un máximo) para usar el ancho disponible en su fila —
+// mientras más lugar haya, más se corre cada tarjeta de atrás, para que se note bien que hay más
+// detrás y sea fácil agarrarla — pero nunca se sale de su propia fila ni corre el resto del
+// formulario (eso lo sigue garantizando el layout flex de quien lo usa).
+const CARD_WIDTH = 192; // w-48
 function WalletCardStack({
   cards,
   selectedId,
@@ -167,6 +170,19 @@ function WalletCardStack({
 }) {
   const selectedIndex = selectedId ? cards.findIndex((c) => c.id === selectedId) : -1;
   const [frontIndex, setFrontIndex] = useState(selectedIndex >= 0 ? selectedIndex : 0);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(CARD_WIDTH);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width;
+      if (w) setContainerWidth(w);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // Si la tarjeta elegida cambia desde afuera (ej. se crea una nueva y queda seleccionada), el
   // frente de la pila la sigue.
@@ -192,8 +208,15 @@ function WalletCardStack({
 
   if (cards.length === 0) return null;
 
+  // Hasta 2 tarjetas apiladas detrás de la de adelante quedan visibles (el resto se alcanza
+  // girando la pila) — el espacio libre del contenedor (más allá de lo que ocupa la tarjeta de
+  // adelante) se reparte entre esas, con un piso y un techo para que ni se aplaste con un
+  // contenedor angosto ni quede absurdamente separada con uno muy ancho.
+  const maxPeek = Math.min(2, cards.length - 1);
+  const peekOffset = maxPeek > 0 ? Math.min(100, Math.max(28, (containerWidth - CARD_WIDTH) / maxPeek)) : 0;
+
   return (
-    <div className="relative w-48 h-28 shrink-0">
+    <div ref={containerRef} className="relative flex-1 min-w-[192px] max-w-[460px] h-28">
       {cards.map((card, i) => {
         const pos = (i - frontIndex + cards.length) % cards.length;
         if (pos > 2) return null; // 3 tarjetas apiladas detrás como máximo; el resto se alcanza girando la pila
@@ -214,13 +237,13 @@ function WalletCardStack({
               if (!isFront) bringToFront(i);
             }}
             animate={{
-              x: pos * 16,
-              y: pos * 7,
+              x: pos * peekOffset,
+              y: pos * 8,
               scale: 1 - pos * 0.06,
               opacity: 1 - pos * 0.3,
             }}
             transition={{ type: "spring", stiffness: 420, damping: 34 }}
-            className={`absolute inset-0 ${canDrag ? "cursor-grab active:cursor-grabbing" : isFront ? "" : "cursor-pointer"}`}
+            className={`absolute top-0 left-0 w-48 ${canDrag ? "cursor-grab active:cursor-grabbing" : isFront ? "" : "cursor-pointer"}`}
             style={{ zIndex: 10 - pos, touchAction: "pan-y" }}
           >
             <WalletCardFace
@@ -516,10 +539,6 @@ export function PaymentMethodPicker({
   const [deletingCard, setDeletingCard] = useState<PaymentMethodCard | null>(null);
 
   const selectedCard = cards.find((c) => describeCard(c) === value) || null;
-  // El string largo de describeCard() (ej. "Visa Crédito •••• 3248 - ... (Lemon)") es para la
-  // tabla de pagos, no para que se vea repetido en este campo de texto libre — acá, con una
-  // tarjeta elegida, el resaltado de la propia tarjeta ya deja claro cuál está seleccionada.
-  const freeTextValue = selectedCard ? "" : value;
 
   const selectCard = (card: PaymentMethodCard) => {
     onChange(describeCard(card));
@@ -542,24 +561,12 @@ export function PaymentMethodPicker({
         <button
           type="button"
           onClick={() => setShowCreate(true)}
-          className={`shrink-0 w-14 h-28 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-1 cursor-pointer transition-all ${
-            darkMode ? "border-zinc-700 text-zinc-400 hover:border-primary hover:text-primary" : "border-slate-300 text-slate-400 hover:border-primary hover:text-primary"
-          }`}
+          className="shrink-0 w-14 h-28 rounded-2xl border-2 border-dashed border-primary/50 text-primary flex flex-col items-center justify-center gap-1 cursor-pointer transition-all hover:border-primary hover:bg-primary/10"
           title="Nueva tarjeta"
         >
           <Plus className="w-5 h-5" />
         </button>
       </div>
-
-      {/* El valor sigue siendo texto editable a mano, por si se quiere aclarar algo puntual sin
-          crear una tarjeta nueva en la billetera. */}
-      <input
-        type="text"
-        value={freeTextValue}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="O escribí acá directamente..."
-        className="w-full mt-2 px-3 py-2 rounded-lg bg-slate-50 dark:bg-zinc-950/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white outline-none transition-all text-sm focus:border-primary"
-      />
 
       {showCreate && (
         <CreateCardModal
