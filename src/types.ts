@@ -66,6 +66,11 @@ export interface DetailedPayment {
   conQuePagar: string; // Text
   dondePagar: string; // Text
   observaciones?: string;
+  /** Ícono elegido para representar este pago (ver src/utils/paymentIcons.ts), p.ej. "netflix" o
+   *  "lightbulb" — sin definir cae al ícono genérico (Receipt). */
+  icono?: string;
+  /** Uno de los ids de PAYMENT_ICON_COLORS — sin definir el ícono sigue el color de acento. */
+  iconoColor?: string;
 }
 
 export type CardBrand = "visa" | "mastercard" | "amex" | "diners" | "discover" | "cabal" | "naranja" | "otra";

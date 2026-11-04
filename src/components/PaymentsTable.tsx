@@ -17,6 +17,8 @@ import { CurrencyInput } from "./CurrencyInput";
 import { parseFormattedNumber, formatNumberToDisplay } from "../lib/numberFormat";
 import { processAndCreateRecurringPayments } from "../utils/recurringPayments";
 import { buildPaymentFileName, guessExtFromDataUrl } from "../utils/paymentFileName";
+import { PaymentIconPicker } from "./PaymentIconPicker";
+import { PaymentIconGlyph } from "./PaymentIconGlyph";
 import {
   Plus,
   Trash2,
@@ -649,6 +651,8 @@ export default function PaymentsTable({
   // Form states
   const [pago, setPago] = useState(false);
   const [descripcion, setDescripcion] = useState("");
+  const [icono, setIcono] = useState<string | undefined>(undefined);
+  const [iconoColor, setIconoColor] = useState<string | undefined>(undefined);
   const [categoria, setCategoria] = useState("Impuestos");
   const [fechaVencimiento, setFechaVencimiento] = useState(
     () => new Date().toISOString().split("T")[0],
@@ -679,6 +683,8 @@ export default function PaymentsTable({
     setEditingPaymentId(p.id);
     setPago(p.pago);
     setDescripcion(p.descripcion);
+    setIcono(p.icono);
+    setIconoColor(p.iconoColor);
     setCategoria(p.categoria);
     setFechaVencimiento(p.fechaVencimiento);
     setFechaCierre(p.fechaCierre || "");
@@ -694,6 +700,8 @@ export default function PaymentsTable({
   const resetForm = () => {
     setPago(false);
     setDescripcion("");
+    setIcono(undefined);
+    setIconoColor(undefined);
     setCategoria("Impuestos");
     setFechaVencimiento(new Date().toISOString().split("T")[0]);
     setFechaCierre("");
@@ -750,6 +758,8 @@ export default function PaymentsTable({
         id: editingPaymentId || generateUniqueId("dp"),
         pago,
         descripcion: descripcion.trim(),
+        icono,
+        iconoColor,
         categoria: categoria as any,
         fechaVencimiento,
         fechaCierre: categoria === "Tarjeta de Credito" ? fechaCierre : undefined,
@@ -923,14 +933,24 @@ export default function PaymentsTable({
       <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
         Descripción
       </label>
-      <input
-        type="text"
-        value={descripcion}
-        onChange={(e) => setDescripcion(e.target.value)}
-        placeholder="Ej: Internet / Supermercado"
-        className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-zinc-950/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-600 outline-none transition-all text-sm focus:border-slate-400 dark:focus:border-zinc-700"
-        required
-      />
+      <div className="flex items-center gap-2">
+        <PaymentIconPicker
+          iconId={icono}
+          colorId={iconoColor}
+          onChange={(nextIcon, nextColor) => {
+            setIcono(nextIcon);
+            setIconoColor(nextColor);
+          }}
+        />
+        <input
+          type="text"
+          value={descripcion}
+          onChange={(e) => setDescripcion(e.target.value)}
+          placeholder="Ej: Internet / Supermercado"
+          className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-zinc-950/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-600 outline-none transition-all text-sm focus:border-slate-400 dark:focus:border-zinc-700"
+          required
+        />
+      </div>
     </motion.div>
   );
 
@@ -1327,9 +1347,16 @@ export default function PaymentsTable({
                         type="button"
                         onClick={() => setDetailPaymentId(p.id)}
                         title="Ver detalle"
-                        className="text-left hover:text-primary hover:underline cursor-pointer"
+                        className="flex items-center gap-1.5 text-left hover:text-primary hover:underline cursor-pointer"
                       >
-                        {p.descripcion}
+                        {p.icono && (
+                          <PaymentIconGlyph
+                            iconId={p.icono}
+                            colorId={p.iconoColor}
+                            className={`w-3.5 h-3.5 shrink-0 ${p.iconoColor ? "" : "text-primary"}`}
+                          />
+                        )}
+                        <span className="truncate">{p.descripcion}</span>
                       </button>
                     </td>
                     <td className="px-3 py-3.5 md:sticky md:left-[260px] z-20 bg-white dark:bg-zinc-950 group-hover:bg-slate-100 dark:group-hover:bg-zinc-900 transition-colors min-w-[130px] w-[130px] max-w-[130px]">
@@ -1631,8 +1658,15 @@ export default function PaymentsTable({
                   </span>
                 </div>
 
-                <p className="font-extrabold text-sm text-slate-900 dark:text-zinc-100 mb-2.5 break-words">
-                  {p.descripcion}
+                <p className="flex items-center gap-1.5 font-extrabold text-sm text-slate-900 dark:text-zinc-100 mb-2.5 break-words">
+                  {p.icono && (
+                    <PaymentIconGlyph
+                      iconId={p.icono}
+                      colorId={p.iconoColor}
+                      className={`w-3.5 h-3.5 shrink-0 ${p.iconoColor ? "" : "text-primary"}`}
+                    />
+                  )}
+                  <span>{p.descripcion}</span>
                 </p>
 
                 <div className="flex items-end justify-between gap-3 mb-1">
@@ -1813,7 +1847,17 @@ export default function PaymentsTable({
             isOpen={!!detailPayment}
             onClose={() => setDetailPaymentId(null)}
             title={detailPayment?.descripcion}
-            icon={Receipt}
+            icon={
+              detailPayment?.icono
+                ? (props: { className?: string }) => (
+                    <PaymentIconGlyph
+                      iconId={detailPayment.icono}
+                      colorId={detailPayment.iconoColor}
+                      className={props.className}
+                    />
+                  )
+                : Receipt
+            }
             onEdit={detailPayment ? () => handleEdit(detailPayment) : undefined}
           >
             {detailPayment && (
