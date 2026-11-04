@@ -65,10 +65,21 @@ function BrandBadge({ marca, tipo }: { marca?: CardBrand; tipo: PaymentMethodCar
       </span>
     );
   }
+  const tipoLabel = tipo === "credito" ? "Crédito" : "Débito";
   if (!marca) {
-    return <span className="text-[10px] font-black uppercase tracking-wide text-white/70">Tarjeta</span>;
+    return (
+      <span className="flex items-baseline gap-1.5 min-w-0">
+        <span className="text-[10px] font-black uppercase tracking-wide text-white/70 truncate">Tarjeta</span>
+        <span className="text-[8px] font-light text-white/60 shrink-0">{tipoLabel}</span>
+      </span>
+    );
   }
-  return <span className="text-[11px] font-black uppercase tracking-wide text-white/90">{CARD_BRAND_META[marca].label}</span>;
+  return (
+    <span className="flex items-baseline gap-1.5 min-w-0">
+      <span className="text-[11px] font-black uppercase tracking-wide text-white/90 truncate">{CARD_BRAND_META[marca].label}</span>
+      <span className="text-[8px] font-light text-white/60 shrink-0">{tipoLabel}</span>
+    </span>
+  );
 }
 
 // Contenido visual puro de una tarjeta de la billetera — sin el wrapper interactivo (botón para
@@ -135,7 +146,7 @@ function WalletCardFace({
           <span className="text-white/80 text-[10px] font-semibold truncate">{card.titular}</span>
           {card.vencimiento && <span className="text-white/70 text-[9px] font-bold shrink-0">{card.vencimiento}</span>}
         </div>
-        <p className="text-white/60 text-[9px] font-bold truncate mt-0.5 flex items-center justify-end gap-1">
+        <p className="text-white/60 text-[9px] font-bold truncate mt-0.5 flex items-center justify-start gap-1">
           <span className="truncate">{card.banco}</span>
           <BankBadge name={card.banco} />
         </p>
@@ -207,12 +218,22 @@ function WalletCardStack({
   if (cards.length === 0) return null;
 
   // Cuánto asoma cada vecino por el borde del contenedor — con un piso y un techo para que no se
-  // aplaste en un contenedor angosto ni quede separado de más en uno muy ancho.
+  // aplaste en un contenedor angosto ni quede separado de más en uno muy ancho. El contenedor no
+  // se estira a usar TODO el ancho de la fila (eso dejaba a la tarjeta activa nadando en un hueco
+  // vacío de un lado cuando no hay vecina de ese lado) — tiene su propio ancho acorde al tamaño
+  // de tarjeta+asomo, y cuando falta la vecina de un lado (primera o última tarjeta) se corre el
+  // contenido entero hacia el otro lado para no dejar ese espacio muerto.
   const peek = Math.min(56, Math.max(20, (containerWidth - CARD_WIDTH) / 2));
+  const hasPrev = frontIndex > 0;
+  const hasNext = frontIndex < cards.length - 1;
+  const edgePad = 12;
+  let centerShift = 0;
+  if (!hasPrev && hasNext) centerShift = -(containerWidth / 2 - CARD_WIDTH / 2 - edgePad);
+  else if (hasPrev && !hasNext) centerShift = containerWidth / 2 - CARD_WIDTH / 2 - edgePad;
 
   return (
     <div className="flex-1 min-w-0">
-      <div ref={containerRef} className="relative w-full h-28 overflow-hidden">
+      <div ref={containerRef} className="relative w-full max-w-[300px] h-32 overflow-hidden">
         {cards.map((card, i) => {
           const offset = i - frontIndex;
           if (Math.abs(offset) > 1) return null; // solo el vecino inmediato de cada lado, como en la referencia
@@ -233,13 +254,13 @@ function WalletCardStack({
                 if (!isActive) bringToFront(i);
               }}
               animate={{
-                x: offset * (CARD_WIDTH / 2 + peek),
+                x: offset * (CARD_WIDTH / 2 + peek) + centerShift,
                 scale: isActive ? 1 : 0.92,
                 opacity: isActive ? 1 : 0.55,
                 filter: isActive ? "blur(0px)" : "blur(3px)",
               }}
               transition={{ type: "spring", stiffness: 380, damping: 32 }}
-              className={`absolute top-0 left-1/2 -ml-24 w-48 ${canDrag ? "cursor-grab active:cursor-grabbing" : isActive ? "" : "cursor-pointer"}`}
+              className={`absolute top-2 left-1/2 -ml-24 w-48 ${canDrag ? "cursor-grab active:cursor-grabbing" : isActive ? "" : "cursor-pointer"}`}
               style={{ zIndex: isActive ? 10 : 5, touchAction: "pan-y" }}
             >
               <WalletCardFace
