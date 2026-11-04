@@ -209,9 +209,13 @@ export function PaymentMethodCardStrip({ card }: { card: PaymentMethodCard }) {
 export function PaymentMethodCardPeek({ card, bleed }: { card: PaymentMethodCard; bleed: string }) {
   const gradient = card.tipo === "transferencia" ? "from-emerald-700 to-emerald-900" : card.marca ? CARD_BRAND_META[card.marca].gradient : CARD_BRAND_META.otra.gradient;
   return (
-    <div className={`${bleed} rounded-b-2xl bg-gradient-to-br ${gradient} select-none`}>
+    <motion.div
+      whileHover={{ scale: 1.015, filter: "brightness(1.12)" }}
+      transition={{ type: "spring", stiffness: 400, damping: 22 }}
+      className={`${bleed} rounded-b-2xl bg-gradient-to-br ${gradient} select-none`}
+    >
       <PaymentMethodCardStripContent card={card} />
-    </div>
+    </motion.div>
   );
 }
 
