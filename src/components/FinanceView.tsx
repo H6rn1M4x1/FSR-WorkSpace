@@ -2337,6 +2337,13 @@ export default function FinanceView({
                                   </span>
                                 </div>
 
+                                {p.metodoPago && (
+                                  <div className="flex items-center gap-1 text-[11px] font-medium text-slate-500 dark:text-zinc-400">
+                                    <CreditCard className="w-3 h-3 shrink-0" />
+                                    {p.metodoPago}
+                                  </div>
+                                )}
+
                                 <div
                                   className="flex items-center gap-2 pt-1 border-t border-slate-100 dark:border-zinc-900/60"
                                   onClick={(e) => e.stopPropagation()}
@@ -2651,6 +2658,13 @@ export default function FinanceView({
                                     {formatCurrency(p.montoAPagar)}
                                   </span>
                                 </div>
+
+                                {p.metodoPago && (
+                                  <div className="flex items-center gap-1 text-[11px] font-medium text-slate-500 dark:text-zinc-400">
+                                    <CreditCard className="w-3 h-3 shrink-0" />
+                                    {p.metodoPago}
+                                  </div>
+                                )}
 
                                 <div
                                   className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100 dark:border-zinc-900/60"
