@@ -9,7 +9,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { createPortal } from "react-dom";
 import { ConfirmationModal } from "./ConfirmationModal";
 import { DetailModal } from "./DetailModal";
-import { DetailedPayment } from "../types";
+import { DetailedPayment, PaymentMethodCard } from "../types";
 import { SmartDateTimePicker } from "./SmartDateTimePicker";
 import { PaymentMethodPicker } from "./PaymentMethodPicker";
 import { RichTextEditor } from "./RichTextEditor";
@@ -1013,6 +1013,7 @@ export default function PaymentsTable({
             value={metodoPago}
             onChange={(value) => setMetodoPago(value)}
             options={[
+              "Tarjeta de Credito",
               "Tarjeta de Debito",
               "Transferencia Bancaria",
               "Debito Automatico",
@@ -1040,6 +1041,7 @@ export default function PaymentsTable({
             value={metodoPago}
             onChange={(value) => setMetodoPago(value)}
             options={[
+              "Tarjeta de Credito",
               "Tarjeta de Debito",
               "Transferencia Bancaria",
               "Debito Automatico",
@@ -1054,24 +1056,23 @@ export default function PaymentsTable({
         value={conQuePagar}
         onChange={setConQuePagar}
         onCardChange={(card) => {
-          // No hay una opción "Tarjeta de Crédito" en este campo (ver las options de abajo) —
-          // crédito y débito caen en la única opción de tarjeta disponible, transferencia en la
-          // suya. El objetivo es que el usuario no tenga que tocar este select a mano después de
-          // elegir con qué pagar, no inventar una opción nueva fuera de lo pedido.
-          setMetodoPago(card.tipo === "transferencia" ? "Transferencia Bancaria" : "Tarjeta de Debito");
+          const metodoPorTipo: Record<PaymentMethodCard["tipo"], string> = {
+            credito: "Tarjeta de Credito",
+            debito: "Debito Automatico",
+            transferencia: "Transferencia Bancaria",
+          };
+          setMetodoPago(metodoPorTipo[card.tipo]);
         }}
       />
       <div>
         <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
           ¿Dónde pagar?
         </label>
-        <div className="rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-black/20 p-1">
-          <RichTextEditor
-            value={dondePagar}
-            onChange={setDondePagar}
-            placeholder="Ej: sucursal, app, página web..."
-          />
-        </div>
+        <RichTextEditor
+          value={dondePagar}
+          onChange={setDondePagar}
+          placeholder="Ej: sucursal, app, página web..."
+        />
       </div>
     </motion.div>
   );
