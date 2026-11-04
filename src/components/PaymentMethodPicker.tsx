@@ -48,7 +48,7 @@ function BankBadge({ name, size = "sm" }: { name: string; size?: "sm" | "md" }) 
   );
 }
 
-function describeCard(card: PaymentMethodCard): string {
+export function describeCard(card: PaymentMethodCard): string {
   const marcaLabel = card.marca ? CARD_BRAND_META[card.marca].label : "";
   if (card.tipo === "transferencia") {
     return `Transferencia - ${card.banco}${card.alias ? ` (alias: ${card.alias})` : ""}`;
@@ -86,7 +86,7 @@ function BrandBadge({ marca, tipo }: { marca?: CardBrand; tipo: PaymentMethodCar
 // la fila simple, motion.div con drag para el carrusel apilado), así los dos lo reusan sin
 // duplicar el diseño. Editar/Eliminar quedan siempre visibles (no solo al hacer hover, que en
 // pantallas táctiles nunca se llega a disparar) junto a la palomita de selección.
-function WalletCardFace({
+export function WalletCardFace({
   card,
   selected,
   onEdit,
@@ -94,8 +94,11 @@ function WalletCardFace({
 }: {
   card: PaymentMethodCard;
   selected: boolean;
-  onEdit: () => void;
-  onDelete: () => void;
+  // Sin onEdit/onDelete queda en modo solo-lectura (sin el lápiz/tacho) — para mostrarla como
+  // preview en otros lados de la app (detalle de un pago, widgets de Facturas/Historial) sin
+  // ofrecer acciones que no aplican ahí.
+  onEdit?: () => void;
+  onDelete?: () => void;
 }) {
   const gradient = card.tipo === "transferencia" ? "from-emerald-700 to-emerald-900" : card.marca ? CARD_BRAND_META[card.marca].gradient : CARD_BRAND_META.otra.gradient;
   return (
@@ -107,30 +110,34 @@ function WalletCardFace({
       <div className="flex items-start justify-between gap-1">
         <BrandBadge marca={card.marca} tipo={card.tipo} />
         <div className="flex items-center gap-1 shrink-0">
-          <button
-            type="button"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              onEdit();
-            }}
-            title="Editar"
-            className="p-1 rounded-full hover:bg-black/20 cursor-pointer"
-          >
-            <Pencil className="w-3 h-3 text-white/80" />
-          </button>
-          <button
-            type="button"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete();
-            }}
-            title="Eliminar"
-            className="p-1 rounded-full hover:bg-black/20 cursor-pointer"
-          >
-            <Trash2 className="w-3 h-3 text-white/80" />
-          </button>
+          {onEdit && (
+            <button
+              type="button"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit();
+              }}
+              title="Editar"
+              className="p-1 rounded-full hover:bg-black/20 cursor-pointer"
+            >
+              <Pencil className="w-3 h-3 text-white/80" />
+            </button>
+          )}
+          {onDelete && (
+            <button
+              type="button"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              title="Eliminar"
+              className="p-1 rounded-full hover:bg-black/20 cursor-pointer"
+            >
+              <Trash2 className="w-3 h-3 text-white/80" />
+            </button>
+          )}
           {selected && (
             <span className="w-4 h-4 rounded-full bg-white flex items-center justify-center shrink-0">
               <Check className="w-2.5 h-2.5 text-emerald-600" strokeWidth={4} />
@@ -153,6 +160,64 @@ function WalletCardFace({
       </div>
     </div>
   );
+}
+
+// Franja alargada con la misma identidad visual de la tarjeta (degradé de marca, nombre del
+// banco/alias, últimos 4 dígitos, logo de marca) pero en formato horizontal compacto — para
+// mostrar "con qué se paga" dentro de una tarjeta de pago (Facturas y Vencimientos / Historial de
+// Pagos) sin ocupar el espacio de la tarjeta completa.
+export function PaymentMethodCardStrip({ card }: { card: PaymentMethodCard }) {
+  const gradient = card.tipo === "transferencia" ? "from-emerald-700 to-emerald-900" : card.marca ? CARD_BRAND_META[card.marca].gradient : CARD_BRAND_META.otra.gradient;
+  return (
+    <div className={`w-full rounded-xl px-3 py-2 flex items-center justify-between gap-2 bg-gradient-to-br ${gradient} shadow-sm select-none`}>
+      <div className="flex items-center gap-2 min-w-0">
+        <span className="w-6 h-6 rounded-full bg-white/15 flex items-center justify-center shrink-0">
+          <BankBadge name={card.banco} size="sm" />
+        </span>
+        <div className="min-w-0">
+          <p className="text-white text-[11px] font-bold truncate leading-tight">
+            {card.tipo === "transferencia" ? card.alias || card.banco : card.banco}
+          </p>
+          <p className="text-white/70 text-[9px] font-semibold truncate leading-tight">
+            {card.tipo === "transferencia" ? "Transferencia" : `•• ${card.last4 || "----"}`}
+          </p>
+        </div>
+      </div>
+      {card.marca && card.tipo !== "transferencia" && (
+        <span className="text-white text-xs font-black italic tracking-tight shrink-0">
+          {CARD_BRAND_META[card.marca].label}
+        </span>
+      )}
+    </div>
+  );
+}
+
+// Resuelve el método de pago elegido en un pago (el texto guardado en `conQuePagar`, igual al que
+// arma describeCard) contra la billetera actual del usuario y lo muestra con su identidad visual
+// real — "compact" para el detalle de un pago (la tarjeta tal cual se ve al crearla) y "strip"
+// para la franja alargada de los widgets de Facturas/Historial. Si no hay ninguna tarjeta que
+// coincida (método viejo tipeado a mano, o la tarjeta ya se borró), cae a mostrar el texto plano.
+export function PaymentMethodCardResolved({
+  userId,
+  describedCard,
+  variant = "compact",
+  fallbackText,
+}: {
+  userId: string;
+  describedCard: string;
+  variant?: "compact" | "strip";
+  fallbackText?: string;
+}) {
+  const { cards } = usePaymentMethods(userId);
+  const card = describedCard ? cards.find((c) => describeCard(c) === describedCard) : undefined;
+  if (!card) {
+    return (
+      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block">
+        {fallbackText ?? describedCard ?? "—"}
+      </span>
+    );
+  }
+  return variant === "strip" ? <PaymentMethodCardStrip card={card} /> : <WalletCardFace card={card} selected={false} />;
 }
 
 // Carrusel centrado estilo Mercado Pago (ver referencia en video): la tarjeta elegida queda

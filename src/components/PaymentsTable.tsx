@@ -19,6 +19,8 @@ import { processAndCreateRecurringPayments } from "../utils/recurringPayments";
 import { buildPaymentFileName, guessExtFromDataUrl } from "../utils/paymentFileName";
 import { PaymentIconPicker } from "./PaymentIconPicker";
 import { PaymentIconGlyph } from "./PaymentIconGlyph";
+import { getEffectivePaymentIconId } from "../utils/paymentIcons";
+import { PaymentMethodCardResolved } from "./PaymentMethodPicker";
 import {
   Plus,
   Trash2,
@@ -937,6 +939,7 @@ export default function PaymentsTable({
         <PaymentIconPicker
           iconId={icono}
           colorId={iconoColor}
+          categoria={categoria as DetailedPayment["categoria"]}
           onChange={(nextIcon, nextColor) => {
             setIcono(nextIcon);
             setIconoColor(nextColor);
@@ -1349,13 +1352,11 @@ export default function PaymentsTable({
                         title="Ver detalle"
                         className="flex items-center gap-1.5 text-left hover:text-primary hover:underline cursor-pointer"
                       >
-                        {p.icono && (
-                          <PaymentIconGlyph
-                            iconId={p.icono}
-                            colorId={p.iconoColor}
-                            className={`w-3.5 h-3.5 shrink-0 ${p.iconoColor ? "" : "text-primary"}`}
-                          />
-                        )}
+                        <PaymentIconGlyph
+                          iconId={getEffectivePaymentIconId(p)}
+                          colorId={p.iconoColor}
+                          className={`w-3.5 h-3.5 shrink-0 ${p.iconoColor ? "" : "text-primary"}`}
+                        />
                         <span className="truncate">{p.descripcion}</span>
                       </button>
                     </td>
@@ -1659,13 +1660,11 @@ export default function PaymentsTable({
                 </div>
 
                 <p className="flex items-center gap-1.5 font-extrabold text-sm text-slate-900 dark:text-zinc-100 mb-2.5 break-words">
-                  {p.icono && (
-                    <PaymentIconGlyph
-                      iconId={p.icono}
-                      colorId={p.iconoColor}
-                      className={`w-3.5 h-3.5 shrink-0 ${p.iconoColor ? "" : "text-primary"}`}
-                    />
-                  )}
+                  <PaymentIconGlyph
+                    iconId={getEffectivePaymentIconId(p)}
+                    colorId={p.iconoColor}
+                    className={`w-3.5 h-3.5 shrink-0 ${p.iconoColor ? "" : "text-primary"}`}
+                  />
                   <span>{p.descripcion}</span>
                 </p>
 
@@ -1848,10 +1847,10 @@ export default function PaymentsTable({
             onClose={() => setDetailPaymentId(null)}
             title={detailPayment?.descripcion}
             icon={
-              detailPayment?.icono
+              detailPayment
                 ? (props: { className?: string }) => (
                     <PaymentIconGlyph
-                      iconId={detailPayment.icono}
+                      iconId={getEffectivePaymentIconId(detailPayment)}
                       colorId={detailPayment.iconoColor}
                       className={props.className}
                     />
@@ -1885,10 +1884,17 @@ export default function PaymentsTable({
                   <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                     Método de Pago
                   </span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {detailPayment.metodoPago || "Debito Automatico"}
-                    {detailPayment.conQuePagar ? ` (${detailPayment.conQuePagar})` : ""}
-                  </span>
+                  <div className="pl-2 space-y-1.5">
+                    <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-semibold block">
+                      {detailPayment.metodoPago || "Debito Automatico"}
+                    </span>
+                    {detailPayment.conQuePagar && (
+                      <PaymentMethodCardResolved
+                        userId={paymentMethodsUserId}
+                        describedCard={detailPayment.conQuePagar}
+                      />
+                    )}
+                  </div>
                 </div>
 
                 {detailPayment.dondePagar && (
