@@ -211,8 +211,8 @@ function WalletCardStack({
   const peek = Math.min(56, Math.max(20, (containerWidth - CARD_WIDTH) / 2));
 
   return (
-    <div>
-      <div ref={containerRef} className="relative w-full max-w-[320px] h-28 overflow-hidden">
+    <div className="flex-1 min-w-0">
+      <div ref={containerRef} className="relative w-full h-28 overflow-hidden">
         {cards.map((card, i) => {
           const offset = i - frontIndex;
           if (Math.abs(offset) > 1) return null; // solo el vecino inmediato de cada lado, como en la referencia
