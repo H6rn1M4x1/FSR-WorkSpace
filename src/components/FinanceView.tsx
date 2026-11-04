@@ -22,6 +22,9 @@ import { createPortal } from "react-dom";
 import AnimatedList from "./AnimatedList";
 import { ConfirmationModal } from "./ConfirmationModal";
 import { DetailModal } from "./DetailModal";
+import { PaymentIconGlyph } from "./PaymentIconGlyph";
+import { getEffectivePaymentIconId } from "../utils/paymentIcons";
+import { PaymentMethodCardResolved } from "./PaymentMethodPicker";
 import {
   DollarSign,
   TrendingUp,
@@ -2277,20 +2280,35 @@ export default function FinanceView({
                                 }`}
                                 title="Haga clic para ver toda la información desplegada"
                               >
+                                <div className="flex items-center justify-between gap-2 mb-0.5">
+                                  <span className="text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-primary/10 text-primary truncate max-w-[120px]">
+                                    {p.categoria}
+                                  </span>
+                                  <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-md shrink-0">
+                                    Pendiente
+                                  </span>
+                                </div>
+
                                 <div className="flex items-center justify-between gap-2">
                                   <div
-                                    className="text-xs font-extrabold text-black dark:text-zinc-100 truncate flex items-center gap-1.5"
+                                    className="text-xs font-extrabold text-black dark:text-zinc-100 truncate flex items-center gap-1.5 min-w-0"
                                     style={{
                                       color: darkMode ? "#f4f4f5" : "#000000",
                                     }}
                                   >
-                                    <Receipt className="w-3.5 h-3.5 text-primary shrink-0 self-center" />
-                                    <span className="self-center translate-y-[0.5px]">{p.descripcion}</span>
+                                    <PaymentIconGlyph
+                                      iconId={getEffectivePaymentIconId(p)}
+                                      colorId={p.iconoColor}
+                                      className={`w-3.5 h-3.5 shrink-0 self-center ${p.iconoColor ? "" : "text-primary"}`}
+                                    />
+                                    <span className="self-center translate-y-[0.5px] truncate">{p.descripcion}</span>
                                     <SharedBadge
                                       item={p}
                                       isSharedOut={isSharedOut("detailed_payments", p.id)}
                                       sharedOutWith={sharedOutWith("detailed_payments", p.id)}
                                     />
+                                  </div>
+                                  <div className="flex items-center gap-1 shrink-0">
                                     <button
                                       type="button"
                                       onClick={(e) => { e.stopPropagation(); handleEditPaymentCard(p.id); }}
@@ -2310,46 +2328,57 @@ export default function FinanceView({
                                   </div>
                                 </div>
 
-                                <div className="flex flex-wrap items-center gap-2">
+                                <div className="flex items-end justify-between gap-3">
                                   <span className="text-[10px] text-zinc-500 font-medium">
                                     {formatFechaDMY(p.fechaVencimiento)}
                                   </span>
-                                  <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-md">
-                                    Pendiente
-                                  </span>
-                                  <span className="text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-primary/10 text-primary truncate max-w-[120px]">
-                                    {p.categoria}
-                                  </span>
-                                </div>
-
-                                <div
-                                  className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100 dark:border-zinc-900/60"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
                                   <span className="text-xs font-extrabold text-primary font-mono">
                                     {formatCurrency(p.montoAPagar)}
                                   </span>
-                                  <div className="flex items-center gap-2 shrink-0">
-                                    <button
-                                      onClick={() =>
-                                        handlePayDetailedPayment(p.id)
-                                      }
-                                      className="px-2.5 py-1 rounded-full bg-primary hover:bg-primary-hover text-white dark:text-blue-950 text-[10px] font-bold cursor-pointer transition-all"
-                                    >
-                                      Pagar
-                                    </button>
-                                    <button
-                                      onClick={() =>
-                                        handleDeleteDetailedPayment(p.id)
-                                      }
-                                      className="p-1 text-red-500 hover:bg-red-500/10 rounded-lg transition-all cursor-pointer"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
                                 </div>
 
-                                <DetailModal isOpen={isExpanded} onClose={() => setExpandedPaymentId(null)} title={p.descripcion} icon={Receipt} onEdit={() => handleEditPaymentCard(p.id)}>
+                                {p.conQuePagar && (
+                                  <div onClick={(e) => e.stopPropagation()}>
+                                    <PaymentMethodCardResolved
+                                      userId={userEmail || "hernanmaximiliano10@gmail.com"}
+                                      describedCard={p.conQuePagar}
+                                      fallbackText={p.metodoPago}
+                                      variant="strip"
+                                    />
+                                  </div>
+                                )}
+
+                                <div
+                                  className="flex items-center gap-2 pt-1 border-t border-slate-100 dark:border-zinc-900/60"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <button
+                                    onClick={() =>
+                                      handlePayDetailedPayment(p.id)
+                                    }
+                                    className="flex-1 px-2.5 py-1.5 rounded-full bg-primary hover:bg-primary-hover text-white dark:text-blue-950 text-[10px] font-bold cursor-pointer transition-all"
+                                  >
+                                    Pagar
+                                  </button>
+                                  <button
+                                    onClick={() =>
+                                      handleDeleteDetailedPayment(p.id)
+                                    }
+                                    className="p-1.5 text-red-500 hover:bg-red-500/10 rounded-lg transition-all cursor-pointer"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+
+                                <DetailModal
+                                  isOpen={isExpanded}
+                                  onClose={() => setExpandedPaymentId(null)}
+                                  title={p.descripcion}
+                                  icon={(props: { className?: string }) => (
+                                    <PaymentIconGlyph iconId={getEffectivePaymentIconId(p)} colorId={p.iconoColor} className={props.className} />
+                                  )}
+                                  onEdit={() => handleEditPaymentCard(p.id)}
+                                >
                                       <div className="flex flex-col gap-3">
                                         <div>
                                           <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
@@ -2367,12 +2396,17 @@ export default function FinanceView({
                                           <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                             Método de Pago
                                           </span>
-                                          <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                                            {p.metodoPago || "Debito Automatico"}
-                                            {p.conQuePagar
-                                              ? ` (${p.conQuePagar})`
-                                              : ""}
-                                          </span>
+                                          <div className="pl-2 space-y-1.5">
+                                            <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-semibold block">
+                                              {p.metodoPago || "Debito Automatico"}
+                                            </span>
+                                            {p.conQuePagar && (
+                                              <PaymentMethodCardResolved
+                                                userId={userEmail || "hernanmaximiliano10@gmail.com"}
+                                                describedCard={p.conQuePagar}
+                                              />
+                                            )}
+                                          </div>
                                         </div>
 
                                         <div>
@@ -2561,20 +2595,35 @@ export default function FinanceView({
                                 }`}
                                 title="Haga clic para ver toda la información desplegada"
                               >
+                                <div className="flex items-center justify-between gap-2 mb-0.5">
+                                  <span className="text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-primary/10 text-primary truncate max-w-[120px]">
+                                    {p.categoria}
+                                  </span>
+                                  <span className="text-[9px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md shrink-0">
+                                    Pagado
+                                  </span>
+                                </div>
+
                                 <div className="flex items-center justify-between gap-2">
                                   <div
-                                    className="text-xs font-extrabold text-black dark:text-zinc-100 truncate flex items-center gap-1.5"
+                                    className="text-xs font-extrabold text-black dark:text-zinc-100 truncate flex items-center gap-1.5 min-w-0"
                                     style={{
                                       color: darkMode ? "#f4f4f5" : "#000000",
                                     }}
                                   >
-                                    <Receipt className="w-3.5 h-3.5 text-primary shrink-0 self-center" />
-                                    <span className="self-center translate-y-[0.5px]">{p.descripcion}</span>
+                                    <PaymentIconGlyph
+                                      iconId={getEffectivePaymentIconId(p)}
+                                      colorId={p.iconoColor}
+                                      className={`w-3.5 h-3.5 shrink-0 self-center ${p.iconoColor ? "" : "text-primary"}`}
+                                    />
+                                    <span className="self-center translate-y-[0.5px] truncate">{p.descripcion}</span>
                                     <SharedBadge
                                       item={p}
                                       isSharedOut={isSharedOut("detailed_payments", p.id)}
                                       sharedOutWith={sharedOutWith("detailed_payments", p.id)}
                                     />
+                                  </div>
+                                  <div className="flex items-center gap-1 shrink-0">
                                     <button
                                       type="button"
                                       onClick={(e) => { e.stopPropagation(); handleEditPaymentCard(p.id); }}
@@ -2594,36 +2643,49 @@ export default function FinanceView({
                                   </div>
                                 </div>
 
-                                <div className="flex flex-wrap items-center gap-2">
+                                <div className="flex items-end justify-between gap-3">
                                   <span className="text-[10px] text-zinc-500 font-medium">
                                     {formatFechaDMY(p.fechaVencimiento)}
                                   </span>
-                                  <span className="text-[9px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md">
-                                    Pagado
-                                  </span>
-                                  <span className="text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-primary/10 text-primary truncate max-w-[120px]">
-                                    {p.categoria}
-                                  </span>
-                                </div>
-
-                                <div
-                                  className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100 dark:border-zinc-900/60"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
                                   <span className="text-xs font-extrabold text-primary font-mono">
                                     {formatCurrency(p.montoAPagar)}
                                   </span>
+                                </div>
+
+                                {p.conQuePagar && (
+                                  <div onClick={(e) => e.stopPropagation()}>
+                                    <PaymentMethodCardResolved
+                                      userId={userEmail || "hernanmaximiliano10@gmail.com"}
+                                      describedCard={p.conQuePagar}
+                                      fallbackText={p.metodoPago}
+                                      variant="strip"
+                                    />
+                                  </div>
+                                )}
+
+                                <div
+                                  className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100 dark:border-zinc-900/60"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
                                   <button
                                     onClick={() =>
                                       handleDeleteDetailedPayment(p.id)
                                     }
-                                    className="p-1 text-red-500 hover:bg-red-500/10 rounded-lg transition-all cursor-pointer"
+                                    className="p-1.5 text-red-500 hover:bg-red-500/10 rounded-lg transition-all cursor-pointer"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </button>
                                 </div>
 
-                                <DetailModal isOpen={isExpanded} onClose={() => setExpandedPaymentId(null)} title={p.descripcion} icon={Receipt} onEdit={() => handleEditPaymentCard(p.id)}>
+                                <DetailModal
+                                  isOpen={isExpanded}
+                                  onClose={() => setExpandedPaymentId(null)}
+                                  title={p.descripcion}
+                                  icon={(props: { className?: string }) => (
+                                    <PaymentIconGlyph iconId={getEffectivePaymentIconId(p)} colorId={p.iconoColor} className={props.className} />
+                                  )}
+                                  onEdit={() => handleEditPaymentCard(p.id)}
+                                >
                                       <div className="flex flex-col gap-3">
                                         <div>
                                           <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
@@ -2641,12 +2703,17 @@ export default function FinanceView({
                                           <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
                                             Método de Pago
                                           </span>
-                                          <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                                            {p.metodoPago || "Debito Automatico"}
-                                            {p.conQuePagar
-                                              ? ` (${p.conQuePagar})`
-                                              : ""}
-                                          </span>
+                                          <div className="pl-2 space-y-1.5">
+                                            <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-semibold block">
+                                              {p.metodoPago || "Debito Automatico"}
+                                            </span>
+                                            {p.conQuePagar && (
+                                              <PaymentMethodCardResolved
+                                                userId={userEmail || "hernanmaximiliano10@gmail.com"}
+                                                describedCard={p.conQuePagar}
+                                              />
+                                            )}
+                                          </div>
                                         </div>
 
                                         <div>
@@ -4417,15 +4484,21 @@ export default function FinanceView({
                         </div>
                         {(item.conQuePagar || item.dondePagar) && (
                           <div className="bg-slate-50 dark:bg-black/60 p-3 rounded-xl border border-slate-100 dark:border-zinc-800/40">
-                            <p className="text-[9px] uppercase tracking-wider text-zinc-500">
+                            <p className="text-[9px] uppercase tracking-wider text-zinc-500 mb-1">
                               ¿Con qué pagar / Dónde?
                             </p>
-                            <p
-                              className="text-slate-800 dark:text-zinc-200 font-bold mt-0.5 truncate"
-                              title={`${item.conQuePagar || ""} / ${item.dondePagar || ""}`}
-                            >
-                              {item.conQuePagar || item.dondePagar}
-                            </p>
+                            {item.conQuePagar ? (
+                              <PaymentMethodCardResolved
+                                userId={userEmail || "hernanmaximiliano10@gmail.com"}
+                                describedCard={item.conQuePagar}
+                                fallbackText={item.conQuePagar || item.dondePagar}
+                                variant="strip"
+                              />
+                            ) : (
+                              <p className="text-slate-800 dark:text-zinc-200 font-bold truncate" title={item.dondePagar || ""}>
+                                {item.dondePagar}
+                              </p>
+                            )}
                           </div>
                         )}
                       </div>
