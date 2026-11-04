@@ -1634,7 +1634,7 @@ export default function PaymentsTable({
                 viewport={{ once: true, margin: "0px 0px -60px 0px" }}
                 transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.15), ease: [0.22, 1, 0.36, 1] }}
                 onClick={() => handleEdit(p)}
-                className="rounded-2xl border p-4 bg-white dark:bg-zinc-900 border-slate-100 dark:border-zinc-800/80 active:scale-[0.98] transition-transform cursor-pointer"
+                className="rounded-2xl border p-4 bg-white dark:bg-zinc-900 border-slate-100 dark:border-zinc-800/80 active:scale-[0.98] transition-transform cursor-pointer overflow-hidden"
               >
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <span
@@ -1732,6 +1732,17 @@ export default function PaymentsTable({
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
+
+                {p.conQuePagar && (
+                  <div className="mt-3.5" onClick={(e) => e.stopPropagation()}>
+                    <PaymentMethodCardResolved
+                      userId={paymentMethodsUserId}
+                      describedCard={p.conQuePagar}
+                      variant="peek"
+                      peekBleed="-mx-4 -mb-4"
+                    />
+                  </div>
+                )}
               </motion.div>
             );
           })

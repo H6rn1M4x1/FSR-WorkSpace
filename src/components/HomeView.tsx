@@ -17,6 +17,8 @@ import { motion, AnimatePresence } from "motion/react";
 import { ConfirmationModal } from "./ConfirmationModal";
 import { LocationPickerMap } from "./LocationPickerMap";
 import { DetailModal as HomeDetailModal } from "./DetailModal";
+import { PaymentIconGlyph } from "./PaymentIconGlyph";
+import { getEffectivePaymentIconId } from "../utils/paymentIcons";
 import { shareItemWith, unshareItem } from "../lib/itemSharingService";
 import {
   Calendar,
@@ -2743,10 +2745,14 @@ export default function HomeView({
                         >
                           <div className="flex items-start gap-3 min-w-0 flex-1">
                             <div className="p-2 bg-primary/10 text-primary rounded-xl shrink-0 mt-0.5">
-                              {isClosing || dp.categoria === "Tarjeta de Credito" ? (
+                              {isClosing ? (
                                 <CreditCard className="w-4 h-4" />
                               ) : (
-                                <Receipt className="w-4 h-4" />
+                                <PaymentIconGlyph
+                                  iconId={getEffectivePaymentIconId(dp)}
+                                  colorId={dp.iconoColor}
+                                  className={`w-4 h-4 ${dp.iconoColor ? "" : "text-primary"}`}
+                                />
                               )}
                             </div>
                             <div className="min-w-0 flex-1">

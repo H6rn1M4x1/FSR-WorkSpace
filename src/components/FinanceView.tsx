@@ -2337,17 +2337,6 @@ export default function FinanceView({
                                   </span>
                                 </div>
 
-                                {p.conQuePagar && (
-                                  <div onClick={(e) => e.stopPropagation()}>
-                                    <PaymentMethodCardResolved
-                                      userId={userEmail || "hernanmaximiliano10@gmail.com"}
-                                      describedCard={p.conQuePagar}
-                                      fallbackText={p.metodoPago}
-                                      variant="strip"
-                                    />
-                                  </div>
-                                )}
-
                                 <div
                                   className="flex items-center gap-2 pt-1 border-t border-slate-100 dark:border-zinc-900/60"
                                   onClick={(e) => e.stopPropagation()}
@@ -2369,6 +2358,17 @@ export default function FinanceView({
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </button>
                                 </div>
+
+                                {p.conQuePagar && (
+                                  <div onClick={(e) => e.stopPropagation()}>
+                                    <PaymentMethodCardResolved
+                                      userId={userEmail || "hernanmaximiliano10@gmail.com"}
+                                      describedCard={p.conQuePagar}
+                                      variant="peek"
+                                      peekBleed="-mx-3.5 -mb-3.5"
+                                    />
+                                  </div>
+                                )}
 
                                 <DetailModal
                                   isOpen={isExpanded}
@@ -2652,17 +2652,6 @@ export default function FinanceView({
                                   </span>
                                 </div>
 
-                                {p.conQuePagar && (
-                                  <div onClick={(e) => e.stopPropagation()}>
-                                    <PaymentMethodCardResolved
-                                      userId={userEmail || "hernanmaximiliano10@gmail.com"}
-                                      describedCard={p.conQuePagar}
-                                      fallbackText={p.metodoPago}
-                                      variant="strip"
-                                    />
-                                  </div>
-                                )}
-
                                 <div
                                   className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100 dark:border-zinc-900/60"
                                   onClick={(e) => e.stopPropagation()}
@@ -2676,6 +2665,17 @@ export default function FinanceView({
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </button>
                                 </div>
+
+                                {p.conQuePagar && (
+                                  <div onClick={(e) => e.stopPropagation()}>
+                                    <PaymentMethodCardResolved
+                                      userId={userEmail || "hernanmaximiliano10@gmail.com"}
+                                      describedCard={p.conQuePagar}
+                                      variant="peek"
+                                      peekBleed="-mx-3.5 -mb-3.5"
+                                    />
+                                  </div>
+                                )}
 
                                 <DetailModal
                                   isOpen={isExpanded}
