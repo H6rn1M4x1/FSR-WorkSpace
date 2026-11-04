@@ -156,13 +156,14 @@ function WalletCardFace({
 }
 
 // Carrusel centrado estilo Mercado Pago (ver referencia en video): la tarjeta elegida queda
-// nítida y centrada; el vecino inmediato de cada lado asoma recortado por el borde del
-// contenedor, difuminado (blur) y un poco más chico/transparente — eso es lo que avisa que hay
-// más para recorrer, no una pila detrás. Deslizar (mantener presionado y arrastrar la tarjeta
-// activa) pasa a la siguiente/anterior, con sonido y vibración al asentarse; tocar el pedacito
-// visible de un vecino también la trae al frente. Abajo, puntitos de paginación — el de la
-// tarjeta activa es una píldora, los demás son círculos que se achican cuanto más lejos están
-// (mismo efecto que el indicador de la referencia).
+// nítida y centrada; el vecino inmediato de cada lado asoma por el borde del contenedor,
+// difuminado (blur) y un poco más chico/transparente — eso es lo que avisa que hay más para
+// recorrer, no una pila detrás. Deslizar (mantener presionado y arrastrar la tarjeta activa) pasa
+// a la siguiente/anterior, con sonido y vibración al asentarse; tocar el pedacito visible de un
+// vecino también la trae al frente. Al final del todo, como una tarjeta más del carrusel, el "+"
+// para agregar una nueva (tocarlo la abre). Los bordes del contenedor no cortan en seco: una
+// máscara los difumina a transparente. Abajo, puntitos de paginación — el de la tarjeta activa es
+// una píldora, los demás son círculos que se achican cuanto más lejos están.
 const CARD_WIDTH = 192; // w-48
 function WalletCardStack({
   cards,
@@ -170,17 +171,23 @@ function WalletCardStack({
   onSelect,
   onEdit,
   onDelete,
+  onAddNew,
 }: {
   cards: PaymentMethodCard[];
   selectedId: string | null;
   onSelect: (card: PaymentMethodCard) => void;
   onEdit: (card: PaymentMethodCard) => void;
   onDelete: (card: PaymentMethodCard) => void;
+  onAddNew: () => void;
 }) {
   const selectedIndex = selectedId ? cards.findIndex((c) => c.id === selectedId) : -1;
   const [frontIndex, setFrontIndex] = useState(selectedIndex >= 0 ? selectedIndex : 0);
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(CARD_WIDTH + 64);
+
+  // Último "slot" del carrusel: no es una tarjeta, es el tile de "agregar nueva".
+  const addSlot = cards.length;
+  const totalSlots = cards.length + 1;
 
   useEffect(() => {
     const el = containerRef.current;
@@ -200,32 +207,29 @@ function WalletCardStack({
   }, [selectedIndex]);
 
   useEffect(() => {
-    if (frontIndex >= cards.length) setFrontIndex(0);
-  }, [cards.length, frontIndex]);
+    if (frontIndex > addSlot) setFrontIndex(0);
+  }, [addSlot, frontIndex]);
 
   const bringToFront = (i: number) => {
     setFrontIndex(i);
     uiSounds.toggle();
     if (navigator.vibrate) navigator.vibrate(8);
-    onSelect(cards[i]);
+    if (i < cards.length) onSelect(cards[i]);
   };
 
   const cycle = (dir: 1 | -1) => {
-    if (cards.length <= 1) return;
-    bringToFront((frontIndex + dir + cards.length) % cards.length);
+    if (totalSlots <= 1) return;
+    bringToFront((frontIndex + dir + totalSlots) % totalSlots);
   };
 
-  if (cards.length === 0) return null;
-
-  // Cuánto asoma cada vecino por el borde del contenedor — con un piso y un techo para que no se
-  // aplaste en un contenedor angosto ni quede separado de más en uno muy ancho. El contenedor no
-  // se estira a usar TODO el ancho de la fila (eso dejaba a la tarjeta activa nadando en un hueco
-  // vacío de un lado cuando no hay vecina de ese lado) — tiene su propio ancho acorde al tamaño
-  // de tarjeta+asomo, y cuando falta la vecina de un lado (primera o última tarjeta) se corre el
-  // contenido entero hacia el otro lado para no dejar ese espacio muerto.
-  const peek = Math.min(56, Math.max(20, (containerWidth - CARD_WIDTH) / 2));
+  // Cuánto asoma cada vecino por el borde del contenedor — con un piso y un techo. El contenedor
+  // usa todo el ancho disponible de su fila (ya no hay un botón "+" aparte compitiendo por lugar),
+  // y el asomo crece con ese ancho para aprovecharlo (en vez de quedar un hueco muerto sin usar a
+  // los costados). Cuando no hay vecina de un lado (primera tarjeta, o el tile de "agregar" al
+  // llegar al final) se corre todo el contenido hacia el otro lado para no dejar ese espacio vacío.
+  const peek = Math.min(110, Math.max(20, (containerWidth - CARD_WIDTH) / 2));
   const hasPrev = frontIndex > 0;
-  const hasNext = frontIndex < cards.length - 1;
+  const hasNext = frontIndex < addSlot;
   const edgePad = 12;
   let centerShift = 0;
   if (!hasPrev && hasNext) centerShift = -(containerWidth / 2 - CARD_WIDTH / 2 - edgePad);
@@ -233,15 +237,23 @@ function WalletCardStack({
 
   return (
     <div className="flex-1 min-w-0">
-      <div ref={containerRef} className="relative w-full max-w-[300px] h-32 overflow-hidden">
-        {cards.map((card, i) => {
+      <div
+        ref={containerRef}
+        className="relative w-full h-32 overflow-hidden"
+        style={{
+          WebkitMaskImage: "linear-gradient(to right, transparent 0, black 24px, black calc(100% - 24px), transparent 100%)",
+          maskImage: "linear-gradient(to right, transparent 0, black 24px, black calc(100% - 24px), transparent 100%)",
+        }}
+      >
+        {Array.from({ length: totalSlots }, (_, i) => i).map((i) => {
           const offset = i - frontIndex;
           if (Math.abs(offset) > 1) return null; // solo el vecino inmediato de cada lado, como en la referencia
           const isActive = offset === 0;
-          const canDrag = isActive && cards.length > 1;
+          const isAddSlot = i === addSlot;
+          const canDrag = isActive && totalSlots > 1;
           return (
             <motion.div
-              key={card.id}
+              key={isAddSlot ? "add-slot" : cards[i].id}
               drag={canDrag ? "x" : false}
               dragElastic={0.5}
               dragConstraints={{ left: 0, right: 0 }}
@@ -251,7 +263,8 @@ function WalletCardStack({
                 else if (info.offset.x > 60) cycle(-1);
               }}
               onTap={() => {
-                if (!isActive) bringToFront(i);
+                if (isAddSlot && isActive) onAddNew();
+                else if (!isActive) bringToFront(i);
               }}
               animate={{
                 x: offset * (CARD_WIDTH / 2 + peek) + centerShift,
@@ -260,31 +273,38 @@ function WalletCardStack({
                 filter: isActive ? "blur(0px)" : "blur(3px)",
               }}
               transition={{ type: "spring", stiffness: 380, damping: 32 }}
-              className={`absolute top-2 left-1/2 -ml-24 w-48 ${canDrag ? "cursor-grab active:cursor-grabbing" : isActive ? "" : "cursor-pointer"}`}
+              className={`absolute top-2 left-1/2 -ml-24 w-48 ${canDrag ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"}`}
               style={{ zIndex: isActive ? 10 : 5, touchAction: "pan-y" }}
             >
-              <WalletCardFace
-                card={card}
-                selected={isActive}
-                onEdit={() => onEdit(card)}
-                onDelete={() => onDelete(card)}
-              />
+              {isAddSlot ? (
+                <div className="w-48 h-28 rounded-2xl border-2 border-dashed border-primary/50 text-primary flex flex-col items-center justify-center gap-1 transition-all hover:border-primary hover:bg-primary/10">
+                  <Plus className="w-5 h-5" />
+                  <span className="text-[10px] font-bold">Nueva tarjeta</span>
+                </div>
+              ) : (
+                <WalletCardFace
+                  card={cards[i]}
+                  selected={isActive}
+                  onEdit={() => onEdit(cards[i])}
+                  onDelete={() => onDelete(cards[i])}
+                />
+              )}
             </motion.div>
           );
         })}
       </div>
 
-      {cards.length > 1 && (
+      {totalSlots > 1 && (
         <div className="flex items-center justify-center gap-1.5 mt-2.5">
-          {cards.map((card, i) => {
+          {Array.from({ length: totalSlots }, (_, i) => i).map((i) => {
             const dist = Math.abs(i - frontIndex);
             const isActive = i === frontIndex;
             return (
               <button
-                key={card.id}
+                key={i === addSlot ? "add-slot" : cards[i].id}
                 type="button"
                 onClick={() => bringToFront(i)}
-                title={card.banco}
+                title={i === addSlot ? "Nueva tarjeta" : cards[i].banco}
                 className={`rounded-full shrink-0 transition-all duration-200 cursor-pointer ${
                   isActive
                     ? "w-5 h-1.5 bg-primary"
@@ -592,22 +612,15 @@ export function PaymentMethodPicker({
       <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-3">
         ¿Con qué pagar?
       </label>
-      <div className="flex items-start gap-2.5 p-1.5 -m-1.5">
+      <div className="p-1.5 -m-1.5">
         <WalletCardStack
           cards={cards}
           selectedId={selectedCard?.id || null}
           onSelect={selectCard}
           onEdit={setEditingCard}
           onDelete={setDeletingCard}
+          onAddNew={() => setShowCreate(true)}
         />
-        <button
-          type="button"
-          onClick={() => setShowCreate(true)}
-          className="shrink-0 w-14 h-28 rounded-2xl border-2 border-dashed border-primary/50 text-primary flex flex-col items-center justify-center gap-1 cursor-pointer transition-all hover:border-primary hover:bg-primary/10"
-          title="Nueva tarjeta"
-        >
-          <Plus className="w-5 h-5" />
-        </button>
       </div>
 
       {showCreate && (
