@@ -18,3 +18,7 @@ android/capacitor-cordova-android-plugins/build/
 android/app/src/main/assets/public/
 *.keystore
 *.jks
+# Excepción: debug.keystore SÍ se versiona a propósito (ver build.gradle) — su contraseña es la
+# fija "android" que usa Gradle por defecto, no es sensible, y necesita quedar igual en todas las
+# máquinas para que el SHA-1 registrado en Firebase para el login de Google no cambie.
+!android/app/debug.keystore

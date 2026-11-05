@@ -22,6 +22,16 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Vuelta del login con Google: Supabase redirige acá en vez de a una URL http —
+                 ver GOOGLE_NATIVE_REDIRECT_URL en src/lib/supabase.ts y el listener appUrlOpen
+                 registrado en App.tsx. -->
+            <intent-filter android:autoVerify="false">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="com.fsrworkspace.app" android:host="login-callback" />
+            </intent-filter>
+
         </activity>
 
         <provider

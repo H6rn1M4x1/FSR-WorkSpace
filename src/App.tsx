@@ -12,7 +12,7 @@ import {
 import { reconcileCollection, sanitizeSyncPayload, saveStateToServer } from "./utils/sync";
 import { getLocalDateString } from "./utils/date";
 import { useToast } from "./context/ToastContext";
-import { initAuth, logout, auth, consumeGoogleReauthNotice } from "./lib/supabase";
+import { initAuth, logout, auth, consumeGoogleReauthNotice, initNativeGoogleAuthListener } from "./lib/supabase";
 import { WorkspaceService } from "./lib/workspace";
 import { Eye, EyeOff, Settings, Folder, RefreshCw } from "lucide-react";
 import LoginScreen from "./components/LoginScreen";
@@ -1337,6 +1337,12 @@ export default function App() {
         "error"
       );
     }
+  }, []);
+
+  // Empaquetado (Capacitor): registra una sola vez el listener que recibe la vuelta del login
+  // de Google (ver NATIVE_GOOGLE_REDIRECT_URL en lib/supabase.ts) — no hace nada en la web.
+  useEffect(() => {
+    initNativeGoogleAuthListener();
   }, []);
 
   // Firebase auth state hook and proactive connection check

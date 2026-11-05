@@ -1,4 +1,7 @@
 import { createClient, type User } from "@supabase/supabase-js";
+import { Capacitor } from "@capacitor/core";
+import { Browser } from "@capacitor/browser";
+import { App as CapacitorApp } from "@capacitor/app";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://pfqlpmvwpsfpuxwunnpz.supabase.co";
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "sb_publishable_48cPYVmkUvyciTujd5YKkA_IFnWn6zn";
@@ -25,7 +28,40 @@ const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/user.birthday.read",
 ].join(" ");
 
+// En la web, Supabase redirige el login a esta misma URL (window.location.origin) y nosotros
+// la leemos de vuelta de window.location.href. Adentro del APK no hay ninguna URL http a la que
+// volver — Android no "es" fsrworkspace.netlify.app — así que en su lugar se usa este esquema
+// propio, registrado como intent-filter en AndroidManifest.xml (acción VIEW, scheme
+// "com.fsrworkspace.app", host "login-callback"). Hay que agregar esta misma URL como "Redirect
+// URL" en el dashboard de Supabase (Authentication > URL Configuration) para que Google/Supabase
+// acepten redirigir ahí.
+const NATIVE_GOOGLE_REDIRECT_URL = "com.fsrworkspace.app://login-callback";
+
 export const googleSignIn = async () => {
+  if (Capacitor.isNativePlatform()) {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        scopes: GOOGLE_SCOPES,
+        queryParams: {
+          access_type: "offline",
+          prompt: "consent",
+        },
+        redirectTo: NATIVE_GOOGLE_REDIRECT_URL,
+        // Sin esto, el SDK intenta navegar window.location acá mismo, adentro del WebView de la
+        // app — y ESE es justamente el contexto que Google bloquea ("disallowed_useragent"). Con
+        // skipBrowserRedirect devuelve la URL sin navegar, y la abrimos nosotros en el navegador
+        // in-app de Capacitor (Browser.open), que Google sí reconoce como un navegador real.
+        skipBrowserRedirect: true,
+      },
+    });
+    if (error) throw error;
+    if (data.url) {
+      await Browser.open({ url: data.url });
+    }
+    return data;
+  }
+
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
@@ -39,6 +75,29 @@ export const googleSignIn = async () => {
   });
   if (error) throw error;
   return data;
+};
+
+// Se llama una sola vez al arrancar la app empaquetada (ver App.tsx) para capturar la vuelta del
+// navegador in-app tras el login: Android entrega la URL de NATIVE_GOOGLE_REDIRECT_URL completa,
+// con los tokens en el fragmento (#access_token=...&refresh_token=...), igual que hace Supabase
+// en la web dentro de window.location.hash — acá simplemente no hay un window.location que leer,
+// así que se arma la sesión a mano con esos mismos tokens.
+export const initNativeGoogleAuthListener = () => {
+  if (!Capacitor.isNativePlatform()) return;
+  CapacitorApp.addListener("appUrlOpen", async ({ url }) => {
+    if (!url.startsWith(NATIVE_GOOGLE_REDIRECT_URL)) return;
+    try {
+      const fragment = url.split("#")[1] ?? "";
+      const params = new URLSearchParams(fragment);
+      const access_token = params.get("access_token");
+      const refresh_token = params.get("refresh_token");
+      if (access_token && refresh_token) {
+        await supabase.auth.setSession({ access_token, refresh_token });
+      }
+    } finally {
+      await Browser.close().catch(() => {});
+    }
+  });
 };
 
 export const emailLogin = async (email: string, password: string) => {
@@ -114,6 +173,11 @@ export const getAccessTokenSync = (): string | null => {
 // has an active Google session it comes back with a fresh token without showing any
 // consent screen — no need to manually log out and back in.
 export const silentGoogleReauth = async (): Promise<void> => {
+  // Pendiente para la app empaquetada: acá habría que abrir el mismo Browser.open() que usa
+  // googleSignIn, pero disparado en silencio cada ~50 min sería una experiencia rara (un
+  // navegador que aparece y desaparece solo). Por ahora el token de Drive/Gmail simplemente
+  // expira en el celu/PC y el usuario tiene que volver a conectarse a mano desde Ajustes.
+  if (Capacitor.isNativePlatform()) return;
   await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
