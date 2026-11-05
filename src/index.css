@@ -1538,3 +1538,44 @@ button:not(:disabled):not(.no-hover-scale):active {
   }
 }
 
+/* Nota de un pago con tarjeta de pago superpuesta detrás (Facturas y Vencimientos, Historial de
+   Pagos, Gastos Mensuales en móvil): el bg-white/dark:bg-black de la nota cae en la regla glass
+   de arriba (html:not(.dark) .bg-white / .dark [class*="bg-zinc-900"]) que la vuelve translúcida
+   — acá se fuerza blanco/negro 100% opacos, mismo truco que .notif-card-solid más arriba. */
+.payment-card-solid,
+html:not(.dark) .payment-card-solid {
+  background-color: #ffffff !important;
+  opacity: 1 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+.dark .payment-card-solid {
+  background-color: #000000 !important;
+  opacity: 1 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Mismo par nota+tarjeta: al pasar el mouse por la franja de la tarjeta de abajo (.payment-overlap-strip-wrap),
+   la nota de arriba (.payment-overlap-note) se agranda junto con ella para que las dos terminen del
+   mismo tamaño — la tarjeta ya se anima sola via framer-motion. Si en cambio el mouse pasa solo por
+   la nota, únicamente ella se agranda (la tarjeta de abajo se queda quieta). */
+@media (hover: hover) {
+  .payment-overlap-note {
+    transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .payment-overlap-note:hover,
+  .payment-overlap-pair:has(.payment-overlap-strip-wrap:hover) .payment-overlap-note {
+    transform: scale(1.015);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .payment-overlap-note,
+  .payment-overlap-note:hover,
+  .payment-overlap-pair:has(.payment-overlap-strip-wrap:hover) .payment-overlap-note {
+    transition: none;
+    transform: none;
+  }
+}
+
