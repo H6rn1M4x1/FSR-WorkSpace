@@ -1636,7 +1636,7 @@ export default function PaymentsTable({
                 onClick={() => handleEdit(p)}
                 className="cursor-pointer active:scale-[0.98] transition-transform"
               >
-                <div className="rounded-2xl border p-4 bg-white dark:bg-zinc-900 border-slate-100 dark:border-zinc-800/80">
+                <div className="relative z-10 rounded-2xl border p-4 bg-white dark:bg-zinc-900 border-slate-100 dark:border-zinc-800/80">
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <span
                       className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${
@@ -1736,11 +1736,12 @@ export default function PaymentsTable({
                 </div>
 
                 {p.conQuePagar && (
-                  <div onClick={(e) => e.stopPropagation()}>
+                  <div className="-mt-7" onClick={(e) => e.stopPropagation()}>
                     <PaymentMethodCardResolved
                       userId={paymentMethodsUserId}
                       describedCard={p.conQuePagar}
                       variant="strip"
+                      overlapBehind
                     />
                   </div>
                 )}

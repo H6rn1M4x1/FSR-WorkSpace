@@ -190,17 +190,24 @@ function PaymentMethodCardStripContent({ card }: { card: PaymentMethodCard }) {
   );
 }
 
-// Franja con su propio contorno redondeado en las 4 puntas (mismo radio que la nota de arriba, no
-// achurado ni pegado sin esquinas) y una animación chica al pasar el mouse por encima — se ubica
-// justo debajo de la nota, sin espacio entre ambas, así cada una se ve como su propia pieza
-// redondeada y juntas arman un "corte" curvo en vez de uno recto (como piezas de rompecabezas).
-export function PaymentMethodCardStrip({ card }: { card: PaymentMethodCard }) {
+// Franja con su propio contorno redondeado en las 4 puntas y una animación chica al pasar el mouse
+// por encima. Con `overlapBehind`, además de sin espacio contra la nota de arriba, queda MÁS ALTA y
+// corrida hacia arriba con el mismo margen negativo (pt-7/-mt-7 se cancelan en la posición de los
+// datos), para que esa parte extra quede tapada detrás de la nota: dos niveles superpuestos, como si
+// la tarjeta fuese un bloque de fondo y la nota un bloque de encima, sin mover dónde se ven los datos.
+export function PaymentMethodCardStrip({
+  card,
+  overlapBehind = false,
+}: {
+  card: PaymentMethodCard;
+  overlapBehind?: boolean;
+}) {
   const gradient = card.tipo === "transferencia" ? "from-emerald-700 to-emerald-900" : card.marca ? CARD_BRAND_META[card.marca].gradient : CARD_BRAND_META.otra.gradient;
   return (
     <motion.div
       whileHover={{ scale: 1.015, filter: "brightness(1.12)" }}
       transition={{ type: "spring", stiffness: 400, damping: 22 }}
-      className={`w-full rounded-2xl bg-gradient-to-br ${gradient} shadow-sm select-none`}
+      className={`w-full rounded-2xl bg-gradient-to-br ${gradient} shadow-sm select-none ${overlapBehind ? "pt-7" : ""}`}
     >
       <PaymentMethodCardStripContent card={card} />
     </motion.div>
@@ -217,11 +224,13 @@ export function PaymentMethodCardResolved({
   describedCard,
   variant = "compact",
   fallbackText,
+  overlapBehind = false,
 }: {
   userId: string;
   describedCard: string;
   variant?: "compact" | "strip";
   fallbackText?: string;
+  overlapBehind?: boolean;
 }) {
   const { cards } = usePaymentMethods(userId);
   const card = describedCard ? cards.find((c) => describeCard(c) === describedCard) : undefined;
@@ -232,7 +241,11 @@ export function PaymentMethodCardResolved({
       </span>
     );
   }
-  return variant === "strip" ? <PaymentMethodCardStrip card={card} /> : <WalletCardFace card={card} selected={false} />;
+  return variant === "strip" ? (
+    <PaymentMethodCardStrip card={card} overlapBehind={overlapBehind} />
+  ) : (
+    <WalletCardFace card={card} selected={false} />
+  );
 }
 
 // Carrusel centrado estilo Mercado Pago (ver referencia en video): la tarjeta elegida queda
