@@ -70,6 +70,7 @@ import {
   Volume2,
   VolumeX,
   BookMarked,
+  Download,
 } from "lucide-react";
 import { AddressBookModal, AddressEntry } from "./AddressBookModal";
 import {
@@ -81,6 +82,13 @@ import { DriveBackupService, BackupLog } from "../lib/driveBackupService";
 import { isUiSoundEnabled, setUiSoundEnabled } from "../lib/sounds";
 import { sendVerificationEmail, auth } from "../lib/supabase";
 import { netlifyFn } from "../lib/apiBase";
+import {
+  APP_VERSION,
+  checkForAndroidUpdate,
+  getElectronUpdatesBridge,
+  isRunningInCapacitor,
+  isRunningInElectron,
+} from "../lib/appUpdates";
 import { SharedSectionsManager } from "./SharedSectionsManager";
 import { AgendaSharingManager } from "./AgendaSharingManager";
 import { AgendaShare } from "../types";
@@ -439,6 +447,67 @@ export function UserSettingsModal({
   const [isSendingVerification, setIsSendingVerification] = useState(false);
   const [pushStatus, setPushStatus] = useState<string>("");
   const [isEnablingPush, setIsEnablingPush] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState<string>("");
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+  const [canInstallUpdate, setCanInstallUpdate] = useState(false);
+
+  // Electron manda el resultado del chequeo/descarga por eventos (ver electron/main.cjs); en
+  // Android, en cambio, checkForAndroidUpdate ya devuelve el resultado directo (no hay nada
+  // "bajando en segundo plano" que escuchar, por eso ese flujo no necesita este listener).
+  useEffect(() => {
+    const bridge = getElectronUpdatesBridge();
+    if (!bridge) return;
+    return bridge.onStatus((data) => {
+      if (data.status === "checking") {
+        setIsCheckingUpdate(true);
+        setUpdateStatus("Buscando actualizaciones...");
+      } else if (data.status === "available") {
+        setUpdateStatus(`Hay una versión nueva (${data.version}). Descargando...`);
+      } else if (data.status === "not-available") {
+        setIsCheckingUpdate(false);
+        setUpdateStatus("Ya tenés la última versión.");
+      } else if (data.status === "downloading") {
+        setUpdateStatus(`Descargando actualización... ${data.percent ?? 0}%`);
+      } else if (data.status === "downloaded") {
+        setIsCheckingUpdate(false);
+        setCanInstallUpdate(true);
+        setUpdateStatus(`Versión ${data.version} lista — reiniciá para instalarla.`);
+      } else if (data.status === "error") {
+        setIsCheckingUpdate(false);
+        setUpdateStatus(data.message || "Error al buscar actualizaciones.");
+      }
+    });
+  }, []);
+
+  const handleCheckForUpdates = async () => {
+    setIsCheckingUpdate(true);
+    setUpdateStatus("");
+    try {
+      if (isRunningInElectron()) {
+        await getElectronUpdatesBridge()?.check();
+        // el resultado llega por el listener de arriba
+        return;
+      }
+      if (isRunningInCapacitor()) {
+        const result = await checkForAndroidUpdate();
+        if (result.status === "update-available") {
+          setUpdateStatus(
+            `Hay una versión nueva (${result.version}). Se abrió el navegador para descargarla — cuando termine, abrí la descarga para instalarla.`
+          );
+        } else if (result.status === "up-to-date") {
+          setUpdateStatus("Ya tenés la última versión.");
+        } else {
+          setUpdateStatus(result.message || "No se pudo comprobar.");
+        }
+      }
+    } finally {
+      if (!isRunningInElectron()) setIsCheckingUpdate(false);
+    }
+  };
+
+  const handleInstallUpdate = async () => {
+    await getElectronUpdatesBridge()?.quitAndInstall();
+  };
 
   const handleEnablePush = async () => {
     setIsEnablingPush(true);
@@ -2175,6 +2244,57 @@ export function UserSettingsModal({
                   </p>
                 )}
               </div>
+
+              {/* App Updates Card — solo tiene sentido en el APK/exe empaquetados; en la web no
+                  hay nada que "actualizar", Netlify ya despliega la última versión sola. */}
+              {(isRunningInElectron() || isRunningInCapacitor()) && (
+                <div className="p-5 rounded-2xl border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 space-y-4">
+                  <div className="flex items-center justify-between gap-4 flex-wrap">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 rounded-2xl bg-primary text-white dark:text-blue-950 shadow-md">
+                        <Download className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="font-extrabold text-sm text-zinc-900 dark:text-zinc-100">
+                          Actualizaciones de la app
+                        </h3>
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                          Versión instalada: {APP_VERSION}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {canInstallUpdate ? (
+                        <button
+                          type="button"
+                          onClick={handleInstallUpdate}
+                          className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-white font-bold text-xs cursor-pointer transition-all shadow-md flex items-center gap-2"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          <span>Reiniciar e instalar</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={handleCheckForUpdates}
+                          disabled={isCheckingUpdate}
+                          className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-white font-bold text-xs cursor-pointer transition-all shadow-md flex items-center gap-2 disabled:opacity-50"
+                        >
+                          {isCheckingUpdate ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                          <span>{isCheckingUpdate ? "Buscando..." : "Buscar actualizaciones"}</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {updateStatus && (
+                    <p className="text-xs font-bold text-primary dark:text-primary p-3 rounded-xl bg-primary-container border border-primary/30">
+                      {updateStatus}
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div className="flex justify-end pt-2">
                 <button

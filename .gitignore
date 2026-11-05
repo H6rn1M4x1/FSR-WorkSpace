@@ -22,3 +22,9 @@ android/app/src/main/assets/public/
 # fija "android" que usa Gradle por defecto, no es sensible, y necesita quedar igual en todas las
 # máquinas para que el SHA-1 registrado en Firebase para el login de Google no cambie.
 !android/app/debug.keystore
+
+# El instalador de Windows (NSIS, ~250MB) supera el límite de 100MB por archivo de GitHub — no se
+# puede versionar acá sin Git LFS. public/downloads/FSR-Workspace.apk SÍ se versiona (pesa poco,
+# <15MB) porque es lo único que necesita el botón "Buscar actualizaciones" de Android — ver
+# src/lib/appUpdates.ts. El .exe de cada release hay que mandarlo aparte (por ahora, a mano).
+public/downloads/win/
