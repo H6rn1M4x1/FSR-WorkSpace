@@ -2,4 +2,9 @@
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@color/ic_launcher_background"/>
     <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
+    <!-- Android 13+: si el usuario activó "Íconos con el tema del sistema" en su launcher, usa
+         esta silueta monocroma en vez del ícono de colores de arriba — Android la tiñe solo con
+         el color de acento de SU fondo de pantalla (distinto en cada dispositivo) y el fondo
+         pasa a seguir el tema claro/oscuro del sistema automáticamente, en vez de quedar fijo. -->
+    <monochrome android:drawable="@mipmap/ic_launcher_monochrome"/>
 </adaptive-icon>

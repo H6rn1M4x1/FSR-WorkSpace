@@ -1,7 +1,7 @@
 {
   "name": "react-example",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -13,7 +13,7 @@
     "cap:sync": "vite build && cap sync android",
     "cap:open:android": "cap open android",
     "electron:start": "vite build && electron .",
-    "electron:build:win": "vite build && electron-builder --win portable --publish never"
+    "electron:build:win": "vite build && electron-builder --win nsis --publish never"
   },
   "dependencies": {
     "@capacitor/android": "^8.6.0",
@@ -37,6 +37,7 @@
     "country-state-city": "^3.2.1",
     "dotenv": "^17.2.3",
     "electron-serve": "^3.0.1",
+    "electron-updater": "^6.8.11",
     "express": "^4.21.2",
     "firebase": "^12.16.0",
     "glob": "^13.0.6",
@@ -97,8 +98,19 @@
     ],
     "win": {
       "target": [
-        "portable"
-      ]
+        "nsis"
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "publish": {
+      "provider": "generic",
+      "url": "https://fsrworkspace.netlify.app/downloads/win/"
     }
   }
 }
