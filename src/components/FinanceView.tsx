@@ -2292,11 +2292,11 @@ export default function FinanceView({
                                 onClick={() =>
                                   setExpandedPaymentId(isExpanded ? null : p.id)
                                 }
-                                className="cursor-pointer group relative"
+                                className="cursor-pointer group relative payment-overlap-pair"
                                 title="Haga clic para ver toda la información desplegada"
                               >
                                 <div
-                                  className={`relative z-10 flex flex-col gap-2 p-3.5 rounded-2xl border transition-all duration-200 ${
+                                  className={`relative z-10 flex flex-col gap-2 p-3.5 rounded-2xl border payment-card-solid payment-overlap-note transition-all duration-200 ${
                                     isExpanded
                                       ? "bg-white dark:bg-black border-primary/50 shadow-md ring-1 ring-primary/20"
                                       : "bg-white dark:bg-black border-zinc-200 dark:border-zinc-800 shadow-xs hover:bg-slate-50 dark:hover:bg-zinc-900"
@@ -2378,7 +2378,7 @@ export default function FinanceView({
                                 </div>
 
                                 {p.conQuePagar && (
-                                  <div className="-mt-7" onClick={(e) => e.stopPropagation()}>
+                                  <div className="-mt-7 payment-overlap-strip-wrap" onClick={(e) => e.stopPropagation()}>
                                     <PaymentMethodCardResolved
                                       userId={userEmail || "hernanmaximiliano10@gmail.com"}
                                       describedCard={p.conQuePagar}
@@ -2606,11 +2606,11 @@ export default function FinanceView({
                                 onClick={() =>
                                   setExpandedPaymentId(isExpanded ? null : p.id)
                                 }
-                                className="cursor-pointer group relative"
+                                className="cursor-pointer group relative payment-overlap-pair"
                                 title="Haga clic para ver toda la información desplegada"
                               >
                                 <div
-                                  className={`relative z-10 flex flex-col gap-2 p-3.5 rounded-2xl border transition-all duration-200 ${
+                                  className={`relative z-10 flex flex-col gap-2 p-3.5 rounded-2xl border payment-card-solid payment-overlap-note transition-all duration-200 ${
                                     isExpanded
                                       ? "bg-white dark:bg-black border-primary/50 shadow-md ring-1 ring-primary/20"
                                       : "bg-white dark:bg-black border-zinc-200 dark:border-zinc-800 shadow-xs hover:bg-slate-50 dark:hover:bg-zinc-900"
@@ -2684,7 +2684,7 @@ export default function FinanceView({
                                 </div>
 
                                 {p.conQuePagar && (
-                                  <div className="-mt-7" onClick={(e) => e.stopPropagation()}>
+                                  <div className="-mt-7 payment-overlap-strip-wrap" onClick={(e) => e.stopPropagation()}>
                                     <PaymentMethodCardResolved
                                       userId={userEmail || "hernanmaximiliano10@gmail.com"}
                                       describedCard={p.conQuePagar}

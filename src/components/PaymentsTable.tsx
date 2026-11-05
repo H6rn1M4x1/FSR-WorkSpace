@@ -1634,9 +1634,9 @@ export default function PaymentsTable({
                 viewport={{ once: true, margin: "0px 0px -60px 0px" }}
                 transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.15), ease: [0.22, 1, 0.36, 1] }}
                 onClick={() => handleEdit(p)}
-                className="cursor-pointer active:scale-[0.98] transition-transform"
+                className="cursor-pointer active:scale-[0.98] transition-transform payment-overlap-pair"
               >
-                <div className="relative z-10 rounded-2xl border p-4 bg-white dark:bg-zinc-900 border-slate-100 dark:border-zinc-800/80">
+                <div className="relative z-10 rounded-2xl border p-4 bg-white dark:bg-zinc-900 force-solid-bg payment-overlap-note border-slate-100 dark:border-zinc-800/80">
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <span
                       className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${
@@ -1736,7 +1736,7 @@ export default function PaymentsTable({
                 </div>
 
                 {p.conQuePagar && (
-                  <div className="-mt-7" onClick={(e) => e.stopPropagation()}>
+                  <div className="-mt-7 payment-overlap-strip-wrap" onClick={(e) => e.stopPropagation()}>
                     <PaymentMethodCardResolved
                       userId={paymentMethodsUserId}
                       describedCard={p.conQuePagar}
