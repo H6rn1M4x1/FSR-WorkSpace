@@ -13,6 +13,7 @@ import { FOOTBALL_LEAGUES } from "../data/footballLeagues";
 import { FOOTBALL_TEAM_ESPN_IDS, NBA_TEAM_ESPN_IDS } from "../data/espnTeamIds";
 import { FOLLOWABLE_COMPETITIONS } from "../data/footballCompetitions";
 import { F1_TEAMS, F1_DRIVERS, F1_TEAM_LOGOS } from "../data/f1";
+import { netlifyFn } from "./apiBase";
 import { fetchWikiThumbnail } from "./wikipedia";
 import { f1TeamLogoUrl, f1DriverPhotoUrl } from "./cloudinary";
 
@@ -72,7 +73,7 @@ export async function getSanJuanEvents(): Promise<SanJuanEvent[]> {
   }
 
   try {
-    const res = await fetch("/.netlify/functions/events-san-juan");
+    const res = await fetch(netlifyFn("/.netlify/functions/events-san-juan"));
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     const items: SanJuanEvent[] = dedupeById((data.items || []).map((it: any) => ({
@@ -168,7 +169,7 @@ interface F1ScrapedAssets {
 let f1AssetsPromise: Promise<F1ScrapedAssets> | null = null;
 function fetchF1Assets(): Promise<F1ScrapedAssets> {
   if (!f1AssetsPromise) {
-    f1AssetsPromise = fetch("/.netlify/functions/f1-images")
+    f1AssetsPromise = fetch(netlifyFn("/.netlify/functions/f1-images"))
       .then((r) => (r.ok ? r.json() : { images: [] }))
       .then((d) => ({ images: d.images || [] }))
       .catch(() => ({ images: [] }));

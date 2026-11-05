@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">FSR Workspace</string>
+    <string name="title_activity_main">FSR Workspace</string>
+    <string name="package_name">com.fsrworkspace.app</string>
+    <string name="custom_url_scheme">com.fsrworkspace.app</string>
+</resources>

@@ -1,3 +1,5 @@
+import { netlifyFn } from "./apiBase";
+
 export class WorkspaceService {
   // Sync notes to Google Drive
   static async syncNotesToDrive(
@@ -219,7 +221,7 @@ export class WorkspaceService {
       token: string
     ): Promise<{ success: boolean; fileId?: string; webViewLink?: string; error?: string }> => {
       try {
-        const res = await fetch("/.netlify/functions/upload-drive-file", {
+        const res = await fetch(netlifyFn("/.netlify/functions/upload-drive-file"), {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -305,7 +307,7 @@ export class WorkspaceService {
       return { success: false, error: "No se proporcionó token de Google Workspace." };
     }
     try {
-      const res = await fetch("/.netlify/functions/sync-calendar-event", {
+      const res = await fetch(netlifyFn("/.netlify/functions/sync-calendar-event"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -342,7 +344,7 @@ export class WorkspaceService {
       return { success: false, error: "Falta el token o el id del evento." };
     }
     try {
-      const res = await fetch("/.netlify/functions/delete-calendar-event", {
+      const res = await fetch(netlifyFn("/.netlify/functions/delete-calendar-event"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -376,7 +378,7 @@ export class WorkspaceService {
       return { success: false, error: "Falta el token o el id del evento." };
     }
     try {
-      const res = await fetch("/.netlify/functions/update-calendar-event", {
+      const res = await fetch(netlifyFn("/.netlify/functions/update-calendar-event"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

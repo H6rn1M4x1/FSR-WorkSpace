@@ -3,14 +3,21 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "main": "electron/main.cjs",
   "scripts": {
     "dev": "tsx server.ts",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "start": "node dist/server.cjs",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "cap:sync": "vite build && cap sync android",
+    "cap:open:android": "cap open android",
+    "electron:start": "vite build && electron .",
+    "electron:build:win": "vite build && electron-builder --win portable --publish never"
   },
   "dependencies": {
+    "@capacitor/android": "^8.6.0",
+    "@capacitor/core": "^8.6.0",
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",
     "@google/genai": "^2.4.0",
@@ -27,6 +34,7 @@
     "chart.js": "^4.5.1",
     "country-state-city": "^3.2.1",
     "dotenv": "^17.2.3",
+    "electron-serve": "^3.0.1",
     "express": "^4.21.2",
     "firebase": "^12.16.0",
     "glob": "^13.0.6",
@@ -58,6 +66,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.6.0",
     "@types/express": "^4.17.21",
     "@types/node": "^22.14.0",
     "@types/qrcode": "^1.5.6",
@@ -65,10 +74,27 @@
     "@types/web-push": "^3.6.4",
     "@types/ws": "^8.18.1",
     "autoprefixer": "^10.4.21",
+    "electron": "^45.2.3",
+    "electron-builder": "^26.18.0",
     "esbuild": "^0.25.0",
     "sharp": "^0.35.3",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2"
+  },
+  "build": {
+    "appId": "com.fsrworkspace.app",
+    "productName": "FSR Workspace",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**/*",
+      "dist/**/*",
+      "!dist/server.cjs"
+    ],
+    "win": {
+      "target": ["portable"]
+    }
   }
 }

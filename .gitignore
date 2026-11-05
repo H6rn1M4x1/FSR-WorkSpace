@@ -4,3 +4,17 @@ dist/
 .env.local
 *.log
 .netlify/
+
+# Electron (ver scripts electron:start / electron:build:win)
+release/
+
+# Capacitor Android (ver scripts cap:sync / cap:open:android) — queda el proyecto nativo
+# versionado, pero no lo que genera cada build ni archivos locales de la máquina de cada uno.
+android/local.properties
+android/.gradle/
+android/build/
+android/app/build/
+android/capacitor-cordova-android-plugins/build/
+android/app/src/main/assets/public/
+*.keystore
+*.jks
