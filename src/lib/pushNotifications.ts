@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { netlifyFn } from "./apiBase";
 
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY || "BKbrXY_FPLAnS9cJyY10YfL51ob8Naxe_D7bLZ6jstiusoE1smwd2jc238eQltRZbEnE6Gwl9_yRY5oes8S19I0";
 
@@ -38,7 +39,7 @@ export const enablePushNotifications = async (): Promise<{ ok: boolean; reason?:
   }
 
   const raw = subscription.toJSON();
-  const res = await fetch("/.netlify/functions/save-push-subscription", {
+  const res = await fetch(netlifyFn("/.netlify/functions/save-push-subscription"), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

@@ -80,6 +80,7 @@ import {
 import { DriveBackupService, BackupLog } from "../lib/driveBackupService";
 import { isUiSoundEnabled, setUiSoundEnabled } from "../lib/sounds";
 import { sendVerificationEmail, auth } from "../lib/supabase";
+import { netlifyFn } from "../lib/apiBase";
 import { SharedSectionsManager } from "./SharedSectionsManager";
 import { AgendaSharingManager } from "./AgendaSharingManager";
 import { AgendaShare } from "../types";
@@ -463,7 +464,7 @@ export function UserSettingsModal({
       const { supabase } = await import("../lib/supabase");
       const { data } = await supabase.auth.getSession();
       const token = data.session?.access_token;
-      const res = await fetch("/.netlify/functions/send-test-push", {
+      const res = await fetch(netlifyFn("/.netlify/functions/send-test-push"), {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -485,7 +486,7 @@ export function UserSettingsModal({
     setIsSendingWhatsapp(true);
     setWhatsappStatus("Enviando mensaje de prueba...");
     try {
-      const res = await fetch("/.netlify/functions/send-whatsapp", {
+      const res = await fetch(netlifyFn("/.netlify/functions/send-whatsapp"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

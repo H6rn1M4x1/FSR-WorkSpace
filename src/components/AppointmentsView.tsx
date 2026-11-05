@@ -15,6 +15,7 @@ import L from "leaflet";
 import { collection, query, getDocs } from "firebase/firestore";
 import { subscribeToCategory, deleteItemFromFirestore, saveItemToFirestore, sanitizeForFirestore, getEffectiveUserId } from "../lib/firestoreSyncService";
 import { auth } from "../lib/supabase";
+import { netlifyFn } from "../lib/apiBase";
 import { db } from "../lib/firebase"; // TODO Fase 2: migrar a Supabase
 import { LocationPickerMap } from "./LocationPickerMap";
 import { useToast } from "../context/ToastContext";
@@ -1770,7 +1771,7 @@ export default function AppointmentsView({
           const query = placeName.toLowerCase().includes("san juan")
             ? placeName
             : `${placeName}, San Juan, Argentina`;
-          const res = await fetch(`/.netlify/functions/geocode-place?q=${encodeURIComponent(query)}`);
+          const res = await fetch(netlifyFn(`/.netlify/functions/geocode-place?q=${encodeURIComponent(query)}`));
           if (res.ok) {
             const data = await res.json();
             if (Array.isArray(data) && data.length > 0 && data[0].lat && data[0].lon) {
@@ -1876,7 +1877,7 @@ export default function AppointmentsView({
 
     searchDebounceRef.current = setTimeout(async () => {
       try {
-        let url = `/.netlify/functions/geocode-place?q=${encodeURIComponent(query.trim())}`;
+        let url = netlifyFn(`/.netlify/functions/geocode-place?q=${encodeURIComponent(query.trim())}`);
         if (userCoords) {
           url += `&lat=${userCoords.lat}&lon=${userCoords.lon}`;
         }
@@ -2196,7 +2197,7 @@ export default function AppointmentsView({
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 2000);
           const res = await fetch(
-            `/.netlify/functions/geocode-place?q=${encodeURIComponent(query)}`,
+            netlifyFn(`/.netlify/functions/geocode-place?q=${encodeURIComponent(query)}`),
             { signal: controller.signal }
           );
           clearTimeout(timeoutId);

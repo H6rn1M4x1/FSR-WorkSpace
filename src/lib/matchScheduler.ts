@@ -3,6 +3,7 @@ import { TEAMS, Team } from "../data/teams";
 import { saveCategoryToFirestore, getEffectiveUserId } from "./firestoreSyncService";
 import { FOOTBALL_TEAM_ESPN_IDS } from "../data/espnTeamIds";
 import { getTeamCachedEvents } from "./eventsService";
+import { netlifyFn } from "./apiBase";
 
 export const TEAM_STADIUMS: Record<string, string> = {
   // Argentina
@@ -268,7 +269,7 @@ export async function generateMonthlyMatchesForTeam(
 
   const resolveVenueCoords = async (venue: string): Promise<{ lat: number | null; lon: number | null }> => {
     try {
-      const geoRes = await fetch(`/.netlify/functions/geocode-place?q=${encodeURIComponent(venue)}`);
+      const geoRes = await fetch(netlifyFn(`/.netlify/functions/geocode-place?q=${encodeURIComponent(venue)}`));
       if (geoRes.ok) {
         const geoData = await geoRes.json();
         if (Array.isArray(geoData) && geoData.length > 0) {
