@@ -190,16 +190,17 @@ function PaymentMethodCardStripContent({ card }: { card: PaymentMethodCard }) {
   );
 }
 
-// Franja alargada "flotante", con su propio contorno redondeado (todas las esquinas, como la
-// caja de arriba) y una animación chica al pasar el mouse por encima — para mostrar "con qué se
-// paga" como su propia tarjetita separada, no pegada al borde de la nota de arriba.
+// Franja con su propio contorno redondeado en las 4 puntas (mismo radio que la nota de arriba, no
+// achurado ni pegado sin esquinas) y una animación chica al pasar el mouse por encima — se ubica
+// justo debajo de la nota, sin espacio entre ambas, así cada una se ve como su propia pieza
+// redondeada y juntas arman un "corte" curvo en vez de uno recto (como piezas de rompecabezas).
 export function PaymentMethodCardStrip({ card }: { card: PaymentMethodCard }) {
   const gradient = card.tipo === "transferencia" ? "from-emerald-700 to-emerald-900" : card.marca ? CARD_BRAND_META[card.marca].gradient : CARD_BRAND_META.otra.gradient;
   return (
     <motion.div
       whileHover={{ scale: 1.015, filter: "brightness(1.12)" }}
       transition={{ type: "spring", stiffness: 400, damping: 22 }}
-      className={`w-full rounded-xl bg-gradient-to-br ${gradient} shadow-sm select-none`}
+      className={`w-full rounded-2xl bg-gradient-to-br ${gradient} shadow-sm select-none`}
     >
       <PaymentMethodCardStripContent card={card} />
     </motion.div>

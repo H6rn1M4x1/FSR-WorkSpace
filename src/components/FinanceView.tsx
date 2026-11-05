@@ -1345,6 +1345,25 @@ export default function FinanceView({
     (cat) => (categoryDetailedTotals[cat] || 0) > 0,
   );
 
+  // Para el slide "Distribución por Categoria" del slider de abajo — a diferencia de
+  // categoryDetailedTotals (acotado al mes actual, que necesita la comparación mes a mes de más
+  // abajo), este es de TODOS los pagos, igual que ya se hizo con Gastos Varios: si no hay pagos
+  // vencidos este mes todavía, antes se veía vacío y el slider terminaba abriendo siempre en el
+  // segundo slide (Gastos Varios, que sí tiene datos al ser histórico completo).
+  const allTimeCategoryTotals = allDetailedCategories.reduce(
+    (acc, cat) => {
+      acc[cat] = detailedPayments
+        .filter((p) => p.categoria === cat)
+        .reduce((sum, p) => sum + p.montoAPagar, 0);
+      return acc;
+    },
+    {} as Record<string, number>,
+  );
+  const activeAllTimeCategories = allDetailedCategories.filter(
+    (cat) => (allTimeCategoryTotals[cat] || 0) > 0,
+  );
+  const totalSpentAllTime = Object.values(allTimeCategoryTotals).reduce((sum, v) => sum + v, 0);
+
   // Mismo parseo que isCurrentMonth pero contra el mes calendario anterior (con rollover de año
   // para enero) — para poder comparar el gasto de cada categoría contra el mes pasado.
   const isPreviousMonth = (dateStr?: string) => {
@@ -2273,89 +2292,93 @@ export default function FinanceView({
                                 onClick={() =>
                                   setExpandedPaymentId(isExpanded ? null : p.id)
                                 }
-                                className={`flex flex-col gap-2 p-3.5 rounded-2xl border transition-all duration-200 cursor-pointer group relative overflow-hidden ${
-                                  isExpanded
-                                    ? "bg-white dark:bg-black border-primary/50 shadow-md ring-1 ring-primary/20"
-                                    : "bg-white dark:bg-black border-zinc-200 dark:border-zinc-800 shadow-xs hover:bg-slate-50 dark:hover:bg-zinc-900"
-                                }`}
+                                className="cursor-pointer group relative"
                                 title="Haga clic para ver toda la información desplegada"
                               >
-                                <div className="flex items-center justify-between gap-2 mb-0.5">
-                                  <span className="text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-primary/10 text-primary truncate max-w-[120px]">
-                                    {p.categoria}
-                                  </span>
-                                  <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-md shrink-0">
-                                    Pendiente
-                                  </span>
-                                </div>
-
-                                <p className="flex items-center gap-1.5 font-extrabold text-sm text-slate-900 dark:text-zinc-100 truncate">
-                                  <PaymentIconGlyph
-                                    iconId={getEffectivePaymentIconId(p)}
-                                    colorId={p.iconoColor}
-                                    className={`w-3.5 h-3.5 shrink-0 ${p.iconoColor ? "" : "text-primary"}`}
-                                  />
-                                  <span className="truncate">{p.descripcion}</span>
-                                  <SharedBadge
-                                    item={p}
-                                    isSharedOut={isSharedOut("detailed_payments", p.id)}
-                                    sharedOutWith={sharedOutWith("detailed_payments", p.id)}
-                                  />
-                                </p>
-
-                                <div className="flex items-end justify-between gap-3">
-                                  <div className="flex items-center gap-1.5 text-xs font-semibold">
-                                    <Calendar className="w-3.5 h-3.5 shrink-0 text-slate-400 dark:text-zinc-500" />
-                                    <span className="text-slate-500 dark:text-zinc-400">
-                                      {formatFechaDMY(p.fechaVencimiento)}
+                                <div
+                                  className={`flex flex-col gap-2 p-3.5 rounded-2xl border transition-all duration-200 ${
+                                    isExpanded
+                                      ? "bg-white dark:bg-black border-primary/50 shadow-md ring-1 ring-primary/20"
+                                      : "bg-white dark:bg-black border-zinc-200 dark:border-zinc-800 shadow-xs hover:bg-slate-50 dark:hover:bg-zinc-900"
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between gap-2 mb-0.5">
+                                    <span className="text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-primary/10 text-primary truncate max-w-[120px]">
+                                      {p.categoria}
+                                    </span>
+                                    <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-md shrink-0">
+                                      Pendiente
                                     </span>
                                   </div>
-                                  <span className="font-mono font-bold text-base text-slate-900 dark:text-zinc-100">
-                                    {formatCurrency(p.montoAPagar)}
-                                  </span>
-                                </div>
 
-                                {p.metodoPago && (
-                                  <div className="flex items-center gap-1 text-[11px] font-medium text-slate-500 dark:text-zinc-400">
-                                    <CreditCard className="w-3 h-3 shrink-0" />
-                                    {p.metodoPago}
+                                  <p className="flex items-center gap-1.5 font-extrabold text-sm text-slate-900 dark:text-zinc-100 truncate">
+                                    <PaymentIconGlyph
+                                      iconId={getEffectivePaymentIconId(p)}
+                                      colorId={p.iconoColor}
+                                      className={`w-3.5 h-3.5 shrink-0 ${p.iconoColor ? "" : "text-primary"}`}
+                                    />
+                                    <span className="truncate">{p.descripcion}</span>
+                                    <SharedBadge
+                                      item={p}
+                                      isSharedOut={isSharedOut("detailed_payments", p.id)}
+                                      sharedOutWith={sharedOutWith("detailed_payments", p.id)}
+                                    />
+                                  </p>
+
+                                  <div className="flex items-end justify-between gap-3">
+                                    <div className="flex items-center gap-1.5 text-xs font-semibold">
+                                      <Calendar className="w-3.5 h-3.5 shrink-0 text-slate-400 dark:text-zinc-500" />
+                                      <span className="text-slate-500 dark:text-zinc-400">
+                                        {formatFechaDMY(p.fechaVencimiento)}
+                                      </span>
+                                    </div>
+                                    <span className="font-mono font-bold text-base text-slate-900 dark:text-zinc-100">
+                                      {formatCurrency(p.montoAPagar)}
+                                    </span>
                                   </div>
-                                )}
 
-                                <div
-                                  className="flex items-center gap-2 mt-1 pt-3 border-t border-slate-100 dark:border-zinc-900/60"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <button
-                                    onClick={() =>
-                                      handlePayDetailedPayment(p.id)
-                                    }
-                                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold bg-primary text-white dark:text-black cursor-pointer transition-all active:scale-95"
+                                  {p.metodoPago && (
+                                    <div className="flex items-center gap-1 text-[11px] font-medium text-slate-500 dark:text-zinc-400">
+                                      <CreditCard className="w-3 h-3 shrink-0" />
+                                      {p.metodoPago}
+                                    </div>
+                                  )}
+
+                                  <div
+                                    className="flex items-center gap-2 mt-1 pt-3 border-t border-slate-100 dark:border-zinc-900/60"
+                                    onClick={(e) => e.stopPropagation()}
                                   >
-                                    <CheckSquare className="w-3.5 h-3.5" />
-                                    Pagar
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleEditPaymentCard(p.id)}
-                                    className={`p-2.5 rounded-xl cursor-pointer transition-all active:scale-95 ${darkMode ? "bg-zinc-800 text-zinc-300" : "bg-slate-100 text-slate-600"}`}
-                                    title="Editar"
-                                  >
-                                    <Pencil className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    onClick={() =>
-                                      handleDeleteDetailedPayment(p.id)
-                                    }
-                                    className="p-2.5 rounded-xl bg-red-500/10 text-red-500 cursor-pointer transition-all active:scale-95"
-                                    title="Eliminar"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
+                                    <button
+                                      onClick={() =>
+                                        handlePayDetailedPayment(p.id)
+                                      }
+                                      className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold bg-primary text-white dark:text-black cursor-pointer transition-all active:scale-95"
+                                    >
+                                      <CheckSquare className="w-3.5 h-3.5" />
+                                      Pagar
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleEditPaymentCard(p.id)}
+                                      className={`p-2.5 rounded-xl cursor-pointer transition-all active:scale-95 ${darkMode ? "bg-zinc-800 text-zinc-300" : "bg-slate-100 text-slate-600"}`}
+                                      title="Editar"
+                                    >
+                                      <Pencil className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      onClick={() =>
+                                        handleDeleteDetailedPayment(p.id)
+                                      }
+                                      className="p-2.5 rounded-xl bg-red-500/10 text-red-500 cursor-pointer transition-all active:scale-95"
+                                      title="Eliminar"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
                                 </div>
 
                                 {p.conQuePagar && (
-                                  <div className="mt-1" onClick={(e) => e.stopPropagation()}>
+                                  <div onClick={(e) => e.stopPropagation()}>
                                     <PaymentMethodCardResolved
                                       userId={userEmail || "hernanmaximiliano10@gmail.com"}
                                       describedCard={p.conQuePagar}
@@ -2582,81 +2605,85 @@ export default function FinanceView({
                                 onClick={() =>
                                   setExpandedPaymentId(isExpanded ? null : p.id)
                                 }
-                                className={`flex flex-col gap-2 p-3.5 rounded-2xl border transition-all duration-200 cursor-pointer group relative overflow-hidden ${
-                                  isExpanded
-                                    ? "bg-white dark:bg-black border-primary/50 shadow-md ring-1 ring-primary/20"
-                                    : "bg-white dark:bg-black border-zinc-200 dark:border-zinc-800 shadow-xs hover:bg-slate-50 dark:hover:bg-zinc-900"
-                                }`}
+                                className="cursor-pointer group relative"
                                 title="Haga clic para ver toda la información desplegada"
                               >
-                                <div className="flex items-center justify-between gap-2 mb-0.5">
-                                  <span className="text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-primary/10 text-primary truncate max-w-[120px]">
-                                    {p.categoria}
-                                  </span>
-                                  <span className="text-[9px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md shrink-0">
-                                    Pagado
-                                  </span>
-                                </div>
-
-                                <p className="flex items-center gap-1.5 font-extrabold text-sm text-slate-900 dark:text-zinc-100 truncate">
-                                  <PaymentIconGlyph
-                                    iconId={getEffectivePaymentIconId(p)}
-                                    colorId={p.iconoColor}
-                                    className={`w-3.5 h-3.5 shrink-0 ${p.iconoColor ? "" : "text-primary"}`}
-                                  />
-                                  <span className="truncate">{p.descripcion}</span>
-                                  <SharedBadge
-                                    item={p}
-                                    isSharedOut={isSharedOut("detailed_payments", p.id)}
-                                    sharedOutWith={sharedOutWith("detailed_payments", p.id)}
-                                  />
-                                </p>
-
-                                <div className="flex items-end justify-between gap-3">
-                                  <div className="flex items-center gap-1.5 text-xs font-semibold">
-                                    <Calendar className="w-3.5 h-3.5 shrink-0 text-slate-400 dark:text-zinc-500" />
-                                    <span className="text-slate-500 dark:text-zinc-400">
-                                      {formatFechaDMY(p.fechaVencimiento)}
+                                <div
+                                  className={`flex flex-col gap-2 p-3.5 rounded-2xl border transition-all duration-200 ${
+                                    isExpanded
+                                      ? "bg-white dark:bg-black border-primary/50 shadow-md ring-1 ring-primary/20"
+                                      : "bg-white dark:bg-black border-zinc-200 dark:border-zinc-800 shadow-xs hover:bg-slate-50 dark:hover:bg-zinc-900"
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between gap-2 mb-0.5">
+                                    <span className="text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-primary/10 text-primary truncate max-w-[120px]">
+                                      {p.categoria}
+                                    </span>
+                                    <span className="text-[9px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md shrink-0">
+                                      Pagado
                                     </span>
                                   </div>
-                                  <span className="font-mono font-bold text-base text-slate-900 dark:text-zinc-100">
-                                    {formatCurrency(p.montoAPagar)}
-                                  </span>
-                                </div>
 
-                                {p.metodoPago && (
-                                  <div className="flex items-center gap-1 text-[11px] font-medium text-slate-500 dark:text-zinc-400">
-                                    <CreditCard className="w-3 h-3 shrink-0" />
-                                    {p.metodoPago}
+                                  <p className="flex items-center gap-1.5 font-extrabold text-sm text-slate-900 dark:text-zinc-100 truncate">
+                                    <PaymentIconGlyph
+                                      iconId={getEffectivePaymentIconId(p)}
+                                      colorId={p.iconoColor}
+                                      className={`w-3.5 h-3.5 shrink-0 ${p.iconoColor ? "" : "text-primary"}`}
+                                    />
+                                    <span className="truncate">{p.descripcion}</span>
+                                    <SharedBadge
+                                      item={p}
+                                      isSharedOut={isSharedOut("detailed_payments", p.id)}
+                                      sharedOutWith={sharedOutWith("detailed_payments", p.id)}
+                                    />
+                                  </p>
+
+                                  <div className="flex items-end justify-between gap-3">
+                                    <div className="flex items-center gap-1.5 text-xs font-semibold">
+                                      <Calendar className="w-3.5 h-3.5 shrink-0 text-slate-400 dark:text-zinc-500" />
+                                      <span className="text-slate-500 dark:text-zinc-400">
+                                        {formatFechaDMY(p.fechaVencimiento)}
+                                      </span>
+                                    </div>
+                                    <span className="font-mono font-bold text-base text-slate-900 dark:text-zinc-100">
+                                      {formatCurrency(p.montoAPagar)}
+                                    </span>
                                   </div>
-                                )}
 
-                                <div
-                                  className="flex items-center gap-2 mt-1 pt-3 border-t border-slate-100 dark:border-zinc-900/60"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <button
-                                    type="button"
-                                    onClick={() => handleEditPaymentCard(p.id)}
-                                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold cursor-pointer transition-all active:scale-95 ${darkMode ? "bg-zinc-800 text-zinc-300" : "bg-slate-100 text-slate-600"}`}
-                                    title="Editar"
+                                  {p.metodoPago && (
+                                    <div className="flex items-center gap-1 text-[11px] font-medium text-slate-500 dark:text-zinc-400">
+                                      <CreditCard className="w-3 h-3 shrink-0" />
+                                      {p.metodoPago}
+                                    </div>
+                                  )}
+
+                                  <div
+                                    className="flex items-center gap-2 mt-1 pt-3 border-t border-slate-100 dark:border-zinc-900/60"
+                                    onClick={(e) => e.stopPropagation()}
                                   >
-                                    <Pencil className="w-3.5 h-3.5" />
-                                    Editar
-                                  </button>
-                                  <button
-                                    onClick={() =>
-                                      handleDeleteDetailedPayment(p.id)
-                                    }
-                                    className="p-2.5 rounded-xl bg-red-500/10 text-red-500 cursor-pointer transition-all active:scale-95"
-                                    title="Eliminar"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleEditPaymentCard(p.id)}
+                                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold cursor-pointer transition-all active:scale-95 ${darkMode ? "bg-zinc-800 text-zinc-300" : "bg-slate-100 text-slate-600"}`}
+                                      title="Editar"
+                                    >
+                                      <Pencil className="w-3.5 h-3.5" />
+                                      Editar
+                                    </button>
+                                    <button
+                                      onClick={() =>
+                                        handleDeleteDetailedPayment(p.id)
+                                      }
+                                      className="p-2.5 rounded-xl bg-red-500/10 text-red-500 cursor-pointer transition-all active:scale-95"
+                                      title="Eliminar"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
                                 </div>
 
                                 {p.conQuePagar && (
-                                  <div className="mt-1" onClick={(e) => e.stopPropagation()}>
+                                  <div onClick={(e) => e.stopPropagation()}>
                                     <PaymentMethodCardResolved
                                       userId={userEmail || "hernanmaximiliano10@gmail.com"}
                                       describedCard={p.conQuePagar}
@@ -2912,10 +2939,10 @@ export default function FinanceView({
                         {
                           icon: <PieChart className="w-5 h-5 text-primary" />,
                           title: "Distribución por Categoria",
-                          data: activeCategories
-                            .map((cat) => ({ name: cat, value: categoryDetailedTotals[cat] || 0 }))
+                          data: activeAllTimeCategories
+                            .map((cat) => ({ name: cat, value: allTimeCategoryTotals[cat] || 0 }))
                             .filter((item) => item.value > 0),
-                          total: totalSpent,
+                          total: totalSpentAllTime,
                           formatValue: formatCurrency,
                         },
                         {

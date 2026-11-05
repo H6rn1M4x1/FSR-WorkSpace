@@ -1634,107 +1634,109 @@ export default function PaymentsTable({
                 viewport={{ once: true, margin: "0px 0px -60px 0px" }}
                 transition={{ duration: 0.3, delay: Math.min(idx * 0.04, 0.15), ease: [0.22, 1, 0.36, 1] }}
                 onClick={() => handleEdit(p)}
-                className="rounded-2xl border p-4 bg-white dark:bg-zinc-900 border-slate-100 dark:border-zinc-800/80 active:scale-[0.98] transition-transform cursor-pointer overflow-hidden"
+                className="cursor-pointer active:scale-[0.98] transition-transform"
               >
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <span
-                    className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${
-                      darkMode ? "bg-primary/10 text-primary" : "bg-primary-container text-primary"
-                    }`}
-                  >
-                    {p.categoria}
-                  </span>
-                  <span
-                    className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${
-                      estado === "Vencimiento"
-                        ? darkMode
-                          ? "bg-red-500/10 text-red-400"
-                          : "bg-red-50 text-red-600"
-                        : darkMode
-                          ? "bg-primary/10 text-primary"
-                          : "bg-primary-container text-primary"
-                    }`}
-                  >
-                    {estado}
-                  </span>
-                </div>
-
-                <p className="flex items-center gap-1.5 font-extrabold text-sm text-slate-900 dark:text-zinc-100 mb-2.5 break-words">
-                  <PaymentIconGlyph
-                    iconId={getEffectivePaymentIconId(p)}
-                    colorId={p.iconoColor}
-                    className={`w-3.5 h-3.5 shrink-0 ${p.iconoColor ? "" : "text-primary"}`}
-                  />
-                  <span>{p.descripcion}</span>
-                </p>
-
-                <div className="flex items-end justify-between gap-3 mb-1">
-                  <div className="flex items-center gap-1.5 text-xs font-semibold">
-                    <Calendar className={`w-3.5 h-3.5 shrink-0 ${vencido ? "text-red-500" : "text-slate-400 dark:text-zinc-500"}`} />
-                    <span className={vencido ? "text-red-500" : "text-slate-500 dark:text-zinc-400"}>
-                      {formatFechaDMY(p.fechaVencimiento)}
+                <div className="rounded-2xl border p-4 bg-white dark:bg-zinc-900 border-slate-100 dark:border-zinc-800/80">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <span
+                      className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${
+                        darkMode ? "bg-primary/10 text-primary" : "bg-primary-container text-primary"
+                      }`}
+                    >
+                      {p.categoria}
+                    </span>
+                    <span
+                      className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${
+                        estado === "Vencimiento"
+                          ? darkMode
+                            ? "bg-red-500/10 text-red-400"
+                            : "bg-red-50 text-red-600"
+                          : darkMode
+                            ? "bg-primary/10 text-primary"
+                            : "bg-primary-container text-primary"
+                      }`}
+                    >
+                      {estado}
                     </span>
                   </div>
-                  <span className="font-mono font-bold text-base text-slate-900 dark:text-zinc-100">
-                    AR$ {new Intl.NumberFormat("es-AR", { minimumFractionDigits: 2 }).format(p.montoAPagar)}
-                  </span>
-                </div>
 
-                {(p.metodoPago || p.dondePagar) && (
-                  <div className="flex items-center gap-3 mt-2 text-[11px] font-medium text-slate-500 dark:text-zinc-400">
-                    {p.metodoPago && (
-                      <span className="flex items-center gap-1">
-                        <CreditCard className="w-3 h-3 shrink-0" />
-                        {p.metodoPago}
+                  <p className="flex items-center gap-1.5 font-extrabold text-sm text-slate-900 dark:text-zinc-100 mb-2.5 break-words">
+                    <PaymentIconGlyph
+                      iconId={getEffectivePaymentIconId(p)}
+                      colorId={p.iconoColor}
+                      className={`w-3.5 h-3.5 shrink-0 ${p.iconoColor ? "" : "text-primary"}`}
+                    />
+                    <span>{p.descripcion}</span>
+                  </p>
+
+                  <div className="flex items-end justify-between gap-3 mb-1">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold">
+                      <Calendar className={`w-3.5 h-3.5 shrink-0 ${vencido ? "text-red-500" : "text-slate-400 dark:text-zinc-500"}`} />
+                      <span className={vencido ? "text-red-500" : "text-slate-500 dark:text-zinc-400"}>
+                        {formatFechaDMY(p.fechaVencimiento)}
                       </span>
-                    )}
-                    {p.dondePagar && (
-                      <span className="flex items-center gap-1 min-w-0 truncate">
-                        <MapPin className="w-3 h-3 shrink-0" />
-                        <span
-                          className="prose dark:prose-invert prose-sm max-w-none [&_*]:!text-inherit [&_*]:!inline"
-                          dangerouslySetInnerHTML={{ __html: p.dondePagar }}
-                        />
-                      </span>
-                    )}
+                    </div>
+                    <span className="font-mono font-bold text-base text-slate-900 dark:text-zinc-100">
+                      AR$ {new Intl.NumberFormat("es-AR", { minimumFractionDigits: 2 }).format(p.montoAPagar)}
+                    </span>
                   </div>
-                )}
 
-                <div className="flex items-center gap-2 mt-3.5 pt-3.5 border-t border-slate-100 dark:border-zinc-800/60" onClick={(e) => e.stopPropagation()}>
-                  <button
-                    type="button"
-                    onClick={() => togglePago(p)}
-                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-95 ${
-                      p.pago
-                        ? darkMode
-                          ? "bg-zinc-800 text-zinc-300"
-                          : "bg-slate-100 text-slate-600"
-                        : "bg-primary text-white dark:text-black"
-                    }`}
-                  >
-                    <CheckSquare className="w-3.5 h-3.5" />
-                    {p.pago ? "Pendiente" : "Marcar pagado"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleEdit(p)}
-                    className={`p-2.5 rounded-xl cursor-pointer transition-all active:scale-95 ${darkMode ? "bg-zinc-800 text-zinc-300" : "bg-slate-100 text-slate-600"}`}
-                    title="Editar"
-                  >
-                    <Pencil className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(p.id)}
-                    className="p-2.5 rounded-xl bg-red-500/10 text-red-500 cursor-pointer transition-all active:scale-95"
-                    title="Eliminar"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  {(p.metodoPago || p.dondePagar) && (
+                    <div className="flex items-center gap-3 mt-2 text-[11px] font-medium text-slate-500 dark:text-zinc-400">
+                      {p.metodoPago && (
+                        <span className="flex items-center gap-1">
+                          <CreditCard className="w-3 h-3 shrink-0" />
+                          {p.metodoPago}
+                        </span>
+                      )}
+                      {p.dondePagar && (
+                        <span className="flex items-center gap-1 min-w-0 truncate">
+                          <MapPin className="w-3 h-3 shrink-0" />
+                          <span
+                            className="prose dark:prose-invert prose-sm max-w-none [&_*]:!text-inherit [&_*]:!inline"
+                            dangerouslySetInnerHTML={{ __html: p.dondePagar }}
+                          />
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2 mt-3.5 pt-3.5 border-t border-slate-100 dark:border-zinc-800/60" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      onClick={() => togglePago(p)}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-95 ${
+                        p.pago
+                          ? darkMode
+                            ? "bg-zinc-800 text-zinc-300"
+                            : "bg-slate-100 text-slate-600"
+                          : "bg-primary text-white dark:text-black"
+                      }`}
+                    >
+                      <CheckSquare className="w-3.5 h-3.5" />
+                      {p.pago ? "Pendiente" : "Marcar pagado"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleEdit(p)}
+                      className={`p-2.5 rounded-xl cursor-pointer transition-all active:scale-95 ${darkMode ? "bg-zinc-800 text-zinc-300" : "bg-slate-100 text-slate-600"}`}
+                      title="Editar"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(p.id)}
+                      className="p-2.5 rounded-xl bg-red-500/10 text-red-500 cursor-pointer transition-all active:scale-95"
+                      title="Eliminar"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
 
                 {p.conQuePagar && (
-                  <div className="mt-2" onClick={(e) => e.stopPropagation()}>
+                  <div onClick={(e) => e.stopPropagation()}>
                     <PaymentMethodCardResolved
                       userId={paymentMethodsUserId}
                       describedCard={p.conQuePagar}
