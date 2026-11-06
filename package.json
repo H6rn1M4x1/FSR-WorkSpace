@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.5",
   "type": "module",
-  "main": "electron/main.cjs",
+  "main": "dist-electron/main.cjs",
   "scripts": {
     "dev": "tsx server.ts",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
@@ -12,8 +12,9 @@
     "lint": "tsc --noEmit",
     "cap:sync": "vite build && cap sync android",
     "cap:open:android": "cap open android",
-    "electron:start": "vite build && electron .",
-    "electron:build:win": "vite build && electron-builder --win nsis --publish never"
+    "electron:bundle-main": "esbuild electron/main.cjs --bundle --platform=node --format=cjs --external:electron --outfile=dist-electron/main.cjs && esbuild electron/preload.cjs --bundle --platform=node --format=cjs --external:electron --outfile=dist-electron/preload.cjs",
+    "electron:start": "vite build && npm run electron:bundle-main && electron .",
+    "electron:build:win": "vite build && npm run electron:bundle-main && electron-builder --win nsis --publish never"
   },
   "dependencies": {
     "@capacitor/android": "^8.6.0",
@@ -94,9 +95,10 @@
       "output": "release"
     },
     "files": [
-      "electron/**/*",
+      "dist-electron/**/*",
       "dist/**/*",
-      "!dist/server.cjs"
+      "!dist/server.cjs",
+      "!node_modules/**/*"
     ],
     "win": {
       "target": [
