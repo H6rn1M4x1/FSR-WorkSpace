@@ -1,6 +1,9 @@
 const { app, BrowserWindow, shell, ipcMain } = require("electron");
 const path = require("path");
-const serve = require("electron-serve");
+// "electron-serve" es un paquete ESM puro ("type": "module") — al bundlearlo con esbuild a CJS,
+// un require() directo trae el namespace del módulo (con el export default colgando de
+// ".default"), no la función en sí, a diferencia de un "import serve from" en código ESM real.
+const serve = require("electron-serve").default;
 const { autoUpdater } = require("electron-updater");
 
 // Sirve el mismo dist/ que genera "vite build" (el que también sube a Netlify) detrás de un
