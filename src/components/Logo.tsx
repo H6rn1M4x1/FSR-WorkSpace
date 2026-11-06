@@ -8,6 +8,15 @@ interface LogoProps {
   spin?: boolean;
 }
 
+// Marca "Cascada": 3 cuadrados redondeados iguales, superpuestos en diagonal.
+const SQUARES = [
+  { x: 44, y: 44, delay: 0 },
+  { x: 90, y: 90, delay: 0.12 },
+  { x: 136, y: 136, delay: 0.24 },
+];
+const SQUARE_SIZE = 76;
+const SQUARE_RX = 16;
+
 export default function Logo({ darkMode, size = "sm", className = "", spin = false }: LogoProps) {
   // Size dimensions for 1:1 aspect ratio (scaled down as requested)
   const sizeClasses = {
@@ -17,7 +26,8 @@ export default function Logo({ darkMode, size = "sm", className = "", spin = fal
     lg: "w-20 h-20",
   };
 
-  const starColor = "var(--color-primary)";
+  // El color de acento (elegido por el usuario en Ajustes) es el que predomina en el logo.
+  const fillColor = "var(--color-primary)";
 
   // Re-run animation when theme or spin changes
   const animationKey = `logo-${darkMode ? "dark" : "light"}-${spin ? "spin" : "normal"}`;
@@ -30,65 +40,54 @@ export default function Logo({ darkMode, size = "sm", className = "", spin = fal
       animate="animate"
       whileHover={spin ? undefined : "hover"}
       whileTap={spin ? undefined : "tap"}
+      variants={{
+        tap: { scale: 0.92, transition: { duration: 0.15 } },
+      }}
     >
-      <svg
-        viewBox="0 0 100 100"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        className="w-full h-full"
-      >
-        {/* Modern 4-pointed Star (Destello) based on user's shared image, scaled to fill space */}
-        <motion.path
-          d="M 50,8 Q 50,50 92,50 Q 50,50 50,92 Q 50,50 8,50 Q 50,50 50,8 Z"
-          fill={starColor}
-          stroke={starColor}
-          strokeWidth="1.5"
-          strokeLinejoin="round"
-          variants={{
-            initial: {
-              scale: 1,
-              rotate: 0,
-              opacity: spin ? 1 : 0,
-            },
-            animate: spin
-              ? {
-                  scale: 1,
-                  rotate: [0, 180, 360],
-                  opacity: 1,
-                  transition: {
-                    duration: 1.6,
-                    repeat: Infinity,
-                    ease: "easeInOut",
+      <svg viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+        {SQUARES.map((sq, i) => (
+          <motion.rect
+            key={i}
+            x={sq.x}
+            y={sq.y}
+            width={SQUARE_SIZE}
+            height={SQUARE_SIZE}
+            rx={SQUARE_RX}
+            fill={fillColor}
+            style={{ originX: `${sq.x + SQUARE_SIZE / 2}px`, originY: `${sq.y + SQUARE_SIZE / 2}px` }}
+            variants={{
+              initial: { scale: 0.4, opacity: 0 },
+              animate: spin
+                ? {
+                    scale: [0.75, 1, 0.75],
+                    opacity: [0.35, 1, 0.35],
+                    transition: {
+                      duration: 1.35,
+                      repeat: Infinity,
+                      delay: sq.delay,
+                      ease: "easeInOut",
+                    },
+                  }
+                : {
+                    scale: 1,
+                    opacity: 1,
+                    transition: {
+                      duration: 0.45,
+                      delay: sq.delay,
+                      ease: [0.34, 1.56, 0.64, 1], // easeOutBack - leve "rebote" al aparecer
+                    },
                   },
-                }
-              : {
-                  scale: 1,
-                  rotate: [0, 180, 360],
-                  opacity: [0, 1, 0, 1],
-                  transition: {
-                    duration: 1.6,
-                    times: [0, 0.35, 0.7, 1],
-                    ease: "easeInOut",
-                  },
+              hover: {
+                scale: [1, 1.12, 1],
+                transition: {
+                  duration: 0.5,
+                  delay: sq.delay * 0.6,
+                  ease: "easeInOut",
                 },
-            hover: {
-              scale: 1,
-              rotate: [0, 180, 360],
-              opacity: [1, 0, 1],
-              transition: {
-                duration: 1.0,
-                times: [0, 0.5, 1],
-                ease: "easeInOut",
               },
-            },
-            tap: {
-              scale: 0.95,
-              opacity: 0.8,
-              transition: { duration: 0.15 },
-            },
-          }}
-          style={{ originX: "50px", originY: "50px" }}
-        />
+            }}
+          />
+        ))}
       </svg>
     </motion.div>
   );

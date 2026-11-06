@@ -234,7 +234,7 @@ export default function App() {
 
     // Update dynamic PWA icon, Favicon, and Web App Manifest per device accent color
     try {
-      const svgIconString = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%"><path d="M 256,32 Q 256,256 480,256 Q 256,256 256,480 Q 256,256 32,256 Q 256,256 256,32 Z" fill="${themeColor}" stroke="${themeColor}" stroke-width="2" stroke-linejoin="round"/></svg>`;
+      const svgIconString = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%"><g fill="${themeColor}"><rect x="88" y="88" width="152" height="152" rx="32"/><rect x="180" y="180" width="152" height="152" rx="32"/><rect x="272" y="272" width="152" height="152" rx="32"/></g></svg>`;
       const svgBlob = new Blob([svgIconString], { type: "image/svg+xml" });
       const svgUrl = URL.createObjectURL(svgBlob);
 
