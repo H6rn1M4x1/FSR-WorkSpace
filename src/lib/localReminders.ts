@@ -74,13 +74,14 @@ interface LocalRemindersData {
 function buildPlannedNotifications(data: LocalRemindersData, now: Date): PlannedNotification[] {
   const planned: PlannedNotification[] = [];
 
-  // --- Turnos: 2hs antes ---
+  // --- Turnos: 2hs antes (si falta menos de 2hs, avisa casi ya — igual que el servidor, que
+  //     manda el aviso apenas detecta que quedan <= 120 min, no solo justo a los 120) ---
   for (const tc of data.turnos) {
     if (tc.estatus || !tc.fecha || !tc.fecha.includes("T")) continue;
     const eventTime = new Date(tc.fecha);
-    if (isNaN(eventTime.getTime())) continue;
-    const reminderAt = new Date(eventTime.getTime() - REMINDER_MINUTES_BEFORE * 60000);
-    if (reminderAt <= now || eventTime <= now) continue;
+    if (isNaN(eventTime.getTime()) || eventTime <= now) continue;
+    const twoHoursBefore = new Date(eventTime.getTime() - REMINDER_MINUTES_BEFORE * 60000);
+    const reminderAt = twoHoursBefore > now ? twoHoursBefore : new Date(now.getTime() + 5000);
     const { date, time } = friendlyDateTime(eventTime);
     const lugarPart = tc.lugar ? ` en ${tc.lugar}` : "";
     const doctorPart = tc.doctor ? ` con ${tc.doctor}` : "";
@@ -92,13 +93,13 @@ function buildPlannedNotifications(data: LocalRemindersData, now: Date): Planned
     });
   }
 
-  // --- Exámenes: 2hs antes ---
+  // --- Exámenes: 2hs antes (mismo criterio que Turnos arriba) ---
   for (const ex of data.examenes) {
     if (!ex.fecha || !ex.hora) continue;
     const eventTime = new Date(`${ex.fecha.split("T")[0]}T${ex.hora}`);
-    if (isNaN(eventTime.getTime())) continue;
-    const reminderAt = new Date(eventTime.getTime() - REMINDER_MINUTES_BEFORE * 60000);
-    if (reminderAt <= now || eventTime <= now) continue;
+    if (isNaN(eventTime.getTime()) || eventTime <= now) continue;
+    const twoHoursBefore = new Date(eventTime.getTime() - REMINDER_MINUTES_BEFORE * 60000);
+    const reminderAt = twoHoursBefore > now ? twoHoursBefore : new Date(now.getTime() + 5000);
     const { date, time } = friendlyDateTime(eventTime);
     const aulaPart = ex.aula ? ` en ${ex.aula}` : "";
     planned.push({

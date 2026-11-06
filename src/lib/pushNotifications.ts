@@ -1,7 +1,6 @@
 import { supabase } from "./supabase";
 import { netlifyFn } from "./apiBase";
 import { Capacitor } from "@capacitor/core";
-import { PushNotifications } from "@capacitor/push-notifications";
 import { LocalNotifications } from "@capacitor/local-notifications";
 
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY || "BKbrXY_FPLAnS9cJyY10YfL51ob8Naxe_D7bLZ6jstiusoE1smwd2jc238eQltRZbEnE6Gwl9_yRY5oes8S19I0";
@@ -16,67 +15,20 @@ function urlBase64ToUint8Array(base64String: string) {
 // El WebView de Android (a diferencia de un navegador real) no implementa la Push API —
 // soporta Service Workers, pero PushManager directamente no existe ahí. El camino "de verdad"
 // sería Firebase Cloud Messaging, pero el proyecto de Firebase de esta app está en un "Starter
-// Tier" de AI Studio que no deja agregar la app Android — así que la vía principal acá es
-// NOTIFICACIONES LOCALES (@capacitor/local-notifications): la app arma de antemano el calendario
-// de avisos (turnos, pagos, salud, comidas — ver src/lib/localReminders.ts) y es el sistema
-// operativo el que los dispara en su horario, sin depender de ningún servidor ni de Google. Este
-// botón intenta ADEMÁS registrarse para FCM por si en algún momento se resuelve lo de Firebase,
-// pero que eso falle no debe impedir que las notificaciones locales (lo que realmente importa)
-// queden activadas.
-async function tryRegisterFcm(): Promise<void> {
-  try {
-    const permStatus = await PushNotifications.requestPermissions();
-    if (permStatus.receive !== "granted") return;
-  } catch {
-    return;
-  }
-
-  return new Promise((resolve) => {
-    let registrationHandle: { remove: () => Promise<void> } | undefined;
-    let errorHandle: { remove: () => Promise<void> } | undefined;
-    const cleanup = async () => {
-      await registrationHandle?.remove();
-      await errorHandle?.remove();
-    };
-
-    PushNotifications.addListener("registration", async (token) => {
-      await cleanup();
-      try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        const authToken = sessionData.session?.access_token;
-        if (!authToken) {
-          resolve();
-          return;
-        }
-        await fetch(netlifyFn("/.netlify/functions/save-fcm-token"), {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
-          body: JSON.stringify({ token: token.value }),
-        });
-      } catch {
-        // best-effort: si falla, las notificaciones locales siguen andando igual.
-      } finally {
-        resolve();
-      }
-    }).then((handle) => { registrationHandle = handle; });
-
-    PushNotifications.addListener("registrationError", async () => {
-      await cleanup();
-      resolve();
-    }).then((handle) => { errorHandle = handle; });
-
-    PushNotifications.register();
-  });
-}
-
-// En nativo, la fuente de verdad es el permiso de notificaciones locales (ver
-// src/lib/localReminders.ts) — FCM se intenta aparte, sin bloquear el resultado.
+// Tier" de AI Studio que no deja agregar la app Android — así que acá se usa NOTIFICACIONES
+// LOCALES (@capacitor/local-notifications): la app arma de antemano el calendario de avisos
+// (turnos, pagos, salud, comidas — ver src/lib/localReminders.ts) y es el sistema operativo el
+// que los dispara en su horario, sin depender de ningún servidor ni de Google.
+//
+// A propósito NO se llama a @capacitor/push-notifications acá: sin google-services.json, Firebase
+// nunca queda inicializado del lado nativo de Android, y PushNotifications.register() termina
+// crasheando la app entera (una excepción nativa de Firebase, no algo que un try/catch de JS
+// pueda atajar) — hasta que Firebase esté realmente disponible, ese plugin se deja sin usar.
 async function enableNativePush(): Promise<{ ok: boolean; reason?: string }> {
   const permStatus = await LocalNotifications.requestPermissions();
   if (permStatus.display !== "granted") {
     return { ok: false, reason: "Permiso de notificaciones denegado." };
   }
-  tryRegisterFcm().catch(() => {});
   return { ok: true };
 }
 
