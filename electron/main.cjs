@@ -62,9 +62,10 @@ function createWindow() {
 
 app.whenReady().then(() => {
   createWindow();
-  // Chequeo silencioso al arrancar — si hay algo nuevo, se descarga solo y queda esperando a que
-  // el usuario confirme el reinicio desde Configuración (ver app-update-status en preload.cjs).
-  autoUpdater.checkForUpdates().catch(() => {});
+  // Sin chequeo automático al arrancar por ahora: el instalador (~250MB) todavía no tiene un feed
+  // real donde publicarse (ver package.json#build.publish y la Card de Configuración), así que
+  // intentarlo solo generaría un error de "no encontrado" cada vez que se abre la app. El puente
+  // de IPC (app-check-for-updates / app-quit-and-install) queda listo para cuando eso se resuelva.
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
