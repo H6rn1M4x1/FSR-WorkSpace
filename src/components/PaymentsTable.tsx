@@ -1651,9 +1651,11 @@ export default function PaymentsTable({
                           ? darkMode
                             ? "bg-red-500/10 text-red-400"
                             : "bg-red-50 text-red-600"
-                          : darkMode
-                            ? "bg-primary/10 text-primary"
-                            : "bg-primary-container text-primary"
+                          : estado === "Pendiente de Pago"
+                            ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                            : estado === "Pagado"
+                              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                              : "bg-slate-200/60 text-slate-500 dark:bg-zinc-800 dark:text-zinc-400"
                       }`}
                     >
                       {estado}
