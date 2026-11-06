@@ -447,6 +447,19 @@ export function UserSettingsModal({
   const [isSendingVerification, setIsSendingVerification] = useState(false);
   const [pushStatus, setPushStatus] = useState<string>("");
   const [isEnablingPush, setIsEnablingPush] = useState(false);
+  const [isPushEnabled, setIsPushEnabled] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    import("../lib/pushNotifications").then(({ isPushNotificationsEnabled }) => {
+      isPushNotificationsEnabled().then((enabled) => {
+        if (!cancelled) setIsPushEnabled(enabled);
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [updateStatus, setUpdateStatus] = useState<string>("");
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [canInstallUpdate, setCanInstallUpdate] = useState(false);
@@ -515,6 +528,7 @@ export function UserSettingsModal({
     try {
       const { enablePushNotifications } = await import("../lib/pushNotifications");
       const result = await enablePushNotifications();
+      setIsPushEnabled(result.ok);
       setPushStatus(
         result.ok
           ? "¡Notificaciones activadas! Vas a recibir avisos aunque la app esté cerrada."
@@ -2162,11 +2176,23 @@ export function UserSettingsModal({
                     <button
                       type="button"
                       onClick={handleEnablePush}
-                      disabled={isEnablingPush}
-                      className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-white font-bold text-xs cursor-pointer transition-all shadow-md flex items-center gap-2 disabled:opacity-50"
+                      disabled={isEnablingPush || isPushEnabled}
+                      className={`px-4 py-2 rounded-xl font-bold text-xs transition-all shadow-md flex items-center gap-2 disabled:opacity-100 ${
+                        isPushEnabled
+                          ? "bg-green-600 text-white cursor-default"
+                          : "bg-primary hover:bg-primary/90 text-white cursor-pointer disabled:opacity-50"
+                      }`}
                     >
-                      {isEnablingPush ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Bell className="w-3.5 h-3.5" />}
-                      <span>{isEnablingPush ? "Activando..." : "Activar Notificaciones"}</span>
+                      {isEnablingPush ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      ) : isPushEnabled ? (
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                      ) : (
+                        <Bell className="w-3.5 h-3.5" />
+                      )}
+                      <span>
+                        {isEnablingPush ? "Activando..." : isPushEnabled ? "Activado" : "Activar Notificaciones"}
+                      </span>
                     </button>
                     <button
                       type="button"

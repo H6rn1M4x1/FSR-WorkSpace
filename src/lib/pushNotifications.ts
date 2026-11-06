@@ -85,6 +85,20 @@ export const enablePushNotifications = async (): Promise<{ ok: boolean; reason?:
   return { ok: true };
 };
 
+// Para que el botón "Activar Notificaciones" refleje si ya están activadas (al abrir el modal,
+// o después de tocarlo) en vez de siempre volver a mostrar "Activar Notificaciones".
+export const isPushNotificationsEnabled = async (): Promise<boolean> => {
+  if (Capacitor.isNativePlatform()) {
+    const permStatus = await LocalNotifications.checkPermissions();
+    return permStatus.display === "granted";
+  }
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) return false;
+  if (Notification.permission !== "granted") return false;
+  const registration = await navigator.serviceWorker.getRegistration();
+  const subscription = await registration?.pushManager.getSubscription();
+  return !!subscription;
+};
+
 export const disablePushNotifications = async (): Promise<void> => {
   // En nativo no hay una "suscripción" de FCM que dar de baja (el token se invalida solo si se
   // desinstala la app) — lo que sí se puede/debe cancelar son los recordatorios locales que ya
