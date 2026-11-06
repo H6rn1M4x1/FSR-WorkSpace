@@ -2,6 +2,7 @@ import { supabase } from "./supabase";
 import { netlifyFn } from "./apiBase";
 import { Capacitor } from "@capacitor/core";
 import { PushNotifications } from "@capacitor/push-notifications";
+import { LocalNotifications } from "@capacitor/local-notifications";
 
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY || "BKbrXY_FPLAnS9cJyY10YfL51ob8Naxe_D7bLZ6jstiusoE1smwd2jc238eQltRZbEnE6Gwl9_yRY5oes8S19I0";
 
@@ -13,15 +14,21 @@ function urlBase64ToUint8Array(base64String: string) {
 }
 
 // El WebView de Android (a diferencia de un navegador real) no implementa la Push API —
-// soporta Service Workers, pero PushManager directamente no existe ahí. Por eso el push "web" de
-// acá abajo nunca va a andar empaquetado: en nativo el camino es Firebase Cloud Messaging vía
-// @capacitor/push-notifications, que entrega un token de FCM en vez de una subscription de Push
-// API — se guarda en una tabla aparte (fcm_tokens) porque el backend lo manda con
-// firebase-admin, no con la librería web-push que ya usa push_subscriptions.
-async function enableNativePush(): Promise<{ ok: boolean; reason?: string }> {
-  const permStatus = await PushNotifications.requestPermissions();
-  if (permStatus.receive !== "granted") {
-    return { ok: false, reason: "Permiso de notificaciones denegado." };
+// soporta Service Workers, pero PushManager directamente no existe ahí. El camino "de verdad"
+// sería Firebase Cloud Messaging, pero el proyecto de Firebase de esta app está en un "Starter
+// Tier" de AI Studio que no deja agregar la app Android — así que la vía principal acá es
+// NOTIFICACIONES LOCALES (@capacitor/local-notifications): la app arma de antemano el calendario
+// de avisos (turnos, pagos, salud, comidas — ver src/lib/localReminders.ts) y es el sistema
+// operativo el que los dispara en su horario, sin depender de ningún servidor ni de Google. Este
+// botón intenta ADEMÁS registrarse para FCM por si en algún momento se resuelve lo de Firebase,
+// pero que eso falle no debe impedir que las notificaciones locales (lo que realmente importa)
+// queden activadas.
+async function tryRegisterFcm(): Promise<void> {
+  try {
+    const permStatus = await PushNotifications.requestPermissions();
+    if (permStatus.receive !== "granted") return;
+  } catch {
+    return;
   }
 
   return new Promise((resolve) => {
@@ -38,27 +45,39 @@ async function enableNativePush(): Promise<{ ok: boolean; reason?: string }> {
         const { data: sessionData } = await supabase.auth.getSession();
         const authToken = sessionData.session?.access_token;
         if (!authToken) {
-          resolve({ ok: false, reason: "Tenés que iniciar sesión primero." });
+          resolve();
           return;
         }
-        const res = await fetch(netlifyFn("/.netlify/functions/save-fcm-token"), {
+        await fetch(netlifyFn("/.netlify/functions/save-fcm-token"), {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
           body: JSON.stringify({ token: token.value }),
         });
-        resolve(res.ok ? { ok: true } : { ok: false, reason: "No se pudo guardar el token en el servidor." });
-      } catch (err: any) {
-        resolve({ ok: false, reason: err?.message || "Error al guardar el token." });
+      } catch {
+        // best-effort: si falla, las notificaciones locales siguen andando igual.
+      } finally {
+        resolve();
       }
     }).then((handle) => { registrationHandle = handle; });
 
-    PushNotifications.addListener("registrationError", async (err) => {
+    PushNotifications.addListener("registrationError", async () => {
       await cleanup();
-      resolve({ ok: false, reason: err.error || "Error al registrar notificaciones push." });
+      resolve();
     }).then((handle) => { errorHandle = handle; });
 
     PushNotifications.register();
   });
+}
+
+// En nativo, la fuente de verdad es el permiso de notificaciones locales (ver
+// src/lib/localReminders.ts) — FCM se intenta aparte, sin bloquear el resultado.
+async function enableNativePush(): Promise<{ ok: boolean; reason?: string }> {
+  const permStatus = await LocalNotifications.requestPermissions();
+  if (permStatus.display !== "granted") {
+    return { ok: false, reason: "Permiso de notificaciones denegado." };
+  }
+  tryRegisterFcm().catch(() => {});
+  return { ok: true };
 }
 
 // Call this from a button like "Activar notificaciones" in Ajustes/UserSettings.
@@ -115,9 +134,14 @@ export const enablePushNotifications = async (): Promise<{ ok: boolean; reason?:
 };
 
 export const disablePushNotifications = async (): Promise<void> => {
-  // En nativo no hay una "suscripción" de Push API que dar de baja — el token de FCM se invalida
-  // solo si se desinstala la app.
-  if (Capacitor.isNativePlatform()) return;
+  // En nativo no hay una "suscripción" de FCM que dar de baja (el token se invalida solo si se
+  // desinstala la app) — lo que sí se puede/debe cancelar son los recordatorios locales que ya
+  // estén programados.
+  if (Capacitor.isNativePlatform()) {
+    const { cancelAllLocalReminders } = await import("./localReminders");
+    await cancelAllLocalReminders();
+    return;
+  }
   if (!("serviceWorker" in navigator)) return;
   const registration = await navigator.serviceWorker.getRegistration();
   const subscription = await registration?.pushManager.getSubscription();

@@ -13,6 +13,7 @@ import { reconcileCollection, sanitizeSyncPayload, saveStateToServer } from "./u
 import { getLocalDateString } from "./utils/date";
 import { useToast } from "./context/ToastContext";
 import { initAuth, logout, auth, consumeGoogleReauthNotice, initNativeGoogleAuthListener } from "./lib/supabase";
+import { scheduleLocalReminders } from "./lib/localReminders";
 import { WorkspaceService } from "./lib/workspace";
 import { Eye, EyeOff, Settings, Folder, RefreshCw } from "lucide-react";
 import LoginScreen from "./components/LoginScreen";
@@ -1344,6 +1345,29 @@ export default function App() {
   useEffect(() => {
     initNativeGoogleAuthListener();
   }, []);
+
+  // Empaquetado (Capacitor): reprograma los recordatorios locales (turnos, pagos, salud, comidas
+  // — ver src/lib/localReminders.ts) cada vez que cambian los datos de origen. Debounced porque
+  // estos arrays se actualizan seguido durante la sincronización inicial; no hace nada en la web
+  // (scheduleLocalReminders ya chequea Capacitor.isNativePlatform() puertas adentro).
+  const localRemindersTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (localRemindersTimeoutRef.current) clearTimeout(localRemindersTimeoutRef.current);
+    localRemindersTimeoutRef.current = setTimeout(() => {
+      scheduleLocalReminders({
+        turnos: turnosCompromisos,
+        payments: detailedPayments,
+        examenes,
+        medicamentos: medicamentosDetallados,
+        disponibilidad: disponibilidadMedicamentos,
+        organizacionSemanal,
+        platos,
+      });
+    }, 3000);
+    return () => {
+      if (localRemindersTimeoutRef.current) clearTimeout(localRemindersTimeoutRef.current);
+    };
+  }, [turnosCompromisos, detailedPayments, examenes, medicamentosDetallados, disponibilidadMedicamentos, organizacionSemanal, platos]);
 
   // Firebase auth state hook and proactive connection check
   useEffect(() => {
