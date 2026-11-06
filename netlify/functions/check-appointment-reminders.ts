@@ -3,6 +3,7 @@ import { initializeApp, getApps } from "firebase/app";
 import { getFirestore, collection, getDocs, doc, updateDoc } from "firebase/firestore";
 import { createClient } from "@supabase/supabase-js";
 import webpush from "web-push";
+import { sendFcmToTokens } from "./_lib/fcm";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAdw038U48NW7DLzaXYkd09OkAYGA2zrEM",
@@ -36,24 +37,36 @@ async function sendWhatsapp(phone: string, apiKey: string, message: string) {
 async function sendPushToUser(email: string, title: string, body: string) {
   const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
   const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const VAPID_PUBLIC_KEY = process.env.VITE_VAPID_PUBLIC_KEY;
-  const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return;
-
-  webpush.setVapidDetails(
-    process.env.VAPID_SUBJECT || "mailto:hernanmaximiliano10@gmail.com",
-    VAPID_PUBLIC_KEY,
-    VAPID_PRIVATE_KEY
-  );
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return;
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-  const { data: subs } = await supabase.from("push_subscriptions").select("endpoint,p256dh,auth").eq("user_id", email);
-  if (!subs || subs.length === 0) return;
 
-  const payload = JSON.stringify({ title, body, category: "general" });
-  await Promise.allSettled(
-    subs.map((s) => webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload))
-  );
+  const VAPID_PUBLIC_KEY = process.env.VITE_VAPID_PUBLIC_KEY;
+  const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
+  if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+    webpush.setVapidDetails(
+      process.env.VAPID_SUBJECT || "mailto:hernanmaximiliano10@gmail.com",
+      VAPID_PUBLIC_KEY,
+      VAPID_PRIVATE_KEY
+    );
+    const { data: subs } = await supabase.from("push_subscriptions").select("endpoint,p256dh,auth").eq("user_id", email);
+    if (subs && subs.length > 0) {
+      const payload = JSON.stringify({ title, body, category: "general" });
+      await Promise.allSettled(
+        subs.map((s) => webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload))
+      );
+    }
+  }
+
+  // Mismo aviso para quien tenga la app empaquetada (Android) — ver netlify/functions/_lib/fcm.ts.
+  const { data: fcmRows } = await supabase.from("fcm_tokens").select("id,token").eq("user_id", email);
+  if (fcmRows && fcmRows.length > 0) {
+    const fcmResult = await sendFcmToTokens(fcmRows.map((r) => r.token), { title, body });
+    if (fcmResult.invalidTokenIndexes.length > 0) {
+      const staleIds = fcmResult.invalidTokenIndexes.map((i) => fcmRows[i].id);
+      await supabase.from("fcm_tokens").delete().in("id", staleIds);
+    }
+  }
 }
 
 function getArgentinaNow(): { hour: number; dateStr: string } {

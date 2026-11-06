@@ -1,6 +1,7 @@
 import type { Handler } from "@netlify/functions";
 import { createClient } from "@supabase/supabase-js";
 import webpush from "web-push";
+import { sendFcmToTokens } from "./_lib/fcm";
 
 export const handler: Handler = async (event) => {
   try {
@@ -46,7 +47,17 @@ export const handler: Handler = async (event) => {
     if (error) {
       return { statusCode: 500, body: `Error leyendo suscripciones: ${error.message}` };
     }
-    if (!subs || subs.length === 0) {
+
+    const { data: fcmRows, error: fcmError } = await supabase
+      .from("fcm_tokens")
+      .select("id,token")
+      .eq("user_id", userId);
+
+    if (fcmError) {
+      return { statusCode: 500, body: `Error leyendo tokens de FCM: ${fcmError.message}` };
+    }
+
+    if ((!subs || subs.length === 0) && (!fcmRows || fcmRows.length === 0)) {
       return { statusCode: 404, body: "No hay ninguna suscripción activa para este usuario." };
     }
 
@@ -57,7 +68,7 @@ export const handler: Handler = async (event) => {
     });
 
     const results = await Promise.allSettled(
-      subs.map((s) =>
+      (subs || []).map((s) =>
         webpush.sendNotification(
           { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
           payload
@@ -70,7 +81,31 @@ export const handler: Handler = async (event) => {
       .filter((r): r is PromiseRejectedResult => r.status === "rejected")
       .map((r) => String(r.reason?.body || r.reason?.message || r.reason));
 
-    return { statusCode: 200, body: JSON.stringify({ ok: true, sent, total: subs.length, failed }) };
+    let fcmSent = 0;
+    let fcmConfigured = true;
+    if (fcmRows && fcmRows.length > 0) {
+      const fcmResult = await sendFcmToTokens(
+        fcmRows.map((r) => r.token),
+        { title: "FSR Workspace", body: "Notificación de prueba: si ves esto, el push funciona con la app cerrada." }
+      );
+      fcmSent = fcmResult.sent;
+      fcmConfigured = fcmResult.configured;
+      if (fcmResult.invalidTokenIndexes.length > 0) {
+        const staleIds = fcmResult.invalidTokenIndexes.map((i) => fcmRows[i].id);
+        await supabase.from("fcm_tokens").delete().in("id", staleIds);
+      }
+    }
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        ok: true,
+        sent: sent + fcmSent,
+        total: (subs?.length || 0) + (fcmRows?.length || 0),
+        failed,
+        fcmConfigured,
+      }),
+    };
   } catch (err: any) {
     return { statusCode: 500, body: `Error inesperado en la función: ${err?.message || String(err)}` };
   }
