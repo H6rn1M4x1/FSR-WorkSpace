@@ -2246,7 +2246,12 @@ export function UserSettingsModal({
               </div>
 
               {/* App Updates Card — solo tiene sentido en el APK/exe empaquetados; en la web no
-                  hay nada que "actualizar", Netlify ya despliega la última versión sola. */}
+                  hay nada que "actualizar", Netlify ya despliega la última versión sola. El botón
+                  de buscar/instalar solo se muestra en Android (hay un .apk chico hosteado en
+                  public/downloads/ para compararlo); en Windows el instalador (~250MB) todavía no
+                  tiene dónde alojarse para un feed automático, así que ahí se avisa que las
+                  actualizaciones siguen llegando por chat en vez de ofrecer un botón que iba a
+                  fallar siempre. */}
               {(isRunningInElectron() || isRunningInCapacitor()) && (
                 <div className="p-5 rounded-2xl border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 space-y-4">
                   <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -2264,29 +2269,37 @@ export function UserSettingsModal({
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      {canInstallUpdate ? (
-                        <button
-                          type="button"
-                          onClick={handleInstallUpdate}
-                          className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-white font-bold text-xs cursor-pointer transition-all shadow-md flex items-center gap-2"
-                        >
-                          <RefreshCw className="w-3.5 h-3.5" />
-                          <span>Reiniciar e instalar</span>
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={handleCheckForUpdates}
-                          disabled={isCheckingUpdate}
-                          className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-white font-bold text-xs cursor-pointer transition-all shadow-md flex items-center gap-2 disabled:opacity-50"
-                        >
-                          {isCheckingUpdate ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-                          <span>{isCheckingUpdate ? "Buscando..." : "Buscar actualizaciones"}</span>
-                        </button>
-                      )}
-                    </div>
+                    {isRunningInCapacitor() && (
+                      <div className="flex items-center gap-2">
+                        {canInstallUpdate ? (
+                          <button
+                            type="button"
+                            onClick={handleInstallUpdate}
+                            className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-white font-bold text-xs cursor-pointer transition-all shadow-md flex items-center gap-2"
+                          >
+                            <RefreshCw className="w-3.5 h-3.5" />
+                            <span>Reiniciar e instalar</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={handleCheckForUpdates}
+                            disabled={isCheckingUpdate}
+                            className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-white font-bold text-xs cursor-pointer transition-all shadow-md flex items-center gap-2 disabled:opacity-50"
+                          >
+                            {isCheckingUpdate ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                            <span>{isCheckingUpdate ? "Buscando..." : "Buscar actualizaciones"}</span>
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
+
+                  {isRunningInElectron() && (
+                    <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 p-3 rounded-xl bg-slate-100 dark:bg-zinc-800">
+                      Por ahora las actualizaciones de Windows te las mandamos directo por este chat — todavía no hay dónde alojar el instalador para que se bajen solas.
+                    </p>
+                  )}
 
                   {updateStatus && (
                     <p className="text-xs font-bold text-primary dark:text-primary p-3 rounded-xl bg-primary-container border border-primary/30">
