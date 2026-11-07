@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, Suspense, lazy } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { StorageService, AestheticStorageService, setStoredDataSilent, setSyncUserId } from "./lib/storage";
 import { uiSounds } from "./lib/sounds";
-import { subscribeToCategory, saveItemToFirestore, refetchCategory } from "./lib/firestoreSyncService";
+import { subscribeToCategory, saveItemToFirestore, deleteItemFromFirestore, refetchCategory } from "./lib/firestoreSyncService";
 import { clearPersistedVaultUnlock } from "./lib/vaultCrypto";
 import {
   subscribeToItemsSharedWithMe,
@@ -405,6 +405,100 @@ export default function App() {
       unsubEdit();
     };
   }, []);
+
+  // Tildar (Pagar/Marcar realizado/Marcar hecha) y eliminar desde la tarjeta de detalle del dock
+  // (ver DOCK_ITEM_CAPABILITIES en src/lib/dockSnapshot.ts): a diferencia de "editar", esto no
+  // necesita abrir ningún formulario — es el mismo guardado de dos líneas (actualizar el campo +
+  // saveItemToFirestore / sacarlo + deleteItemFromFirestore) que ya usan PaymentsTable,
+  // AppointmentsView y AcademicView para sus propios checkboxes y botones de borrar, copiado acá
+  // para que funcione igual sin tener que montar esos componentes dentro del dock.
+  useEffect(() => {
+    const dockBridge = (
+      window as unknown as {
+        FSR_ELECTRON_DOCK?: {
+          onQuickToggle: (cb: (payload: { kind: string; itemId: string }) => void) => () => void;
+          onQuickDelete: (cb: (payload: { kind: string; itemId: string }) => void) => () => void;
+        };
+      }
+    ).FSR_ELECTRON_DOCK;
+    if (!dockBridge) return;
+    // Nota: acá todavía no está declarado "userProfile" (se declara más abajo, junto al resto del
+    // estado de Configuración de Usuario) — a diferencia del efecto que arma el snapshot del dock,
+    // este usa solo "user?.email" para no depender de algo fuera de orden.
+    const userId = user?.email || "hernanmaximiliano10@gmail.com";
+
+    const unsubToggle = dockBridge.onQuickToggle(({ kind, itemId }) => {
+      if (kind === "detailedPayment") {
+        setDetailedPayments((prev) => {
+          const found = prev.find((p) => p.id === itemId);
+          if (!found) return prev;
+          const updated = { ...found, pago: !found.pago };
+          saveItemToFirestore(userId, "detailed_payments", updated).catch(() => {});
+          return prev.map((p) => (p.id === itemId ? updated : p));
+        });
+      } else if (kind === "invoice") {
+        setInvoices((prev) => {
+          const found = prev.find((i) => i.id === itemId);
+          if (!found) return prev;
+          const updated = { ...found, paid: !found.paid };
+          saveItemToFirestore(userId, "invoices", updated).catch(() => {});
+          return prev.map((i) => (i.id === itemId ? updated : i));
+        });
+      } else if (kind === "turno") {
+        setTurnosCompromisos((prev) => {
+          const found = prev.find((t) => t.id === itemId);
+          if (!found) return prev;
+          const updated = { ...found, estatus: !found.estatus };
+          saveItemToFirestore(userId, "turnos_compromisos", updated).catch(() => {});
+          return prev.map((t) => (t.id === itemId ? updated : t));
+        });
+      } else if (kind === "task") {
+        setTasks((prev) => {
+          const found = prev.find((t) => t.id === itemId);
+          if (!found) return prev;
+          const updated = { ...found, completed: !found.completed };
+          saveItemToFirestore(userId, "tasks", updated).catch(() => {});
+          return prev.map((t) => (t.id === itemId ? updated : t));
+        });
+      }
+    });
+
+    const unsubDelete = dockBridge.onQuickDelete(({ kind, itemId }) => {
+      if (kind === "detailedPayment") {
+        deleteItemFromFirestore(userId, "detailed_payments", itemId).catch(() => {});
+        setDetailedPayments((prev) => prev.filter((p) => p.id !== itemId));
+      } else if (kind === "invoice") {
+        deleteItemFromFirestore(userId, "invoices", itemId).catch(() => {});
+        setInvoices((prev) => prev.filter((i) => i.id !== itemId));
+      } else if (kind === "turno") {
+        setTurnosCompromisos((prev) => {
+          const found = prev.find((t) => t.id === itemId);
+          deleteItemFromFirestore(userId, "turnos_compromisos", itemId).catch(() => {});
+          // Mismo paso extra que el borrado real de Turnos: si el turno tenía un evento de Google
+          // Calendar enlazado, también se borra ahí (si hay sesión de Google). TurnoCompromiso no
+          // declara este campo en types.ts (mismo gap preexistente que ya tiene AppointmentsView.tsx).
+          const googleCalendarEventId = (found as unknown as { googleCalendarEventId?: string } | undefined)?.googleCalendarEventId;
+          if (googleCalendarEventId && token) {
+            import("./lib/workspace").then(({ WorkspaceService }) => {
+              WorkspaceService.deleteCalendarEvent(googleCalendarEventId, token).catch(() => {});
+            });
+          }
+          return prev.filter((t) => t.id !== itemId);
+        });
+      } else if (kind === "examen") {
+        deleteItemFromFirestore(userId, "examenes", itemId).catch(() => {});
+        setExamenes((prev) => prev.filter((e) => e.id !== itemId));
+      } else if (kind === "task") {
+        deleteItemFromFirestore(userId, "tasks", itemId).catch(() => {});
+        setTasks((prev) => prev.filter((t) => t.id !== itemId));
+      }
+    });
+
+    return () => {
+      unsubToggle();
+      unsubDelete();
+    };
+  }, [user?.email, token]);
 
   // Botón "+" de la miniatura de Notas Rápidas de Inicio — navega a Notas Rápidas con el
   // formulario de "nueva nota" ya abierto (mismo mecanismo que "Agendar"/editar de arriba).
