@@ -21,6 +21,7 @@ import Logo from "./components/Logo";
 import TopNavbar, { SUBMENUS_BY_TAB } from "./components/TopNavbar";
 import { NavPanelContext, type NavPanelRow } from "./lib/navPanelContext";
 import { DEFAULT_TURNO_CATEGORIAS, getTurnoCategoryLabel } from "./lib/turnoCategories";
+import { buildDockSnapshot } from "./lib/dockSnapshot";
 import HomeView from "./components/HomeView";
 const AcademicView = lazy(() => import("./components/AcademicView"));
 const MealsView = lazy(() => import("./components/MealsView"));
@@ -482,6 +483,25 @@ export default function App() {
   // Exámenes de práctica armados/corregidos por IA — colección propia ("ai_exams", NO "examenes":
   // esa ya existe para el calendario de exámenes reales de la facultad, es un concepto distinto).
   const [exams, setExams] = useState<Exam[]>([]);
+
+  // Dock flotante de Electron (ver electron/main.cjs y src/components/DockApp.tsx): esta ventana
+  // (la principal) es la única que tiene toda esta data ya cargada, así que es la que arma el
+  // resumen liviano y se lo manda al dock por IPC cada vez que algo relevante cambia. En web/móvil
+  // "FSR_ELECTRON_DOCK" no existe (solo lo expone electron/preload.cjs), así que esto no hace nada ahí.
+  useEffect(() => {
+    const dockBridge = (window as unknown as { FSR_ELECTRON_DOCK?: { pushSnapshot: (s: unknown) => void } })
+      .FSR_ELECTRON_DOCK;
+    if (!dockBridge) return;
+    const snapshot = buildDockSnapshot({
+      detailedPayments,
+      invoices,
+      turnosCompromisos,
+      medicamentosDetallados,
+      examenes,
+      tasks,
+    });
+    dockBridge.pushSnapshot(snapshot);
+  }, [detailedPayments, invoices, turnosCompromisos, medicamentosDetallados, examenes, tasks]);
 
   // User Settings State
   const [isUserSettingsOpen, setIsUserSettingsOpen] = useState(false);

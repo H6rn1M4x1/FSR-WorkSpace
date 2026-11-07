@@ -3,7 +3,18 @@
 @plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:where(.dark, .dark *));
-/* 
+
+/* Dock flotante de Electron (ventana frameless y transparente — ver electron/main.cjs y
+   src/components/DockApp.tsx): sin esto, el fondo normal de la app taparía la transparencia de
+   la ventana con un rectángulo oscuro en vez de mostrar solo la píldora del dock. */
+html.dock-mode,
+html.dock-mode body {
+  background: transparent !important;
+  margin: 0;
+  overflow: hidden;
+}
+
+/*
 ==========================================================================
   UNIFIED GOOGLE MATERIAL COLOR SYSTEM & DESIGN TOKENS
 ==========================================================================
