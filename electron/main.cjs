@@ -1,6 +1,7 @@
 const { app, BrowserWindow, shell, ipcMain, Tray, Menu, screen, nativeImage } = require("electron");
 const path = require("path");
 const fs = require("fs");
+const { execFile } = require("child_process");
 // "electron-serve" es un paquete ESM puro ("type": "module") — al bundlearlo con esbuild a CJS,
 // un require() directo trae el namespace del módulo (con el export default colgando de
 // ".default"), no la función en sí, a diferencia de un "import serve from" en código ESM real.
@@ -132,21 +133,102 @@ function createDockWindow() {
   });
 }
 
-// Esconde el dock cuando la propia ventana principal está maximizada y enfocada (ahí ya estás
-// mirando toda esa misma data a pantalla completa, el dock solo taparía algo). Dejamos pendiente
-// detectar OTRAS apps por encima (punto 5 pedido): hacerlo bien requeriría un módulo nativo para
-// consultar qué ventana del sistema operativo está realmente arriba, que no agregamos todavía
-// para no sumarle riesgo al empaquetado — ver la respuesta al usuario.
+// Esconde el dock cuando: (a) la propia ventana principal está maximizada y enfocada, o (b) hay
+// OTRA ventana del sistema por encima tapando esa misma zona de la pantalla (punto 5 pedido).
+//
+// Para (b) hace falta preguntarle al sistema operativo qué ventana está realmente arriba — nada
+// de esto lo sabe Electron solo. Se evaluó usar el paquete "active-win" (npm), pero es un
+// complemento nativo (N-API) que: (1) es ESM puro, (2) descarga un binario prearmado DISTINTO
+// por plataforma durante el install, así que el que se bajó acá (Linux) no sirve para el
+// instalador de Windows, y habría que resolver ese binario de Windows aparte sin poder probar que
+// arranca en un Windows real desde este entorno, y (3) trae ~114 paquetes transitivos con
+// vulnerabilidades conocidas. Se descartó por ese riesgo de romper el empaquetado sin forma de
+// verificarlo acá. En su lugar, esto usa PowerShell (ya viene con Windows, cero dependencias
+// nuevas) para llamar a GetForegroundWindow/GetWindowRect de la API de Windows — mismo resultado,
+// sin agregar nada al paquete.
+const FOREGROUND_PROBE_SCRIPT = `
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public class FsrForegroundProbe {
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+  [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hWnd);
+  public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
+}
+"@
+$h = [FsrForegroundProbe]::GetForegroundWindow()
+$r = New-Object FsrForegroundProbe+RECT
+[FsrForegroundProbe]::GetWindowRect($h, [ref]$r) | Out-Null
+[uint32]$procId = 0
+[FsrForegroundProbe]::GetWindowThreadProcessId($h, [ref]$procId) | Out-Null
+$min = [FsrForegroundProbe]::IsIconic($h)
+Write-Output "$procId,$($r.Left),$($r.Top),$($r.Right),$($r.Bottom),$min"
+`.trim();
+
+// Último dato que se tiene de "qué ventana está arriba" — lo actualiza el sondeo de PowerShell de
+// más abajo. null = todavía no se sabe (o el sondeo falló), y entonces no se asume que algo tapa.
+let lastForegroundWindow = null;
+let foregroundProbeTimer = null;
+
+function rectsOverlap(a, b) {
+  return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+}
+
 function updateDockAutoHide() {
   if (!dockWindow || dockWindow.isDestroyed()) return;
-  const shouldHide = Boolean(
+
+  const ownWindowCoversIt = Boolean(
     mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible() && mainWindow.isMaximized() && mainWindow.isFocused()
   );
-  if (shouldHide) {
+
+  let otherAppCoversIt = false;
+  if (lastForegroundWindow && !lastForegroundWindow.minimized && lastForegroundWindow.pid !== process.pid) {
+    const b = dockWindow.getBounds();
+    const dockRect = { left: b.x, top: b.y, right: b.x + b.width, bottom: b.y + b.height };
+    otherAppCoversIt = rectsOverlap(lastForegroundWindow.rect, dockRect);
+  }
+
+  if (ownWindowCoversIt || otherAppCoversIt) {
     dockWindow.hide();
   } else if (!dockWindow.isVisible()) {
     dockWindow.showInactive();
   }
+}
+
+// Solo tiene sentido en Windows — en otras plataformas no hay PowerShell, y de todos modos el
+// instalador que se distribuye es exclusivamente para Windows.
+function startForegroundWindowWatcher() {
+  if (process.platform !== "win32") return;
+
+  const poll = () => {
+    execFile(
+      "powershell.exe",
+      ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", FOREGROUND_PROBE_SCRIPT],
+      { windowsHide: true, timeout: 3000 },
+      (err, stdout) => {
+        if (!err && stdout) {
+          try {
+            const [pidStr, left, top, right, bottom, minStr] = stdout.trim().split(",");
+            lastForegroundWindow = {
+              pid: Number(pidStr),
+              rect: { left: Number(left), top: Number(top), right: Number(right), bottom: Number(bottom) },
+              minimized: minStr.trim().toLowerCase() === "true",
+            };
+            updateDockAutoHide();
+          } catch {
+            // Salida inesperada — se ignora este sondeo, el dock queda como estaba.
+          }
+        }
+        // Encadenado (no setInterval a secas): así, si una corrida tarda más de lo normal, no se
+        // amontonan procesos de powershell.exe uno atrás del otro.
+        foregroundProbeTimer = setTimeout(poll, 2500);
+      }
+    );
+  };
+
+  poll();
 }
 
 function createTray() {
@@ -291,6 +373,7 @@ app.whenReady().then(() => {
   createMainWindow(startHidden);
   createDockWindow();
   createTray();
+  startForegroundWindowWatcher();
   // Sin chequeo automático al arrancar por ahora: el instalador (~250MB) todavía no tiene un feed
   // real donde publicarse (ver package.json#build.publish y la Card de Configuración), así que
   // intentarlo solo generaría un error de "no encontrado" cada vez que se abre la app. El puente
@@ -307,6 +390,7 @@ app.whenReady().then(() => {
 
 app.on("before-quit", () => {
   app.isQuitting = true;
+  if (foregroundProbeTimer) clearTimeout(foregroundProbeTimer);
 });
 
 app.on("window-all-closed", () => {

@@ -158,4 +158,8 @@ export const uiSounds = {
       { freq: 740, at: 0, duration: 0.08, gain: 0.05, type: "sine" },
       { freq: 980, at: 0.09, duration: 0.14, gain: 0.05, type: "sine" },
     ]),
+
+  // Pasar el mouse por encima de un ítem (ej. las tarjetas del dock flotante): un tick muy breve y
+  // suave — pensado para sonar seguido sin cansar, a diferencia del resto de los sonidos.
+  hover: () => playTones([{ freq: 900, at: 0, duration: 0.03, gain: 0.02, type: "sine" }]),
 };
