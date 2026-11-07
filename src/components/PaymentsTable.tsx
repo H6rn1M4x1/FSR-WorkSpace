@@ -1048,7 +1048,7 @@ export default function PaymentsTable({
     </motion.div>
   );
 
-  const blockConDondePagar = (
+  const blockConQuePagar = (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
@@ -1087,36 +1087,22 @@ export default function PaymentsTable({
           setMetodoPago(metodoPorTipo[card.tipo]);
         }}
       />
-      <div>
-        <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
-          ¿Dónde pagar?
-        </label>
-        <RichTextEditor
-          value={dondePagar}
-          onChange={setDondePagar}
-          placeholder="Ej: sucursal, app, página web..."
-        />
-      </div>
     </motion.div>
   );
 
-  const blockContenido = (
+  const blockDondePagar = (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
-      className="rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-black/20 p-3.5"
     >
-      <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1.5">
-        <FileText className="w-3 h-3" />
-        Contenido / Notas
+      <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
+        ¿Dónde pagar?
       </label>
-      <textarea
-        value={observaciones}
-        onChange={(e) => setObservaciones(e.target.value)}
-        rows={4}
-        placeholder="Agregá un detalle, referencia o cualquier nota sobre este pago..."
-        className="w-full bg-transparent outline-none resize-none text-[12.5px] leading-snug text-slate-800 dark:text-zinc-200 placeholder:text-slate-400 dark:placeholder:text-zinc-600"
+      <RichTextEditor
+        value={dondePagar}
+        onChange={setDondePagar}
+        placeholder="Ej: sucursal, app, página web..."
       />
     </motion.div>
   );
@@ -1816,30 +1802,31 @@ export default function PaymentsTable({
               {/* Scrollable Content */}
               <div className="flex-1 overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-zinc-200 dark:scrollbar-thumb-zinc-800">
                 <form onSubmit={handleAddSubmit} className="pb-1">
-                  {/* Mobile: todo apilado en una sola columna, en el orden pedido. */}
+                  {/* Mobile: todo apilado en una sola columna — ¿Dónde pagar? sigue justo debajo
+                      de ¿Con qué pagar?. */}
                   <div className="flex flex-col gap-4 lg:hidden">
                     {blockSwitches}
                     {blockDescripcion}
                     {blockCategoriaMonto}
                     {blockFechas}
-                    {blockConDondePagar}
-                    {blockContenido}
+                    {blockConQuePagar}
+                    {blockDondePagar}
                     {blockUploads}
                   </div>
 
                   {/* Desktop: dos columnas independientes (cada una con su propio alto, sin
-                      estirarse para igualar a la otra) — el layout original. */}
+                      estirarse para igualar a la otra) — ¿Dónde pagar? va debajo de los uploads. */}
                   <div className="hidden lg:grid lg:grid-cols-[1.08fr_1fr] gap-5 items-start">
                     <div className="space-y-4">
                       {blockDescripcion}
                       {blockCategoriaMonto}
                       {blockFechas}
-                      {blockConDondePagar}
+                      {blockConQuePagar}
                     </div>
                     <div className="space-y-3.5">
                       {blockSwitches}
-                      {blockContenido}
                       {blockUploads}
+                      {blockDondePagar}
                     </div>
                   </div>
                 </form>

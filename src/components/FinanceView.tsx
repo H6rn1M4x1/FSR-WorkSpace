@@ -742,6 +742,27 @@ export default function FinanceView({
     setMergedEditPaymentId(localEditPaymentId);
     setMergedEditPaymentNonce((n) => n + 1);
   }, [localEditPaymentNonce]);
+
+  // Botón "Agregar Pago" junto al título de "Facturas y Vencimientos": mismo mecanismo que el
+  // "Agendar" de Inicio, pero disparado localmente — navega a "Gastos Mensuales" y abre el
+  // formulario de alta ya ahí, para no tener que ir a buscar el botón "+" de esa otra pestaña.
+  const [localQuickAddNonce, setLocalQuickAddNonce] = useState(0);
+  const handleQuickAddPaymentCard = () => {
+    setActiveTab("todos_pagos");
+    setLocalQuickAddNonce((n) => n + 1);
+  };
+  const [mergedQuickAddNonce, setMergedQuickAddNonce] = useState(0);
+  const [mergedQuickAddDate, setMergedQuickAddDate] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    if (!autoOpenQuickAdd) return;
+    setMergedQuickAddDate(autoOpenQuickAddDate);
+    setMergedQuickAddNonce((n) => n + 1);
+  }, [autoOpenQuickAdd]);
+  useEffect(() => {
+    if (!localQuickAddNonce) return;
+    setMergedQuickAddDate(undefined);
+    setMergedQuickAddNonce((n) => n + 1);
+  }, [localQuickAddNonce]);
   const [cotizacionesSubTab, setCotizacionesSubTab] = useState<
     "acciones" | "cripto"
   >("acciones");
@@ -2241,13 +2262,22 @@ export default function FinanceView({
                   }`}
                 >
                   <div>
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-2">
-                        <DollarSign className="w-5 h-5 text-primary" />
-                        <h3 className="font-bold text-md">
+                    <div className="flex items-center justify-between mb-4 gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <DollarSign className="w-5 h-5 text-primary shrink-0" />
+                        <h3 className="font-bold text-md truncate">
                           Facturas y Vencimientos
                         </h3>
                       </div>
+                      <button
+                        type="button"
+                        onClick={handleQuickAddPaymentCard}
+                        title="Agregar pago (en Gastos Mensuales)"
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-primary hover:bg-primary-hover text-white dark:text-blue-950 text-[11px] font-bold cursor-pointer transition-all shadow-sm shrink-0"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Agregar</span>
+                      </button>
                     </div>
 
                     {/* Selected Date Header Banner */}
@@ -4147,8 +4177,8 @@ export default function FinanceView({
                       darkMode={darkMode}
                       token={token}
                       userEmail={userEmail}
-                      autoOpenQuickAdd={autoOpenQuickAdd}
-                      autoOpenQuickAddDate={autoOpenQuickAddDate}
+                      autoOpenQuickAdd={mergedQuickAddNonce}
+                      autoOpenQuickAddDate={mergedQuickAddDate}
                       onQuickAddHandled={onQuickAddHandled}
                       autoOpenEditId={mergedEditPaymentId}
                       autoOpenEditNonce={mergedEditPaymentNonce}
