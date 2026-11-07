@@ -41,6 +41,10 @@ contextBridge.exposeInMainWorld("FSR_ELECTRON_DOCK", {
   // en electron/main.cjs) — category es una de las claves de QUICK_ADD_TARGETS en App.tsx.
   quickAdd: (category) => ipcRenderer.send("dock-quick-add", category),
   quickEdit: (category, itemId) => ipcRenderer.send("dock-quick-edit", { category, itemId }),
+  // Tildar (Pagar/Marcar realizado/Marcar hecha) y eliminar en el momento, sin pasar por la app —
+  // kind es uno de los DockItemKind de src/lib/dockSnapshot.ts.
+  quickToggle: (kind, itemId) => ipcRenderer.send("dock-quick-toggle", { kind, itemId }),
+  quickDelete: (kind, itemId) => ipcRenderer.send("dock-quick-delete", { kind, itemId }),
   onSnapshot: (callback) => {
     const listener = (_event, snapshot) => callback(snapshot);
     ipcRenderer.on("dock-snapshot", listener);
@@ -62,5 +66,15 @@ contextBridge.exposeInMainWorld("FSR_ELECTRON_DOCK", {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on("dock-quick-edit", listener);
     return () => ipcRenderer.removeListener("dock-quick-edit", listener);
+  },
+  onQuickToggle: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on("dock-quick-toggle", listener);
+    return () => ipcRenderer.removeListener("dock-quick-toggle", listener);
+  },
+  onQuickDelete: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on("dock-quick-delete", listener);
+    return () => ipcRenderer.removeListener("dock-quick-delete", listener);
   },
 });

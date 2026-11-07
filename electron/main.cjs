@@ -354,6 +354,22 @@ ipcMain.on("dock-quick-edit", (_event, payload) => {
   }
 });
 
+// Tildar (Pagar/Marcar realizado/Marcar hecha) y eliminar desde la tarjeta de detalle del dock:
+// a diferencia de "editar", esto NO necesita mostrar la ventana principal — es un cambio simple
+// (un booleano, o sacar el registro) que la ventana oculta puede guardar por su cuenta igual que
+// si lo hubiera hecho el usuario desde la app (mismo guardado/sync, ver el efecto en App.tsx).
+ipcMain.on("dock-quick-toggle", (_event, payload) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("dock-quick-toggle", payload);
+  }
+});
+
+ipcMain.on("dock-quick-delete", (_event, payload) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("dock-quick-delete", payload);
+  }
+});
+
 // Selector de monitor (punto 6 pedido por el usuario) — el dock pide la lista y manda el id
 // elegido; acá se persiste y se reposiciona ya mismo con el tamaño que la ventana tenga en ese
 // momento (si está colapsada o expandida).

@@ -13,12 +13,17 @@ import {
   ChevronRight,
   X,
   Plus,
+  Pencil,
+  Trash2,
+  Calendar as CalendarIcon,
+  Home,
+  type LucideIcon,
 } from "lucide-react";
 import Logo from "./Logo";
 import { AestheticStorageService } from "../lib/storage";
 import { uiSounds } from "../lib/sounds";
 import { getLocalDateString } from "../utils/date";
-import type { DockEditKind, DockItem, DockSnapshot } from "../lib/dockSnapshot";
+import { DOCK_ITEM_CAPABILITIES, type DockItem, type DockSectionKey, type DockSnapshot } from "../lib/dockSnapshot";
 
 interface DockDisplayOption {
   id: number;
@@ -31,9 +36,6 @@ interface NotifEntry {
   title: string;
   body: string;
   category: string;
-  // Id del registro real al que apunta esta notificación (si lo tiene) — con esto, tocarla puede
-  // abrir el mismo formulario de edición real en vez de un simple texto (ver handleItemClick).
-  itemId?: string;
   receivedAt: number;
 }
 
@@ -43,25 +45,32 @@ interface DockBridge {
   resize: (size: { width: number; height: number; collapsed: boolean }) => void;
   openMain: () => void;
   onSnapshot: (cb: (snapshot: DockSnapshot) => void) => () => void;
-  onNotify: (cb: (payload: { title: string; body: string; category: string; id?: string }) => void) => () => void;
+  onNotify: (cb: (payload: { title: string; body: string; category: string }) => void) => () => void;
   getDisplays: () => Promise<DockDisplayOption[]>;
   setDisplay: (displayId: number) => void;
   quickAdd: (category: string) => void;
   quickEdit: (category: string, itemId: string) => void;
+  quickToggle: (kind: string, itemId: string) => void;
+  quickDelete: (kind: string, itemId: string) => void;
 }
 
 function getDockBridge(): DockBridge | null {
   return (window as unknown as { FSR_ELECTRON_DOCK?: DockBridge }).FSR_ELECTRON_DOCK ?? null;
 }
 
-type SectionKey = "finanzas" | "turnos" | "salud" | "academico";
-
-const SECTIONS: { key: SectionKey; label: string; icon: typeof DollarSign }[] = [
+const SECTIONS: { key: DockSectionKey; label: string; icon: LucideIcon }[] = [
   { key: "finanzas", label: "Finanzas", icon: DollarSign },
   { key: "turnos", label: "Turnos", icon: CalendarClock },
   { key: "salud", label: "Salud", icon: HeartPulse },
   { key: "academico", label: "Académico", icon: GraduationCap },
 ];
+
+const SECTION_ICON: Record<DockSectionKey, LucideIcon> = {
+  finanzas: DollarSign,
+  turnos: CalendarClock,
+  salud: HeartPulse,
+  academico: GraduationCap,
+};
 
 const CATEGORY_LABELS: Record<string, string> = {
   finanzas: "Finanzas",
@@ -75,7 +84,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 // Misma clave que usa QUICK_ADD_TARGETS en App.tsx — para el botón "+" de cada sección (siempre
 // abre el formulario de alta en blanco, no depende de ningún ítem puntual).
-const SECTION_ADD_KEY: Record<SectionKey, string> = {
+const SECTION_ADD_KEY: Record<DockSectionKey, string> = {
   finanzas: "finanzas",
   turnos: "turno",
   salud: "salud",
@@ -85,9 +94,14 @@ const SECTION_ADD_KEY: Record<SectionKey, string> = {
 const WEEKDAY_LABELS = ["D", "L", "M", "M", "J", "V", "S"];
 
 const COLLAPSED_SIZE = { width: 200, height: 40 };
-const EXPANDED_SIZE = { width: 680, height: 420 };
+const EXPANDED_SIZE = { width: 680, height: 460 };
 // Tiempo que espera antes de colapsar al sacar el mouse, para no cerrarse por un roce accidental.
 const COLLAPSE_DELAY_MS = 350;
+// La misma duración/curva la usan el resize del panel Y el crossfade del contenido — si no
+// coinciden, el cierre se siente "cortado" en vez de una sola transición fluida (lo que se pidió
+// arreglar: "cuando cierra el dock, no hay animación y además se ve poco fluido").
+const PANEL_TRANSITION = { duration: 0.32, ease: [0.22, 1, 0.36, 1] as const };
+const CONTENT_TRANSITION = { duration: 0.2, ease: [0.22, 1, 0.36, 1] as const };
 
 const EMPTY_SNAPSHOT: DockSnapshot = {
   generatedAt: 0,
@@ -105,8 +119,7 @@ function initials(name: string): string {
 }
 
 // "Hoy" = lo que vence puntualmente hoy + lo que no tiene fecha propia (ej. Salud) — sin arrastrar
-// lo vencido de antes (punto 4 pedido: el filtro de "hoy" no debe mezclar fechas pasadas). Otro
-// día elegido en el calendario = solo lo que cae justo en esa fecha exacta.
+// lo vencido de antes. Otro día elegido en el calendario = solo lo que cae justo en esa fecha.
 function matchesDate(item: DockItem, date: string, todayStr: string): boolean {
   if (date === todayStr) return item.isToday || item.dateOnly === "";
   return item.dateOnly === date;
@@ -120,6 +133,17 @@ function timeAgo(ts: number): string {
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `Hace ${hours} h`;
   return `Hace ${Math.floor(hours / 24)} d`;
+}
+
+function formatFechaLarga(dateOnly: string): string {
+  if (!dateOnly) return "";
+  const [y, m, d] = dateOnly.split("-");
+  return d && m && y ? `${d}/${m}/${y}` : dateOnly;
+}
+
+function formatMonto(n?: number): string {
+  if (n === undefined || n === null) return "";
+  return `AR$${Number(n).toLocaleString("es-AR")}`;
 }
 
 function startOfMonth(d: Date): Date {
@@ -147,23 +171,69 @@ interface Theme {
   navInactive: string;
 }
 
-function ItemRow({ item, index, theme, onClick }: { item: DockItem; index: number; theme: Theme; onClick?: () => void }) {
+function LiveClock({ theme }: { theme: Theme }) {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 15000);
+    return () => clearInterval(id);
+  }, []);
+  const time = now.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+  const date = now.toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" });
+  return (
+    <div className={`text-center py-3 border-b ${theme.border} shrink-0`}>
+      <p className="text-3xl font-bold tabular-nums leading-none">{time}</p>
+      <p className="text-xs text-zinc-500 capitalize mt-1">{date}</p>
+    </div>
+  );
+}
+
+function ItemRow({
+  item,
+  theme,
+  onClick,
+  onToggle,
+}: {
+  item: DockItem;
+  theme: Theme;
+  onClick?: () => void;
+  onToggle?: () => void;
+}) {
+  const Icon = SECTION_ICON[item.section];
+  const toggleable = DOCK_ITEM_CAPABILITIES[item.kind].toggleable;
   return (
     <motion.div
       onClick={onClick}
       onHoverStart={() => uiSounds.hover()}
       whileHover={{ scale: 1.015 }}
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25, delay: Math.min(index * 0.035, 0.3) }}
+      initial={{ opacity: 0, y: 10 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: "0px 0px -10% 0px" }}
+      transition={{ duration: 0.25 }}
       role={onClick ? "button" : undefined}
       tabIndex={onClick ? 0 : undefined}
-      className={`w-full text-left px-3 py-2 rounded-xl text-sm transition-colors ${onClick ? "cursor-pointer" : ""} ${
-        item.overdue ? "bg-red-500/10 text-red-300" : item.isToday ? "bg-primary/10" : theme.subtle
-      }`}
+      className={`w-full text-left px-3 py-2 rounded-xl text-sm transition-colors flex items-center gap-2 ${
+        onClick ? "cursor-pointer" : ""
+      } ${item.overdue ? "bg-red-500/10 text-red-300" : item.isToday ? "bg-primary/10" : theme.subtle}`}
     >
-      <p className="font-semibold truncate">{item.title}</p>
-      {item.subtitle && <p className="text-xs opacity-70 truncate">{item.subtitle}</p>}
+      {toggleable && (
+        <button
+          type="button"
+          title={DOCK_ITEM_CAPABILITIES[item.kind].toggleLabel}
+          onClick={(e) => {
+            e.stopPropagation();
+            uiSounds.toggle();
+            onToggle?.();
+          }}
+          className={`w-4 h-4 rounded-full border-2 shrink-0 cursor-pointer transition-colors ${
+            item.overdue ? "border-red-400" : "border-primary"
+          } hover:bg-primary/20`}
+        />
+      )}
+      <Icon className="w-3.5 h-3.5 shrink-0 opacity-60" />
+      <div className="min-w-0 flex-1">
+        <p className="font-semibold truncate">{item.title}</p>
+        {item.subtitle && <p className="text-xs opacity-70 truncate">{item.subtitle}</p>}
+      </div>
     </motion.div>
   );
 }
@@ -181,6 +251,7 @@ function MiniCalendar({
   selectedDate,
   todayStr,
   theme,
+  markedDates,
   onSelect,
   onMonthChange,
 }: {
@@ -188,6 +259,7 @@ function MiniCalendar({
   selectedDate: string;
   todayStr: string;
   theme: Theme;
+  markedDates: Set<string>;
   onSelect: (dateOnly: string) => void;
   onMonthChange: (next: Date) => void;
 }) {
@@ -233,6 +305,7 @@ function MiniCalendar({
           const dateOnly = toDateOnly(new Date(month.getFullYear(), month.getMonth(), day));
           const isSelected = dateOnly === selectedDate;
           const isToday = dateOnly === todayStr;
+          const hasItems = markedDates.has(dateOnly);
           return (
             <button
               key={i}
@@ -241,11 +314,16 @@ function MiniCalendar({
                 uiSounds.selectDate();
                 onSelect(dateOnly);
               }}
-              className={`text-[10px] w-5 h-5 mx-auto rounded-full flex items-center justify-center transition-colors cursor-pointer ${
-                isSelected ? "bg-primary text-white font-bold" : isToday ? "text-primary font-bold" : `${theme.hover}`
-              }`}
+              className="relative flex flex-col items-center cursor-pointer"
             >
-              {day}
+              <span
+                className={`text-[10px] w-5 h-5 mx-auto rounded-full flex items-center justify-center transition-colors ${
+                  isSelected ? "bg-primary text-white font-bold" : isToday ? "text-primary font-bold" : theme.hover
+                }`}
+              >
+                {day}
+              </span>
+              {hasItems && !isSelected && <span className="w-1 h-1 rounded-full bg-primary -mt-0.5" />}
             </button>
           );
         })}
@@ -254,12 +332,140 @@ function MiniCalendar({
   );
 }
 
+// Tarjeta de detalle (punto 1 pedido): el mismo estilo visual que ya tiene Finanzas en la app real
+// (categoría + estado arriba, ícono + título, fecha, monto si corresponde, y los botones de
+// acción) — adaptada a cada sección en vez de abrir directo el formulario de edición al tocar.
+function DetailCard({
+  item,
+  theme,
+  onClose,
+  onToggle,
+  onEdit,
+  onDelete,
+}: {
+  item: DockItem;
+  theme: Theme;
+  onClose: () => void;
+  onToggle: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    setConfirmDelete(false);
+    return () => {
+      if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
+    };
+  }, [item.id]);
+
+  const caps = DOCK_ITEM_CAPABILITIES[item.kind];
+  const Icon = SECTION_ICON[item.section];
+  const sectionLabel = SECTIONS.find((s) => s.key === item.section)?.label ?? item.section;
+  const statusLabel = item.overdue ? "Vencido" : item.isToday ? "Hoy" : "Pendiente";
+  const statusColor = item.overdue ? "bg-red-500/15 text-red-400" : item.isToday ? "bg-primary/20 text-primary" : "bg-amber-500/15 text-amber-500";
+  const isFinanzas = item.kind === "detailedPayment" || item.kind === "invoice";
+
+  const handleTrashClick = () => {
+    if (!confirmDelete) {
+      uiSounds.click();
+      setConfirmDelete(true);
+      confirmTimerRef.current = setTimeout(() => setConfirmDelete(false), 4000);
+      return;
+    }
+    uiSounds.delete();
+    onDelete();
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.96 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.96 }}
+      transition={CONTENT_TRANSITION}
+      className={`absolute inset-0 ${theme.bg} flex flex-col p-4`}
+    >
+      <div className="flex items-center justify-between mb-4">
+        <span className="text-[10px] uppercase tracking-wide font-bold text-primary bg-primary/15 rounded-full px-2 py-0.5">{sectionLabel}</span>
+        <div className="flex items-center gap-2">
+          <span className={`text-[10px] uppercase tracking-wide font-bold rounded-full px-2 py-0.5 ${statusColor}`}>{statusLabel}</span>
+          <button type="button" onClick={onClose} className={`p-1 rounded-lg ${theme.hover} cursor-pointer`}>
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      <div className="flex items-start gap-3 mb-3">
+        <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center shrink-0">
+          <Icon className="w-5 h-5 text-primary" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="font-bold text-base truncate">{item.title}</p>
+          {item.dateOnly && (
+            <p className="text-xs text-zinc-500 flex items-center gap-1 mt-0.5">
+              <CalendarIcon className="w-3 h-3" /> {formatFechaLarga(item.dateOnly)}
+            </p>
+          )}
+          {!isFinanzas && item.subtitle && <p className="text-xs text-zinc-500 mt-0.5">{item.subtitle}</p>}
+        </div>
+        {isFinanzas && item.amount != null && <p className="font-bold text-lg shrink-0">{formatMonto(item.amount)}</p>}
+      </div>
+
+      <div className="flex-1" />
+
+      <div className="flex items-center gap-2">
+        {caps.toggleable && (
+          <motion.button
+            type="button"
+            whileTap={{ scale: 0.97 }}
+            onClick={() => {
+              uiSounds.save();
+              onToggle();
+            }}
+            className="flex-1 flex items-center justify-center gap-1.5 bg-primary text-white font-bold text-sm py-2 rounded-xl cursor-pointer"
+          >
+            <Check className="w-4 h-4" />
+            {caps.toggleLabel}
+          </motion.button>
+        )}
+        {caps.editable && (
+          <button
+            type="button"
+            title="Editar en la app"
+            onClick={() => {
+              uiSounds.edit();
+              onEdit();
+            }}
+            className={`p-2.5 rounded-xl ${theme.subtle} ${theme.hover} cursor-pointer`}
+          >
+            <Pencil className="w-4 h-4" />
+          </button>
+        )}
+        {caps.deletable && (
+          <button
+            type="button"
+            title={confirmDelete ? "Tocá de nuevo para confirmar" : "Eliminar"}
+            onClick={handleTrashClick}
+            className={`p-2.5 rounded-xl cursor-pointer transition-colors ${
+              confirmDelete ? "bg-red-500 text-white" : `${theme.subtle} text-red-400 ${theme.hover}`
+            }`}
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
 export default function DockApp() {
   const [expanded, setExpanded] = useState(false);
-  const [section, setSection] = useState<SectionKey | null>(null);
+  const [section, setSection] = useState<DockSectionKey | null>(null);
   const [snapshot, setSnapshot] = useState<DockSnapshot>(EMPTY_SNAPSHOT);
   const [notifFeed, setNotifFeed] = useState<NotifEntry[]>([]);
   const [openNotifId, setOpenNotifId] = useState<string | null>(null);
+  const [openItem, setOpenItem] = useState<DockItem | null>(null);
+  const [locallyResolvedIds, setLocallyResolvedIds] = useState<Set<string>>(new Set());
   const [pulse, setPulse] = useState(false);
   const [displays, setDisplays] = useState<DockDisplayOption[]>([]);
   const [showDisplayMenu, setShowDisplayMenu] = useState(false);
@@ -281,8 +487,7 @@ export default function DockApp() {
     document.documentElement.classList.toggle("dark", AestheticStorageService.getDarkMode());
   }, []);
 
-  // El color de acento y el modo claro/oscuro los manda la ventana principal en cada snapshot
-  // (punto 1 pedido: que el dock lo detecte y lo aplique solo).
+  // El color de acento y el modo claro/oscuro los manda la ventana principal en cada snapshot.
   useEffect(() => {
     if (!snapshot.generatedAt) return;
     document.documentElement.style.setProperty("--color-primary", snapshot.themeColor);
@@ -292,24 +497,22 @@ export default function DockApp() {
   useEffect(() => {
     const bridge = getDockBridge();
     if (!bridge) return;
-    const unsubSnapshot = bridge.onSnapshot((s) => setSnapshot(s));
+    const unsubSnapshot = bridge.onSnapshot((s) => {
+      setSnapshot(s);
+      // Ya se reflejó el cambio real — el "ocultamiento optimista" (ver handleToggleItem) deja de
+      // hacer falta para estos ids.
+      setLocallyResolvedIds(new Set());
+    });
     const unsubNotify = bridge.onNotify((payload) => {
       uiSounds.notify();
       setPulse(true);
       if (pulseTimerRef.current) clearTimeout(pulseTimerRef.current);
       pulseTimerRef.current = setTimeout(() => setPulse(false), 1600);
       setNotifFeed((prev) =>
-        [
-          {
-            id: `${Date.now()}-${Math.random()}`,
-            title: payload.title,
-            body: payload.body,
-            category: payload.category,
-            itemId: payload.id,
-            receivedAt: Date.now(),
-          },
-          ...prev,
-        ].slice(0, 12)
+        [{ id: `${Date.now()}-${Math.random()}`, title: payload.title, body: payload.body, category: payload.category, receivedAt: Date.now() }, ...prev].slice(
+          0,
+          12
+        )
       );
     });
     bridge
@@ -329,8 +532,8 @@ export default function DockApp() {
     bridgeRef.current?.resize({ ...size, collapsed: !expanded });
   }, [expanded]);
 
-  // Abrir/cerrar con el mouse (punto 3 pedido): entra = se abre; sale = se cierra solo, con un
-  // pequeño margen de tiempo para que no se cierre por pasar de largo sin querer.
+  // Abrir/cerrar con el mouse: entra = se abre; sale = se cierra solo, con un pequeño margen de
+  // tiempo para que no se cierre por pasar de largo sin querer. Las dos con sonido.
   const handleMouseEnter = () => {
     if (collapseTimerRef.current) {
       clearTimeout(collapseTimerRef.current);
@@ -347,11 +550,12 @@ export default function DockApp() {
       setExpanded(false);
       setShowDisplayMenu(false);
       setOpenNotifId(null);
+      setOpenItem(null);
       uiSounds.collapse();
     }, COLLAPSE_DELAY_MS);
   };
 
-  const handleSectionClick = (key: SectionKey) => {
+  const handleSectionClick = (key: DockSectionKey) => {
     uiSounds.navigate();
     setSection((prev) => (prev === key ? null : key));
   };
@@ -363,28 +567,40 @@ export default function DockApp() {
     setShowDisplayMenu(false);
   };
 
-  // Tocar un ítem de cualquier sección (punto 3 pedido): en vez de armar una vista de detalle
-  // propia adentro del dock (y reimplementar Pagar/editar/eliminar con una lógica de guardado
-  // paralela a la que ya existe), esto reusa el mismo mecanismo de "lápiz" que ya tiene Inicio
-  // (handleQuickEdit en App.tsx) — abre la ventana principal directo en el formulario de edición
-  // REAL de ese ítem (con su mismo diseño de PaymentsTable/Turnos/etc.), ya con Pagar/editar/
-  // eliminar funcionando de verdad y sincronizado en todos lados.
-  const handleItemClick = (editKind: DockEditKind, itemId: string) => {
-    if (!editKind) return;
+  // Tocar una nota (punto 1 pedido): abre la tarjeta de detalle con su info, en vez de ir directo
+  // a editar — editar/eliminar/tildar son ahora botones explícitos dentro de esa tarjeta.
+  const handleItemClick = (item: DockItem) => {
     uiSounds.expand();
-    bridgeRef.current?.quickEdit(editKind, itemId);
+    setOpenItem(item);
   };
 
-  // Las notificaciones de la agenda sí llevan el id del registro real (ver
-  // src/services/notificationService.ts) — si la categoría tiene un formulario de edición
-  // conocido, tocarla hace lo mismo que un ítem de sección. Si no (ej. una notificación genérica
-  // de prueba, sin id), se muestra el texto completo en un panel simple adentro del dock.
+  const handleCloseItem = () => {
+    uiSounds.collapse();
+    setOpenItem(null);
+  };
+
+  // Tildar (Pagar/Marcar realizado/Marcar hecha): se oculta de inmediato en el dock (optimista)
+  // mientras la ventana principal guarda el cambio de verdad — ver dock-quick-toggle en App.tsx.
+  const handleToggleItem = (item: DockItem) => {
+    bridgeRef.current?.quickToggle(item.kind, item.id);
+    setLocallyResolvedIds((prev) => new Set(prev).add(item.id));
+    if (openItem?.id === item.id) setOpenItem(null);
+  };
+
+  const handleEditItem = (item: DockItem) => {
+    const category = DOCK_ITEM_CAPABILITIES[item.kind].editCategory;
+    if (!category) return;
+    bridgeRef.current?.quickEdit(category, item.id);
+    setOpenItem(null);
+  };
+
+  const handleDeleteItem = (item: DockItem) => {
+    bridgeRef.current?.quickDelete(item.kind, item.id);
+    setLocallyResolvedIds((prev) => new Set(prev).add(item.id));
+    setOpenItem(null);
+  };
+
   const handleNotifClick = (n: NotifEntry) => {
-    const knownEditKinds: DockEditKind[] = ["finanzas", "turno", "universidad", "salud"];
-    if (n.itemId && knownEditKinds.includes(n.category as DockEditKind)) {
-      handleItemClick(n.category as DockEditKind, n.itemId);
-      return;
-    }
     uiSounds.expand();
     setOpenNotifId(n.id);
   };
@@ -394,41 +610,61 @@ export default function DockApp() {
     setOpenNotifId(null);
   };
 
-  const handleSectionAdd = (key: SectionKey) => {
+  const handleSectionAdd = (key: DockSectionKey) => {
     uiSounds.click();
     bridgeRef.current?.quickAdd(SECTION_ADD_KEY[key]);
   };
 
-  // Filtrado por fecha (puntos 3 y 4 pedidos): por default siempre "hoy" (pendiente + vencido),
-  // salvo que se elija otro día en el mini calendario.
-  const finanzasF = useMemo(() => snapshot.finanzas.filter((i) => matchesDate(i, selectedDate, todayStr)), [snapshot.finanzas, selectedDate, todayStr]);
-  const turnosF = useMemo(() => snapshot.turnos.filter((i) => matchesDate(i, selectedDate, todayStr)), [snapshot.turnos, selectedDate, todayStr]);
-  const saludF = useMemo(() => snapshot.salud.filter((i) => matchesDate(i, selectedDate, todayStr)), [snapshot.salud, selectedDate, todayStr]);
-  const academicoF = useMemo(() => snapshot.academico.filter((i) => matchesDate(i, selectedDate, todayStr)), [snapshot.academico, selectedDate, todayStr]);
+  // Filtrado por fecha: por default siempre "hoy" (lo que vence hoy), salvo que se elija otro día
+  // en el mini calendario — y se sacan los que se acaban de tildar/borrar desde acá mismo
+  // (ocultamiento optimista, ver handleToggleItem/handleDeleteItem).
+  const notResolved = (i: DockItem) => !locallyResolvedIds.has(i.id);
+  const finanzasF = useMemo(
+    () => snapshot.finanzas.filter((i) => matchesDate(i, selectedDate, todayStr) && notResolved(i)),
+    [snapshot.finanzas, selectedDate, todayStr, locallyResolvedIds]
+  );
+  const turnosF = useMemo(
+    () => snapshot.turnos.filter((i) => matchesDate(i, selectedDate, todayStr) && notResolved(i)),
+    [snapshot.turnos, selectedDate, todayStr, locallyResolvedIds]
+  );
+  const saludF = useMemo(
+    () => snapshot.salud.filter((i) => matchesDate(i, selectedDate, todayStr) && notResolved(i)),
+    [snapshot.salud, selectedDate, todayStr, locallyResolvedIds]
+  );
+  const academicoF = useMemo(
+    () => snapshot.academico.filter((i) => matchesDate(i, selectedDate, todayStr) && notResolved(i)),
+    [snapshot.academico, selectedDate, todayStr, locallyResolvedIds]
+  );
 
-  const filteredByKey: Record<SectionKey, DockItem[]> = {
+  const filteredByKey: Record<DockSectionKey, DockItem[]> = {
     finanzas: finanzasF,
     turnos: turnosF,
     salud: saludF,
     academico: academicoF,
   };
 
-  const mergedItems = useMemo(() => [...finanzasF, ...turnosF, ...saludF, ...academicoF].slice(0, 10), [finanzasF, turnosF, saludF, academicoF]);
+  const mergedItems = useMemo(() => [...finanzasF, ...turnosF, ...saludF, ...academicoF].slice(0, 12), [finanzasF, turnosF, saludF, academicoF]);
 
   // El estado "ambiente" del pill colapsado siempre refleja lo pendiente de HOY, sin importar qué
   // día esté elegido en el calendario del panel expandido.
   const todayPendingCount = useMemo(() => {
     const all = [...snapshot.finanzas, ...snapshot.turnos, ...snapshot.academico];
-    return all.filter((i) => matchesDate(i, todayStr, todayStr)).length;
-  }, [snapshot, todayStr]);
+    return all.filter((i) => matchesDate(i, todayStr, todayStr) && notResolved(i)).length;
+  }, [snapshot, todayStr, locallyResolvedIds]);
 
   const statusText = useMemo(() => {
     if (todayPendingCount === 0) return "Al día";
     return `${todayPendingCount} pendiente${todayPendingCount === 1 ? "" : "s"}`;
   }, [todayPendingCount]);
 
+  // Días con algo pendiente, para el puntito del mini calendario (punto 8 pedido).
+  const markedDates = useMemo(() => {
+    const all = [...snapshot.finanzas, ...snapshot.turnos, ...snapshot.academico];
+    return new Set(all.map((i) => i.dateOnly).filter(Boolean));
+  }, [snapshot]);
+
   const sectionItems = section ? filteredByKey[section] : mergedItems;
-  const sectionLabel = section ? SECTIONS.find((s) => s.key === section)!.label : "General";
+  const sectionLabel = section ? SECTIONS.find((s) => s.key === section)!.label : "Inicio";
   const openNotif = openNotifId ? notifFeed.find((n) => n.id === openNotifId) ?? null : null;
 
   const isDark = snapshot.darkMode;
@@ -453,14 +689,14 @@ export default function DockApp() {
           width: expanded ? EXPANDED_SIZE.width : COLLAPSED_SIZE.width,
           height: expanded ? EXPANDED_SIZE.height : COLLAPSED_SIZE.height,
           // Arriba siempre en escuadra, colapsado o expandido: pegado al borde de la pantalla,
-          // como si el panel expandido fuera "el dock cerrado, pero más grande" (punto 2 pedido),
-          // no una tarjeta flotando separada con un hueco arriba.
+          // como si el panel expandido fuera "el dock cerrado, pero más grande", no una tarjeta
+          // flotando separada con un hueco arriba.
           borderTopLeftRadius: 0,
           borderTopRightRadius: 0,
           borderBottomLeftRadius: expanded ? 28 : 20,
           borderBottomRightRadius: expanded ? 28 : 20,
         }}
-        transition={{ type: "spring", stiffness: 260, damping: 28 }}
+        transition={PANEL_TRANSITION}
         className={`relative ${theme.bg} border ${theme.border} shadow-2xl overflow-hidden ${theme.text}`}
       >
         {/* Anillo que destella cuando llega una notificación nueva, colapsado o expandido. */}
@@ -477,14 +713,14 @@ export default function DockApp() {
           )}
         </AnimatePresence>
 
-        <AnimatePresence mode="wait" initial={false}>
+        <AnimatePresence mode="popLayout" initial={false}>
           {!expanded ? (
             <motion.div
               key="collapsed"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
+              transition={CONTENT_TRANSITION}
               className="w-full h-full flex items-center gap-2 px-3"
             >
               <Logo darkMode={isDark} size="xs" />
@@ -497,7 +733,7 @@ export default function DockApp() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
+              transition={CONTENT_TRANSITION}
               className="flex h-full"
             >
               {/* Sidebar: perfil + secciones + mini calendario a la izquierda. */}
@@ -515,6 +751,21 @@ export default function DockApp() {
                     <p className="text-[11px] text-zinc-500 truncate">{statusText}</p>
                   </div>
                 </div>
+
+                <motion.button
+                  type="button"
+                  whileTap={{ scale: 0.96 }}
+                  onClick={() => {
+                    uiSounds.navigate();
+                    setSection(null);
+                  }}
+                  className={`flex items-center gap-2 px-2.5 py-2 rounded-xl text-sm transition-colors cursor-pointer ${
+                    !section ? "bg-primary text-white" : `${theme.navInactive} ${theme.hover}`
+                  }`}
+                >
+                  <Home className="w-4 h-4 shrink-0" />
+                  <span className="flex-1 text-left truncate">Inicio</span>
+                </motion.button>
 
                 {SECTIONS.map(({ key, label, icon: Icon }) => {
                   const count = filteredByKey[key].length;
@@ -545,6 +796,7 @@ export default function DockApp() {
                   selectedDate={selectedDate}
                   todayStr={todayStr}
                   theme={theme}
+                  markedDates={markedDates}
                   onSelect={setSelectedDate}
                   onMonthChange={setCalendarMonth}
                 />
@@ -602,8 +854,10 @@ export default function DockApp() {
                 </div>
               </div>
 
-              {/* Contenido: la sección elegida, o todas mezcladas si no hay ninguna. */}
+              {/* Contenido: Inicio (reloj + todo mezclado) o la sección elegida. */}
               <div className="flex-1 h-full flex flex-col min-w-0 relative">
+                {!section && <LiveClock theme={theme} />}
+
                 <div className={`px-4 py-3 border-b ${theme.border} shrink-0 flex items-center justify-between gap-2`}>
                   <div>
                     <p className="text-sm font-bold">{sectionLabel}</p>
@@ -611,9 +865,9 @@ export default function DockApp() {
                       {selectedDate === todayStr ? "Lo pendiente de hoy" : `Lo que cae el ${selectedDate.split("-").reverse().join("/")}`}
                     </p>
                   </div>
-                  {/* Agregar contenido de esta sección sin abrir la app (punto 5 pedido): dispara el
-                      mismo formulario de alta que ya usa el botón "Agendar" de Inicio, así queda
-                      guardado y sincronizado exactamente igual en la app, la web y Android. */}
+                  {/* Agregar contenido de esta sección sin abrir la app: dispara el mismo alta que
+                      ya usa el botón "Agendar" de Inicio, así queda guardado y sincronizado igual
+                      en la app, la web y Android. */}
                   {section && (
                     <motion.button
                       type="button"
@@ -629,25 +883,25 @@ export default function DockApp() {
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
-                  <AnimatePresence mode="wait">
+                  <AnimatePresence mode="popLayout">
                     <motion.div
                       key={`${section ?? "merged"}-${selectedDate}`}
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
-                      transition={{ duration: 0.15 }}
+                      transition={CONTENT_TRANSITION}
                       className="space-y-1.5"
                     >
                       {sectionItems.length === 0 ? (
                         <EmptyState />
                       ) : (
-                        sectionItems.map((item, i) => (
+                        sectionItems.map((item) => (
                           <ItemRow
                             key={item.id}
                             item={item}
-                            index={i}
                             theme={theme}
-                            onClick={item.editKind ? () => handleItemClick(item.editKind, item.id) : undefined}
+                            onClick={() => handleItemClick(item)}
+                            onToggle={() => handleToggleItem(item)}
                           />
                         ))
                       )}
@@ -657,14 +911,23 @@ export default function DockApp() {
                           <p className="text-[11px] uppercase tracking-wide text-zinc-500 flex items-center gap-1 px-1 mb-1">
                             <Bell className="w-3 h-3" /> Notificaciones
                           </p>
-                          {notifFeed.map((n, i) => (
-                            <ItemRow
+                          {notifFeed.map((n) => (
+                            <motion.div
                               key={n.id}
-                              item={{ id: n.id, title: n.title, subtitle: n.body, dateOnly: "", overdue: false, isToday: false, editKind: null }}
-                              index={i}
-                              theme={theme}
                               onClick={() => handleNotifClick(n)}
-                            />
+                              onHoverStart={() => uiSounds.hover()}
+                              whileHover={{ scale: 1.015 }}
+                              initial={{ opacity: 0, y: 10 }}
+                              whileInView={{ opacity: 1, y: 0 }}
+                              viewport={{ once: true, margin: "0px 0px -10% 0px" }}
+                              transition={{ duration: 0.25 }}
+                              role="button"
+                              tabIndex={0}
+                              className={`w-full text-left px-3 py-2 rounded-xl text-sm cursor-pointer ${theme.subtle}`}
+                            >
+                              <p className="font-semibold truncate">{n.title}</p>
+                              <p className="text-xs opacity-70 truncate">{n.body}</p>
+                            </motion.div>
                           ))}
                         </div>
                       )}
@@ -672,15 +935,28 @@ export default function DockApp() {
                   </AnimatePresence>
                 </div>
 
-                {/* Detalle de notificación (punto 2 pedido): se abre con animación + sonido y muestra
-                    toda la info que tenemos de esa notificación. */}
+                <AnimatePresence>
+                  {openItem && (
+                    <DetailCard
+                      item={openItem}
+                      theme={theme}
+                      onClose={handleCloseItem}
+                      onToggle={() => handleToggleItem(openItem)}
+                      onEdit={() => handleEditItem(openItem)}
+                      onDelete={() => handleDeleteItem(openItem)}
+                    />
+                  )}
+                </AnimatePresence>
+
+                {/* Detalle simple de notificación (no viene con la info estructurada que tiene un
+                    DockItem real, así que se muestra como texto en vez de la tarjeta rica). */}
                 <AnimatePresence>
                   {openNotif && (
                     <motion.div
                       initial={{ opacity: 0, scale: 0.96 }}
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.96 }}
-                      transition={{ duration: 0.18 }}
+                      transition={CONTENT_TRANSITION}
                       className={`absolute inset-0 ${theme.bg} flex flex-col p-4`}
                     >
                       <div className="flex items-center justify-between mb-3">
