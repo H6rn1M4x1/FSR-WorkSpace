@@ -64,8 +64,14 @@ export interface DockItem {
   // Fecha puntual (YYYY-MM-DD) del ítem, o "" cuando no aplica una fecha concreta (ej. Salud: un
   // medicamento "en tratamiento" no vence un día puntual, se considera vigente solo para "hoy").
   dateOnly: string;
+  // "overdue" nunca es true si el ítem ya está resuelto (done=true) — vencido solo tiene sentido
+  // para algo que sigue pendiente.
   overdue: boolean;
   isToday: boolean;
+  // Ya resuelto (pago/estatus/completed en true) — a diferencia de la versión anterior, estos
+  // ítems NO se descartan: si vencían/caían hoy se siguen mostrando en "Inicio" (con el check ya
+  // tildado), para que no parezca que "faltan" cosas que en realidad ya se hicieron hoy mismo.
+  done: boolean;
   kind: DockItemKind;
   section: DockSectionKey;
   // Monto en pesos, solo cuando el ítem es de Finanzas — para mostrarlo destacado en la tarjeta de
@@ -129,7 +135,6 @@ export function buildDockSnapshot(params: {
 
   const finanzas: DockItem[] = [];
   for (const p of params.detailedPayments) {
-    if (p.pago) continue;
     const dateOnly = dateOnlyOf(p.fechaVencimiento);
     const { overdue, isToday } = classify(dateOnly, todayStr);
     finanzas.push({
@@ -137,15 +142,15 @@ export function buildDockSnapshot(params: {
       title: p.descripcion || "Pago",
       subtitle: [formatMonto(p.montoAPagar), dateOnly ? `vence ${formatFecha(dateOnly)}` : ""].filter(Boolean).join(" · "),
       dateOnly,
-      overdue,
+      overdue: overdue && !p.pago,
       isToday,
+      done: p.pago,
       kind: "detailedPayment",
       section: "finanzas",
       amount: p.montoAPagar,
     });
   }
   for (const inv of params.invoices) {
-    if (inv.paid) continue;
     const dateOnly = dateOnlyOf(inv.dueDate);
     const { overdue, isToday } = classify(dateOnly, todayStr);
     finanzas.push({
@@ -153,8 +158,9 @@ export function buildDockSnapshot(params: {
       title: inv.title || "Factura",
       subtitle: [formatMonto(inv.amount), dateOnly ? `vence ${formatFecha(dateOnly)}` : ""].filter(Boolean).join(" · "),
       dateOnly,
-      overdue,
+      overdue: overdue && !inv.paid,
       isToday,
+      done: inv.paid,
       kind: "invoice",
       section: "finanzas",
       amount: inv.amount,
@@ -164,7 +170,6 @@ export function buildDockSnapshot(params: {
 
   const turnos: DockItem[] = [];
   for (const t of params.turnosCompromisos) {
-    if (t.estatus) continue; // ya completado
     const dateOnly = dateOnlyOf(t.fecha);
     const { overdue, isToday } = classify(dateOnly, todayStr);
     const hora = (t.fecha || "").includes("T") ? t.fecha.split("T")[1]?.slice(0, 5) : "";
@@ -173,8 +178,9 @@ export function buildDockSnapshot(params: {
       title: t.descripcion || "Turno",
       subtitle: [hora && hora !== "00:00" ? `${hora} hs` : "", t.lugar].filter(Boolean).join(" · "),
       dateOnly,
-      overdue,
+      overdue: overdue && !t.estatus,
       isToday,
+      done: t.estatus,
       kind: "turno",
       section: "turnos",
     });
@@ -182,6 +188,7 @@ export function buildDockSnapshot(params: {
   turnos.sort(byDate);
 
   // Sin fecha propia: un medicamento "en tratamiento" es vigente hoy, no un día puntual futuro.
+  // "done" no aplica acá (no es un pendiente puntual con un estado resuelto/no resuelto).
   const salud: DockItem[] = params.medicamentosDetallados
     .filter((m) => m.estado === "Consumiendo")
     .map((m) => ({
@@ -191,6 +198,7 @@ export function buildDockSnapshot(params: {
       dateOnly: "",
       overdue: false,
       isToday: false,
+      done: false,
       kind: "medicamento" as const,
       section: "salud" as const,
     }));
@@ -206,12 +214,12 @@ export function buildDockSnapshot(params: {
       dateOnly,
       overdue,
       isToday,
+      done: false, // un examen no tiene un estado "resuelto/no resuelto" simple
       kind: "examen",
       section: "academico",
     });
   }
   for (const t of params.tasks) {
-    if (t.completed) continue;
     const dateOnly = dateOnlyOf(t.dueDate);
     const { overdue, isToday } = classify(dateOnly, todayStr);
     academico.push({
@@ -219,8 +227,9 @@ export function buildDockSnapshot(params: {
       title: `${t.type}: ${t.title}`,
       subtitle: "",
       dateOnly,
-      overdue,
+      overdue: overdue && !t.completed,
       isToday,
+      done: t.completed,
       kind: "task",
       section: "academico",
     });
