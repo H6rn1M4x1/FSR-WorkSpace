@@ -104,6 +104,11 @@ const WEEKDAY_LABELS = ["D", "L", "M", "M", "J", "V", "S"];
 
 const COLLAPSED_SIZE = { width: 200, height: 40 };
 const EXPANDED_SIZE = { width: 680, height: 500 };
+// Tamaño del aviso que se abre solo ante una notificación (punto 2 pedido, round 6) — "en
+// pequeño", no el panel expandido entero.
+const NOTIF_TOAST_SIZE = { width: 320, height: 104 };
+// Cuánto se queda abierto el aviso antes de volver a cerrarse solo (si el mouse no está encima).
+const NOTIF_TOAST_MS = 6000;
 // Tiempo que espera antes de colapsar al sacar el mouse, para no cerrarse por un roce accidental.
 const COLLAPSE_DELAY_MS = 350;
 // La misma duración/curva la usan el resize del panel Y el crossfade del contenido — si no
@@ -293,15 +298,6 @@ function ItemRow({
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(
-    () => () => {
-      if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
-    },
-    []
-  );
-
   const caps = DOCK_ITEM_CAPABILITIES[item.kind];
   const Icon = SECTION_ICON[item.section];
   const sectionLabel = SECTIONS.find((s) => s.key === item.section)?.label ?? item.section;
@@ -315,13 +311,9 @@ function ItemRow({
     : "bg-amber-500/15 text-amber-500";
   const isFinanzas = item.kind === "detailedPayment" || item.kind === "invoice";
 
+  // Un solo toque elimina directo (punto 4 pedido, round 6): la confirmación de doble toque que
+  // había antes generaba la sensación de "el botón no funciona" si no se volvía a tocar a tiempo.
   const handleTrashClick = () => {
-    if (!confirmDelete) {
-      uiSounds.click();
-      setConfirmDelete(true);
-      confirmTimerRef.current = setTimeout(() => setConfirmDelete(false), 4000);
-      return;
-    }
     uiSounds.delete();
     onDelete();
   };
@@ -393,11 +385,9 @@ function ItemRow({
           {caps.deletable && (
             <button
               type="button"
-              title={confirmDelete ? "Tocá de nuevo para confirmar" : "Eliminar"}
+              title="Eliminar"
               onClick={handleTrashClick}
-              className={`p-2 rounded-lg cursor-pointer transition-colors shrink-0 ${
-                confirmDelete ? "bg-red-500 text-white" : `text-red-400 ${theme.hover}`
-              }`}
+              className={`p-2 rounded-lg cursor-pointer transition-colors shrink-0 text-red-400 ${theme.hover}`}
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
@@ -508,6 +498,9 @@ export default function DockApp() {
   const [snapshot, setSnapshot] = useState<DockSnapshot>(EMPTY_SNAPSHOT);
   const [notifFeed, setNotifFeed] = useState<NotifEntry[]>([]);
   const [openNotifId, setOpenNotifId] = useState<string | null>(null);
+  // Aviso que se abre solo ante una notificación nueva (punto 2 pedido, round 6), sin que haga
+  // falta pasar el mouse — null cuando no hay ninguno mostrándose.
+  const [notifToast, setNotifToast] = useState<NotifEntry | null>(null);
   // Ids borrados desde acá mismo — se esconden al toque (ocultamiento optimista) mientras la
   // ventana principal confirma el borrado de verdad.
   const [locallyResolvedIds, setLocallyResolvedIds] = useState<Set<string>>(new Set());
@@ -524,10 +517,19 @@ export default function DockApp() {
   const bridgeRef = useRef<DockBridge | null>(null);
   const collapseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pulseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const notifToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Espejo de "expanded" en un ref: el handler de notificaciones se registra una sola vez (ver
+  // más abajo) y necesita leer el valor más reciente sin tener que re-suscribirse cada vez que
+  // cambia (lo que reiniciaría la conexión con el bridge).
+  const expandedRef = useRef(false);
 
   useEffect(() => {
     bridgeRef.current = getDockBridge();
   }, []);
+
+  useEffect(() => {
+    expandedRef.current = expanded;
+  }, [expanded]);
 
   // Bootstrap inicial (antes de que llegue el primer snapshot de la ventana principal): lee una
   // vez lo que ya haya en localStorage para no arrancar con el acento/tema por defecto un instante.
@@ -558,12 +560,25 @@ export default function DockApp() {
       setPulse(true);
       if (pulseTimerRef.current) clearTimeout(pulseTimerRef.current);
       pulseTimerRef.current = setTimeout(() => setPulse(false), 1600);
-      setNotifFeed((prev) =>
-        [{ id: `${Date.now()}-${Math.random()}`, title: payload.title, body: payload.body, category: payload.category, receivedAt: Date.now() }, ...prev].slice(
-          0,
-          12
-        )
-      );
+      const entry: NotifEntry = {
+        id: `${Date.now()}-${Math.random()}`,
+        title: payload.title,
+        body: payload.body,
+        category: payload.category,
+        receivedAt: Date.now(),
+      };
+      setNotifFeed((prev) => [entry, ...prev].slice(0, 12));
+
+      // Punto 2 pedido (round 6): que la notificación no solo quede guardada en el feed, sino que
+      // el dock se abra solo (en chico) y muestre qué es, sin que haga falta pasarle el mouse —
+      // electron/main.cjs fuerza la ventana visible un rato aunque algo esté en pantalla completa
+      // tapándola (ver dock-notify ahí). Si el usuario ya está con el panel grande abierto, no
+      // hace falta el aviso chico: ya lo va a ver en la lista/el feed de abajo.
+      if (!expandedRef.current) {
+        if (notifToastTimerRef.current) clearTimeout(notifToastTimerRef.current);
+        setNotifToast(entry);
+        notifToastTimerRef.current = setTimeout(() => setNotifToast(null), NOTIF_TOAST_MS);
+      }
     });
     bridge
       .getDisplays()
@@ -574,13 +589,14 @@ export default function DockApp() {
       unsubNotify();
       if (pulseTimerRef.current) clearTimeout(pulseTimerRef.current);
       if (collapseTimerRef.current) clearTimeout(collapseTimerRef.current);
+      if (notifToastTimerRef.current) clearTimeout(notifToastTimerRef.current);
     };
   }, []);
 
   useEffect(() => {
-    const size = expanded ? EXPANDED_SIZE : COLLAPSED_SIZE;
+    const size = expanded ? EXPANDED_SIZE : notifToast ? NOTIF_TOAST_SIZE : COLLAPSED_SIZE;
     bridgeRef.current?.resize({ ...size, collapsed: !expanded });
-  }, [expanded]);
+  }, [expanded, notifToast]);
 
   // Abrir/cerrar con el mouse: entra = se abre; sale = se cierra solo, con un pequeño margen de
   // tiempo para que no se cierre por pasar de largo sin querer. Las dos con sonido.
@@ -592,6 +608,13 @@ export default function DockApp() {
     if (!expanded) {
       uiSounds.expand();
       setExpanded(true);
+      // El aviso chico ya cumplió su función (o el usuario entró directo al panel grande) — se
+      // saca para no competir con el panel expandido.
+      if (notifToastTimerRef.current) {
+        clearTimeout(notifToastTimerRef.current);
+        notifToastTimerRef.current = null;
+      }
+      setNotifToast(null);
     }
   };
 
@@ -649,6 +672,18 @@ export default function DockApp() {
   const handleCloseNotif = () => {
     uiSounds.collapse();
     setOpenNotifId(null);
+  };
+
+  // Tocar el aviso chico que se abrió solo: pasa al panel grande mostrando esa misma notificación.
+  const handleToastClick = (n: NotifEntry) => {
+    if (notifToastTimerRef.current) {
+      clearTimeout(notifToastTimerRef.current);
+      notifToastTimerRef.current = null;
+    }
+    setNotifToast(null);
+    uiSounds.expand();
+    setExpanded(true);
+    setOpenNotifId(n.id);
   };
 
   const handleSectionAdd = (key: DockSectionKey) => {
@@ -726,7 +761,9 @@ export default function DockApp() {
 
   const isDark = snapshot.darkMode;
   const theme: Theme = {
-    bg: isDark ? "bg-black" : "bg-white",
+    // Mismo fondo translúcido + blur que ya usa la app en otras zonas (ej. el aviso de "MODO
+    // LOCAL" en App.tsx: bg-black/75 / bg-white/80 con backdrop-blur-2xl) — punto 1 pedido.
+    bg: isDark ? "bg-black/75 backdrop-blur-2xl" : "bg-white/80 backdrop-blur-2xl",
     text: isDark ? "text-[#e3e2e6]" : "text-[#1a1a1a]",
     border: isDark ? "border-white/10" : "border-black/10",
     hover: isDark ? "hover:bg-white/5" : "hover:bg-black/5",
@@ -743,8 +780,8 @@ export default function DockApp() {
     >
       <motion.div
         animate={{
-          width: expanded ? EXPANDED_SIZE.width : COLLAPSED_SIZE.width,
-          height: expanded ? EXPANDED_SIZE.height : COLLAPSED_SIZE.height,
+          width: expanded ? EXPANDED_SIZE.width : notifToast ? NOTIF_TOAST_SIZE.width : COLLAPSED_SIZE.width,
+          height: expanded ? EXPANDED_SIZE.height : notifToast ? NOTIF_TOAST_SIZE.height : COLLAPSED_SIZE.height,
           // Arriba siempre en escuadra, colapsado o expandido: pegado al borde de la pantalla,
           // como si el panel expandido fuera "el dock cerrado, pero más grande", no una tarjeta
           // flotando separada con un hueco arriba.
@@ -771,7 +808,36 @@ export default function DockApp() {
         </AnimatePresence>
 
         <AnimatePresence mode="popLayout" initial={false}>
-          {!expanded ? (
+          {!expanded && notifToast ? (
+            // Aviso que se abre solo ante una notificación nueva (punto 2 pedido, round 6):
+            // electron/main.cjs ya se encargó de forzar la ventana visible aunque algo esté en
+            // pantalla completa tapándola — acá solo hace falta mostrar qué es.
+            <motion.div
+              key="toast"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={CONTENT_TRANSITION}
+              role="button"
+              tabIndex={0}
+              onClick={() => handleToastClick(notifToast)}
+              className="w-full h-full flex items-start gap-2.5 px-3.5 py-3 cursor-pointer"
+            >
+              <div className="w-8 h-8 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
+                <Bell className="w-4 h-4 text-primary" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[9px] uppercase tracking-wide font-bold text-primary truncate">
+                    {CATEGORY_LABELS[notifToast.category] || notifToast.category}
+                  </span>
+                  <span className="text-[10px] text-zinc-500 shrink-0">{timeAgo(notifToast.receivedAt)}</span>
+                </div>
+                <p className="text-sm font-bold truncate">{notifToast.title}</p>
+                <p className="text-xs opacity-70 line-clamp-2">{notifToast.body}</p>
+              </div>
+            </motion.div>
+          ) : !expanded ? (
             <motion.div
               key="collapsed"
               initial={{ opacity: 0 }}
@@ -849,15 +915,18 @@ export default function DockApp() {
 
                 <div className="flex-1" />
 
-                <MiniCalendar
-                  month={calendarMonth}
-                  selectedDate={selectedDate}
-                  todayStr={todayStr}
-                  theme={theme}
-                  markedDates={markedDates}
-                  onSelect={setSelectedDate}
-                  onMonthChange={setCalendarMonth}
-                />
+                {/* mb-2 para que no quede pegado contra la fila de abajo (punto 3 pedido). */}
+                <div className="mb-2">
+                  <MiniCalendar
+                    month={calendarMonth}
+                    selectedDate={selectedDate}
+                    todayStr={todayStr}
+                    theme={theme}
+                    markedDates={markedDates}
+                    onSelect={setSelectedDate}
+                    onMonthChange={setCalendarMonth}
+                  />
+                </div>
 
                 <div className={`relative flex items-center gap-1 pt-2 border-t ${theme.border}`}>
                   <button
