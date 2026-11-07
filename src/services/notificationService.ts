@@ -189,10 +189,16 @@ export async function showAgendaNotification({
   // electron/main.cjs y src/components/DockApp.tsx) en vez de a una notificación nativa de
   // Windows — ni pide permiso de Notification ni pasa por el Service Worker, para no terminar
   // con dos avisos duplicados por lo mismo.
-  const dockBridge = (window as unknown as { FSR_ELECTRON_DOCK?: { notify: (p: { title: string; body: string; category: string }) => void } })
-    .FSR_ELECTRON_DOCK;
+  const dockBridge = (
+    window as unknown as {
+      FSR_ELECTRON_DOCK?: { notify: (p: { title: string; body: string; category: string; id?: string }) => void };
+    }
+  ).FSR_ELECTRON_DOCK;
   if (dockBridge) {
-    dockBridge.notify({ title, body, category });
+    // "turnos" acá es el nombre de la categoría de notificación; el mecanismo de "abrir para
+    // editar" de App.tsx (QUICK_ADD_TARGETS) usa la clave en singular — ver DockApp.tsx.
+    const editCategory = category === "turnos" ? "turno" : category;
+    dockBridge.notify({ title, body, category: editCategory, id: (data as { id?: string })?.id });
     return true;
   }
 

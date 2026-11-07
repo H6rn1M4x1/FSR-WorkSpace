@@ -37,6 +37,10 @@ contextBridge.exposeInMainWorld("FSR_ELECTRON_DOCK", {
   // Selector de monitor del dock (ver electron/main.cjs).
   getDisplays: () => ipcRenderer.invoke("dock-get-displays"),
   setDisplay: (displayId) => ipcRenderer.send("dock-set-display", displayId),
+  // Usado por el dock para "agregar"/"editar" (ver el comentario de dock-quick-add/dock-quick-edit
+  // en electron/main.cjs) — category es una de las claves de QUICK_ADD_TARGETS en App.tsx.
+  quickAdd: (category) => ipcRenderer.send("dock-quick-add", category),
+  quickEdit: (category, itemId) => ipcRenderer.send("dock-quick-edit", { category, itemId }),
   onSnapshot: (callback) => {
     const listener = (_event, snapshot) => callback(snapshot);
     ipcRenderer.on("dock-snapshot", listener);
@@ -46,5 +50,17 @@ contextBridge.exposeInMainWorld("FSR_ELECTRON_DOCK", {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on("dock-notify", listener);
     return () => ipcRenderer.removeListener("dock-notify", listener);
+  },
+  // Usado por la ventana principal (src/App.tsx) para enterarse de que el dock pidió abrir el
+  // formulario de alta/edición de una categoría — ver dock-quick-add/dock-quick-edit más arriba.
+  onQuickAdd: (callback) => {
+    const listener = (_event, category) => callback(category);
+    ipcRenderer.on("dock-quick-add", listener);
+    return () => ipcRenderer.removeListener("dock-quick-add", listener);
+  },
+  onQuickEdit: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on("dock-quick-edit", listener);
+    return () => ipcRenderer.removeListener("dock-quick-edit", listener);
   },
 });
