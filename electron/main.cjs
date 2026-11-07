@@ -171,6 +171,10 @@ let foregroundProbeTimer = null;
 let dockRevealedOverFullscreen = false;
 // Para no repetir llamadas idénticas a setOpacity/setIgnoreMouseEvents en cada tick.
 let dockCurrentlyVisible = true;
+// Hasta cuándo hay que mostrar el dock a la fuerza por una notificación nueva (punto 2 pedido,
+// round 6), sin importar qué haya en pantalla completa tapándolo ni dónde esté el mouse — ver
+// dock-notify más abajo. 0 = no hay ninguna notificación forzando nada ahora mismo.
+let notifyForceVisibleUntil = 0;
 
 function rectCoversDisplay(winRect, displayBounds) {
   const TOLERANCE = 2; // algunas apps dejan 1-2px de diferencia por el borde/sombra de la ventana
@@ -199,6 +203,14 @@ function applyDockVisibility(visible) {
 // la visibilidad normal apenas "fullscreenCovered" vuelve a false.
 function tickDockVisibility() {
   if (!dockWindow || dockWindow.isDestroyed()) return;
+
+  // Una notificación nueva fuerza el dock visible un rato, pase lo que pase en pantalla y esté
+  // donde esté el mouse (punto 2 pedido, round 6) — se evalúa antes que cualquier otra regla.
+  if (Date.now() < notifyForceVisibleUntil) {
+    dockRevealedOverFullscreen = true;
+    applyDockVisibility(true);
+    return;
+  }
 
   if (!fullscreenCovered) {
     dockRevealedOverFullscreen = false;
@@ -316,6 +328,13 @@ ipcMain.on("dock-snapshot", (_event, snapshot) => {
 ipcMain.on("dock-notify", (_event, payload) => {
   if (dockWindow && !dockWindow.isDestroyed()) {
     dockWindow.webContents.send("dock-notify", payload);
+    // Punto 2 pedido (round 6): la notificación tiene que verse aunque el dock esté escondido por
+    // algo en pantalla completa en ese momento — se fuerza visible un rato (más que lo que tarda
+    // el aviso chico del lado del renderer en cerrarse solo, ver NOTIF_TOAST_MS en DockApp.tsx,
+    // para no esconderlo de golpe mientras todavía se está mostrando).
+    notifyForceVisibleUntil = Date.now() + 8000;
+    dockRevealedOverFullscreen = true;
+    applyDockVisibility(true);
   }
 });
 
