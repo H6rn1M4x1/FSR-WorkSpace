@@ -275,60 +275,135 @@ function LiveClock({ theme }: { theme: Theme }) {
   );
 }
 
+// Tarjeta de cada nota (punto 1 pedido, round 5): mismo estilo visual que ya tiene Finanzas en la
+// app real (categoría/estado arriba, ícono + título, fecha, monto si corresponde, botones de
+// acción) — pero aplicado DIRECTO en la lista de cada sección, no solo al abrir un detalle aparte.
 function ItemRow({
   item,
   done,
   theme,
-  onClick,
   onToggle,
+  onEdit,
+  onDelete,
 }: {
   item: DockItem;
   done: boolean;
   theme: Theme;
-  onClick?: () => void;
-  onToggle?: () => void;
+  onToggle: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
 }) {
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
+    },
+    []
+  );
+
+  const caps = DOCK_ITEM_CAPABILITIES[item.kind];
   const Icon = SECTION_ICON[item.section];
-  const toggleable = DOCK_ITEM_CAPABILITIES[item.kind].toggleable;
+  const sectionLabel = SECTIONS.find((s) => s.key === item.section)?.label ?? item.section;
+  const statusLabel = done ? "Resuelto" : item.overdue ? "Vencido" : item.isToday ? "Hoy" : "Pendiente";
+  const statusColor = done
+    ? "bg-emerald-500/15 text-emerald-500"
+    : item.overdue
+    ? "bg-red-500/15 text-red-400"
+    : item.isToday
+    ? "bg-primary/20 text-primary"
+    : "bg-amber-500/15 text-amber-500";
+  const isFinanzas = item.kind === "detailedPayment" || item.kind === "invoice";
+
+  const handleTrashClick = () => {
+    if (!confirmDelete) {
+      uiSounds.click();
+      setConfirmDelete(true);
+      confirmTimerRef.current = setTimeout(() => setConfirmDelete(false), 4000);
+      return;
+    }
+    uiSounds.delete();
+    onDelete();
+  };
+
   return (
     <motion.div
-      onClick={onClick}
       onHoverStart={() => uiSounds.hover()}
-      whileHover={{ scale: 1.015 }}
       initial={{ opacity: 0, y: 10 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "0px 0px -10% 0px" }}
       transition={{ duration: 0.25 }}
-      role={onClick ? "button" : undefined}
-      tabIndex={onClick ? 0 : undefined}
-      className={`w-full text-left px-3 py-2 rounded-xl text-sm transition-colors flex items-center gap-2 ${
-        onClick ? "cursor-pointer" : ""
-      } ${done ? theme.subtle : item.overdue ? "bg-red-500/10 text-red-300" : item.isToday ? "bg-primary/10" : theme.subtle} ${
-        done ? "opacity-50" : ""
-      }`}
+      className={`rounded-xl border ${theme.border} ${theme.subtle} p-3 ${done ? "opacity-60" : ""}`}
     >
-      {toggleable && (
-        <button
-          type="button"
-          title={done ? "Marcar como pendiente" : DOCK_ITEM_CAPABILITIES[item.kind].toggleLabel}
-          onClick={(e) => {
-            e.stopPropagation();
-            uiSounds.toggle();
-            onToggle?.();
-          }}
-          className={`w-4 h-4 rounded-full border-2 shrink-0 cursor-pointer transition-colors flex items-center justify-center ${
-            done ? "bg-primary border-primary" : item.overdue ? "border-red-400" : "border-primary"
-          } hover:bg-primary/20`}
-        >
-          {done && <Check className="w-2.5 h-2.5 text-white" />}
-        </button>
-      )}
-      <Icon className="w-3.5 h-3.5 shrink-0 opacity-60" />
-      <div className="min-w-0 flex-1">
-        <p className={`font-semibold truncate ${done ? "line-through" : ""}`}>{item.title}</p>
-        {item.subtitle && <p className="text-xs opacity-70 truncate">{item.subtitle}</p>}
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <span className="text-[9px] uppercase tracking-wide font-bold text-primary bg-primary/15 rounded-full px-2 py-0.5 truncate max-w-[60%]">
+          {sectionLabel}
+        </span>
+        <span className={`text-[9px] uppercase tracking-wide font-bold rounded-full px-2 py-0.5 shrink-0 ${statusColor}`}>{statusLabel}</span>
       </div>
-      {item.amount != null && <span className="text-xs font-bold shrink-0 opacity-80">{formatMonto(item.amount)}</span>}
+
+      <div className="flex items-start gap-2.5 mb-2.5">
+        <div className="w-8 h-8 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
+          <Icon className="w-4 h-4 text-primary" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className={`font-bold text-sm truncate ${done ? "line-through" : ""}`}>{item.title}</p>
+          {item.dateOnly && (
+            <p className="text-[11px] text-zinc-500 flex items-center gap-1 mt-0.5">
+              <CalendarIcon className="w-3 h-3" /> {formatFechaLarga(item.dateOnly)}
+            </p>
+          )}
+          {!isFinanzas && item.subtitle && <p className="text-[11px] text-zinc-500 mt-0.5">{item.subtitle}</p>}
+        </div>
+        {isFinanzas && item.amount != null && <p className="font-bold text-sm shrink-0">{formatMonto(item.amount)}</p>}
+      </div>
+
+      {(caps.toggleable || caps.editable || caps.deletable) && (
+        <div className="flex items-center gap-1.5">
+          {caps.toggleable && (
+            <motion.button
+              type="button"
+              whileTap={{ scale: 0.97 }}
+              onClick={() => {
+                uiSounds.save();
+                uiSounds.toggle();
+                onToggle();
+              }}
+              className={`flex-1 flex items-center justify-center gap-1.5 font-bold text-xs py-1.5 rounded-lg cursor-pointer ${
+                done ? `${theme.subtle} ${theme.hover}` : "bg-primary text-white"
+              }`}
+            >
+              {done ? <Undo2 className="w-3.5 h-3.5" /> : <Check className="w-3.5 h-3.5" />}
+              {done ? "Marcar como pendiente" : caps.toggleLabel}
+            </motion.button>
+          )}
+          {caps.editable && (
+            <button
+              type="button"
+              title="Editar en la app"
+              onClick={() => {
+                uiSounds.edit();
+                onEdit();
+              }}
+              className={`p-2 rounded-lg ${theme.hover} cursor-pointer shrink-0`}
+            >
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {caps.deletable && (
+            <button
+              type="button"
+              title={confirmDelete ? "Tocá de nuevo para confirmar" : "Eliminar"}
+              onClick={handleTrashClick}
+              className={`p-2 rounded-lg cursor-pointer transition-colors shrink-0 ${
+                confirmDelete ? "bg-red-500 text-white" : `text-red-400 ${theme.hover}`
+              }`}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      )}
     </motion.div>
   );
 }
@@ -427,149 +502,12 @@ function MiniCalendar({
   );
 }
 
-// Tarjeta de detalle (punto 1 pedido): el mismo estilo visual que ya tiene Finanzas en la app real
-// (categoría + estado arriba, ícono + título, fecha, monto si corresponde, y los botones de
-// acción) — adaptada a cada sección en vez de abrir directo el formulario de edición al tocar.
-function DetailCard({
-  item,
-  done,
-  theme,
-  onClose,
-  onToggle,
-  onEdit,
-  onDelete,
-}: {
-  item: DockItem;
-  done: boolean;
-  theme: Theme;
-  onClose: () => void;
-  onToggle: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
-}) {
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    setConfirmDelete(false);
-    return () => {
-      if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
-    };
-  }, [item.id]);
-
-  const caps = DOCK_ITEM_CAPABILITIES[item.kind];
-  const Icon = SECTION_ICON[item.section];
-  const sectionLabel = SECTIONS.find((s) => s.key === item.section)?.label ?? item.section;
-  const statusLabel = done ? "Resuelto" : item.overdue ? "Vencido" : item.isToday ? "Hoy" : "Pendiente";
-  const statusColor = done
-    ? "bg-emerald-500/15 text-emerald-500"
-    : item.overdue
-    ? "bg-red-500/15 text-red-400"
-    : item.isToday
-    ? "bg-primary/20 text-primary"
-    : "bg-amber-500/15 text-amber-500";
-  const isFinanzas = item.kind === "detailedPayment" || item.kind === "invoice";
-
-  const handleTrashClick = () => {
-    if (!confirmDelete) {
-      uiSounds.click();
-      setConfirmDelete(true);
-      confirmTimerRef.current = setTimeout(() => setConfirmDelete(false), 4000);
-      return;
-    }
-    uiSounds.delete();
-    onDelete();
-  };
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.96 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.96 }}
-      transition={CONTENT_TRANSITION}
-      className={`absolute inset-0 ${theme.bg} flex flex-col p-4`}
-    >
-      <div className="flex items-center justify-between mb-4">
-        <span className="text-[10px] uppercase tracking-wide font-bold text-primary bg-primary/15 rounded-full px-2 py-0.5">{sectionLabel}</span>
-        <div className="flex items-center gap-2">
-          <span className={`text-[10px] uppercase tracking-wide font-bold rounded-full px-2 py-0.5 ${statusColor}`}>{statusLabel}</span>
-          <button type="button" onClick={onClose} className={`p-1 rounded-lg ${theme.hover} cursor-pointer`}>
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-
-      <div className="flex items-start gap-3 mb-3">
-        <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center shrink-0">
-          <Icon className="w-5 h-5 text-primary" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="font-bold text-base truncate">{item.title}</p>
-          {item.dateOnly && (
-            <p className="text-xs text-zinc-500 flex items-center gap-1 mt-0.5">
-              <CalendarIcon className="w-3 h-3" /> {formatFechaLarga(item.dateOnly)}
-            </p>
-          )}
-          {!isFinanzas && item.subtitle && <p className="text-xs text-zinc-500 mt-0.5">{item.subtitle}</p>}
-        </div>
-        {isFinanzas && item.amount != null && <p className="font-bold text-lg shrink-0">{formatMonto(item.amount)}</p>}
-      </div>
-
-      <div className="flex-1" />
-
-      <div className="flex items-center gap-2">
-        {caps.toggleable && (
-          <motion.button
-            type="button"
-            whileTap={{ scale: 0.97 }}
-            onClick={() => {
-              uiSounds.save();
-              onToggle();
-            }}
-            className={`flex-1 flex items-center justify-center gap-1.5 font-bold text-sm py-2 rounded-xl cursor-pointer ${
-              done ? `${theme.subtle} ${theme.hover}` : "bg-primary text-white"
-            }`}
-          >
-            {done ? <Undo2 className="w-4 h-4" /> : <Check className="w-4 h-4" />}
-            {done ? "Marcar como pendiente" : caps.toggleLabel}
-          </motion.button>
-        )}
-        {caps.editable && (
-          <button
-            type="button"
-            title="Editar en la app"
-            onClick={() => {
-              uiSounds.edit();
-              onEdit();
-            }}
-            className={`p-2.5 rounded-xl ${theme.subtle} ${theme.hover} cursor-pointer`}
-          >
-            <Pencil className="w-4 h-4" />
-          </button>
-        )}
-        {caps.deletable && (
-          <button
-            type="button"
-            title={confirmDelete ? "Tocá de nuevo para confirmar" : "Eliminar"}
-            onClick={handleTrashClick}
-            className={`p-2.5 rounded-xl cursor-pointer transition-colors ${
-              confirmDelete ? "bg-red-500 text-white" : `${theme.subtle} text-red-400 ${theme.hover}`
-            }`}
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
-        )}
-      </div>
-    </motion.div>
-  );
-}
-
 export default function DockApp() {
   const [expanded, setExpanded] = useState(false);
   const [section, setSection] = useState<DockSectionKey | null>(null);
   const [snapshot, setSnapshot] = useState<DockSnapshot>(EMPTY_SNAPSHOT);
   const [notifFeed, setNotifFeed] = useState<NotifEntry[]>([]);
   const [openNotifId, setOpenNotifId] = useState<string | null>(null);
-  const [openItem, setOpenItem] = useState<DockItem | null>(null);
   // Ids borrados desde acá mismo — se esconden al toque (ocultamiento optimista) mientras la
   // ventana principal confirma el borrado de verdad.
   const [locallyResolvedIds, setLocallyResolvedIds] = useState<Set<string>>(new Set());
@@ -662,7 +600,6 @@ export default function DockApp() {
       setExpanded(false);
       setShowDisplayMenu(false);
       setOpenNotifId(null);
-      setOpenItem(null);
       uiSounds.collapse();
     }, COLLAPSE_DELAY_MS);
   };
@@ -677,18 +614,6 @@ export default function DockApp() {
     bridgeRef.current?.setDisplay(id);
     setDisplays((prev) => prev.map((d) => ({ ...d, selected: d.id === id })));
     setShowDisplayMenu(false);
-  };
-
-  // Tocar una nota (punto 1 pedido): abre la tarjeta de detalle con su info, en vez de ir directo
-  // a editar — editar/eliminar/tildar son ahora botones explícitos dentro de esa tarjeta.
-  const handleItemClick = (item: DockItem) => {
-    uiSounds.expand();
-    setOpenItem(item);
-  };
-
-  const handleCloseItem = () => {
-    uiSounds.collapse();
-    setOpenItem(null);
   };
 
   // Tildar (Pagar/Marcar realizado/Marcar hecha): invierte el check al toque (optimista) mientras
@@ -709,13 +634,11 @@ export default function DockApp() {
     const category = DOCK_ITEM_CAPABILITIES[item.kind].editCategory;
     if (!category) return;
     bridgeRef.current?.quickEdit(category, item.id);
-    setOpenItem(null);
   };
 
   const handleDeleteItem = (item: DockItem) => {
     bridgeRef.current?.quickDelete(item.kind, item.id);
     setLocallyResolvedIds((prev) => new Set(prev).add(item.id));
-    setOpenItem(null);
   };
 
   const handleNotifClick = (n: NotifEntry) => {
@@ -770,7 +693,10 @@ export default function DockApp() {
   // resuelto que se sigue mostrando igual, ver punto 3 pedido).
   const pendingCountOf = (items: DockItem[]) => items.filter((i) => !effectiveDone(i)).length;
 
-  const mergedItems = useMemo(() => [...finanzasF, ...turnosF, ...saludF, ...academicoF].slice(0, 12), [finanzasF, turnosF, saludF, academicoF]);
+  // Inicio mezcla Finanzas/Turnos/Académico, respetando ese mismo orden (el de las secciones en la
+  // barra lateral) — Salud queda afuera (punto 2 pedido, round 5): solo se ve en su propia sección,
+  // porque mezclado en Inicio resulta molesto (son medicamentos "en tratamiento", no vencimientos).
+  const mergedItems = useMemo(() => [...finanzasF, ...turnosF, ...academicoF].slice(0, 12), [finanzasF, turnosF, academicoF]);
 
   // El estado "ambiente" del pill colapsado siempre refleja lo pendiente de HOY (sin contar lo ya
   // resuelto), sin importar qué día esté elegido en el calendario del panel expandido.
@@ -1033,8 +959,9 @@ export default function DockApp() {
                             item={item}
                             done={effectiveDone(item)}
                             theme={theme}
-                            onClick={() => handleItemClick(item)}
                             onToggle={() => handleToggleItem(item)}
+                            onEdit={() => handleEditItem(item)}
+                            onDelete={() => handleDeleteItem(item)}
                           />
                         ))
                       )}
@@ -1067,20 +994,6 @@ export default function DockApp() {
                     </motion.div>
                   </AnimatePresence>
                 </div>
-
-                <AnimatePresence>
-                  {openItem && (
-                    <DetailCard
-                      item={openItem}
-                      done={effectiveDone(openItem)}
-                      theme={theme}
-                      onClose={handleCloseItem}
-                      onToggle={() => handleToggleItem(openItem)}
-                      onEdit={() => handleEditItem(openItem)}
-                      onDelete={() => handleDeleteItem(openItem)}
-                    />
-                  )}
-                </AnimatePresence>
 
                 {/* Detalle simple de notificación (no viene con la info estructurada que tiene un
                     DockItem real, así que se muestra como texto en vez de la tarjeta rica). */}
