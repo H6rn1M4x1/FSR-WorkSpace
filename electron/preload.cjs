@@ -34,6 +34,9 @@ contextBridge.exposeInMainWorld("FSR_ELECTRON_DOCK", {
   resize: (size) => ipcRenderer.send("dock-resize", size),
   // Usado por el dock para mostrar la ventana principal (botón "Abrir app completa").
   openMain: () => ipcRenderer.send("dock-open-main"),
+  // Selector de monitor del dock (ver electron/main.cjs).
+  getDisplays: () => ipcRenderer.invoke("dock-get-displays"),
+  setDisplay: (displayId) => ipcRenderer.send("dock-set-display", displayId),
   onSnapshot: (callback) => {
     const listener = (_event, snapshot) => callback(snapshot);
     ipcRenderer.on("dock-snapshot", listener);

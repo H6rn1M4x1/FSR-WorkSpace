@@ -146,4 +146,16 @@ export const uiSounds = {
   // Abrir una nota/ítem en grande (lupa / "ver detalles"): un "pop" breve que sube de altura,
   // como si algo se expandiera.
   expand: () => playTones([{ freq: 460, rampTo: 680, at: 0, duration: 0.08, gain: 0.05, type: "sine" }]),
+
+  // Opuesto de "expand": algo se achica/cierra (ej. el dock flotante al colapsarse) — mismo
+  // "pop" pero de bajada en vez de subida.
+  collapse: () => playTones([{ freq: 680, rampTo: 460, at: 0, duration: 0.07, gain: 0.045, type: "sine" }]),
+
+  // Llega una notificación nueva al dock flotante: un timbre de dos notas bien distinguible,
+  // pensado para escucharse sin estar mirando la pantalla.
+  notify: () =>
+    playTones([
+      { freq: 740, at: 0, duration: 0.08, gain: 0.05, type: "sine" },
+      { freq: 980, at: 0.09, duration: 0.14, gain: 0.05, type: "sine" },
+    ]),
 };

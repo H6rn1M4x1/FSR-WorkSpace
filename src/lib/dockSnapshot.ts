@@ -28,6 +28,15 @@ export interface DockSnapshot {
   salud: DockItem[];
   academico: DockItem[];
   urgentCount: number;
+  // Totales reales (sin el recorte a MAX_ITEMS de arriba) para los contadores de cada sección en
+  // el dock — así una sección con más de 5 pendientes no muestra "5" como si fuera el total.
+  counts: { finanzas: number; turnos: number; salud: number; academico: number };
+  // El dock es una ventana/renderer aparte: no monta App.tsx, así que no tiene forma propia de
+  // enterarse del color de acento, el modo oscuro ni quién es el usuario — viaja todo acá adentro
+  // en vez de depender de que lea localStorage por su cuenta (ver DockApp.tsx).
+  themeColor: string;
+  darkMode: boolean;
+  profile: { name: string; photoURL: string | null };
 }
 
 const MAX_ITEMS = 5;
@@ -82,6 +91,9 @@ export function buildDockSnapshot(params: {
   medicamentosDetallados: MedicamentoDetallado[];
   examenes: ExamenItem[];
   tasks: AcademicTask[];
+  themeColor: string;
+  darkMode: boolean;
+  profile: { name: string; photoURL: string | null };
 }): DockSnapshot {
   const todayStr = getLocalDateString();
 
@@ -178,5 +190,14 @@ export function buildDockSnapshot(params: {
     salud: sortAndTrim(saludRaw),
     academico: sortAndTrim(academicoRaw),
     urgentCount,
+    counts: {
+      finanzas: finanzasRaw.length,
+      turnos: turnosRaw.length,
+      salud: saludRaw.length,
+      academico: academicoRaw.length,
+    },
+    themeColor: params.themeColor,
+    darkMode: params.darkMode,
+    profile: params.profile,
   };
 }
