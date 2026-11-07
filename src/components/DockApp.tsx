@@ -17,6 +17,15 @@ import {
   Trash2,
   Calendar as CalendarIcon,
   Home,
+  Undo2,
+  Sun,
+  CloudSun,
+  Cloud,
+  CloudRain,
+  CloudDrizzle,
+  CloudFog,
+  CloudLightning,
+  Snowflake,
   type LucideIcon,
 } from "lucide-react";
 import Logo from "./Logo";
@@ -94,7 +103,7 @@ const SECTION_ADD_KEY: Record<DockSectionKey, string> = {
 const WEEKDAY_LABELS = ["D", "L", "M", "M", "J", "V", "S"];
 
 const COLLAPSED_SIZE = { width: 200, height: 40 };
-const EXPANDED_SIZE = { width: 680, height: 460 };
+const EXPANDED_SIZE = { width: 680, height: 500 };
 // Tiempo que espera antes de colapsar al sacar el mouse, para no cerrarse por un roce accidental.
 const COLLAPSE_DELAY_MS = 350;
 // La misma duración/curva la usan el resize del panel Y el crossfade del contenido — si no
@@ -171,6 +180,82 @@ interface Theme {
   navInactive: string;
 }
 
+// Mismo mapeo de códigos WMO que ya usa src/components/WeatherWidget.tsx — se copia acá en vez
+// de importarlo porque ese componente arrastra "country-state-city" (para resolver el perfil del
+// usuario a coordenadas), que el dock no necesita: acá se pide la ubicación real en el momento
+// (ver WeatherMini), no la ciudad que el usuario cargó en su perfil.
+function getWeatherIcon(code: number): LucideIcon {
+  if (code === 0) return Sun;
+  if (code === 1 || code === 2) return CloudSun;
+  if (code === 3) return Cloud;
+  if (code === 45 || code === 48) return CloudFog;
+  if (code >= 51 && code <= 57) return CloudDrizzle;
+  if ((code >= 61 && code <= 67) || (code >= 80 && code <= 82)) return CloudRain;
+  if ((code >= 71 && code <= 77) || code === 85 || code === 86) return Snowflake;
+  if (code >= 95) return CloudLightning;
+  return Sun;
+}
+
+interface WeatherState {
+  temp: number;
+  code: number;
+}
+
+// Clima con la ubicación real del dispositivo en el momento (punto 6 pedido: "que tome
+// automáticamente mi ubicación actual"), no la ciudad cargada en el perfil — por eso usa
+// geolocalización del navegador en vez del mecanismo de WeatherWidget. Si el usuario no da
+// permiso, o la ubicación tarda demasiado, simplemente no se muestra nada (el reloj solo sigue
+// andando igual) — electron/main.cjs aprueba el permiso de geolocalización de entrada para que acá
+// no haga falta pedirlo a mano cada vez.
+function WeatherMini() {
+  const [weather, setWeather] = useState<WeatherState | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchWeather = () => {
+      if (typeof navigator === "undefined" || !navigator.geolocation) return;
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          try {
+            const { latitude, longitude } = pos.coords;
+            const res = await fetch(
+              `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true&timezone=auto`
+            );
+            const data = await res.json();
+            const cw = data?.current_weather;
+            if (!cancelled && cw) {
+              setWeather({ temp: Math.round(cw.temperature), code: cw.weathercode ?? 0 });
+            }
+          } catch {
+            // Sin clima esta vez — no es crítico, el reloj sigue andando igual.
+          }
+        },
+        () => {
+          // Permiso denegado o ubicación no disponible — se deja sin mostrar nada.
+        },
+        { timeout: 8000, maximumAge: 10 * 60 * 1000 }
+      );
+    };
+
+    fetchWeather();
+    const id = setInterval(fetchWeather, 30 * 60 * 1000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, []);
+
+  if (!weather) return null;
+  const Icon = getWeatherIcon(weather.code);
+  return (
+    <span className="inline-flex items-center gap-1 text-sm text-zinc-400">
+      <Icon className="w-4 h-4 text-primary" />
+      {weather.temp}°C
+    </span>
+  );
+}
+
 function LiveClock({ theme }: { theme: Theme }) {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
@@ -180,20 +265,25 @@ function LiveClock({ theme }: { theme: Theme }) {
   const time = now.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
   const date = now.toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" });
   return (
-    <div className={`text-center py-3 border-b ${theme.border} shrink-0`}>
+    <div className={`text-center py-2.5 border-b ${theme.border} shrink-0`}>
       <p className="text-3xl font-bold tabular-nums leading-none">{time}</p>
-      <p className="text-xs text-zinc-500 capitalize mt-1">{date}</p>
+      <div className="flex items-center justify-center gap-2 mt-1">
+        <p className="text-xs text-zinc-500 capitalize">{date}</p>
+        <WeatherMini />
+      </div>
     </div>
   );
 }
 
 function ItemRow({
   item,
+  done,
   theme,
   onClick,
   onToggle,
 }: {
   item: DockItem;
+  done: boolean;
   theme: Theme;
   onClick?: () => void;
   onToggle?: () => void;
@@ -213,27 +303,32 @@ function ItemRow({
       tabIndex={onClick ? 0 : undefined}
       className={`w-full text-left px-3 py-2 rounded-xl text-sm transition-colors flex items-center gap-2 ${
         onClick ? "cursor-pointer" : ""
-      } ${item.overdue ? "bg-red-500/10 text-red-300" : item.isToday ? "bg-primary/10" : theme.subtle}`}
+      } ${done ? theme.subtle : item.overdue ? "bg-red-500/10 text-red-300" : item.isToday ? "bg-primary/10" : theme.subtle} ${
+        done ? "opacity-50" : ""
+      }`}
     >
       {toggleable && (
         <button
           type="button"
-          title={DOCK_ITEM_CAPABILITIES[item.kind].toggleLabel}
+          title={done ? "Marcar como pendiente" : DOCK_ITEM_CAPABILITIES[item.kind].toggleLabel}
           onClick={(e) => {
             e.stopPropagation();
             uiSounds.toggle();
             onToggle?.();
           }}
-          className={`w-4 h-4 rounded-full border-2 shrink-0 cursor-pointer transition-colors ${
-            item.overdue ? "border-red-400" : "border-primary"
+          className={`w-4 h-4 rounded-full border-2 shrink-0 cursor-pointer transition-colors flex items-center justify-center ${
+            done ? "bg-primary border-primary" : item.overdue ? "border-red-400" : "border-primary"
           } hover:bg-primary/20`}
-        />
+        >
+          {done && <Check className="w-2.5 h-2.5 text-white" />}
+        </button>
       )}
       <Icon className="w-3.5 h-3.5 shrink-0 opacity-60" />
       <div className="min-w-0 flex-1">
-        <p className="font-semibold truncate">{item.title}</p>
+        <p className={`font-semibold truncate ${done ? "line-through" : ""}`}>{item.title}</p>
         {item.subtitle && <p className="text-xs opacity-70 truncate">{item.subtitle}</p>}
       </div>
+      {item.amount != null && <span className="text-xs font-bold shrink-0 opacity-80">{formatMonto(item.amount)}</span>}
     </motion.div>
   );
 }
@@ -337,6 +432,7 @@ function MiniCalendar({
 // acción) — adaptada a cada sección en vez de abrir directo el formulario de edición al tocar.
 function DetailCard({
   item,
+  done,
   theme,
   onClose,
   onToggle,
@@ -344,6 +440,7 @@ function DetailCard({
   onDelete,
 }: {
   item: DockItem;
+  done: boolean;
   theme: Theme;
   onClose: () => void;
   onToggle: () => void;
@@ -362,8 +459,14 @@ function DetailCard({
   const caps = DOCK_ITEM_CAPABILITIES[item.kind];
   const Icon = SECTION_ICON[item.section];
   const sectionLabel = SECTIONS.find((s) => s.key === item.section)?.label ?? item.section;
-  const statusLabel = item.overdue ? "Vencido" : item.isToday ? "Hoy" : "Pendiente";
-  const statusColor = item.overdue ? "bg-red-500/15 text-red-400" : item.isToday ? "bg-primary/20 text-primary" : "bg-amber-500/15 text-amber-500";
+  const statusLabel = done ? "Resuelto" : item.overdue ? "Vencido" : item.isToday ? "Hoy" : "Pendiente";
+  const statusColor = done
+    ? "bg-emerald-500/15 text-emerald-500"
+    : item.overdue
+    ? "bg-red-500/15 text-red-400"
+    : item.isToday
+    ? "bg-primary/20 text-primary"
+    : "bg-amber-500/15 text-amber-500";
   const isFinanzas = item.kind === "detailedPayment" || item.kind === "invoice";
 
   const handleTrashClick = () => {
@@ -422,10 +525,12 @@ function DetailCard({
               uiSounds.save();
               onToggle();
             }}
-            className="flex-1 flex items-center justify-center gap-1.5 bg-primary text-white font-bold text-sm py-2 rounded-xl cursor-pointer"
+            className={`flex-1 flex items-center justify-center gap-1.5 font-bold text-sm py-2 rounded-xl cursor-pointer ${
+              done ? `${theme.subtle} ${theme.hover}` : "bg-primary text-white"
+            }`}
           >
-            <Check className="w-4 h-4" />
-            {caps.toggleLabel}
+            {done ? <Undo2 className="w-4 h-4" /> : <Check className="w-4 h-4" />}
+            {done ? "Marcar como pendiente" : caps.toggleLabel}
           </motion.button>
         )}
         {caps.editable && (
@@ -465,7 +570,13 @@ export default function DockApp() {
   const [notifFeed, setNotifFeed] = useState<NotifEntry[]>([]);
   const [openNotifId, setOpenNotifId] = useState<string | null>(null);
   const [openItem, setOpenItem] = useState<DockItem | null>(null);
+  // Ids borrados desde acá mismo — se esconden al toque (ocultamiento optimista) mientras la
+  // ventana principal confirma el borrado de verdad.
   const [locallyResolvedIds, setLocallyResolvedIds] = useState<Set<string>>(new Set());
+  // Ids tildados/destildados desde acá — a diferencia del borrado, esto NO esconde el ítem (punto
+  // 3 pedido: lo de hoy se sigue mostrando aunque ya esté resuelto), solo invierte su estado
+  // "done" de forma optimista mientras se confirma de verdad.
+  const [locallyToggledIds, setLocallyToggledIds] = useState<Set<string>>(new Set());
   const [pulse, setPulse] = useState(false);
   const [displays, setDisplays] = useState<DockDisplayOption[]>([]);
   const [showDisplayMenu, setShowDisplayMenu] = useState(false);
@@ -499,9 +610,10 @@ export default function DockApp() {
     if (!bridge) return;
     const unsubSnapshot = bridge.onSnapshot((s) => {
       setSnapshot(s);
-      // Ya se reflejó el cambio real — el "ocultamiento optimista" (ver handleToggleItem) deja de
-      // hacer falta para estos ids.
+      // Ya se reflejó el cambio real — los overrides optimistas (ver handleToggleItem/
+      // handleDeleteItem) dejan de hacer falta.
       setLocallyResolvedIds(new Set());
+      setLocallyToggledIds(new Set());
     });
     const unsubNotify = bridge.onNotify((payload) => {
       uiSounds.notify();
@@ -579,12 +691,18 @@ export default function DockApp() {
     setOpenItem(null);
   };
 
-  // Tildar (Pagar/Marcar realizado/Marcar hecha): se oculta de inmediato en el dock (optimista)
-  // mientras la ventana principal guarda el cambio de verdad — ver dock-quick-toggle en App.tsx.
+  // Tildar (Pagar/Marcar realizado/Marcar hecha): invierte el check al toque (optimista) mientras
+  // la ventana principal guarda el cambio de verdad — ver dock-quick-toggle en App.tsx. A
+  // diferencia de la versión anterior, esto YA NO esconde el ítem (punto 3 pedido): lo de hoy se
+  // sigue mostrando aunque ya esté resuelto, solo con el check tildado.
   const handleToggleItem = (item: DockItem) => {
     bridgeRef.current?.quickToggle(item.kind, item.id);
-    setLocallyResolvedIds((prev) => new Set(prev).add(item.id));
-    if (openItem?.id === item.id) setOpenItem(null);
+    setLocallyToggledIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(item.id)) next.delete(item.id);
+      else next.add(item.id);
+      return next;
+    });
   };
 
   const handleEditItem = (item: DockItem) => {
@@ -615,24 +733,29 @@ export default function DockApp() {
     bridgeRef.current?.quickAdd(SECTION_ADD_KEY[key]);
   };
 
-  // Filtrado por fecha: por default siempre "hoy" (lo que vence hoy), salvo que se elija otro día
-  // en el mini calendario — y se sacan los que se acaban de tildar/borrar desde acá mismo
-  // (ocultamiento optimista, ver handleToggleItem/handleDeleteItem).
-  const notResolved = (i: DockItem) => !locallyResolvedIds.has(i.id);
+  // Estado "resuelto" efectivo de un ítem, considerando el toggle optimista local (ver
+  // handleToggleItem) — no se usa para decidir si se MUESTRA o no (eso ya no depende de esto,
+  // punto 3 pedido), solo para cómo se ve (check tildado, tachado, etc.).
+  const effectiveDone = (i: DockItem) => (locallyToggledIds.has(i.id) ? !i.done : i.done);
+
+  // Filtrado por fecha: por default siempre "hoy" (lo que vence hoy, resuelto o no), salvo que se
+  // elija otro día en el mini calendario — y se sacan los que se acaban de BORRAR desde acá mismo
+  // (ocultamiento optimista, ver handleDeleteItem; tildar ya no esconde nada, ver handleToggleItem).
+  const notDeleted = (i: DockItem) => !locallyResolvedIds.has(i.id);
   const finanzasF = useMemo(
-    () => snapshot.finanzas.filter((i) => matchesDate(i, selectedDate, todayStr) && notResolved(i)),
+    () => snapshot.finanzas.filter((i) => matchesDate(i, selectedDate, todayStr) && notDeleted(i)),
     [snapshot.finanzas, selectedDate, todayStr, locallyResolvedIds]
   );
   const turnosF = useMemo(
-    () => snapshot.turnos.filter((i) => matchesDate(i, selectedDate, todayStr) && notResolved(i)),
+    () => snapshot.turnos.filter((i) => matchesDate(i, selectedDate, todayStr) && notDeleted(i)),
     [snapshot.turnos, selectedDate, todayStr, locallyResolvedIds]
   );
   const saludF = useMemo(
-    () => snapshot.salud.filter((i) => matchesDate(i, selectedDate, todayStr) && notResolved(i)),
+    () => snapshot.salud.filter((i) => matchesDate(i, selectedDate, todayStr) && notDeleted(i)),
     [snapshot.salud, selectedDate, todayStr, locallyResolvedIds]
   );
   const academicoF = useMemo(
-    () => snapshot.academico.filter((i) => matchesDate(i, selectedDate, todayStr) && notResolved(i)),
+    () => snapshot.academico.filter((i) => matchesDate(i, selectedDate, todayStr) && notDeleted(i)),
     [snapshot.academico, selectedDate, todayStr, locallyResolvedIds]
   );
 
@@ -643,14 +766,18 @@ export default function DockApp() {
     academico: academicoF,
   };
 
+  // El numerito de cada sección en la barra lateral cuenta solo lo PENDIENTE de verdad (no lo ya
+  // resuelto que se sigue mostrando igual, ver punto 3 pedido).
+  const pendingCountOf = (items: DockItem[]) => items.filter((i) => !effectiveDone(i)).length;
+
   const mergedItems = useMemo(() => [...finanzasF, ...turnosF, ...saludF, ...academicoF].slice(0, 12), [finanzasF, turnosF, saludF, academicoF]);
 
-  // El estado "ambiente" del pill colapsado siempre refleja lo pendiente de HOY, sin importar qué
-  // día esté elegido en el calendario del panel expandido.
+  // El estado "ambiente" del pill colapsado siempre refleja lo pendiente de HOY (sin contar lo ya
+  // resuelto), sin importar qué día esté elegido en el calendario del panel expandido.
   const todayPendingCount = useMemo(() => {
     const all = [...snapshot.finanzas, ...snapshot.turnos, ...snapshot.academico];
-    return all.filter((i) => matchesDate(i, todayStr, todayStr) && notResolved(i)).length;
-  }, [snapshot, todayStr, locallyResolvedIds]);
+    return all.filter((i) => matchesDate(i, todayStr, todayStr) && notDeleted(i) && !effectiveDone(i)).length;
+  }, [snapshot, todayStr, locallyResolvedIds, locallyToggledIds]);
 
   const statusText = useMemo(() => {
     if (todayPendingCount === 0) return "Al día";
@@ -663,7 +790,11 @@ export default function DockApp() {
     return new Set(all.map((i) => i.dateOnly).filter(Boolean));
   }, [snapshot]);
 
-  const sectionItems = section ? filteredByKey[section] : mergedItems;
+  // Lo ya resuelto se muestra, pero al final de la lista (no mezclado con lo que todavía falta).
+  const sectionItems = useMemo(
+    () => [...(section ? filteredByKey[section] : mergedItems)].sort((a, b) => Number(effectiveDone(a)) - Number(effectiveDone(b))),
+    [section, filteredByKey, mergedItems, locallyToggledIds]
+  );
   const sectionLabel = section ? SECTIONS.find((s) => s.key === section)!.label : "Inicio";
   const openNotif = openNotifId ? notifFeed.find((n) => n.id === openNotifId) ?? null : null;
 
@@ -736,13 +867,14 @@ export default function DockApp() {
               transition={CONTENT_TRANSITION}
               className="flex h-full"
             >
-              {/* Sidebar: perfil + secciones + mini calendario a la izquierda. */}
-              <div className={`w-[190px] shrink-0 h-full border-r ${theme.border} flex flex-col p-3 gap-1`}>
-                <div className={`flex items-center gap-2 px-1 pb-3 mb-1 border-b ${theme.border}`}>
+              {/* Sidebar: perfil + secciones + mini calendario a la izquierda. Compacto a propósito
+                  (punto 2 pedido) para que el mini calendario entre completo sin recortarse. */}
+              <div className={`w-[190px] shrink-0 h-full border-r ${theme.border} flex flex-col p-2.5 gap-0.5 overflow-y-auto`}>
+                <div className={`flex items-center gap-2 px-1 pb-2 mb-0.5 border-b ${theme.border}`}>
                   {snapshot.profile.photoURL ? (
-                    <img src={snapshot.profile.photoURL} alt={snapshot.profile.name} className="w-8 h-8 rounded-full object-cover shrink-0" />
+                    <img src={snapshot.profile.photoURL} alt={snapshot.profile.name} className="w-7 h-7 rounded-full object-cover shrink-0" />
                   ) : (
-                    <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-sm font-bold shrink-0">
+                    <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold shrink-0">
                       {initials(snapshot.profile.name)}
                     </div>
                   )}
@@ -759,7 +891,7 @@ export default function DockApp() {
                     uiSounds.navigate();
                     setSection(null);
                   }}
-                  className={`flex items-center gap-2 px-2.5 py-2 rounded-xl text-sm transition-colors cursor-pointer ${
+                  className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-sm transition-colors cursor-pointer ${
                     !section ? "bg-primary text-white" : `${theme.navInactive} ${theme.hover}`
                   }`}
                 >
@@ -768,7 +900,7 @@ export default function DockApp() {
                 </motion.button>
 
                 {SECTIONS.map(({ key, label, icon: Icon }) => {
-                  const count = filteredByKey[key].length;
+                  const count = pendingCountOf(filteredByKey[key]);
                   const active = section === key;
                   return (
                     <motion.button
@@ -776,7 +908,7 @@ export default function DockApp() {
                       type="button"
                       whileTap={{ scale: 0.96 }}
                       onClick={() => handleSectionClick(key)}
-                      className={`flex items-center gap-2 px-2.5 py-2 rounded-xl text-sm transition-colors cursor-pointer ${
+                      className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-sm transition-colors cursor-pointer ${
                         active ? "bg-primary text-white" : `${theme.navInactive} ${theme.hover}`
                       }`}
                     >
@@ -899,6 +1031,7 @@ export default function DockApp() {
                           <ItemRow
                             key={item.id}
                             item={item}
+                            done={effectiveDone(item)}
                             theme={theme}
                             onClick={() => handleItemClick(item)}
                             onToggle={() => handleToggleItem(item)}
@@ -939,6 +1072,7 @@ export default function DockApp() {
                   {openItem && (
                     <DetailCard
                       item={openItem}
+                      done={effectiveDone(openItem)}
                       theme={theme}
                       onClose={handleCloseItem}
                       onToggle={() => handleToggleItem(openItem)}

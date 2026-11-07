@@ -324,6 +324,28 @@ const toFirebaseLikeUser = (user: User): FirebaseLikeUser => ({
 // Lightweight stand-in for Firebase's `auth.currentUser`, kept in sync via initAuth below.
 export const auth: { currentUser: FirebaseLikeUser | null } = { currentUser: null };
 
+// En el Electron de escritorio, cuando Windows arranca y abre la app solo (ver electron/main.cjs,
+// app.setLoginItemSettings), la red todavía puede no estar lista en el primer instante. Sin esto,
+// el primer getSession() de más abajo podía intentar refrescar un token vencido, fallar por falta
+// de red, y terminar mostrando la pantalla de login aunque la sesión guardada siguiera siendo
+// válida — el usuario lo reportó como "la sesión se cierra sola" al reiniciar la PC.
+function waitForNetworkIfElectron(timeoutMs: number): Promise<void> {
+  const isElectron = typeof window !== "undefined" && Boolean((window as unknown as { FSR_ELECTRON?: boolean }).FSR_ELECTRON);
+  if (!isElectron || typeof navigator === "undefined" || navigator.onLine) return Promise.resolve();
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      window.removeEventListener("online", finish);
+      clearTimeout(timer);
+      resolve();
+    };
+    const timer = setTimeout(finish, timeoutMs);
+    window.addEventListener("online", finish);
+  });
+}
+
 export const initAuth = (
   onAuthSuccess?: (user: FirebaseLikeUser, token: string | null) => void,
   onAuthFailure?: () => void
@@ -335,18 +357,20 @@ export const initAuth = (
     sessionStorage.removeItem(REDIRECT_PENDING_KEY);
   } catch {}
 
-  supabase.auth.getSession().then(({ data }) => {
-    if (data.session?.user) {
-      const u = toFirebaseLikeUser(data.session.user);
-      auth.currentUser = u;
-      cacheProviderToken(data.session.provider_token);
-      ensureBackgroundTokenRefresh();
-      onAuthSuccess?.(u, data.session.provider_token ?? readCachedProviderToken());
-    } else {
-      auth.currentUser = null;
-      onAuthFailure?.();
-    }
-  });
+  waitForNetworkIfElectron(15000).then(() =>
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session?.user) {
+        const u = toFirebaseLikeUser(data.session.user);
+        auth.currentUser = u;
+        cacheProviderToken(data.session.provider_token);
+        ensureBackgroundTokenRefresh();
+        onAuthSuccess?.(u, data.session.provider_token ?? readCachedProviderToken());
+      } else {
+        auth.currentUser = null;
+        onAuthFailure?.();
+      }
+    })
+  );
 
   const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
     if (session?.user) {

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, ipcMain, Tray, Menu, screen, nativeImage } = require("electron");
+const { app, BrowserWindow, shell, ipcMain, Tray, Menu, screen, nativeImage, session } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const { execFile } = require("child_process");
@@ -432,6 +432,13 @@ function createMainWindow(startHidden) {
 }
 
 app.whenReady().then(() => {
+  // El clima de "Inicio" en el dock (ver src/components/DockApp.tsx) pide la ubicación real del
+  // dispositivo con navigator.geolocation — sin esto, Electron la rechaza de entrada sin ni
+  // siquiera mostrar un prompt, y el clima nunca llegaría a mostrarse.
+  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+    callback(permission === "geolocation");
+  });
+
   // Arranque automático con Windows: la app se relanza sola con "--dock" al iniciar sesión,
   // directo a la bandeja + dock flotante, sin mostrar la ventana principal (ver createMainWindow).
   // Solo tiene sentido en el instalador real (en desarrollo, process.execPath es el propio
