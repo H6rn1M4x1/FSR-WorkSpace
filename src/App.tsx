@@ -484,6 +484,10 @@ export default function App() {
   // esa ya existe para el calendario de exámenes reales de la facultad, es un concepto distinto).
   const [exams, setExams] = useState<Exam[]>([]);
 
+  // User Settings State
+  const [isUserSettingsOpen, setIsUserSettingsOpen] = useState(false);
+  const [userProfile, setUserProfile] = useState<UserProfileData | null>(null);
+
   // Dock flotante de Electron (ver electron/main.cjs y src/components/DockApp.tsx): esta ventana
   // (la principal) es la única que tiene toda esta data ya cargada, así que es la que arma el
   // resumen liviano y se lo manda al dock por IPC cada vez que algo relevante cambia. En web/móvil
@@ -499,13 +503,26 @@ export default function App() {
       medicamentosDetallados,
       examenes,
       tasks,
+      themeColor,
+      darkMode,
+      profile: {
+        name: userProfile?.displayName || user?.displayName || auth.currentUser?.displayName || "Usuario",
+        photoURL: userProfile?.photoURL || user?.photoURL || auth.currentUser?.photoURL || null,
+      },
     });
     dockBridge.pushSnapshot(snapshot);
-  }, [detailedPayments, invoices, turnosCompromisos, medicamentosDetallados, examenes, tasks]);
-
-  // User Settings State
-  const [isUserSettingsOpen, setIsUserSettingsOpen] = useState(false);
-  const [userProfile, setUserProfile] = useState<UserProfileData | null>(null);
+  }, [
+    detailedPayments,
+    invoices,
+    turnosCompromisos,
+    medicamentosDetallados,
+    examenes,
+    tasks,
+    themeColor,
+    darkMode,
+    user,
+    userProfile,
+  ]);
 
   // Self-heal userProfile.email: it should always match the real logged-in session, never
   // a possibly-stale value from a previously-saved profile document. This also fixes the

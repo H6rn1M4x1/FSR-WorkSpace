@@ -1,5 +1,6 @@
 const { app, BrowserWindow, shell, ipcMain, Tray, Menu, screen, nativeImage } = require("electron");
 const path = require("path");
+const fs = require("fs");
 // "electron-serve" es un paquete ESM puro ("type": "module") — al bundlearlo con esbuild a CJS,
 // un require() directo trae el namespace del módulo (con el export default colgando de
 // ".default"), no la función en sí, a diferencia de un "import serve from" en código ESM real.
@@ -53,13 +54,50 @@ ipcMain.handle("app-get-version", () => app.getVersion());
 // que carga la MISMA app (mismo dist/, mismo origen "app://-") con "?mode=dock" en la URL — así
 // comparte sesión/localStorage con la ventana principal sin tener que duplicar el login.
 // ---------------------------------------------------------------------------------------------
-const DOCK_DEFAULT_SIZE = { width: 220, height: 48 };
+const DOCK_DEFAULT_SIZE = { width: 200, height: 40 };
 
-function positionDockWindow(win, width, height) {
-  const display = screen.getPrimaryDisplay();
+// En qué monitor va el dock (punto 6 pedido por el usuario) — se guarda en un JSON propio en vez
+// de depender de localStorage (eso vive del lado del renderer, y acá hace falta leerlo ANTES de
+// crear la ventana, desde el proceso principal). getPath() necesita que la app ya esté lista, así
+// que la ruta se arma recién cuando hace falta en vez de una sola vez al cargar el archivo.
+function getDockPrefsPath() {
+  return path.join(app.getPath("userData"), "dock-prefs.json");
+}
+
+function readDockPrefs() {
+  try {
+    return JSON.parse(fs.readFileSync(getDockPrefsPath(), "utf-8"));
+  } catch {
+    return {};
+  }
+}
+
+function writeDockPrefs(prefs) {
+  try {
+    const prefsPath = getDockPrefsPath();
+    fs.mkdirSync(path.dirname(prefsPath), { recursive: true });
+    fs.writeFileSync(prefsPath, JSON.stringify(prefs));
+  } catch {
+    // Si no se pudo guardar, el dock simplemente vuelve al monitor principal la próxima vez —
+    // no es crítico como para interrumpir nada.
+  }
+}
+
+function getDockDisplay() {
+  const prefs = readDockPrefs();
+  const displays = screen.getAllDisplays();
+  const found = prefs.displayId ? displays.find((d) => d.id === prefs.displayId) : null;
+  return found || screen.getPrimaryDisplay();
+}
+
+// y=0 (pegado al borde superior) cuando está colapsado — como la "pestaña" de Troko, que cuelga
+// justo del borde de la pantalla — y con un margen cuando está expandido, como una tarjeta propia
+// que flota debajo (ver DockApp.tsx).
+function positionDockWindow(win, width, height, collapsed) {
+  const display = getDockDisplay();
   const { x: areaX, y: areaY, width: areaWidth } = display.workArea;
   const x = Math.round(areaX + (areaWidth - width) / 2);
-  const y = areaY + 8;
+  const y = areaY + (collapsed ? 0 : 12);
   win.setBounds({ x, y, width, height }, true);
 }
 
@@ -86,12 +124,29 @@ function createDockWindow() {
   });
 
   dockWindow.setAlwaysOnTop(true, "screen-saver");
-  positionDockWindow(dockWindow, DOCK_DEFAULT_SIZE.width, DOCK_DEFAULT_SIZE.height);
+  positionDockWindow(dockWindow, DOCK_DEFAULT_SIZE.width, DOCK_DEFAULT_SIZE.height, true);
   dockWindow.loadURL("app://-/?mode=dock");
 
   dockWindow.on("closed", () => {
     dockWindow = undefined;
   });
+}
+
+// Esconde el dock cuando la propia ventana principal está maximizada y enfocada (ahí ya estás
+// mirando toda esa misma data a pantalla completa, el dock solo taparía algo). Dejamos pendiente
+// detectar OTRAS apps por encima (punto 5 pedido): hacerlo bien requeriría un módulo nativo para
+// consultar qué ventana del sistema operativo está realmente arriba, que no agregamos todavía
+// para no sumarle riesgo al empaquetado — ver la respuesta al usuario.
+function updateDockAutoHide() {
+  if (!dockWindow || dockWindow.isDestroyed()) return;
+  const shouldHide = Boolean(
+    mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible() && mainWindow.isMaximized() && mainWindow.isFocused()
+  );
+  if (shouldHide) {
+    dockWindow.hide();
+  } else if (!dockWindow.isVisible()) {
+    dockWindow.showInactive();
+  }
 }
 
 function createTray() {
@@ -144,7 +199,7 @@ ipcMain.on("dock-notify", (_event, payload) => {
 
 ipcMain.on("dock-resize", (_event, size) => {
   if (dockWindow && !dockWindow.isDestroyed() && size && size.width && size.height) {
-    positionDockWindow(dockWindow, size.width, size.height);
+    positionDockWindow(dockWindow, size.width, size.height, Boolean(size.collapsed));
   }
 });
 
@@ -152,6 +207,27 @@ ipcMain.on("dock-open-main", () => {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.show();
     mainWindow.focus();
+  }
+});
+
+// Selector de monitor (punto 6 pedido por el usuario) — el dock pide la lista y manda el id
+// elegido; acá se persiste y se reposiciona ya mismo con el tamaño que la ventana tenga en ese
+// momento (si está colapsada o expandida).
+ipcMain.handle("dock-get-displays", () => {
+  const prefs = readDockPrefs();
+  return screen.getAllDisplays().map((d, i) => ({
+    id: d.id,
+    label: `Monitor ${i + 1}${d.id === screen.getPrimaryDisplay().id ? " (principal)" : ""}`,
+    selected: prefs.displayId ? d.id === prefs.displayId : d.id === screen.getPrimaryDisplay().id,
+  }));
+});
+
+ipcMain.on("dock-set-display", (_event, displayId) => {
+  writeDockPrefs({ ...readDockPrefs(), displayId });
+  if (dockWindow && !dockWindow.isDestroyed()) {
+    const bounds = dockWindow.getBounds();
+    const collapsed = bounds.height <= DOCK_DEFAULT_SIZE.height;
+    positionDockWindow(dockWindow, bounds.width, bounds.height, collapsed);
   }
 });
 
@@ -192,6 +268,10 @@ function createMainWindow(startHidden) {
       mainWindow.hide();
     }
   });
+
+  ["maximize", "unmaximize", "focus", "blur", "show", "hide", "minimize", "restore"].forEach((ev) =>
+    mainWindow.on(ev, updateDockAutoHide)
+  );
 
   loadURL(mainWindow);
 }
