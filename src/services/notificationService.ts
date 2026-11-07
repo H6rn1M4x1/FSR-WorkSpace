@@ -142,6 +142,13 @@ export function isNotificationSupported(): boolean {
  * Get current notification permission status.
  */
 export function getNotificationPermission(): NotificationPermission | "unsupported" {
+  // En el Electron de escritorio las notificaciones van al dock flotante (ver
+  // showAgendaNotification más abajo), que no depende del permiso nativo de Notification — sin
+  // esto, toda la lógica de "¿hay que avisar?" de HomeView quedaría bloqueada esperando un
+  // permiso que acá nunca hace falta pedir.
+  if (typeof window !== "undefined" && (window as unknown as { FSR_ELECTRON_DOCK?: unknown }).FSR_ELECTRON_DOCK) {
+    return "granted";
+  }
   if (!isNotificationSupported()) return "unsupported";
   return Notification.permission;
 }
@@ -178,6 +185,17 @@ export async function showAgendaNotification({
   accentColor: customAccent,
   data = {},
 }: NotificationPayload): Promise<boolean> {
+  // En el Electron de escritorio, las notificaciones van SOLO al dock flotante (ver
+  // electron/main.cjs y src/components/DockApp.tsx) en vez de a una notificación nativa de
+  // Windows — ni pide permiso de Notification ni pasa por el Service Worker, para no terminar
+  // con dos avisos duplicados por lo mismo.
+  const dockBridge = (window as unknown as { FSR_ELECTRON_DOCK?: { notify: (p: { title: string; body: string; category: string }) => void } })
+    .FSR_ELECTRON_DOCK;
+  if (dockBridge) {
+    dockBridge.notify({ title, body, category });
+    return true;
+  }
+
   if (!isNotificationSupported()) return false;
 
   if (Notification.permission !== "granted") {
@@ -186,6 +204,7 @@ export async function showAgendaNotification({
   }
 
   const deviceAccent = customAccent || getDeviceAccentColor();
+
   const iconUrl = getCategoryIconWithAccent(category, deviceAccent);
 
   const options: any = {

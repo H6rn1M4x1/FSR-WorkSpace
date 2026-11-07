@@ -97,17 +97,35 @@ if (typeof window !== 'undefined' && L && L.DomUtil) {
   };
 }
 
-// Enable global click-and-drag scroll on all table containers
-initDragToScroll();
+// El dock flotante de Electron (ver electron/main.cjs) navega a esta misma app con
+// "?mode=dock" en vez de crear un HTML/bundle separado — así comparte origen (y por lo tanto
+// localStorage/sesión de Supabase) con la ventana principal sin esfuerzo extra.
+const isDockMode = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('mode') === 'dock';
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <ErrorBoundary>
-      <ToastProvider>
-        <App />
-      </ToastProvider>
-    </ErrorBoundary>
-  </StrictMode>,
-);
+if (isDockMode) {
+  document.documentElement.classList.add('dock-mode');
+  import('./components/DockApp').then(({ default: DockApp }) => {
+    createRoot(document.getElementById('root')!).render(
+      <StrictMode>
+        <ErrorBoundary>
+          <DockApp />
+        </ErrorBoundary>
+      </StrictMode>,
+    );
+  });
+} else {
+  // Enable global click-and-drag scroll on all table containers
+  initDragToScroll();
+
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <ErrorBoundary>
+        <ToastProvider>
+          <App />
+        </ToastProvider>
+      </ErrorBoundary>
+    </StrictMode>,
+  );
+}
 
 
