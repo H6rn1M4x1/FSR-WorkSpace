@@ -380,6 +380,32 @@ export default function App() {
   };
   const handleQuickEditHandled = () => setQuickEditTarget(undefined);
 
+  // El dock flotante de Electron (ver electron/main.cjs y src/components/DockApp.tsx) no arma sus
+  // propios formularios de alta/edición — le pide a ESTA ventana (que ya los tiene) que dispare el
+  // mismo mecanismo de "Agendar"/lápiz de arriba, así cualquier alta o edición hecha desde el dock
+  // queda guardada y sincronizada exactamente igual que si se hubiera hecho desde acá.
+  useEffect(() => {
+    const dockBridge = (
+      window as unknown as {
+        FSR_ELECTRON_DOCK?: {
+          onQuickAdd: (cb: (category: string) => void) => () => void;
+          onQuickEdit: (cb: (payload: { category: string; itemId: string }) => void) => () => void;
+        };
+      }
+    ).FSR_ELECTRON_DOCK;
+    if (!dockBridge) return;
+    const unsubAdd = dockBridge.onQuickAdd((category) => {
+      if (category in QUICK_ADD_TARGETS) handleQuickAdd(category as keyof typeof QUICK_ADD_TARGETS);
+    });
+    const unsubEdit = dockBridge.onQuickEdit(({ category, itemId }) => {
+      if (category in QUICK_ADD_TARGETS) handleQuickEdit(category as keyof typeof QUICK_ADD_TARGETS, itemId);
+    });
+    return () => {
+      unsubAdd();
+      unsubEdit();
+    };
+  }, []);
+
   // Botón "+" de la miniatura de Notas Rápidas de Inicio — navega a Notas Rápidas con el
   // formulario de "nueva nota" ya abierto (mismo mecanismo que "Agendar"/editar de arriba).
   const [quickNoteComposeNonce, setQuickNoteComposeNonce] = useState<number | undefined>(undefined);

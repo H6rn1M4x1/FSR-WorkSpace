@@ -91,15 +91,13 @@ function getDockDisplay() {
   return found || screen.getPrimaryDisplay();
 }
 
-// y=0 (pegado al borde superior) cuando está colapsado — como la "pestaña" de Troko, que cuelga
-// justo del borde de la pantalla — y con un margen cuando está expandido, como una tarjeta propia
-// que flota debajo (ver DockApp.tsx).
-function positionDockWindow(win, width, height, collapsed) {
+// Siempre pegado al borde superior (y=0), colapsado o expandido — el panel expandido es "el dock
+// cerrado, pero más grande", no una tarjeta aparte flotando con un margen debajo (ver DockApp.tsx).
+function positionDockWindow(win, width, height) {
   const display = getDockDisplay();
   const { x: areaX, y: areaY, width: areaWidth } = display.workArea;
   const x = Math.round(areaX + (areaWidth - width) / 2);
-  const y = areaY + (collapsed ? 0 : 12);
-  win.setBounds({ x, y, width, height }, true);
+  win.setBounds({ x, y: areaY, width, height }, true);
 }
 
 function createDockWindow() {
@@ -125,7 +123,7 @@ function createDockWindow() {
   });
 
   dockWindow.setAlwaysOnTop(true, "screen-saver");
-  positionDockWindow(dockWindow, DOCK_DEFAULT_SIZE.width, DOCK_DEFAULT_SIZE.height, true);
+  positionDockWindow(dockWindow, DOCK_DEFAULT_SIZE.width, DOCK_DEFAULT_SIZE.height);
   dockWindow.loadURL("app://-/?mode=dock");
 
   dockWindow.on("closed", () => {
@@ -133,19 +131,19 @@ function createDockWindow() {
   });
 }
 
-// Esconde el dock cuando: (a) la propia ventana principal está maximizada y enfocada, o (b) hay
-// OTRA ventana del sistema por encima tapando esa misma zona de la pantalla (punto 5 pedido).
+// Esconde el dock SOLO cuando hay algo en pantalla completa de verdad (punto 1 pedido) — no ya con
+// cualquier ventana maximizada tapándolo de refilón, como antes.
 //
-// Para (b) hace falta preguntarle al sistema operativo qué ventana está realmente arriba — nada
-// de esto lo sabe Electron solo. Se evaluó usar el paquete "active-win" (npm), pero es un
-// complemento nativo (N-API) que: (1) es ESM puro, (2) descarga un binario prearmado DISTINTO
-// por plataforma durante el install, así que el que se bajó acá (Linux) no sirve para el
-// instalador de Windows, y habría que resolver ese binario de Windows aparte sin poder probar que
-// arranca en un Windows real desde este entorno, y (3) trae ~114 paquetes transitivos con
-// vulnerabilidades conocidas. Se descartó por ese riesgo de romper el empaquetado sin forma de
-// verificarlo acá. En su lugar, esto usa PowerShell (ya viene con Windows, cero dependencias
-// nuevas) para llamar a GetForegroundWindow/GetWindowRect de la API de Windows — mismo resultado,
-// sin agregar nada al paquete.
+// Hace falta preguntarle al sistema operativo qué ventana está realmente arriba y si ocupa el
+// monitor entero — nada de esto lo sabe Electron solo. Se evaluó usar el paquete "active-win"
+// (npm), pero es un complemento nativo (N-API) que: (1) es ESM puro, (2) descarga un binario
+// prearmado DISTINTO por plataforma durante el install, así que el que se bajó acá (Linux) no
+// sirve para el instalador de Windows, y habría que resolver ese binario de Windows aparte sin
+// poder probar que arranca en un Windows real desde este entorno, y (3) trae ~114 paquetes
+// transitivos con vulnerabilidades conocidas. Se descartó por ese riesgo de romper el empaquetado
+// sin forma de verificarlo acá. En su lugar, esto usa PowerShell (ya viene con Windows, cero
+// dependencias nuevas) para llamar a GetForegroundWindow/GetWindowRect de la API de Windows —
+// mismo resultado, sin agregar nada al paquete.
 const FOREGROUND_PROBE_SCRIPT = `
 Add-Type @"
 using System;
@@ -153,7 +151,6 @@ using System.Runtime.InteropServices;
 public class FsrForegroundProbe {
   [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
-  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
   [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hWnd);
   public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
 }
@@ -161,39 +158,80 @@ public class FsrForegroundProbe {
 $h = [FsrForegroundProbe]::GetForegroundWindow()
 $r = New-Object FsrForegroundProbe+RECT
 [FsrForegroundProbe]::GetWindowRect($h, [ref]$r) | Out-Null
-[uint32]$procId = 0
-[FsrForegroundProbe]::GetWindowThreadProcessId($h, [ref]$procId) | Out-Null
 $min = [FsrForegroundProbe]::IsIconic($h)
-Write-Output "$procId,$($r.Left),$($r.Top),$($r.Right),$($r.Bottom),$min"
+Write-Output "$($r.Left),$($r.Top),$($r.Right),$($r.Bottom),$min"
 `.trim();
 
-// Último dato que se tiene de "qué ventana está arriba" — lo actualiza el sondeo de PowerShell de
-// más abajo. null = todavía no se sabe (o el sondeo falló), y entonces no se asume que algo tapa.
-let lastForegroundWindow = null;
+// Si lo último que se sabe es que hay algo en pantalla completa tapando el monitor del dock.
+// Arranca en false (nunca se asume tapado hasta que el sondeo diga lo contrario).
+let fullscreenCovered = false;
 let foregroundProbeTimer = null;
+// Si el dock está revelado "a la fuerza" porque el usuario acercó el mouse al borde mientras algo
+// estaba en pantalla completa (punto 1.1 pedido).
+let dockRevealedOverFullscreen = false;
+// Para no repetir llamadas idénticas a setOpacity/setIgnoreMouseEvents en cada tick.
+let dockCurrentlyVisible = true;
 
-function rectsOverlap(a, b) {
-  return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+function rectCoversDisplay(winRect, displayBounds) {
+  const TOLERANCE = 2; // algunas apps dejan 1-2px de diferencia por el borde/sombra de la ventana
+  return (
+    winRect.left <= displayBounds.x + TOLERANCE &&
+    winRect.top <= displayBounds.y + TOLERANCE &&
+    winRect.right >= displayBounds.x + displayBounds.width - TOLERANCE &&
+    winRect.bottom >= displayBounds.y + displayBounds.height - TOLERANCE
+  );
 }
 
-function updateDockAutoHide() {
+function pointInRect(x, y, r) {
+  return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+}
+
+function applyDockVisibility(visible) {
+  if (!dockWindow || dockWindow.isDestroyed() || dockCurrentlyVisible === visible) return;
+  dockCurrentlyVisible = visible;
+  dockWindow.setIgnoreMouseEvents(!visible, { forward: true });
+  dockWindow.setOpacity(visible ? 1 : 0);
+}
+
+// Sondeo liviano (sin spawnear nada) de la posición del mouse — decide si hay que revelar el dock
+// por encima de una app en pantalla completa (punto 1.1) o volver a esconderlo al alejar el mouse.
+// Corre siempre (no solo cuando hay algo en pantalla completa) porque también es lo que restaura
+// la visibilidad normal apenas "fullscreenCovered" vuelve a false.
+function tickDockVisibility() {
   if (!dockWindow || dockWindow.isDestroyed()) return;
 
-  const ownWindowCoversIt = Boolean(
-    mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible() && mainWindow.isMaximized() && mainWindow.isFocused()
-  );
-
-  let otherAppCoversIt = false;
-  if (lastForegroundWindow && !lastForegroundWindow.minimized && lastForegroundWindow.pid !== process.pid) {
-    const b = dockWindow.getBounds();
-    const dockRect = { left: b.x, top: b.y, right: b.x + b.width, bottom: b.y + b.height };
-    otherAppCoversIt = rectsOverlap(lastForegroundWindow.rect, dockRect);
+  if (!fullscreenCovered) {
+    dockRevealedOverFullscreen = false;
+    applyDockVisibility(true);
+    return;
   }
 
-  if (ownWindowCoversIt || otherAppCoversIt) {
-    dockWindow.hide();
-  } else if (!dockWindow.isVisible()) {
-    dockWindow.showInactive();
+  const cursor = screen.getCursorScreenPoint();
+
+  if (!dockRevealedOverFullscreen) {
+    // Franja sensible pegada al borde superior, del ancho del dock colapsado — alcanza con
+    // acercar el mouse ahí (aunque el dock esté invisible) para que vuelva a aparecer.
+    const display = getDockDisplay();
+    const hotLeft = Math.round(display.workArea.x + (display.workArea.width - DOCK_DEFAULT_SIZE.width) / 2);
+    const hotRect = { left: hotLeft, top: display.workArea.y, right: hotLeft + DOCK_DEFAULT_SIZE.width, bottom: display.workArea.y + 4 };
+    if (pointInRect(cursor.x, cursor.y, hotRect)) {
+      dockRevealedOverFullscreen = true;
+      applyDockVisibility(true);
+    } else {
+      applyDockVisibility(false);
+    }
+  } else {
+    // Ya revelado: se mantiene mientras el mouse siga cerca (con margen, para no parpadear apenas
+    // se sale un pixel) — al alejarse de verdad, vuelve a esconderse.
+    const b = dockWindow.getBounds();
+    const margin = 24;
+    const buffered = { left: b.x - margin, top: b.y - margin, right: b.x + b.width + margin, bottom: b.y + b.height + margin };
+    if (pointInRect(cursor.x, cursor.y, buffered)) {
+      applyDockVisibility(true);
+    } else {
+      dockRevealedOverFullscreen = false;
+      applyDockVisibility(false);
+    }
   }
 }
 
@@ -208,17 +246,16 @@ function startForegroundWindowWatcher() {
       ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", FOREGROUND_PROBE_SCRIPT],
       { windowsHide: true, timeout: 3000 },
       (err, stdout) => {
-        if (!err && stdout) {
+        if (!err && stdout && dockWindow && !dockWindow.isDestroyed()) {
           try {
-            const [pidStr, left, top, right, bottom, minStr] = stdout.trim().split(",");
-            lastForegroundWindow = {
-              pid: Number(pidStr),
-              rect: { left: Number(left), top: Number(top), right: Number(right), bottom: Number(bottom) },
-              minimized: minStr.trim().toLowerCase() === "true",
-            };
-            updateDockAutoHide();
+            const [left, top, right, bottom, minStr] = stdout.trim().split(",");
+            const minimized = minStr.trim().toLowerCase() === "true";
+            const display = getDockDisplay();
+            fullscreenCovered =
+              !minimized &&
+              rectCoversDisplay({ left: Number(left), top: Number(top), right: Number(right), bottom: Number(bottom) }, display.bounds);
           } catch {
-            // Salida inesperada — se ignora este sondeo, el dock queda como estaba.
+            // Salida inesperada — se ignora este sondeo, se mantiene el último estado conocido.
           }
         }
         // Encadenado (no setInterval a secas): así, si una corrida tarda más de lo normal, no se
@@ -229,6 +266,9 @@ function startForegroundWindowWatcher() {
   };
 
   poll();
+  // Más seguido que el sondeo de PowerShell (que es el que solo importa cada 2.5s) porque el
+  // movimiento del mouse para revelar/esconder el dock tiene que sentirse inmediato.
+  setInterval(tickDockVisibility, 150);
 }
 
 function createTray() {
@@ -281,7 +321,7 @@ ipcMain.on("dock-notify", (_event, payload) => {
 
 ipcMain.on("dock-resize", (_event, size) => {
   if (dockWindow && !dockWindow.isDestroyed() && size && size.width && size.height) {
-    positionDockWindow(dockWindow, size.width, size.height, Boolean(size.collapsed));
+    positionDockWindow(dockWindow, size.width, size.height);
   }
 });
 
@@ -289,6 +329,28 @@ ipcMain.on("dock-open-main", () => {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.show();
     mainWindow.focus();
+  }
+});
+
+// "Agregar" y "editar" desde el dock (puntos 3 y 5 pedidos): en vez de reconstruir los formularios
+// de cada sección adentro del dock (con su propia lógica de guardado/sincronización), esto reusa
+// el mecanismo que YA existe en App.tsx para el botón "Agendar"/lápiz de Inicio
+// (handleQuickAdd/handleQuickEdit) — el dock solo le pide a la ventana principal que lo dispare.
+// Así cualquier alta/edición hecha desde el dock pasa por el mismo guardado/sync de siempre, y se
+// ve igual en la app, la web y Android sin duplicar nada.
+ipcMain.on("dock-quick-add", (_event, category) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.show();
+    mainWindow.focus();
+    mainWindow.webContents.send("dock-quick-add", category);
+  }
+});
+
+ipcMain.on("dock-quick-edit", (_event, payload) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.show();
+    mainWindow.focus();
+    mainWindow.webContents.send("dock-quick-edit", payload);
   }
 });
 
@@ -308,8 +370,7 @@ ipcMain.on("dock-set-display", (_event, displayId) => {
   writeDockPrefs({ ...readDockPrefs(), displayId });
   if (dockWindow && !dockWindow.isDestroyed()) {
     const bounds = dockWindow.getBounds();
-    const collapsed = bounds.height <= DOCK_DEFAULT_SIZE.height;
-    positionDockWindow(dockWindow, bounds.width, bounds.height, collapsed);
+    positionDockWindow(dockWindow, bounds.width, bounds.height);
   }
 });
 
@@ -350,10 +411,6 @@ function createMainWindow(startHidden) {
       mainWindow.hide();
     }
   });
-
-  ["maximize", "unmaximize", "focus", "blur", "show", "hide", "minimize", "restore"].forEach((ev) =>
-    mainWindow.on(ev, updateDockAutoHide)
-  );
 
   loadURL(mainWindow);
 }

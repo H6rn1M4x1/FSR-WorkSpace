@@ -18,6 +18,14 @@ import type {
 } from "../types";
 import { getLocalDateString } from "../utils/date";
 
+// A qué formulario de edición (QUICK_ADD_TARGETS en App.tsx) corresponde este ítem — null cuando
+// no hay ninguno con el que abrirlo (ver el comentario largo en DockApp.tsx: solo algunas
+// colecciones tienen un mecanismo de "abrir para editar" ya armado — forzar uno donde no existe
+// terminaría abriendo el ítem equivocado, o no abriendo nada, en silencio). "salud" solo se usa
+// para notificaciones (que sí llevan el id correcto de "Stock y Disponibilidad"), nunca para los
+// ítems de la sección Salud del dock (esos son medicamentos "en tratamiento", otro id distinto).
+export type DockEditKind = "finanzas" | "turno" | "universidad" | "salud" | null;
+
 export interface DockItem {
   id: string;
   title: string;
@@ -27,6 +35,7 @@ export interface DockItem {
   dateOnly: string;
   overdue: boolean;
   isToday: boolean;
+  editKind: DockEditKind;
 }
 
 export interface DockSnapshot {
@@ -95,6 +104,7 @@ export function buildDockSnapshot(params: {
       dateOnly,
       overdue,
       isToday,
+      editKind: "finanzas",
     });
   }
   for (const inv of params.invoices) {
@@ -108,6 +118,10 @@ export function buildDockSnapshot(params: {
       dateOnly,
       overdue,
       isToday,
+      // Las "invoices" son una colección más vieja/simple que no tiene su propio formulario de
+      // edición deep-link (a diferencia de DetailedPayment, que sí usa PaymentsTable) — se
+      // muestran igual (son datos reales y vigentes), pero no son clickeables.
+      editKind: null,
     });
   }
   finanzas.sort(byDate);
@@ -125,11 +139,14 @@ export function buildDockSnapshot(params: {
       dateOnly,
       overdue,
       isToday,
+      editKind: "turno",
     });
   }
   turnos.sort(byDate);
 
   // Sin fecha propia: un medicamento "en tratamiento" es vigente hoy, no un día puntual futuro.
+  // Sin editKind: el mecanismo de edición de Salud abre el registro de "Stock y Disponibilidad"
+  // (otra colección, con otro id), no el medicamento en sí — forzarlo abriría lo que no es.
   const salud: DockItem[] = params.medicamentosDetallados
     .filter((m) => m.estado === "Consumiendo")
     .map((m) => ({
@@ -139,6 +156,7 @@ export function buildDockSnapshot(params: {
       dateOnly: "",
       overdue: false,
       isToday: false,
+      editKind: null,
     }));
 
   const academico: DockItem[] = [];
@@ -152,6 +170,7 @@ export function buildDockSnapshot(params: {
       dateOnly,
       overdue,
       isToday,
+      editKind: "universidad",
     });
   }
   for (const t of params.tasks) {
@@ -165,6 +184,9 @@ export function buildDockSnapshot(params: {
       dateOnly,
       overdue,
       isToday,
+      // Las tareas (AcademicTask) no tienen su propio mecanismo de edición deep-link todavía
+      // (el de Académico solo busca en exámenes y horarios) — se muestran, pero no son clickeables.
+      editKind: null,
     });
   }
   academico.sort(byDate);

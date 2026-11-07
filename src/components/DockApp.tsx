@@ -12,12 +12,13 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
+  Plus,
 } from "lucide-react";
 import Logo from "./Logo";
 import { AestheticStorageService } from "../lib/storage";
 import { uiSounds } from "../lib/sounds";
 import { getLocalDateString } from "../utils/date";
-import type { DockItem, DockSnapshot } from "../lib/dockSnapshot";
+import type { DockEditKind, DockItem, DockSnapshot } from "../lib/dockSnapshot";
 
 interface DockDisplayOption {
   id: number;
@@ -30,6 +31,9 @@ interface NotifEntry {
   title: string;
   body: string;
   category: string;
+  // Id del registro real al que apunta esta notificación (si lo tiene) — con esto, tocarla puede
+  // abrir el mismo formulario de edición real en vez de un simple texto (ver handleItemClick).
+  itemId?: string;
   receivedAt: number;
 }
 
@@ -39,9 +43,11 @@ interface DockBridge {
   resize: (size: { width: number; height: number; collapsed: boolean }) => void;
   openMain: () => void;
   onSnapshot: (cb: (snapshot: DockSnapshot) => void) => () => void;
-  onNotify: (cb: (payload: { title: string; body: string; category: string }) => void) => () => void;
+  onNotify: (cb: (payload: { title: string; body: string; category: string; id?: string }) => void) => () => void;
   getDisplays: () => Promise<DockDisplayOption[]>;
   setDisplay: (displayId: number) => void;
+  quickAdd: (category: string) => void;
+  quickEdit: (category: string, itemId: string) => void;
 }
 
 function getDockBridge(): DockBridge | null {
@@ -59,11 +65,21 @@ const SECTIONS: { key: SectionKey; label: string; icon: typeof DollarSign }[] = 
 
 const CATEGORY_LABELS: Record<string, string> = {
   finanzas: "Finanzas",
+  turno: "Turnos",
   turnos: "Turnos",
   universidad: "Académico",
   salud: "Salud",
   comidas: "Comidas",
   general: "General",
+};
+
+// Misma clave que usa QUICK_ADD_TARGETS en App.tsx — para el botón "+" de cada sección (siempre
+// abre el formulario de alta en blanco, no depende de ningún ítem puntual).
+const SECTION_ADD_KEY: Record<SectionKey, string> = {
+  finanzas: "finanzas",
+  turnos: "turno",
+  salud: "salud",
+  academico: "universidad",
 };
 
 const WEEKDAY_LABELS = ["D", "L", "M", "M", "J", "V", "S"];
@@ -88,10 +104,11 @@ function initials(name: string): string {
   return name.trim().charAt(0).toUpperCase() || "U";
 }
 
-// "Hoy" = vencido en cualquier momento (sigue pendiente) + lo puntual de hoy + lo que no tiene
-// fecha propia (ej. Salud). Otro día elegido = solo lo que cae justo en esa fecha.
+// "Hoy" = lo que vence puntualmente hoy + lo que no tiene fecha propia (ej. Salud) — sin arrastrar
+// lo vencido de antes (punto 4 pedido: el filtro de "hoy" no debe mezclar fechas pasadas). Otro
+// día elegido en el calendario = solo lo que cae justo en esa fecha exacta.
 function matchesDate(item: DockItem, date: string, todayStr: string): boolean {
-  if (date === todayStr) return item.overdue || item.isToday || item.dateOnly === "";
+  if (date === todayStr) return item.isToday || item.dateOnly === "";
   return item.dateOnly === date;
 }
 
@@ -282,10 +299,17 @@ export default function DockApp() {
       if (pulseTimerRef.current) clearTimeout(pulseTimerRef.current);
       pulseTimerRef.current = setTimeout(() => setPulse(false), 1600);
       setNotifFeed((prev) =>
-        [{ id: `${Date.now()}-${Math.random()}`, title: payload.title, body: payload.body, category: payload.category, receivedAt: Date.now() }, ...prev].slice(
-          0,
-          12
-        )
+        [
+          {
+            id: `${Date.now()}-${Math.random()}`,
+            title: payload.title,
+            body: payload.body,
+            category: payload.category,
+            itemId: payload.id,
+            receivedAt: Date.now(),
+          },
+          ...prev,
+        ].slice(0, 12)
       );
     });
     bridge
@@ -339,14 +363,40 @@ export default function DockApp() {
     setShowDisplayMenu(false);
   };
 
-  const handleOpenNotif = (id: string) => {
+  // Tocar un ítem de cualquier sección (punto 3 pedido): en vez de armar una vista de detalle
+  // propia adentro del dock (y reimplementar Pagar/editar/eliminar con una lógica de guardado
+  // paralela a la que ya existe), esto reusa el mismo mecanismo de "lápiz" que ya tiene Inicio
+  // (handleQuickEdit en App.tsx) — abre la ventana principal directo en el formulario de edición
+  // REAL de ese ítem (con su mismo diseño de PaymentsTable/Turnos/etc.), ya con Pagar/editar/
+  // eliminar funcionando de verdad y sincronizado en todos lados.
+  const handleItemClick = (editKind: DockEditKind, itemId: string) => {
+    if (!editKind) return;
     uiSounds.expand();
-    setOpenNotifId(id);
+    bridgeRef.current?.quickEdit(editKind, itemId);
+  };
+
+  // Las notificaciones de la agenda sí llevan el id del registro real (ver
+  // src/services/notificationService.ts) — si la categoría tiene un formulario de edición
+  // conocido, tocarla hace lo mismo que un ítem de sección. Si no (ej. una notificación genérica
+  // de prueba, sin id), se muestra el texto completo en un panel simple adentro del dock.
+  const handleNotifClick = (n: NotifEntry) => {
+    const knownEditKinds: DockEditKind[] = ["finanzas", "turno", "universidad", "salud"];
+    if (n.itemId && knownEditKinds.includes(n.category as DockEditKind)) {
+      handleItemClick(n.category as DockEditKind, n.itemId);
+      return;
+    }
+    uiSounds.expand();
+    setOpenNotifId(n.id);
   };
 
   const handleCloseNotif = () => {
     uiSounds.collapse();
     setOpenNotifId(null);
+  };
+
+  const handleSectionAdd = (key: SectionKey) => {
+    uiSounds.click();
+    bridgeRef.current?.quickAdd(SECTION_ADD_KEY[key]);
   };
 
   // Filtrado por fecha (puntos 3 y 4 pedidos): por default siempre "hoy" (pendiente + vencido),
@@ -402,10 +452,13 @@ export default function DockApp() {
         animate={{
           width: expanded ? EXPANDED_SIZE.width : COLLAPSED_SIZE.width,
           height: expanded ? EXPANDED_SIZE.height : COLLAPSED_SIZE.height,
-          borderTopLeftRadius: expanded ? 24 : 0,
-          borderTopRightRadius: expanded ? 24 : 0,
-          borderBottomLeftRadius: expanded ? 24 : 20,
-          borderBottomRightRadius: expanded ? 24 : 20,
+          // Arriba siempre en escuadra, colapsado o expandido: pegado al borde de la pantalla,
+          // como si el panel expandido fuera "el dock cerrado, pero más grande" (punto 2 pedido),
+          // no una tarjeta flotando separada con un hueco arriba.
+          borderTopLeftRadius: 0,
+          borderTopRightRadius: 0,
+          borderBottomLeftRadius: expanded ? 28 : 20,
+          borderBottomRightRadius: expanded ? 28 : 20,
         }}
         transition={{ type: "spring", stiffness: 260, damping: 28 }}
         className={`relative ${theme.bg} border ${theme.border} shadow-2xl overflow-hidden ${theme.text}`}
@@ -551,11 +604,28 @@ export default function DockApp() {
 
               {/* Contenido: la sección elegida, o todas mezcladas si no hay ninguna. */}
               <div className="flex-1 h-full flex flex-col min-w-0 relative">
-                <div className={`px-4 py-3 border-b ${theme.border} shrink-0`}>
-                  <p className="text-sm font-bold">{sectionLabel}</p>
-                  <p className="text-xs text-zinc-500">
-                    {selectedDate === todayStr ? "Lo pendiente de hoy" : `Lo que cae el ${selectedDate.split("-").reverse().join("/")}`}
-                  </p>
+                <div className={`px-4 py-3 border-b ${theme.border} shrink-0 flex items-center justify-between gap-2`}>
+                  <div>
+                    <p className="text-sm font-bold">{sectionLabel}</p>
+                    <p className="text-xs text-zinc-500">
+                      {selectedDate === todayStr ? "Lo pendiente de hoy" : `Lo que cae el ${selectedDate.split("-").reverse().join("/")}`}
+                    </p>
+                  </div>
+                  {/* Agregar contenido de esta sección sin abrir la app (punto 5 pedido): dispara el
+                      mismo formulario de alta que ya usa el botón "Agendar" de Inicio, así queda
+                      guardado y sincronizado exactamente igual en la app, la web y Android. */}
+                  {section && (
+                    <motion.button
+                      type="button"
+                      whileTap={{ scale: 0.92 }}
+                      onClick={() => handleSectionAdd(section)}
+                      title={`Agregar en ${sectionLabel}`}
+                      className="flex items-center gap-1 px-2 py-1 rounded-lg bg-primary text-white text-xs font-bold cursor-pointer shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Agregar
+                    </motion.button>
+                  )}
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
@@ -571,7 +641,15 @@ export default function DockApp() {
                       {sectionItems.length === 0 ? (
                         <EmptyState />
                       ) : (
-                        sectionItems.map((item, i) => <ItemRow key={item.id} item={item} index={i} theme={theme} />)
+                        sectionItems.map((item, i) => (
+                          <ItemRow
+                            key={item.id}
+                            item={item}
+                            index={i}
+                            theme={theme}
+                            onClick={item.editKind ? () => handleItemClick(item.editKind, item.id) : undefined}
+                          />
+                        ))
                       )}
 
                       {!section && selectedDate === todayStr && notifFeed.length > 0 && (
@@ -582,10 +660,10 @@ export default function DockApp() {
                           {notifFeed.map((n, i) => (
                             <ItemRow
                               key={n.id}
-                              item={{ id: n.id, title: n.title, subtitle: n.body, dateOnly: "", overdue: false, isToday: false }}
+                              item={{ id: n.id, title: n.title, subtitle: n.body, dateOnly: "", overdue: false, isToday: false, editKind: null }}
                               index={i}
                               theme={theme}
-                              onClick={() => handleOpenNotif(n.id)}
+                              onClick={() => handleNotifClick(n)}
                             />
                           ))}
                         </div>
