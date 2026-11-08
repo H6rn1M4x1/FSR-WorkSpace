@@ -1012,7 +1012,11 @@ export default function DockApp() {
               <div className="flex-1 h-full flex flex-col min-w-0 relative">
                 {!section && <LiveClock />}
 
-                <div className="px-4 py-3 shrink-0 flex items-center justify-between gap-2">
+                {/* Título de la sección como su propio bloque sólido (punto 1 pedido, round 11) —
+                    antes flotaba directo sobre el fondo translúcido, sin bloque. */}
+                <div
+                  className={`mx-3 mt-3 px-4 py-3 rounded-xl border ${theme.border} ${theme.solidBlock} shrink-0 flex items-center justify-between gap-2`}
+                >
                   <div>
                     <p className="text-sm font-bold">{sectionLabel}</p>
                     <p className="text-xs text-zinc-500">
