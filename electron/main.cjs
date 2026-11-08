@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, ipcMain, Tray, Menu, screen, nativeImage, session } = require("electron");
+const { app, BrowserWindow, shell, ipcMain, Tray, Menu, screen, nativeImage, session, globalShortcut } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const { execFile } = require("child_process");
@@ -151,6 +151,9 @@ function createDockWindow() {
 // sin forma de verificarlo acá. En su lugar, esto usa PowerShell (ya viene con Windows, cero
 // dependencias nuevas) para llamar a GetForegroundWindow/GetWindowRect de la API de Windows —
 // mismo resultado, sin agregar nada al paquete.
+// Bloq Mayús/Bloq Num (punto 3 pedido, round 12, bloque 1 de Dynamic Island) se agregan ACÁ, no en
+// un sondeo aparte: es el mismo GetKeyState de user32.dll que ya se carga para la ventana en
+// primer plano, así que no hace falta spawnear un segundo powershell.exe por esto.
 const FOREGROUND_PROBE_SCRIPT = `
 Add-Type @"
 using System;
@@ -159,6 +162,7 @@ public class FsrForegroundProbe {
   [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
   [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern short GetKeyState(int nVirtKey);
   public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
 }
 "@
@@ -166,7 +170,9 @@ $h = [FsrForegroundProbe]::GetForegroundWindow()
 $r = New-Object FsrForegroundProbe+RECT
 [FsrForegroundProbe]::GetWindowRect($h, [ref]$r) | Out-Null
 $min = [FsrForegroundProbe]::IsIconic($h)
-Write-Output "$($r.Left),$($r.Top),$($r.Right),$($r.Bottom),$min"
+$caps = (([FsrForegroundProbe]::GetKeyState(0x14)) -band 1) -ne 0
+$num = (([FsrForegroundProbe]::GetKeyState(0x90)) -band 1) -ne 0
+Write-Output "$($r.Left),$($r.Top),$($r.Right),$($r.Bottom),$min,$caps,$num"
 `.trim();
 
 // "Now Playing" de todo Windows (punto 2 pedido, round 11: Dynamic Island for Windows) — igual
@@ -287,6 +293,14 @@ try {
 // Arranca en false (nunca se asume tapado hasta que el sondeo diga lo contrario).
 let fullscreenCovered = false;
 let foregroundProbeTimer = null;
+// Dedup de Bloq Mayús/Bloq Num (punto 3 pedido, round 12) — mismo sondeo que el de arriba, pero
+// solo se manda un "dock-keylock-update" nuevo si de verdad cambió algo (igual que el resto de los
+// sondeos de este archivo).
+let lastKeyLockKey = null;
+// Escondido A MANO por el usuario con el atajo de teclado (punto 3 pedido, round 12) — distinto de
+// "tapado por pantalla completa": esto gana siempre, sin importar dónde esté el mouse ni qué haya
+// en pantalla, hasta que se vuelva a tocar el atajo.
+let dockManuallyHidden = false;
 // Si el dock está revelado "a la fuerza" porque el usuario acercó el mouse al borde mientras algo
 // estaba en pantalla completa (punto 1.1 pedido).
 let dockRevealedOverFullscreen = false;
@@ -371,6 +385,12 @@ function tickDockVisibility() {
     return;
   }
 
+  if (dockManuallyHidden) {
+    dockRevealedOverFullscreen = false;
+    applyDockVisibility(false);
+    return;
+  }
+
   if (!fullscreenCovered) {
     dockRevealedOverFullscreen = false;
     applyDockVisibility(true);
@@ -406,6 +426,21 @@ function tickDockVisibility() {
   }
 }
 
+// Atajo de teclado global para mostrar/ocultar el dock a mano (punto 3 pedido, round 12, bloque 1
+// de Dynamic Island) — 100% Electron (globalShortcut), sin PowerShell: no hace falta leer ni
+// escribir nada de Windows para esto.
+function toggleDockManualVisibility() {
+  dockManuallyHidden = !dockManuallyHidden;
+  if (!dockManuallyHidden) {
+    // Vuelve a mostrarse YA (no esperar al próximo tick de 150ms) para que el atajo se sienta
+    // instantáneo.
+    dockRevealedOverFullscreen = false;
+    tickDockVisibility();
+  } else {
+    applyDockVisibility(false);
+  }
+}
+
 // Solo tiene sentido en Windows — en otras plataformas no hay PowerShell, y de todos modos el
 // instalador que se distribuye es exclusivamente para Windows.
 function startForegroundWindowWatcher() {
@@ -419,12 +454,20 @@ function startForegroundWindowWatcher() {
       (err, stdout) => {
         if (!err && stdout && dockWindow && !dockWindow.isDestroyed()) {
           try {
-            const [left, top, right, bottom, minStr] = stdout.trim().split(",");
+            const [left, top, right, bottom, minStr, capsStr, numStr] = stdout.trim().split(",");
             const minimized = minStr.trim().toLowerCase() === "true";
             const display = getDockDisplay();
             fullscreenCovered =
               !minimized &&
               rectCoversDisplay({ left: Number(left), top: Number(top), right: Number(right), bottom: Number(bottom) }, display.bounds);
+
+            const capsLockOn = (capsStr || "").trim().toLowerCase() === "true";
+            const numLockOn = (numStr || "").trim().toLowerCase() === "true";
+            const keyLockKey = `${capsLockOn}|${numLockOn}`;
+            if (keyLockKey !== lastKeyLockKey) {
+              lastKeyLockKey = keyLockKey;
+              dockWindow.webContents.send("dock-keylock-update", { capsLockOn, numLockOn });
+            }
           } catch {
             // Salida inesperada — se ignora este sondeo, se mantiene el último estado conocido.
           }
@@ -501,6 +544,58 @@ function runMediaControl(action, onDone) {
     { windowsHide: true, timeout: 3000 },
     () => onDone?.()
   );
+}
+
+// Batería (punto 3 pedido, round 12, bloque 1 de Dynamic Island) — Win32_Battery es WMI clásico
+// (no WinRT), bastante más simple que el sondeo de medios: una sola consulta, sin helpers de
+// reflection. BatteryStatus=1 es "descargándose"; cualquier otro valor documentado (2,3,6,7,8,9)
+// implica que hay corriente entrando (cargando, ya cargada al 100%, etc. — ver docs de WMI).
+const BATTERY_PROBE_SCRIPT = `
+try {
+  $b = Get-CimInstance -ClassName Win32_Battery -ErrorAction Stop | Select-Object -First 1
+  if ($null -eq $b) {
+    Write-Output (@{ hasBattery = $false } | ConvertTo-Json -Compress)
+  } else {
+    $charging = $b.BatteryStatus -ne 1
+    $result = @{ hasBattery = $true; percent = [int]$b.EstimatedChargeRemaining; charging = $charging }
+    Write-Output ($result | ConvertTo-Json -Compress)
+  }
+} catch {
+  Write-Output (@{ hasBattery = $false } | ConvertTo-Json -Compress)
+}
+`.trim();
+
+let batteryProbeTimer = null;
+let lastBatteryStateKey = null;
+
+// Igual patrón que el resto de los sondeos de este archivo (encadenado, no setInterval a secas) —
+// pero mucho menos seguido: la batería no cambia de un segundo a otro, cada 20s alcanza de sobra y
+// evita consultas WMI de más.
+function startBatteryWatcher() {
+  if (process.platform !== "win32") return;
+  const poll = () => {
+    execFile(
+      "powershell.exe",
+      ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", BATTERY_PROBE_SCRIPT],
+      { windowsHide: true, timeout: 4000 },
+      (err, stdout) => {
+        if (!err && stdout && dockWindow && !dockWindow.isDestroyed()) {
+          try {
+            const parsed = JSON.parse(stdout.trim());
+            const key = JSON.stringify(parsed);
+            if (key !== lastBatteryStateKey) {
+              lastBatteryStateKey = key;
+              dockWindow.webContents.send("dock-battery-update", parsed);
+            }
+          } catch {
+            // Salida inesperada — se ignora esta corrida, se mantiene el último estado conocido.
+          }
+        }
+        batteryProbeTimer = setTimeout(poll, 20000);
+      }
+    );
+  };
+  poll();
 }
 
 function createTray() {
@@ -704,6 +799,12 @@ app.whenReady().then(() => {
   createTray();
   startForegroundWindowWatcher();
   startMediaWatcher();
+  startBatteryWatcher();
+
+  // Atajo de teclado para mostrar/ocultar el dock a mano (punto 3 pedido, round 12) — no se pisa
+  // con nada ya usado por Windows ni por esta app. Si otro programa ya lo tiene registrado,
+  // register() devuelve false en silencio (no rompe el arranque).
+  globalShortcut.register("Alt+Shift+D", toggleDockManualVisibility);
   // Sin chequeo automático al arrancar por ahora: el instalador (~250MB) todavía no tiene un feed
   // real donde publicarse (ver package.json#build.publish y la Card de Configuración), así que
   // intentarlo solo generaría un error de "no encontrado" cada vez que se abre la app. El puente
@@ -722,6 +823,8 @@ app.on("before-quit", () => {
   app.isQuitting = true;
   if (foregroundProbeTimer) clearTimeout(foregroundProbeTimer);
   if (mediaProbeTimer) clearTimeout(mediaProbeTimer);
+  if (batteryProbeTimer) clearTimeout(batteryProbeTimer);
+  globalShortcut.unregisterAll();
 });
 
 app.on("window-all-closed", () => {
