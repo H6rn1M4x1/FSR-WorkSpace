@@ -108,6 +108,11 @@ interface DockBridge {
   mediaControl: (action: "playpause" | "next" | "previous") => void;
   onKeyLockUpdate: (cb: (payload: KeyLockInfo) => void) => () => void;
   onBatteryUpdate: (cb: (payload: BatteryInfo) => void) => () => void;
+  // Fuerza al dock a mostrarse un rato aunque algo esté en pantalla completa tapándolo (punto 3
+  // pedido, round 13) — igual mecanismo que ya usan las notificaciones de la agenda (dock-notify en
+  // electron/main.cjs), generalizado para cualquier aviso que se origine DENTRO del propio dock
+  // (Bloq Mayús/Num, cambio de canción, batería baja, foco) en vez de venir de la ventana principal.
+  forceReveal: (ms: number) => void;
   getDisplays: () => Promise<DockDisplayOption[]>;
   setDisplay: (displayId: number) => void;
   quickAdd: (category: string) => void;
@@ -173,6 +178,14 @@ const MEDIA_MINI_SIZE = { width: 220, height: 40 };
 // MEDIA_MINI_SIZE de arriba (sigue sonando algo).
 const MEDIA_TOAST_SIZE = { width: 340, height: 172 };
 const MEDIA_TOAST_MS = 5000;
+// Aviso de Bloq Mayús/Bloq Num (punto 1/3 pedidos, round 13) — chico y breve, igual que el de la
+// imagen de referencia de Dynamic Island for Windows.
+const KEYLOCK_TOAST_SIZE = { width: 270, height: 56 };
+const KEYLOCK_TOAST_MS = 2200;
+// Aviso + pill del temporizador de foco (punto 2/3 pedidos, round 13).
+const FOCUS_TOAST_SIZE = { width: 280, height: 130 };
+const FOCUS_TOAST_MS = 2600;
+const FOCUS_MINI_SIZE = { width: 170, height: 40 };
 // Tiempo que espera antes de colapsar al sacar el mouse, para no cerrarse por un roce accidental.
 const COLLAPSE_DELAY_MS = 350;
 // La misma duración/curva la usan el resize del panel Y el crossfade del contenido — si no
@@ -678,50 +691,29 @@ function StatusStrip({ battery, keyLock }: { battery: BatteryInfo | null; keyLoc
 
 const FOCUS_PRESETS_MIN = [25, 15, 5];
 
-// Temporizador de foco (punto 3 pedido, round 12, bloque 1 de Dynamic Island) — a diferencia de
-// Now Playing, este no necesita nada de Windows: es una cuenta regresiva propia, autocontenida.
-function FocusTimerWidget({ theme }: { theme: Theme }) {
-  const [totalSeconds, setTotalSeconds] = useState(FOCUS_PRESETS_MIN[0] * 60);
-  const [remaining, setRemaining] = useState(FOCUS_PRESETS_MIN[0] * 60);
-  const [running, setRunning] = useState(false);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  useEffect(() => {
-    if (!running) return;
-    intervalRef.current = setInterval(() => {
-      setRemaining((r) => {
-        if (r <= 1) {
-          setRunning(false);
-          uiSounds.notify();
-          return 0;
-        }
-        return r - 1;
-      });
-    }, 1000);
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [running]);
-
-  const pick = (minutes: number) => {
-    uiSounds.click();
-    setRunning(false);
-    setTotalSeconds(minutes * 60);
-    setRemaining(minutes * 60);
-  };
-
-  const toggle = () => {
-    if (remaining <= 0) return;
-    uiSounds.toggle();
-    setRunning((r) => !r);
-  };
-
-  const reset = () => {
-    uiSounds.click();
-    setRunning(false);
-    setRemaining(totalSeconds);
-  };
-
+// Temporizador de foco (punto 2 pedido, round 13: "debería estar en Académico" + "si le doy a
+// iniciar se cancela la acción") — el estado y el intervalo viven en DockApp (ver más abajo), NO
+// acá: antes este componente los tenía adentro, y como solo se montaba con el panel expandido
+// abierto en Inicio, al colapsarse el dock se desmontaba y la cuenta se perdía. Ahora este
+// componente es solo la VISTA de ese estado (se muestra en la sección Académico), y la cuenta
+// sigue corriendo aunque el dock esté chiquito (ver FocusMiniPill, el pill colapsado).
+function FocusTimerWidget({
+  theme,
+  totalSeconds,
+  remaining,
+  running,
+  onPick,
+  onToggle,
+  onReset,
+}: {
+  theme: Theme;
+  totalSeconds: number;
+  remaining: number;
+  running: boolean;
+  onPick: (minutes: number) => void;
+  onToggle: () => void;
+  onReset: () => void;
+}) {
   const progressPct = totalSeconds > 0 ? ((totalSeconds - remaining) / totalSeconds) * 100 : 0;
 
   return (
@@ -741,7 +733,7 @@ function FocusTimerWidget({ theme }: { theme: Theme }) {
             <button
               key={m}
               type="button"
-              onClick={() => pick(m)}
+              onClick={() => onPick(m)}
               className={`px-2 py-1 rounded-lg text-[11px] font-semibold cursor-pointer ${
                 totalSeconds === m * 60 ? "bg-primary text-white" : theme.subtle
               }`}
@@ -751,18 +743,61 @@ function FocusTimerWidget({ theme }: { theme: Theme }) {
           ))}
         </div>
         <div className="flex items-center gap-1.5">
-          <button type="button" onClick={reset} className={`p-1.5 rounded-lg cursor-pointer ${theme.hover}`}>
+          <button type="button" onClick={onReset} className={`p-1.5 rounded-lg cursor-pointer ${theme.hover}`}>
             <RotateCcw className="w-3.5 h-3.5" />
           </button>
           <button
             type="button"
-            onClick={toggle}
+            onClick={onToggle}
             className="w-7 h-7 rounded-full bg-primary text-white flex items-center justify-center cursor-pointer"
           >
             {running ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 ml-0.5" />}
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Pill colapsado chico mientras el temporizador de foco sigue corriendo (punto 2 pedido, round
+// 13) — mismo rol que MiniPlayingPill, pero para el foco en vez de la música.
+function FocusMiniPill({ remaining }: { remaining: number }) {
+  return (
+    <div className="w-full h-full flex items-center gap-2 px-3">
+      <Timer className="w-4 h-4 text-primary shrink-0" />
+      <span className="text-sm font-semibold truncate flex-1">Foco</span>
+      <span className="text-sm font-bold tabular-nums">{formatMediaTime(remaining)}</span>
+    </div>
+  );
+}
+
+// Aviso grande al arrancar/pausar/terminar el temporizador (punto 2/3 pedidos, round 13) — mismo
+// patrón que MediaToastContent: aparece un momento y después se achica solo al FocusMiniPill.
+function FocusToastContent({ kind, remaining }: { kind: "start" | "pause" | "done"; remaining: number }) {
+  const label = kind === "start" ? "Arrancó el foco" : kind === "pause" ? "Foco en pausa" : "¡Terminó el foco!";
+  return (
+    <div className="w-full h-full flex flex-col items-center justify-center gap-1.5 px-4">
+      <Timer className="w-6 h-6 text-primary" />
+      <p className="text-sm font-bold text-center">{label}</p>
+      {kind !== "done" && <p className="text-lg font-bold tabular-nums">{formatMediaTime(remaining)}</p>}
+    </div>
+  );
+}
+
+// Aviso al tocar Bloq Mayús/Bloq Num (punto 1/3 pedidos, round 13, al estilo Dynamic Island for
+// Windows) — ícono con la letra/estado + nombre + Activado/Desactivado, igual que MediaToastContent
+// pero para esto. Se fuerza visible aunque algo esté en pantalla completa (ver bridge.forceReveal).
+function KeyLockToastContent({ kind, isOn }: { kind: "caps" | "num"; isOn: boolean }) {
+  const label = kind === "caps" ? "Bloq Mayús" : "Bloq Num";
+  return (
+    <div className="w-full h-full flex items-center gap-2.5 px-3.5">
+      <div className="w-8 h-8 rounded-lg bg-primary/15 flex items-center justify-center shrink-0 text-primary font-bold text-sm">
+        {kind === "caps" ? "A" : "1"}
+      </div>
+      <span className="text-sm font-semibold truncate flex-1">{label}</span>
+      <span className={`text-xs font-bold shrink-0 ${isOn ? "text-primary" : "text-zinc-500"}`}>
+        {isOn ? "Activado" : "Desactivado"}
+      </span>
     </div>
   );
 }
@@ -997,6 +1032,16 @@ export default function DockApp() {
   // Bloq Mayús/Bloq Num + batería (punto 3 pedido, round 12, bloque 1 de Dynamic Island).
   const [keyLock, setKeyLock] = useState<KeyLockInfo | null>(null);
   const [battery, setBattery] = useState<BatteryInfo | null>(null);
+  // Aviso chico al tocar Bloq Mayús/Num (punto 1/3 pedidos, round 13) — null = no se muestra nada.
+  const [keyLockToast, setKeyLockToast] = useState<{ kind: "caps" | "num"; isOn: boolean } | null>(null);
+  // Temporizador de foco (punto 2 pedido, round 13) — vive acá, NO en FocusTimerWidget, para que
+  // siga corriendo aunque el dock esté colapsado (ver el comentario de FocusTimerWidget).
+  const [focusTotal, setFocusTotal] = useState(FOCUS_PRESETS_MIN[0] * 60);
+  const [focusRemaining, setFocusRemaining] = useState(FOCUS_PRESETS_MIN[0] * 60);
+  const [focusRunning, setFocusRunning] = useState(false);
+  // Aviso grande al arrancar/pausar/terminar el foco (punto 2/3 pedidos, round 13) — null = no se
+  // muestra nada; se achica solo a FocusMiniPill mientras focusRunning siga en true.
+  const [focusToast, setFocusToast] = useState<"start" | "pause" | "done" | null>(null);
   // Ids borrados desde acá mismo — se esconden al toque (ocultamiento optimista) mientras la
   // ventana principal confirma el borrado de verdad.
   const [locallyResolvedIds, setLocallyResolvedIds] = useState<Set<string>>(new Set());
@@ -1021,6 +1066,12 @@ export default function DockApp() {
   // Para avisar batería baja una sola vez por "episodio" (no en cada sondeo de 20s mientras sigue
   // baja) — se resetea solo cuando vuelve a cargar o sube por encima del umbral.
   const batteryLowAlertedRef = useRef(false);
+  const keyLockToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Último estado conocido de Bloq Mayús/Num, para detectar cuál de los dos CAMBIÓ (y no disparar
+  // el aviso en el primer sondeo que llega, que no es un cambio real sino el estado inicial).
+  const prevKeyLockRef = useRef<KeyLockInfo | null>(null);
+  const focusToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const focusIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Espejo de "expanded" en un ref: el handler de notificaciones se registra una sola vez (ver
   // más abajo) y necesita leer el valor más reciente sin tener que re-suscribirse cada vez que
   // cambia (lo que reiniciaría la conexión con el bridge).
@@ -1033,6 +1084,59 @@ export default function DockApp() {
   useEffect(() => {
     expandedRef.current = expanded;
   }, [expanded]);
+
+  // Cuenta regresiva del temporizador de foco (punto 2 pedido, round 13) — a propósito al nivel de
+  // DockApp (siempre montado), no dentro de FocusTimerWidget (que solo se monta con el panel
+  // expandido abierto en Académico): así la cuenta sigue corriendo aunque el dock se colapse.
+  useEffect(() => {
+    if (!focusRunning) return;
+    focusIntervalRef.current = setInterval(() => {
+      setFocusRemaining((r) => {
+        if (r <= 1) {
+          setFocusRunning(false);
+          uiSounds.notify();
+          if (focusToastTimerRef.current) clearTimeout(focusToastTimerRef.current);
+          setFocusToast("done");
+          bridgeRef.current?.forceReveal(FOCUS_TOAST_MS + 600);
+          focusToastTimerRef.current = setTimeout(() => setFocusToast(null), FOCUS_TOAST_MS);
+          return 0;
+        }
+        return r - 1;
+      });
+    }, 1000);
+    return () => {
+      if (focusIntervalRef.current) clearInterval(focusIntervalRef.current);
+    };
+  }, [focusRunning]);
+
+  const handleFocusPick = (minutes: number) => {
+    uiSounds.click();
+    setFocusRunning(false);
+    setFocusTotal(minutes * 60);
+    setFocusRemaining(minutes * 60);
+  };
+
+  const handleFocusToggle = () => {
+    if (focusRemaining <= 0) return;
+    uiSounds.toggle();
+    setFocusRunning((r) => {
+      const next = !r;
+      // Punto 2/3 pedidos (round 13): avisar grande al arrancar/pausar, aunque haya algo en
+      // pantalla completa tapando el dock — se achica solo al pill chico (FocusMiniPill) mientras
+      // siga corriendo.
+      if (focusToastTimerRef.current) clearTimeout(focusToastTimerRef.current);
+      setFocusToast(next ? "start" : "pause");
+      bridgeRef.current?.forceReveal(FOCUS_TOAST_MS + 600);
+      focusToastTimerRef.current = setTimeout(() => setFocusToast(null), FOCUS_TOAST_MS);
+      return next;
+    });
+  };
+
+  const handleFocusReset = () => {
+    uiSounds.click();
+    setFocusRunning(false);
+    setFocusRemaining(focusTotal);
+  };
 
   // Bootstrap inicial (antes de que llegue el primer snapshot de la ventana principal): lee una
   // vez lo que ya haya en localStorage para no arrancar con el acento/tema por defecto un instante.
@@ -1102,11 +1206,31 @@ export default function DockApp() {
         // al pill animado chico (no al estado por defecto, porque sigue sonando algo).
         if (mediaToastTimerRef.current) clearTimeout(mediaToastTimerRef.current);
         setMediaToast(true);
+        bridgeRef.current?.forceReveal(MEDIA_TOAST_MS + 600);
         mediaToastTimerRef.current = setTimeout(() => setMediaToast(false), MEDIA_TOAST_MS);
       }
       mediaTrackKeyRef.current = key;
     });
-    const unsubKeyLock = bridge.onKeyLockUpdate(setKeyLock);
+    const unsubKeyLock = bridge.onKeyLockUpdate((info) => {
+      const prev = prevKeyLockRef.current;
+      setKeyLock(info);
+      // Punto 1/3 pedidos (round 13): aviso al estilo Dynamic Island al tocar Bloq Mayús/Num — pero
+      // no en el primer sondeo que llega (ese es el estado inicial, no un cambio real).
+      if (prev) {
+        if (info.capsLockOn !== prev.capsLockOn) {
+          if (keyLockToastTimerRef.current) clearTimeout(keyLockToastTimerRef.current);
+          setKeyLockToast({ kind: "caps", isOn: info.capsLockOn });
+          bridgeRef.current?.forceReveal(KEYLOCK_TOAST_MS + 600);
+          keyLockToastTimerRef.current = setTimeout(() => setKeyLockToast(null), KEYLOCK_TOAST_MS);
+        } else if (info.numLockOn !== prev.numLockOn) {
+          if (keyLockToastTimerRef.current) clearTimeout(keyLockToastTimerRef.current);
+          setKeyLockToast({ kind: "num", isOn: info.numLockOn });
+          bridgeRef.current?.forceReveal(KEYLOCK_TOAST_MS + 600);
+          keyLockToastTimerRef.current = setTimeout(() => setKeyLockToast(null), KEYLOCK_TOAST_MS);
+        }
+      }
+      prevKeyLockRef.current = info;
+    });
     const unsubBattery = bridge.onBatteryUpdate((info) => {
       setBattery(info);
       const isLow = info.hasBattery && !info.charging && typeof info.percent === "number" && info.percent <= 20;
@@ -1129,6 +1253,7 @@ export default function DockApp() {
         if (!expandedRef.current) {
           if (notifToastTimerRef.current) clearTimeout(notifToastTimerRef.current);
           setNotifToast(entry);
+          bridgeRef.current?.forceReveal(NOTIF_TOAST_MS + 600);
           notifToastTimerRef.current = setTimeout(() => setNotifToast(null), NOTIF_TOAST_MS);
         }
       } else if (!isLow) {
@@ -1147,32 +1272,48 @@ export default function DockApp() {
       unsubBattery();
       unsubVisibility();
       if (pulseTimerRef.current) clearTimeout(pulseTimerRef.current);
+      if (keyLockToastTimerRef.current) clearTimeout(keyLockToastTimerRef.current);
+      if (focusToastTimerRef.current) clearTimeout(focusToastTimerRef.current);
+      if (focusIntervalRef.current) clearInterval(focusIntervalRef.current);
       if (collapseTimerRef.current) clearTimeout(collapseTimerRef.current);
       if (notifToastTimerRef.current) clearTimeout(notifToastTimerRef.current);
       if (mediaToastTimerRef.current) clearTimeout(mediaToastTimerRef.current);
     };
   }, []);
 
-  // Prioridad del pill colapsado (punto 2 pedido, round 12): un aviso de notificación nueva siempre
-  // gana (ya estaba así); si no hay uno, el aviso grande de "cambió la música" gana sobre el pill
-  // chico animado de "sigue sonando algo", que a su vez gana sobre el estado por defecto.
-  const collapsedVariant: "notif" | "mediaToast" | "miniPlaying" | "default" = notifToast
-    ? "notif"
-    : mediaToast && mediaInfo?.hasSession
-    ? "mediaToast"
-    : mediaInfo?.hasSession
-    ? "miniPlaying"
-    : "default";
+  // Prioridad del pill colapsado (punto 2 pedido, round 12, extendida punto 1/2/3 pedidos, round
+  // 13): notificación > aviso de Bloq Mayús/Num > aviso de "cambió la música" > aviso del foco >
+  // pill chico de música sonando > pill chico del foco corriendo > estado por defecto.
+  const collapsedVariant: "notif" | "keylock" | "mediaToast" | "focusToast" | "miniPlaying" | "focusMini" | "default" =
+    notifToast
+      ? "notif"
+      : keyLockToast
+      ? "keylock"
+      : mediaToast && mediaInfo?.hasSession
+      ? "mediaToast"
+      : focusToast
+      ? "focusToast"
+      : mediaInfo?.hasSession
+      ? "miniPlaying"
+      : focusRunning
+      ? "focusMini"
+      : "default";
 
   useEffect(() => {
     const size = expanded
       ? EXPANDED_SIZE
       : collapsedVariant === "notif"
       ? NOTIF_TOAST_SIZE
+      : collapsedVariant === "keylock"
+      ? KEYLOCK_TOAST_SIZE
       : collapsedVariant === "mediaToast"
       ? MEDIA_TOAST_SIZE
+      : collapsedVariant === "focusToast"
+      ? FOCUS_TOAST_SIZE
       : collapsedVariant === "miniPlaying"
       ? MEDIA_MINI_SIZE
+      : collapsedVariant === "focusMini"
+      ? FOCUS_MINI_SIZE
       : COLLAPSED_SIZE;
     bridgeRef.current?.resize({ ...size, collapsed: !expanded });
   }, [expanded, collapsedVariant]);
@@ -1377,19 +1518,31 @@ export default function DockApp() {
             ? EXPANDED_SIZE.width
             : collapsedVariant === "notif"
             ? NOTIF_TOAST_SIZE.width
+            : collapsedVariant === "keylock"
+            ? KEYLOCK_TOAST_SIZE.width
             : collapsedVariant === "mediaToast"
             ? MEDIA_TOAST_SIZE.width
+            : collapsedVariant === "focusToast"
+            ? FOCUS_TOAST_SIZE.width
             : collapsedVariant === "miniPlaying"
             ? MEDIA_MINI_SIZE.width
+            : collapsedVariant === "focusMini"
+            ? FOCUS_MINI_SIZE.width
             : COLLAPSED_SIZE.width,
           height: expanded
             ? EXPANDED_SIZE.height
             : collapsedVariant === "notif"
             ? NOTIF_TOAST_SIZE.height
+            : collapsedVariant === "keylock"
+            ? KEYLOCK_TOAST_SIZE.height
             : collapsedVariant === "mediaToast"
             ? MEDIA_TOAST_SIZE.height
+            : collapsedVariant === "focusToast"
+            ? FOCUS_TOAST_SIZE.height
             : collapsedVariant === "miniPlaying"
             ? MEDIA_MINI_SIZE.height
+            : collapsedVariant === "focusMini"
+            ? FOCUS_MINI_SIZE.height
             : COLLAPSED_SIZE.height,
           // Arriba siempre en escuadra, colapsado o expandido: pegado al borde de la pantalla,
           // como si el panel expandido fuera "el dock cerrado, pero más grande", no una tarjeta
@@ -1446,15 +1599,31 @@ export default function DockApp() {
                 <p className="text-xs opacity-70 line-clamp-2">{notifToast.body}</p>
               </div>
             </motion.div>
+          ) : !expanded && collapsedVariant === "keylock" && keyLockToast ? (
+            // Aviso al tocar Bloq Mayús/Bloq Num (punto 1/3 pedidos, round 13).
+            <motion.div key="keylock-toast" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={CONTENT_TRANSITION} className="w-full h-full">
+              <KeyLockToastContent kind={keyLockToast.kind} isOn={keyLockToast.isOn} />
+            </motion.div>
           ) : !expanded && collapsedVariant === "mediaToast" && mediaInfo?.hasSession ? (
             // Aviso grande que se abre solo al cambiar lo que suena (punto 2.1 pedido, round 12).
             <motion.div key="media-toast" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={CONTENT_TRANSITION} className="w-full h-full">
               <MediaToastContent media={mediaInfo} theme={theme} onControl={handleMediaControl} />
             </motion.div>
+          ) : !expanded && collapsedVariant === "focusToast" && focusToast ? (
+            // Aviso al arrancar/pausar/terminar el foco (punto 2/3 pedidos, round 13).
+            <motion.div key="focus-toast" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={CONTENT_TRANSITION} className="w-full h-full">
+              <FocusToastContent kind={focusToast} remaining={focusRemaining} />
+            </motion.div>
           ) : !expanded && collapsedVariant === "miniPlaying" && mediaInfo?.hasSession ? (
             // Pill chico animado mientras sigue sonando algo (punto 2 pedido, round 12).
             <motion.div key="media-mini" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={CONTENT_TRANSITION} className="w-full h-full">
               <MiniPlayingPill media={mediaInfo} isDark={isDark} />
+            </motion.div>
+          ) : !expanded && collapsedVariant === "focusMini" ? (
+            // Pill chico mientras el foco sigue corriendo (punto 2 pedido, round 13) — así no se
+            // pierde la cuenta al colapsar el dock ("se cancela la acción" reportado).
+            <motion.div key="focus-mini" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={CONTENT_TRANSITION} className="w-full h-full">
+              <FocusMiniPill remaining={focusRemaining} />
             </motion.div>
           ) : !expanded ? (
             <motion.div
@@ -1608,7 +1777,19 @@ export default function DockApp() {
               <div className="flex-1 h-full flex flex-col min-w-0 relative">
                 {!section && <LiveClock />}
                 {!section && <NowPlayingWidget media={mediaInfo} theme={theme} onControl={handleMediaControl} />}
-                {!section && <FocusTimerWidget theme={theme} />}
+                {/* El foco va en Académico, no en Inicio (punto 2 pedido, round 13) — el estado
+                    vive en DockApp (ver más arriba), este componente es solo la vista. */}
+                {section === "academico" && (
+                  <FocusTimerWidget
+                    theme={theme}
+                    totalSeconds={focusTotal}
+                    remaining={focusRemaining}
+                    running={focusRunning}
+                    onPick={handleFocusPick}
+                    onToggle={handleFocusToggle}
+                    onReset={handleFocusReset}
+                  />
+                )}
 
                 {/* Título de la sección como su propio bloque sólido (punto 1 pedido, round 11) —
                     antes flotaba directo sobre el fondo translúcido, sin bloque. */}
