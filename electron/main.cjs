@@ -206,6 +206,27 @@ function Get-CurrentMediaSession {
   $manager = Await ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager])
   $manager.GetCurrentSession()
 }
+# Portada/carátula (punto 1 pedido, round 12) — el Thumbnail de la sesión es un
+# IRandomAccessStreamReference; hay que abrirlo y leer los bytes a mano (WinRT no tiene un
+# "dame la URL" directo). Tope de 2MB para no colgar el sondeo con una carátula gigante.
+function Get-MediaThumbnailBase64($mediaProps) {
+  if ($null -eq $mediaProps.Thumbnail) { return $null }
+  try {
+    [Windows.Storage.Streams.DataReader,Windows.Storage.Streams,ContentType=WindowsRuntime] | Out-Null
+    $stream = Await ($mediaProps.Thumbnail.OpenReadAsync()) ([Windows.Storage.Streams.IRandomAccessStreamWithContentType])
+    $size = [uint32]([Math]::Min([uint64]$stream.Size, 2097152))
+    if ($size -le 0) { return $null }
+    $reader = New-Object Windows.Storage.Streams.DataReader -ArgumentList $stream
+    Await ($reader.LoadAsync($size)) ([uint32]) | Out-Null
+    $bytes = New-Object byte[] ($size)
+    $reader.ReadBytes($bytes)
+    $contentType = $stream.ContentType
+    if ([string]::IsNullOrEmpty($contentType)) { $contentType = "image/jpeg" }
+    @{ base64 = [Convert]::ToBase64String($bytes); contentType = $contentType }
+  } catch {
+    $null
+  }
+}
 `;
 
 const MEDIA_PROBE_SCRIPT = (
@@ -219,6 +240,7 @@ try {
     $props = Await ($session.TryGetMediaPropertiesAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties])
     $playbackInfo = $session.GetPlaybackInfo()
     $timeline = $session.GetTimelineProperties()
+    $thumb = Get-MediaThumbnailBase64 $props
     $result = @{
       hasSession = $true
       title = $props.Title
@@ -228,6 +250,8 @@ try {
       status = [int]$playbackInfo.PlaybackStatus
       positionSeconds = [math]::Round($timeline.Position.TotalSeconds, 2)
       endSeconds = [math]::Round($timeline.EndTime.TotalSeconds, 2)
+      thumbnailBase64 = if ($thumb) { $thumb.base64 } else { $null }
+      thumbnailContentType = if ($thumb) { $thumb.contentType } else { $null }
     }
     Write-Output ($result | ConvertTo-Json -Compress)
   }

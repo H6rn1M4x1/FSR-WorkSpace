@@ -69,6 +69,15 @@ interface MediaInfo {
   status?: number;
   positionSeconds?: number;
   endSeconds?: number;
+  // Portada/carátula (punto 1 pedido, round 12) — viene en base64 desde electron/main.cjs (lee el
+  // Thumbnail de la sesión de medios vía WinRT), no es una URL.
+  thumbnailBase64?: string;
+  thumbnailContentType?: string;
+}
+
+function mediaThumbnailUri(media: MediaInfo | null | undefined): string | null {
+  if (!media?.thumbnailBase64) return null;
+  return `data:${media.thumbnailContentType || "image/jpeg"};base64,${media.thumbnailBase64}`;
 }
 
 interface DockBridge {
@@ -133,6 +142,14 @@ const EXPANDED_SIZE = { width: 680, height: 500 };
 const NOTIF_TOAST_SIZE = { width: 320, height: 104 };
 // Cuánto se queda abierto el aviso antes de volver a cerrarse solo (si el mouse no está encima).
 const NOTIF_TOAST_MS = 6000;
+// Pill chico animado mientras suena algo (punto 2 pedido, round 12) — un poco más ancho que
+// COLLAPSED_SIZE para que entren la portada + el espectro decorativo + el título.
+const MEDIA_MINI_SIZE = { width: 220, height: 40 };
+// Aviso grande que se abre solo al cambiar lo que suena (punto 2.1 pedido, round 12) — misma idea
+// que NOTIF_TOAST_SIZE/MS pero para música: se achica solo, no al pill por defecto sino al
+// MEDIA_MINI_SIZE de arriba (sigue sonando algo).
+const MEDIA_TOAST_SIZE = { width: 340, height: 172 };
+const MEDIA_TOAST_MS = 5000;
 // Tiempo que espera antes de colapsar al sacar el mouse, para no cerrarse por un roce accidental.
 const COLLAPSE_DELAY_MS = 350;
 // La misma duración/curva la usan el resize del panel Y el crossfade del contenido — si no
@@ -427,12 +444,18 @@ function NowPlayingWidget({
   const progressPct = duration > 0 ? Math.min(100, Math.max(0, (estimatedPosition / duration) * 100)) : 0;
   const currentLyric = [...lyrics].reverse().find((l) => l.time <= estimatedPosition)?.text;
 
+  const thumbnailUri = mediaThumbnailUri(media);
+
   return (
     <div className={`mx-3 mt-3 p-3 rounded-xl border ${theme.border} ${theme.solidBlock} shrink-0`}>
       <div className="flex items-center gap-2.5">
-        <div className="w-9 h-9 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
-          <Music2 className="w-4 h-4 text-primary" />
-        </div>
+        {thumbnailUri ? (
+          <img src={thumbnailUri} alt="" className="w-9 h-9 rounded-lg object-cover shrink-0" />
+        ) : (
+          <div className="w-9 h-9 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
+            <Music2 className="w-4 h-4 text-primary" />
+          </div>
+        )}
         <div className="min-w-0 flex-1">
           <p className="text-sm font-bold truncate">{media.title || "Reproduciendo"}</p>
           <p className="text-xs text-zinc-500 truncate">
@@ -474,6 +497,121 @@ function NowPlayingWidget({
             onControl("playpause");
           }}
           className="w-9 h-9 rounded-full bg-primary text-white flex items-center justify-center cursor-pointer"
+        >
+          {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            uiSounds.click();
+            onControl("next");
+          }}
+          className={`p-1.5 rounded-lg cursor-pointer ${theme.hover}`}
+        >
+          <SkipForward className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Espectro de sonido decorativo (punto 2 pedido, round 12): barras animadas por CSS/framer-motion,
+// NO un análisis de frecuencia real del audio — eso requeriría captura WASAPI loopback + FFT, un
+// desarrollo nativo aparte mucho más grande que esto, que no se pidió explícitamente.
+function EqualizerBars({ className = "" }: { className?: string }) {
+  return (
+    <div className={`flex items-end gap-[2px] h-3 ${className}`}>
+      {[0, 1, 2, 3].map((i) => (
+        <motion.span
+          key={i}
+          className="w-[3px] rounded-full bg-primary"
+          animate={{ height: ["30%", "100%", "45%", "85%", "30%"] }}
+          transition={{ duration: 0.9 + i * 0.15, repeat: Infinity, ease: "easeInOut" }}
+        />
+      ))}
+    </div>
+  );
+}
+
+// Pill colapsado chico mientras algo está sonando (punto 2 pedido, round 12) — portada/ícono +
+// título + espectro decorativo, en el mismo tamaño de pill que el estado por defecto (apenas más
+// ancho, ver MEDIA_MINI_SIZE).
+function MiniPlayingPill({ media, isDark }: { media: MediaInfo; isDark: boolean }) {
+  const thumbnailUri = mediaThumbnailUri(media);
+  return (
+    <div className="w-full h-full flex items-center gap-2 px-3">
+      {thumbnailUri ? (
+        <img src={thumbnailUri} alt="" className="w-6 h-6 rounded-md object-cover shrink-0" />
+      ) : (
+        <Logo darkMode={isDark} size="xs" />
+      )}
+      <span className="text-sm font-semibold truncate flex-1">{media.title || "Reproduciendo"}</span>
+      <EqualizerBars />
+    </div>
+  );
+}
+
+// Aviso grande que se abre solo al cambiar lo que suena (punto 2.1 pedido, round 12) — portada +
+// título/artista/app de origen + progreso + controles, igual que NowPlayingWidget pero sin letra
+// sincronizada (se cierra solo antes de que haga falta) y en el tamaño de MEDIA_TOAST_SIZE.
+function MediaToastContent({
+  media,
+  theme,
+  onControl,
+}: {
+  media: MediaInfo;
+  theme: Theme;
+  onControl: (action: "playpause" | "next" | "previous") => void;
+}) {
+  const thumbnailUri = mediaThumbnailUri(media);
+  const isPlaying = media.status === MEDIA_STATUS_PLAYING;
+  const duration = media.endSeconds ?? 0;
+  const position = media.positionSeconds ?? 0;
+  const progressPct = duration > 0 ? Math.min(100, Math.max(0, (position / duration) * 100)) : 0;
+  return (
+    <div className="w-full h-full flex flex-col gap-2.5 px-4 py-3.5">
+      <div className="flex items-center gap-3">
+        {thumbnailUri ? (
+          <img src={thumbnailUri} alt="" className="w-12 h-12 rounded-xl object-cover shrink-0" />
+        ) : (
+          <div className="w-12 h-12 rounded-xl bg-primary/15 flex items-center justify-center shrink-0">
+            <Music2 className="w-5 h-5 text-primary" />
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-bold truncate">{media.title || "Reproduciendo"}</p>
+          <p className="text-xs text-zinc-500 truncate">
+            {media.artist || "—"}
+            {prettyAppId(media.appId) && <span className="opacity-70"> · Reproduciendo desde {prettyAppId(media.appId)}</span>}
+          </p>
+        </div>
+        <EqualizerBars />
+      </div>
+
+      {duration > 0 && (
+        <div className={`h-1 rounded-full overflow-hidden ${theme.subtle}`}>
+          <div className="h-full bg-primary rounded-full" style={{ width: `${progressPct}%` }} />
+        </div>
+      )}
+
+      <div className="flex items-center justify-center gap-5">
+        <button
+          type="button"
+          onClick={() => {
+            uiSounds.click();
+            onControl("previous");
+          }}
+          className={`p-1.5 rounded-lg cursor-pointer ${theme.hover}`}
+        >
+          <SkipBack className="w-4 h-4" />
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            uiSounds.click();
+            onControl("playpause");
+          }}
+          className="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center cursor-pointer"
         >
           {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
         </button>
@@ -716,6 +854,9 @@ export default function DockApp() {
   // "Now Playing" de todo Windows (punto 2 pedido, round 11) — null mientras no haya ninguna
   // sesión de medios activa.
   const [mediaInfo, setMediaInfo] = useState<MediaInfo | null>(null);
+  // Aviso grande que se abre solo al cambiar lo que suena (punto 2.1 pedido, round 12) — true
+  // mientras se muestra; se achica solo al pill animado chico (MiniPlayingPill), no al default.
+  const [mediaToast, setMediaToast] = useState(false);
   // Ids borrados desde acá mismo — se esconden al toque (ocultamiento optimista) mientras la
   // ventana principal confirma el borrado de verdad.
   const [locallyResolvedIds, setLocallyResolvedIds] = useState<Set<string>>(new Set());
@@ -733,6 +874,10 @@ export default function DockApp() {
   const collapseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pulseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const notifToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mediaToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Última "clave" (título|artista) de lo que sonaba, para detectar cuándo CAMBIA (y no disparar
+  // el aviso grande en cada sondeo de PowerShell, que llega cada 2s aunque no haya cambiado nada).
+  const mediaTrackKeyRef = useRef<string>("");
   // Espejo de "expanded" en un ref: el handler de notificaciones se registra una sola vez (ver
   // más abajo) y necesita leer el valor más reciente sin tener que re-suscribirse cada vez que
   // cambia (lo que reiniciaría la conexión con el bridge).
@@ -803,7 +948,21 @@ export default function DockApp() {
       if (visible) uiSounds.expand();
       else uiSounds.collapse();
     });
-    const unsubMedia = bridge.onMediaUpdate(setMediaInfo);
+    const unsubMedia = bridge.onMediaUpdate((info) => {
+      setMediaInfo(info);
+      const key = info?.hasSession ? `${info.title ?? ""}|${info.artist ?? ""}` : "";
+      if (!key) {
+        setMediaToast(false);
+      } else if (key !== mediaTrackKeyRef.current && !expandedRef.current) {
+        // Punto 2.1 pedido (round 12): cambió lo que suena (o arrancó a sonar algo) — se agranda
+        // solo un toque, como el reproductor de la imagen de referencia, y después se achica solo
+        // al pill animado chico (no al estado por defecto, porque sigue sonando algo).
+        if (mediaToastTimerRef.current) clearTimeout(mediaToastTimerRef.current);
+        setMediaToast(true);
+        mediaToastTimerRef.current = setTimeout(() => setMediaToast(false), MEDIA_TOAST_MS);
+      }
+      mediaTrackKeyRef.current = key;
+    });
     bridge
       .getDisplays()
       .then(setDisplays)
@@ -816,13 +975,33 @@ export default function DockApp() {
       if (pulseTimerRef.current) clearTimeout(pulseTimerRef.current);
       if (collapseTimerRef.current) clearTimeout(collapseTimerRef.current);
       if (notifToastTimerRef.current) clearTimeout(notifToastTimerRef.current);
+      if (mediaToastTimerRef.current) clearTimeout(mediaToastTimerRef.current);
     };
   }, []);
 
+  // Prioridad del pill colapsado (punto 2 pedido, round 12): un aviso de notificación nueva siempre
+  // gana (ya estaba así); si no hay uno, el aviso grande de "cambió la música" gana sobre el pill
+  // chico animado de "sigue sonando algo", que a su vez gana sobre el estado por defecto.
+  const collapsedVariant: "notif" | "mediaToast" | "miniPlaying" | "default" = notifToast
+    ? "notif"
+    : mediaToast && mediaInfo?.hasSession
+    ? "mediaToast"
+    : mediaInfo?.hasSession
+    ? "miniPlaying"
+    : "default";
+
   useEffect(() => {
-    const size = expanded ? EXPANDED_SIZE : notifToast ? NOTIF_TOAST_SIZE : COLLAPSED_SIZE;
+    const size = expanded
+      ? EXPANDED_SIZE
+      : collapsedVariant === "notif"
+      ? NOTIF_TOAST_SIZE
+      : collapsedVariant === "mediaToast"
+      ? MEDIA_TOAST_SIZE
+      : collapsedVariant === "miniPlaying"
+      ? MEDIA_MINI_SIZE
+      : COLLAPSED_SIZE;
     bridgeRef.current?.resize({ ...size, collapsed: !expanded });
-  }, [expanded, notifToast]);
+  }, [expanded, collapsedVariant]);
 
   // Abrir/cerrar con el mouse: entra = se abre; sale = se cierra solo, con un pequeño margen de
   // tiempo para que no se cierre por pasar de largo sin querer. Las dos con sonido.
@@ -841,6 +1020,11 @@ export default function DockApp() {
         notifToastTimerRef.current = null;
       }
       setNotifToast(null);
+      if (mediaToastTimerRef.current) {
+        clearTimeout(mediaToastTimerRef.current);
+        mediaToastTimerRef.current = null;
+      }
+      setMediaToast(false);
     }
   };
 
@@ -1015,8 +1199,24 @@ export default function DockApp() {
     >
       <motion.div
         animate={{
-          width: expanded ? EXPANDED_SIZE.width : notifToast ? NOTIF_TOAST_SIZE.width : COLLAPSED_SIZE.width,
-          height: expanded ? EXPANDED_SIZE.height : notifToast ? NOTIF_TOAST_SIZE.height : COLLAPSED_SIZE.height,
+          width: expanded
+            ? EXPANDED_SIZE.width
+            : collapsedVariant === "notif"
+            ? NOTIF_TOAST_SIZE.width
+            : collapsedVariant === "mediaToast"
+            ? MEDIA_TOAST_SIZE.width
+            : collapsedVariant === "miniPlaying"
+            ? MEDIA_MINI_SIZE.width
+            : COLLAPSED_SIZE.width,
+          height: expanded
+            ? EXPANDED_SIZE.height
+            : collapsedVariant === "notif"
+            ? NOTIF_TOAST_SIZE.height
+            : collapsedVariant === "mediaToast"
+            ? MEDIA_TOAST_SIZE.height
+            : collapsedVariant === "miniPlaying"
+            ? MEDIA_MINI_SIZE.height
+            : COLLAPSED_SIZE.height,
           // Arriba siempre en escuadra, colapsado o expandido: pegado al borde de la pantalla,
           // como si el panel expandido fuera "el dock cerrado, pero más grande", no una tarjeta
           // flotando separada con un hueco arriba.
@@ -1071,6 +1271,16 @@ export default function DockApp() {
                 <p className="text-sm font-bold truncate">{notifToast.title}</p>
                 <p className="text-xs opacity-70 line-clamp-2">{notifToast.body}</p>
               </div>
+            </motion.div>
+          ) : !expanded && collapsedVariant === "mediaToast" && mediaInfo?.hasSession ? (
+            // Aviso grande que se abre solo al cambiar lo que suena (punto 2.1 pedido, round 12).
+            <motion.div key="media-toast" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={CONTENT_TRANSITION} className="w-full h-full">
+              <MediaToastContent media={mediaInfo} theme={theme} onControl={handleMediaControl} />
+            </motion.div>
+          ) : !expanded && collapsedVariant === "miniPlaying" && mediaInfo?.hasSession ? (
+            // Pill chico animado mientras sigue sonando algo (punto 2 pedido, round 12).
+            <motion.div key="media-mini" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={CONTENT_TRANSITION} className="w-full h-full">
+              <MiniPlayingPill media={mediaInfo} isDark={isDark} />
             </motion.div>
           ) : !expanded ? (
             <motion.div
