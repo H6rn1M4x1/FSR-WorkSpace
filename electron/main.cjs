@@ -212,25 +212,33 @@ function Get-CurrentMediaSession {
   $manager = Await ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager])
   $manager.GetCurrentSession()
 }
-# Portada/carátula (punto 1 pedido, round 12) — el Thumbnail de la sesión es un
-# IRandomAccessStreamReference; hay que abrirlo y leer los bytes a mano (WinRT no tiene un
-# "dame la URL" directo). Tope de 2MB para no colgar el sondeo con una carátula gigante.
+# Portada/carátula (punto 1 pedido, round 12; arreglo round 15 — seguía sin aparecer) — el
+# Thumbnail de la sesión es un IRandomAccessStreamReference; hay que abrirlo y leer los bytes a
+# mano (WinRT no tiene un "dame la URL" directo). Tope de 2MB para no colgar el sondeo con una
+# carátula gigante. hasSource/error quedan en el resultado aunque no se pueda ver desde la UI —
+# sirven para diferenciar "esta app no comparte carátula" (hasSource=false, no es un bug acá) de
+# "sí la comparte pero algo falló leyéndola" (hasSource=true, sí sería un bug) la próxima vez que
+# haga falta diagnosticar esto sin poder probarlo en una PC Windows real.
 function Get-MediaThumbnailBase64($mediaProps) {
-  if ($null -eq $mediaProps.Thumbnail) { return $null }
+  if ($null -eq $mediaProps.Thumbnail) { return @{ hasSource = $false } }
   try {
     [Windows.Storage.Streams.DataReader,Windows.Storage.Streams,ContentType=WindowsRuntime] | Out-Null
-    $stream = Await ($mediaProps.Thumbnail.OpenReadAsync()) ([Windows.Storage.Streams.IRandomAccessStreamWithContentType])
-    $size = [uint32]([Math]::Min([uint64]$stream.Size, 2097152))
-    if ($size -le 0) { return $null }
-    $reader = New-Object Windows.Storage.Streams.DataReader -ArgumentList $stream
+    $thumbStream = Await ($mediaProps.Thumbnail.OpenReadAsync()) ([Windows.Storage.Streams.IRandomAccessStreamWithContentType])
+    $size = [uint32]([Math]::Min([uint64]$thumbStream.Size, 2097152))
+    if ($size -le 0) { return @{ hasSource = $true; base64 = $null } }
+    # GetInputStreamAt(0) en vez de pasar el IRandomAccessStream directo al constructor de
+    # DataReader: más explícito sobre qué interfaz usar, menos margen para que el interop elija mal
+    # el overload (sospecha principal de por qué no funcionaba antes).
+    $inputStream = $thumbStream.GetInputStreamAt(0)
+    $reader = New-Object Windows.Storage.Streams.DataReader($inputStream)
     Await ($reader.LoadAsync($size)) ([uint32]) | Out-Null
     $bytes = New-Object byte[] ($size)
     $reader.ReadBytes($bytes)
-    $contentType = $stream.ContentType
+    $contentType = $thumbStream.ContentType
     if ([string]::IsNullOrEmpty($contentType)) { $contentType = "image/jpeg" }
-    @{ base64 = [Convert]::ToBase64String($bytes); contentType = $contentType }
+    @{ hasSource = $true; base64 = [Convert]::ToBase64String($bytes); contentType = $contentType }
   } catch {
-    $null
+    @{ hasSource = $true; base64 = $null; error = "$_" }
   }
 }
 `;
@@ -256,8 +264,8 @@ try {
       status = [int]$playbackInfo.PlaybackStatus
       positionSeconds = [math]::Round($timeline.Position.TotalSeconds, 2)
       endSeconds = [math]::Round($timeline.EndTime.TotalSeconds, 2)
-      thumbnailBase64 = if ($thumb) { $thumb.base64 } else { $null }
-      thumbnailContentType = if ($thumb) { $thumb.contentType } else { $null }
+      thumbnailBase64 = if ($thumb -and $thumb.base64) { $thumb.base64 } else { $null }
+      thumbnailContentType = if ($thumb -and $thumb.base64) { $thumb.contentType } else { $null }
     }
     Write-Output ($result | ConvertTo-Json -Compress)
   }
@@ -688,10 +696,10 @@ function Get-FsrVolumeState {
 // hace falta un FileSystemWatcher corriendo todo el tiempo (una técnica nueva, nunca probada acá):
 // alcanza con mirar en cada sondeo si el archivo más nuevo de la carpeta de Capturas de a Windows
 // cambió desde la última vez, reusando el mismo patrón de sondeo-y-comparar de todo este archivo.
-// Privacidad (micrófono/cámara en uso) via el registro (CapabilityAccessManager\ConsentStore) y
-// Enfoque asistido/No molestar via una clave no documentada por Microsoft (encontrada por la
-// comunidad, puede no existir o variar según la build de Windows — por eso el try/catch ancho, para
-// que si falla, solo ese campo quede en null en vez de tirar abajo el resto del sondeo).
+//
+// Privacidad (mic/cámara), No molestar, Bluetooth y el monitor de hardware (CPU/RAM/disco/red) se
+// sacaron de acá (punto pedido, round 15: "esto eliminalo") — ya no hace sentido seguir
+// consultando WMI/registro cada 3s por datos que no se muestran en ningún lado.
 const SYSTEM_PROBE_SCRIPT = (
   WINRT_VOLUME_HELPERS +
   `
@@ -724,86 +732,11 @@ try {
   }
 } catch {}
 
-function Test-FsrCapabilityInUse($capRoot) {
-  if (-not (Test-Path $capRoot)) { return $false }
-  $paths = @($capRoot)
-  Get-ChildItem $capRoot -ErrorAction SilentlyContinue | ForEach-Object {
-    $paths += $_.PSPath
-    if ($_.PSChildName -eq "NonPackaged") {
-      Get-ChildItem $_.PSPath -ErrorAction SilentlyContinue | ForEach-Object { $paths += $_.PSPath }
-    }
-  }
-  foreach ($p in $paths) {
-    $props = Get-ItemProperty -Path $p -ErrorAction SilentlyContinue
-    if ($null -ne $props -and ($props.PSObject.Properties.Name -contains "LastUsedTimeStop")) {
-      if ($props.LastUsedTimeStop -eq 0 -and $props.LastUsedTimeStart -gt 0) { return $true }
-    }
-  }
-  return $false
-}
-try {
-  $capBase = "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore"
-  $result.micInUse = Test-FsrCapabilityInUse (Join-Path $capBase "microphone")
-  $result.camInUse = Test-FsrCapabilityInUse (Join-Path $capBase "webcam")
-} catch { $result.micInUse = $null; $result.camInUse = $null }
-
-try {
-  # Offset no documentado por Microsoft, encontrado por la comunidad: puede no existir en todas las
-  # builds de Windows (10 vs 11, actualizaciones) — si falla, dndState queda en null (se interpreta
-  # como "no se pudo saber", no como "desactivado").
-  $dndPath = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\CloudStore\\Store\\Cache\\DefaultAccount\\$$windows.data.notifications.quiethourssettings\\Current'
-  $dndBytes = (Get-ItemProperty -Path $dndPath -Name "Data" -ErrorAction Stop).Data
-  if ($dndBytes -and $dndBytes.Length -gt 18) {
-    $result.dndState = [int]$dndBytes[18]
-  }
-} catch { $result.dndState = $null }
-
 try {
   $vol = Get-FsrVolumeState
   if ($vol) {
     $result.volumePercent = $vol.volumePercent
     $result.muted = $vol.muted
-  }
-} catch {}
-
-try {
-  $bt = Get-PnpDevice -Class Bluetooth -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq "OK" -and $_.FriendlyName -notmatch "^(Bluetooth Radio|Microsoft Bluetooth|Generic Bluetooth)" }
-  if ($bt) { $result.bluetoothDevices = @($bt | Select-Object -ExpandProperty FriendlyName -Unique) }
-  else { $result.bluetoothDevices = @() }
-} catch { $result.bluetoothDevices = @() }
-
-try {
-  $cpu = (Get-CimInstance Win32_Processor -ErrorAction SilentlyContinue | Measure-Object -Property LoadPercentage -Average).Average
-  if ($null -ne $cpu) { $result.cpuPercent = [int]$cpu }
-} catch {}
-
-try {
-  $os = Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue
-  if ($os) {
-    $totalKB = $os.TotalVisibleMemorySize
-    $freeKB = $os.FreePhysicalMemory
-    $result.ramTotalGB = [math]::Round($totalKB / 1MB, 1)
-    $result.ramUsedGB = [math]::Round(($totalKB - $freeKB) / 1MB, 1)
-    $result.ramPercent = [int](100 - ($freeKB / $totalKB * 100))
-  }
-} catch {}
-
-try {
-  $disk = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='C:'" -ErrorAction SilentlyContinue
-  if ($disk) {
-    $result.diskFreeGB = [math]::Round($disk.FreeSpace / 1GB, 1)
-    $result.diskTotalGB = [math]::Round($disk.Size / 1GB, 1)
-  }
-} catch {}
-
-try {
-  $net = Get-CimInstance Win32_PerfFormattedData_Tcpip_NetworkInterface -ErrorAction SilentlyContinue |
-    Where-Object { $_.Name -notmatch "Loopback|isatap|Teredo" } |
-    Sort-Object { $_.BytesTotalPersec } -Descending |
-    Select-Object -First 1
-  if ($net) {
-    $result.netDownKBs = [math]::Round($net.BytesReceivedPersec / 1KB, 1)
-    $result.netUpKBs = [math]::Round($net.BytesSentPersec / 1KB, 1)
   }
 } catch {}
 

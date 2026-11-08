@@ -37,16 +37,6 @@ import {
   RotateCcw,
   Volume2,
   VolumeX,
-  Minus,
-  Power,
-  Cpu,
-  MemoryStick,
-  HardDrive,
-  Wifi,
-  Moon,
-  Mic,
-  Video,
-  Bluetooth,
   Clipboard,
   Camera,
   type LucideIcon,
@@ -112,41 +102,16 @@ interface BatteryInfo {
   charging?: boolean;
 }
 
-// Resto de las funciones de Dynamic Island for Windows (punto pedido, round 14) — todo esto viene
-// consolidado en un solo sondeo (SYSTEM_PROBE_SCRIPT en electron/main.cjs) para no spawnear un
-// powershell.exe por cada función. Cada campo es opcional/nullable porque cada uno tiene su propio
-// try/catch allá: si uno falla (ej. dndState, que usa una clave no documentada por Microsoft), el
-// resto igual llega.
+// Portapapeles/captura/volumen (punto pedido, round 14) — consolidado en un solo sondeo
+// (SYSTEM_PROBE_SCRIPT en electron/main.cjs). El monitor de hardware, privacidad, No molestar y
+// Bluetooth que iban acá se sacaron (punto pedido, round 15: "esto eliminalo").
 interface SystemInfo {
   clipboardSeq?: number;
   clipboardPreview?: string;
   lastScreenshotFile?: string;
   lastScreenshotTicks?: number;
-  micInUse?: boolean | null;
-  camInUse?: boolean | null;
-  // GlobalSystemMediaTransportControlsSessionPlaybackStatus no aplica acá — esto es el estado de
-  // Enfoque asistido/No molestar: 0 Desactivado, 1 Solo prioritarias, 2 Solo alarmas, 3 Horas
-  // silenciosas; null = no se pudo leer (no es lo mismo que "desactivado").
-  dndState?: number | null;
   volumePercent?: number;
   muted?: boolean;
-  bluetoothDevices?: string[];
-  cpuPercent?: number;
-  ramPercent?: number;
-  ramUsedGB?: number;
-  ramTotalGB?: number;
-  diskFreeGB?: number;
-  diskTotalGB?: number;
-  netDownKBs?: number;
-  netUpKBs?: number;
-}
-
-function prettyDndState(state: number | null | undefined): string | null {
-  if (state === null || state === undefined || state === 0) return null;
-  if (state === 1) return "Solo prioritarias";
-  if (state === 2) return "Solo alarmas";
-  if (state === 3) return "Horas silenciosas";
-  return "Activado";
 }
 
 interface DockBridge {
@@ -912,125 +877,6 @@ function ScreenshotToastContent({ fileName }: { fileName?: string }) {
   );
 }
 
-// Widget persistente en Inicio con el resto de las funciones de Dynamic Island (punto pedido,
-// round 14) — a diferencia de los avisos de arriba (momentáneos), esto es ESTADO ambiente (cuánto
-// volumen hay ahora, qué tan ocupada está la PC, qué está conectado por Bluetooth, si el micrófono/
-// cámara están en uso, si está activado Enfoque asistido), por eso va como indicador siempre
-// visible en vez de un aviso que aparece y desaparece.
-function SystemStatusWidget({
-  system,
-  theme,
-  onVolumeControl,
-}: {
-  system: SystemInfo | null;
-  theme: Theme;
-  onVolumeControl: (action: "up" | "down" | "mute") => void;
-}) {
-  if (!system) return null;
-  const dndLabel = prettyDndState(system.dndState);
-  const hasBt = (system.bluetoothDevices?.length ?? 0) > 0;
-  const hasPrivacy = system.micInUse || system.camInUse;
-  const hasBadges = hasBt || hasPrivacy || !!dndLabel;
-  const hasVolume = typeof system.volumePercent === "number";
-  const hasHardware =
-    typeof system.cpuPercent === "number" ||
-    typeof system.ramPercent === "number" ||
-    typeof system.diskFreeGB === "number" ||
-    typeof system.netDownKBs === "number";
-  if (!hasVolume && !hasHardware && !hasBadges) return null;
-
-  return (
-    <div className={`mx-3 mt-3 p-3 rounded-xl border ${theme.border} ${theme.solidBlock} shrink-0 space-y-2.5`}>
-      {hasVolume && (
-        <div className="flex items-center gap-2">
-          {system.muted ? (
-            <VolumeX className="w-4 h-4 text-zinc-500 shrink-0" />
-          ) : (
-            <Volume2 className="w-4 h-4 text-primary shrink-0" />
-          )}
-          <div className={`flex-1 h-1 rounded-full overflow-hidden ${theme.subtle}`}>
-            <div className="h-full bg-primary rounded-full" style={{ width: `${system.muted ? 0 : system.volumePercent}%` }} />
-          </div>
-          <span className="text-[11px] tabular-nums text-zinc-500 w-8 text-right shrink-0">
-            {system.muted ? "Mute" : `${system.volumePercent}%`}
-          </span>
-          <div className="flex items-center gap-0.5 shrink-0">
-            <button type="button" onClick={() => onVolumeControl("down")} className={`p-1 rounded cursor-pointer ${theme.hover}`}>
-              <Minus className="w-3 h-3" />
-            </button>
-            <button type="button" onClick={() => onVolumeControl("mute")} className={`p-1 rounded cursor-pointer ${theme.hover}`}>
-              <Power className="w-3 h-3" />
-            </button>
-            <button type="button" onClick={() => onVolumeControl("up")} className={`p-1 rounded cursor-pointer ${theme.hover}`}>
-              <Plus className="w-3 h-3" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {hasHardware && (
-        <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px]">
-          {typeof system.cpuPercent === "number" && (
-            <div className="flex items-center gap-1.5">
-              <Cpu className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
-              <span className="text-zinc-500">CPU</span>
-              <span className="ml-auto font-semibold tabular-nums">{system.cpuPercent}%</span>
-            </div>
-          )}
-          {typeof system.ramPercent === "number" && (
-            <div className="flex items-center gap-1.5">
-              <MemoryStick className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
-              <span className="text-zinc-500">RAM</span>
-              <span className="ml-auto font-semibold tabular-nums">{system.ramPercent}%</span>
-            </div>
-          )}
-          {typeof system.diskFreeGB === "number" && (
-            <div className="flex items-center gap-1.5">
-              <HardDrive className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
-              <span className="text-zinc-500">Disco</span>
-              <span className="ml-auto font-semibold tabular-nums">{system.diskFreeGB}GB libres</span>
-            </div>
-          )}
-          {typeof system.netDownKBs === "number" && (
-            <div className="flex items-center gap-1.5">
-              <Wifi className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
-              <span className="text-zinc-500">Red</span>
-              <span className="ml-auto font-semibold tabular-nums">
-                ↓{system.netDownKBs} ↑{system.netUpKBs ?? 0} KB/s
-              </span>
-            </div>
-          )}
-        </div>
-      )}
-
-      {hasBadges && (
-        <div className={`pt-2 border-t ${theme.border} flex flex-wrap items-center gap-1.5`}>
-          {dndLabel && (
-            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-primary/15 text-primary text-[10px] font-bold">
-              <Moon className="w-3 h-3" /> {dndLabel}
-            </span>
-          )}
-          {system.micInUse && (
-            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-500/15 text-red-500 text-[10px] font-bold">
-              <Mic className="w-3 h-3" /> Mic
-            </span>
-          )}
-          {system.camInUse && (
-            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-500/15 text-red-500 text-[10px] font-bold">
-              <Video className="w-3 h-3" /> Cámara
-            </span>
-          )}
-          {hasBt && (
-            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-zinc-500/15 text-zinc-500 text-[10px] font-bold truncate max-w-full">
-              <Bluetooth className="w-3 h-3 shrink-0" /> {system.bluetoothDevices!.join(", ")}
-            </span>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // Tarjeta de cada nota (punto 1 pedido, round 5): mismo estilo visual que ya tiene Finanzas en la
 // app real (categoría/estado arriba, ícono + título, fecha, monto si corresponde, botones de
 // acción) — pero aplicado DIRECTO en la lista de cada sección, no solo al abrir un detalle aparte.
@@ -1500,10 +1346,8 @@ export default function DockApp() {
         batteryLowAlertedRef.current = false;
       }
     });
-    // Resto de las funciones de Dynamic Island (punto pedido, round 14) — volumen/portapapeles/
-    // captura son avisos momentáneos (se detecta el CAMBIO, igual que Bloq Mayús/Num); privacidad/
-    // No molestar/Bluetooth/hardware son estado ambiente, no disparan nada acá, solo actualizan
-    // systemInfo (ver SystemStatusWidget).
+    // Portapapeles/captura/volumen (punto pedido, round 14) — avisos momentáneos, se detecta el
+    // CAMBIO (igual que Bloq Mayús/Num).
     const unsubSystem = bridge.onSystemUpdate((info) => {
       const prev = prevSystemRef.current;
       setSystemInfo(info);
@@ -1515,27 +1359,30 @@ export default function DockApp() {
         volumeToastTimerRef.current = setTimeout(() => setVolumeToast(null), VOLUME_TOAST_MS);
       }
 
-      if (
-        prev &&
+      const screenshotChanged =
+        !!prev && typeof info.lastScreenshotTicks === "number" && info.lastScreenshotTicks !== prev.lastScreenshotTicks;
+      const clipboardChanged =
+        !!prev &&
         typeof info.clipboardSeq === "number" &&
         typeof prev.clipboardSeq === "number" &&
-        info.clipboardSeq !== prev.clipboardSeq
-      ) {
-        if (clipboardToastTimerRef.current) clearTimeout(clipboardToastTimerRef.current);
-        setClipboardToast({ preview: info.clipboardPreview });
-        bridgeRef.current?.forceReveal(CLIPBOARD_TOAST_MS + 600);
-        clipboardToastTimerRef.current = setTimeout(() => setClipboardToast(null), CLIPBOARD_TOAST_MS);
-      }
+        info.clipboardSeq !== prev.clipboardSeq;
 
-      if (
-        prev &&
-        typeof info.lastScreenshotTicks === "number" &&
-        info.lastScreenshotTicks !== prev.lastScreenshotTicks
-      ) {
+      // Punto pedido (round 15): "no se diferencia entre captura y copiar/pegar" — pasaba porque
+      // Win+ImprPant guarda el archivo EN LA CARPETA *Y* lo deja en el portapapeles a la vez, así
+      // que una captura real disparaba los dos cambios en el mismo sondeo; como el portapapeles
+      // tenía más prioridad en el pill, la captura real nunca se llegaba a mostrar como tal. Ahora,
+      // si cambiaron los dos en el mismo sondeo, se interpreta como una captura (es la señal más
+      // específica) y el aviso de portapapeles de ese sondeo se pisa.
+      if (screenshotChanged) {
         if (screenshotToastTimerRef.current) clearTimeout(screenshotToastTimerRef.current);
         setScreenshotToast({ fileName: info.lastScreenshotFile });
         bridgeRef.current?.forceReveal(SCREENSHOT_TOAST_MS + 600);
         screenshotToastTimerRef.current = setTimeout(() => setScreenshotToast(null), SCREENSHOT_TOAST_MS);
+      } else if (clipboardChanged) {
+        if (clipboardToastTimerRef.current) clearTimeout(clipboardToastTimerRef.current);
+        setClipboardToast({ preview: info.clipboardPreview });
+        bridgeRef.current?.forceReveal(CLIPBOARD_TOAST_MS + 600);
+        clipboardToastTimerRef.current = setTimeout(() => setClipboardToast(null), CLIPBOARD_TOAST_MS);
       }
 
       prevSystemRef.current = info;
@@ -1565,15 +1412,17 @@ export default function DockApp() {
     };
   }, []);
 
-  // Prioridad del pill colapsado (punto 2 pedido, round 12, extendida rounds 13/14): notificación >
-  // Bloq Mayús/Num > volumen > portapapeles > captura > "cambió la música" > aviso del foco > pill
-  // de música sonando > pill del foco corriendo > estado por defecto.
+  // Prioridad del pill colapsado (punto 2 pedido, round 12, extendida rounds 13/14/15): notificación
+  // > Bloq Mayús/Num > volumen > captura > portapapeles > "cambió la música" > aviso del foco >
+  // pill de música sonando > pill del foco corriendo > estado por defecto. Captura va ANTES que
+  // portapapeles (no solo en el mismo sondeo, ver onSystemUpdate) por si un aviso de portapapeles
+  // todavía está en pantalla de un sondeo anterior cuando llega una captura nueva.
   const collapsedVariant:
     | "notif"
     | "keylock"
     | "volume"
-    | "clipboard"
     | "screenshot"
+    | "clipboard"
     | "mediaToast"
     | "focusToast"
     | "miniPlaying"
@@ -1584,10 +1433,10 @@ export default function DockApp() {
     ? "keylock"
     : volumeToast
     ? "volume"
-    : clipboardToast
-    ? "clipboard"
     : screenshotToast
     ? "screenshot"
+    : clipboardToast
+    ? "clipboard"
     : mediaToast && mediaInfo?.hasSession
     ? "mediaToast"
     : focusToast
@@ -1738,11 +1587,6 @@ export default function DockApp() {
 
   const handleMediaControl = (action: "playpause" | "next" | "previous") => {
     bridgeRef.current?.mediaControl(action);
-  };
-
-  const handleVolumeControl = (action: "up" | "down" | "mute") => {
-    uiSounds.click();
-    bridgeRef.current?.volumeControl(action);
   };
 
   // Estado "resuelto" efectivo de un ítem, considerando el toggle optimista local (ver
@@ -2129,7 +1973,6 @@ export default function DockApp() {
               <div className="flex-1 h-full flex flex-col min-w-0 relative">
                 {!section && <LiveClock />}
                 {!section && <NowPlayingWidget media={mediaInfo} theme={theme} onControl={handleMediaControl} />}
-                {!section && <SystemStatusWidget system={systemInfo} theme={theme} onVolumeControl={handleVolumeControl} />}
                 {/* El foco va en Académico, no en Inicio (punto 2 pedido, round 13) — el estado
                     vive en DockApp (ver más arriba), este componente es solo la vista. */}
                 {section === "academico" && (
