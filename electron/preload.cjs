@@ -87,6 +87,15 @@ contextBridge.exposeInMainWorld("FSR_ELECTRON_DOCK", {
     ipcRenderer.on("dock-battery-update", listener);
     return () => ipcRenderer.removeListener("dock-battery-update", listener);
   },
+  // Resto de las funciones de Dynamic Island for Windows (punto pedido, round 14): portapapeles,
+  // captura de pantalla, privacidad, No molestar, volumen, Bluetooth, CPU/RAM/disco/red — ver
+  // SYSTEM_PROBE_SCRIPT en electron/main.cjs.
+  onSystemUpdate: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on("dock-system-update", listener);
+    return () => ipcRenderer.removeListener("dock-system-update", listener);
+  },
+  volumeControl: (action) => ipcRenderer.send("dock-volume-control", action),
   // Usado por la ventana principal (src/App.tsx) para enterarse de que el dock pidió abrir el
   // formulario de alta/edición de una categoría — ver dock-quick-add/dock-quick-edit más arriba.
   onQuickAdd: (callback) => {

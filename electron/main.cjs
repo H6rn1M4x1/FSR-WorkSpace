@@ -607,6 +607,280 @@ function startBatteryWatcher() {
   poll();
 }
 
+// Interop COM para el volumen maestro (punto pedido, round 14: "todas las demás funciones de
+// Dynamic Island for Windows") — a diferencia de todo lo anterior (P/Invoke simple o WMI), Windows
+// no tiene un cmdlet ni una API de WinRT para leer/cambiar el volumen del sistema: la única forma
+// es la API de Core Audio (IAudioEndpointVolume), que es COM clásico. Esto es más intrincado y más
+// riesgoso que el resto de este archivo (GUIDs + vtables exactos, nada que se pueda chequear sin
+// una PC Windows real) — si no anduviera a la primera, es el candidato más probable.
+const WINRT_VOLUME_HELPERS = `
+$fsrVolumeSrc = @"
+using System;
+using System.Runtime.InteropServices;
+
+public enum FsrDataFlow { eRender, eCapture, eAll }
+public enum FsrRole { eConsole, eMultimedia, eCommunications }
+
+[ComImport, Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")]
+public class FsrMMDeviceEnumeratorComObject { }
+
+[Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+public interface IFsrMMDeviceEnumerator {
+  int NotImpl1();
+  int GetDefaultAudioEndpoint(FsrDataFlow dataFlow, FsrRole role, out IFsrMMDevice ppDevice);
+}
+
+[Guid("D666063F-1587-4E43-81F1-B948E807363F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+public interface IFsrMMDevice {
+  int Activate(ref Guid iid, int dwClsCtx, IntPtr pActivationParams, [MarshalAs(UnmanagedType.IUnknown)] out object ppInterface);
+}
+
+[Guid("5CDF2C82-841E-4546-9722-0CF74078229A"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+public interface IFsrAudioEndpointVolume {
+  int NotImpl1();
+  int NotImpl2();
+  int GetChannelCount(out uint channelCount);
+  int SetMasterVolumeLevel(float level, Guid eventContext);
+  int SetMasterVolumeLevelScalar(float level, Guid eventContext);
+  int GetMasterVolumeLevel(out float level);
+  int GetMasterVolumeLevelScalar(out float level);
+  int SetChannelVolumeLevel(uint channel, float level, Guid eventContext);
+  int SetChannelVolumeLevelScalar(uint channel, float level, Guid eventContext);
+  int GetChannelVolumeLevel(uint channel, out float level);
+  int GetChannelVolumeLevelScalar(uint channel, out float level);
+  int SetMute([MarshalAs(UnmanagedType.Bool)] bool mute, Guid eventContext);
+  int GetMute([MarshalAs(UnmanagedType.Bool)] out bool mute);
+}
+
+public static class FsrVolume {
+  public static IFsrAudioEndpointVolume GetMasterVolumeObject() {
+    var enumerator = (IFsrMMDeviceEnumerator)(new FsrMMDeviceEnumeratorComObject());
+    IFsrMMDevice device;
+    enumerator.GetDefaultAudioEndpoint(FsrDataFlow.eRender, FsrRole.eMultimedia, out device);
+    object epv;
+    Guid iidEpv = typeof(IFsrAudioEndpointVolume).GUID;
+    device.Activate(ref iidEpv, 1 /* CLSCTX_INPROC_SERVER */, IntPtr.Zero, out epv);
+    return (IFsrAudioEndpointVolume)epv;
+  }
+}
+"@
+try {
+  Add-Type -TypeDefinition $fsrVolumeSrc -Language CSharp -ErrorAction Stop
+} catch {
+  # Ya estaba cargado de un sondeo anterior en el mismo proceso de powershell.exe (no debería pasar,
+  # ya que cada sondeo es un proceso nuevo, pero por las dudas no tiene que tirar abajo el script).
+}
+function Get-FsrVolumeState {
+  try {
+    $vol = [FsrVolume]::GetMasterVolumeObject()
+    $level = 0.0
+    $vol.GetMasterVolumeLevelScalar([ref]$level)
+    $muted = $false
+    $vol.GetMute([ref]$muted)
+    @{ volumePercent = [int][Math]::Round($level * 100); muted = $muted }
+  } catch {
+    $null
+  }
+}
+`;
+
+// Captura de pantalla (punto pedido, round 14) — a diferencia de lo que pensé al principio, NO
+// hace falta un FileSystemWatcher corriendo todo el tiempo (una técnica nueva, nunca probada acá):
+// alcanza con mirar en cada sondeo si el archivo más nuevo de la carpeta de Capturas de a Windows
+// cambió desde la última vez, reusando el mismo patrón de sondeo-y-comparar de todo este archivo.
+// Privacidad (micrófono/cámara en uso) via el registro (CapabilityAccessManager\ConsentStore) y
+// Enfoque asistido/No molestar via una clave no documentada por Microsoft (encontrada por la
+// comunidad, puede no existir o variar según la build de Windows — por eso el try/catch ancho, para
+// que si falla, solo ese campo quede en null en vez de tirar abajo el resto del sondeo).
+const SYSTEM_PROBE_SCRIPT = (
+  WINRT_VOLUME_HELPERS +
+  `
+$result = @{}
+
+try {
+  Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public class FsrClipboardProbe {
+  [DllImport("user32.dll")] public static extern uint GetClipboardSequenceNumber();
+}
+"@ -ErrorAction SilentlyContinue
+  $result.clipboardSeq = [int]([FsrClipboardProbe]::GetClipboardSequenceNumber())
+} catch { $result.clipboardSeq = $null }
+
+try {
+  $clipText = Get-Clipboard -Raw -ErrorAction SilentlyContinue
+  if ($clipText) { $result.clipboardPreview = $clipText.Substring(0, [Math]::Min(100, $clipText.Length)) }
+} catch {}
+
+try {
+  $shotsDir = Join-Path $env:USERPROFILE "Pictures\\Screenshots"
+  if (Test-Path $shotsDir) {
+    $latest = Get-ChildItem $shotsDir -File -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if ($latest) {
+      $result.lastScreenshotFile = $latest.Name
+      $result.lastScreenshotTicks = [int64]$latest.LastWriteTime.Ticks
+    }
+  }
+} catch {}
+
+function Test-FsrCapabilityInUse($capRoot) {
+  if (-not (Test-Path $capRoot)) { return $false }
+  $paths = @($capRoot)
+  Get-ChildItem $capRoot -ErrorAction SilentlyContinue | ForEach-Object {
+    $paths += $_.PSPath
+    if ($_.PSChildName -eq "NonPackaged") {
+      Get-ChildItem $_.PSPath -ErrorAction SilentlyContinue | ForEach-Object { $paths += $_.PSPath }
+    }
+  }
+  foreach ($p in $paths) {
+    $props = Get-ItemProperty -Path $p -ErrorAction SilentlyContinue
+    if ($null -ne $props -and ($props.PSObject.Properties.Name -contains "LastUsedTimeStop")) {
+      if ($props.LastUsedTimeStop -eq 0 -and $props.LastUsedTimeStart -gt 0) { return $true }
+    }
+  }
+  return $false
+}
+try {
+  $capBase = "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore"
+  $result.micInUse = Test-FsrCapabilityInUse (Join-Path $capBase "microphone")
+  $result.camInUse = Test-FsrCapabilityInUse (Join-Path $capBase "webcam")
+} catch { $result.micInUse = $null; $result.camInUse = $null }
+
+try {
+  # Offset no documentado por Microsoft, encontrado por la comunidad: puede no existir en todas las
+  # builds de Windows (10 vs 11, actualizaciones) — si falla, dndState queda en null (se interpreta
+  # como "no se pudo saber", no como "desactivado").
+  $dndPath = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\CloudStore\\Store\\Cache\\DefaultAccount\\$$windows.data.notifications.quiethourssettings\\Current'
+  $dndBytes = (Get-ItemProperty -Path $dndPath -Name "Data" -ErrorAction Stop).Data
+  if ($dndBytes -and $dndBytes.Length -gt 18) {
+    $result.dndState = [int]$dndBytes[18]
+  }
+} catch { $result.dndState = $null }
+
+try {
+  $vol = Get-FsrVolumeState
+  if ($vol) {
+    $result.volumePercent = $vol.volumePercent
+    $result.muted = $vol.muted
+  }
+} catch {}
+
+try {
+  $bt = Get-PnpDevice -Class Bluetooth -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq "OK" -and $_.FriendlyName -notmatch "^(Bluetooth Radio|Microsoft Bluetooth|Generic Bluetooth)" }
+  if ($bt) { $result.bluetoothDevices = @($bt | Select-Object -ExpandProperty FriendlyName -Unique) }
+  else { $result.bluetoothDevices = @() }
+} catch { $result.bluetoothDevices = @() }
+
+try {
+  $cpu = (Get-CimInstance Win32_Processor -ErrorAction SilentlyContinue | Measure-Object -Property LoadPercentage -Average).Average
+  if ($null -ne $cpu) { $result.cpuPercent = [int]$cpu }
+} catch {}
+
+try {
+  $os = Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue
+  if ($os) {
+    $totalKB = $os.TotalVisibleMemorySize
+    $freeKB = $os.FreePhysicalMemory
+    $result.ramTotalGB = [math]::Round($totalKB / 1MB, 1)
+    $result.ramUsedGB = [math]::Round(($totalKB - $freeKB) / 1MB, 1)
+    $result.ramPercent = [int](100 - ($freeKB / $totalKB * 100))
+  }
+} catch {}
+
+try {
+  $disk = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='C:'" -ErrorAction SilentlyContinue
+  if ($disk) {
+    $result.diskFreeGB = [math]::Round($disk.FreeSpace / 1GB, 1)
+    $result.diskTotalGB = [math]::Round($disk.Size / 1GB, 1)
+  }
+} catch {}
+
+try {
+  $net = Get-CimInstance Win32_PerfFormattedData_Tcpip_NetworkInterface -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -notmatch "Loopback|isatap|Teredo" } |
+    Sort-Object { $_.BytesTotalPersec } -Descending |
+    Select-Object -First 1
+  if ($net) {
+    $result.netDownKBs = [math]::Round($net.BytesReceivedPersec / 1KB, 1)
+    $result.netUpKBs = [math]::Round($net.BytesSentPersec / 1KB, 1)
+  }
+} catch {}
+
+Write-Output ($result | ConvertTo-Json -Compress)
+`
+).trim();
+
+function buildVolumeControlScript(action) {
+  // Paso del 5% por toque de +/- (igual que las teclas físicas de volumen de muchos teclados).
+  return (
+    WINRT_VOLUME_HELPERS +
+    `
+try {
+  $vol = [FsrVolume]::GetMasterVolumeObject()
+  ${
+    action === "mute"
+      ? `$muted = $false; $vol.GetMute([ref]$muted); $vol.SetMute((-not $muted), [Guid]::Empty) | Out-Null`
+      : `$level = 0.0
+  $vol.GetMasterVolumeLevelScalar([ref]$level)
+  $step = 0.05
+  $next = [Math]::Min(1.0, [Math]::Max(0.0, $level ${action === "up" ? "+" : "-"} $step))
+  $vol.SetMasterVolumeLevelScalar([float]$next, [Guid]::Empty) | Out-Null`
+  }
+} catch {}
+`
+  ).trim();
+}
+
+let systemProbeTimer = null;
+let lastSystemStateKey = null;
+
+// Punto pedido (round 14): el resto de las funciones de Dynamic Island for Windows, consolidadas
+// en UN SOLO sondeo cada 3s (en vez de un powershell.exe aparte por cada una) — ver
+// SYSTEM_PROBE_SCRIPT arriba, donde cada función va en su propio try/catch para que un campo que
+// falle (ej. el de No molestar, que usa una clave no documentada) no se lleve puesto al resto.
+function probeSystemOnce(cb) {
+  execFile(
+    "powershell.exe",
+    ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", SYSTEM_PROBE_SCRIPT],
+    { windowsHide: true, timeout: 5000 },
+    (err, stdout) => {
+      if (!err && stdout && dockWindow && !dockWindow.isDestroyed()) {
+        try {
+          const parsed = JSON.parse(stdout.trim());
+          const key = JSON.stringify(parsed);
+          if (key !== lastSystemStateKey) {
+            lastSystemStateKey = key;
+            dockWindow.webContents.send("dock-system-update", parsed);
+          }
+        } catch {
+          // Salida inesperada — se ignora esta corrida, se mantiene el último estado conocido.
+        }
+      }
+      cb?.();
+    }
+  );
+}
+
+function startSystemWatcher() {
+  if (process.platform !== "win32") return;
+  const poll = () => probeSystemOnce(() => { systemProbeTimer = setTimeout(poll, 3000); });
+  poll();
+}
+
+function runVolumeControl(action, onDone) {
+  if (process.platform !== "win32") {
+    onDone?.();
+    return;
+  }
+  execFile(
+    "powershell.exe",
+    ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", buildVolumeControlScript(action)],
+    { windowsHide: true, timeout: 3000 },
+    () => onDone?.()
+  );
+}
+
 function createTray() {
   // "dist/logo.png" (generado por scripts/generate-icons.js a partir de public/pwa-icon.svg) ya
   // viaja empaquetado dentro de "dist/**/*" (ver package.json#build.files) — no hace falta un
@@ -730,6 +1004,16 @@ ipcMain.on("dock-media-control", (_event, action) => {
   });
 });
 
+// Volumen (punto pedido, round 14) — mismo patrón que dock-media-control: un proceso de
+// PowerShell aparte para la acción, y al terminar un sondeo extra inmediato (en vez de esperar los
+// 3s normales de startSystemWatcher) para que el dock vea el nuevo nivel al toque.
+ipcMain.on("dock-volume-control", (_event, action) => {
+  runVolumeControl(action, () => {
+    lastSystemStateKey = null;
+    probeSystemOnce(() => {});
+  });
+});
+
 // Selector de monitor (punto 6 pedido por el usuario) — el dock pide la lista y manda el id
 // elegido; acá se persiste y se reposiciona ya mismo con el tamaño que la ventana tenga en ese
 // momento (si está colapsada o expandida).
@@ -816,6 +1100,7 @@ app.whenReady().then(() => {
   startForegroundWindowWatcher();
   startMediaWatcher();
   startBatteryWatcher();
+  startSystemWatcher();
 
   // Atajo de teclado para mostrar/ocultar el dock a mano (punto 3 pedido, round 12) — no se pisa
   // con nada ya usado por Windows ni por esta app. Si otro programa ya lo tiene registrado,
@@ -840,6 +1125,7 @@ app.on("before-quit", () => {
   if (foregroundProbeTimer) clearTimeout(foregroundProbeTimer);
   if (mediaProbeTimer) clearTimeout(mediaProbeTimer);
   if (batteryProbeTimer) clearTimeout(batteryProbeTimer);
+  if (systemProbeTimer) clearTimeout(systemProbeTimer);
   globalShortcut.unregisterAll();
 });
 
