@@ -18,7 +18,7 @@ export default function LoginScreen({
   onLoginSuccess,
   backgroundStyle = "dither",
   darkMode = true,
-  themeColor = "#8ab4f8",
+  themeColor = "#71717a",
 }: LoginScreenProps) {
   const [isRegistering, setIsRegistering] = useState(false);
   const [email, setEmail] = useState("");

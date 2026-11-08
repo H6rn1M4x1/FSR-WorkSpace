@@ -169,11 +169,14 @@ export function setStoredDataSilent<T>(key: string, data: T): void {
 
 // Aesthetic Preferences Helper (Local Storage EXCLUSIVE for current device)
 export class AestheticStorageService {
+  // Gris por defecto (antes era un azul) hasta que el usuario elija otro color de acento desde
+  // Configuración — mismo valor en web, Electron y Android, porque las tres comparten este mismo
+  // código (localStorage).
   static getThemeColor(): string {
     try {
-      return localStorage.getItem("theme_color") || "#8ab4f8";
+      return localStorage.getItem("theme_color") || "#71717a";
     } catch {
-      return "#8ab4f8";
+      return "#71717a";
     }
   }
 
