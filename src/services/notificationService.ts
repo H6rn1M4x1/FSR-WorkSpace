@@ -1,5 +1,7 @@
 // Notification Service for Agenda Central Integrada (PWA Push & Local Notifications with Device Accent Color)
 
+import { AestheticStorageService } from "../lib/storage";
+
 export type AgendaCategory = "turnos" | "finanzas" | "universidad" | "salud" | "comidas" | "general";
 
 /**
@@ -37,10 +39,9 @@ export function formatDateToDDMMAAAA(dateInput?: string | Date): string {
 export function getDeviceAccentColor(): string {
   try {
     if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("theme_color");
-      if (stored) return stored.trim();
-      const computed = window.getComputedStyle(document.documentElement).getPropertyValue("--color-primary").trim();
-      if (computed) return computed;
+      // Misma fuente única que el resto de la app (con su migración del azul viejo al gris por
+      // defecto) en vez de leer "theme_color" de localStorage por su cuenta acá.
+      return AestheticStorageService.getThemeColor();
     }
   } catch {
     // fallback

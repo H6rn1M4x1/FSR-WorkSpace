@@ -91,45 +91,6 @@ function getDockDisplay() {
   return found || screen.getPrimaryDisplay();
 }
 
-// Radio de las esquinas de ABAJO (arriba siempre en escuadra) — 20 colapsado/aviso chico, 28
-// expandido, igual que PANEL_TRANSITION/borderBottomLeftRadius en DockApp.tsx. Se actualiza desde
-// dock-resize (ver más abajo) antes de reposicionar, así positionDockWindow siempre recorta con el
-// radio que corresponde al tamaño que se le está por aplicar.
-let dockCornerRadius = 20;
-
-// backgroundMaterial: "acrylic" (ver createDockWindow) lo pinta Windows (DWM) para el RECTÁNGULO
-// COMPLETO de la ventana, sin enterarse del borde redondeado que dibuja el CSS adentro — por eso
-// en el primer intento (round 7) aparecían puntas grises asomando en las esquinas de abajo. Esta
-// función arma esa misma esquina redondeada pero como una lista de franjas angostas (un rectángulo
-// grande arriba + una fila de 1px por cada línea de la curva, achicándose hacia abajo) para
-// recortar la FORMA real de la ventana con BrowserWindow.setShape() y que coincida exactamente con
-// lo que ya se ve dibujado — así el material no tiene manera de asomar fuera del borde redondeado.
-function roundedBottomRectShape(width, height, radius) {
-  const r = Math.max(0, Math.min(radius, Math.floor(height / 2), Math.floor(width / 2)));
-  const rects = [];
-  const topHeight = height - r;
-  if (topHeight > 0) rects.push({ x: 0, y: 0, width, height: topHeight });
-  for (let i = 0; i < r; i++) {
-    const dx = Math.sqrt(Math.max(0, r * r - i * i));
-    const inset = Math.round(r - dx);
-    const rowWidth = Math.max(0, width - inset * 2);
-    if (rowWidth > 0) rects.push({ x: inset, y: topHeight + i, width: rowWidth, height: 1 });
-  }
-  return rects;
-}
-
-// Solo tiene sentido junto con backgroundMaterial (Windows 11 únicamente) — en cualquier otra
-// plataforma la ventana ya es un rectángulo transparente de verdad, sin nada que recortar.
-function applyDockShape(win, width, height) {
-  if (process.platform !== "win32") return;
-  try {
-    win.setShape(roundedBottomRectShape(width, height, dockCornerRadius));
-  } catch {
-    // Si esta combinación puntual de Windows/Electron no lo soporta, la ventana se queda sin
-    // recortar — vuelve a verse como el rectángulo con el material parejo, no rompe nada.
-  }
-}
-
 // Siempre pegado al borde superior (y=0), colapsado o expandido — el panel expandido es "el dock
 // cerrado, pero más grande", no una tarjeta aparte flotando con un margen debajo (ver DockApp.tsx).
 function positionDockWindow(win, width, height) {
@@ -137,7 +98,6 @@ function positionDockWindow(win, width, height) {
   const { x: areaX, y: areaY, width: areaWidth } = display.workArea;
   const x = Math.round(areaX + (areaWidth - width) / 2);
   win.setBounds({ x, y: areaY, width, height }, true);
-  applyDockShape(win, width, height);
 }
 
 function createDockWindow() {
@@ -153,13 +113,13 @@ function createDockWindow() {
     skipTaskbar: true,
     backgroundColor: "#00000000",
     show: true,
-    // Blur de verdad del escritorio detrás del dock, en vez de solo el tinte por CSS — Windows 11
-    // build 22621+ únicamente (en cualquier otra versión/plataforma, Electron lo ignora sin romper
-    // nada). Las puntas grises del primer intento (round 7) se resuelven con applyDockShape/
-    // positionDockWindow de arriba, que recorta la FORMA real de la ventana a juego con el borde
-    // redondeado — no se puede afinar sin una Windows real a mano, así que puede hacer falta otra
-    // vuelta de ajuste con feedback.
-    ...(process.platform === "win32" ? { backgroundMaterial: "acrylic" } : {}),
+    // Se probó backgroundMaterial: "acrylic" + BrowserWindow.setShape() acá (rounds 7 y 9) para
+    // un blur real del escritorio detrás del dock — pero setShape solo acepta una LISTA DE
+    // RECTÁNGULOS, no una curva de verdad: la esquina redondeada se armaba como una fila de 1px
+    // por cada línea del círculo, y esa aproximación en escalones se nota como pequeños triángulos
+    // grises en el borde (es un límite de la API, no un bug puntual para ajustar con otra vuelta).
+    // Se sacó del todo — queda el tinte translúcido por CSS (ver theme.bg en DockApp.tsx), que al
+    // ser dibujado por Chromium adentro de la página sí respeta el border-radius sin escalones.
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
@@ -427,11 +387,6 @@ ipcMain.on("dock-notify", (_event, payload) => {
 
 ipcMain.on("dock-resize", (_event, size) => {
   if (dockWindow && !dockWindow.isDestroyed() && size && size.width && size.height) {
-    // "collapsed" ya viajaba en este payload (DockApp.tsx lo manda desde siempre) pero acá no se
-    // usaba para nada — ahora decide el radio de esquina con el que se recorta la forma real de
-    // la ventana (ver applyDockShape), para que calce con el borderBottomLeftRadius/Right que
-    // dibuja el CSS en cada tamaño.
-    dockCornerRadius = size.collapsed ? 20 : 28;
     positionDockWindow(dockWindow, size.width, size.height);
   }
 });
