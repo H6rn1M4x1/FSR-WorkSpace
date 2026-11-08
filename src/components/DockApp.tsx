@@ -177,6 +177,10 @@ function toDateOnly(d: Date): string {
 
 interface Theme {
   bg: string;
+  // Translúcido propio para una sección/bloque interno (sidebar, encabezado) — una segunda capa
+  // de transparencia por encima del fondo general del dock, para que esa franja se lea como su
+  // propia sección en vez de estar separada solo por una línea (punto 2 pedido, round 7).
+  block: string;
   text: string;
   border: string;
   hover: string;
@@ -270,7 +274,7 @@ function LiveClock({ theme }: { theme: Theme }) {
   const time = now.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
   const date = now.toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" });
   return (
-    <div className={`text-center py-2.5 border-b ${theme.border} shrink-0`}>
+    <div className={`text-center py-2.5 border-b ${theme.border} ${theme.block} shrink-0`}>
       <p className="text-3xl font-bold tabular-nums leading-none">{time}</p>
       <div className="flex items-center justify-center gap-2 mt-1">
         <p className="text-xs text-zinc-500 capitalize">{date}</p>
@@ -764,10 +768,19 @@ export default function DockApp() {
     // Mismo fondo translúcido + blur que ya usa la app en otras zonas (ej. el aviso de "MODO
     // LOCAL" en App.tsx: bg-black/75 / bg-white/80 con backdrop-blur-2xl) — punto 1 pedido.
     bg: isDark ? "bg-black/75 backdrop-blur-2xl" : "bg-white/80 backdrop-blur-2xl",
+    // Segunda capa de translucidez para una sección interna (sidebar, encabezados) — mismo patrón
+    // que ya usa la app para su propio Sidebar.tsx (bg-zinc-950/60 / bg-white/60 con
+    // backdrop-blur-xl): una sección que antes solo se separaba con una línea ahora se lee como
+    // su propio bloque (punto 2 pedido, round 7).
+    block: isDark ? "bg-black/20 backdrop-blur-sm" : "bg-white/25 backdrop-blur-sm",
     text: isDark ? "text-[#e3e2e6]" : "text-[#1a1a1a]",
     border: isDark ? "border-white/10" : "border-black/10",
     hover: isDark ? "hover:bg-white/5" : "hover:bg-black/5",
-    subtle: isDark ? "bg-white/5" : "bg-black/5",
+    // Lo que va AL FRENTE de un bloque (tarjetas de notas, badges, botones secundarios) es de
+    // color SÓLIDO — mismo patrón que ya usa la app (ej. bg-zinc-100 dark:bg-zinc-800 en sus
+    // superficies secundarias) — para que se distinga con claridad del bloque translúcido detrás,
+    // en vez de sumar otra capa de transparencia encima (punto 2 pedido, round 7).
+    subtle: isDark ? "bg-zinc-800" : "bg-zinc-100",
     popoverBg: isDark ? "bg-zinc-900" : "bg-zinc-50",
     navInactive: isDark ? "text-zinc-300" : "text-zinc-700",
   };
@@ -861,7 +874,7 @@ export default function DockApp() {
             >
               {/* Sidebar: perfil + secciones + mini calendario a la izquierda. Compacto a propósito
                   (punto 2 pedido) para que el mini calendario entre completo sin recortarse. */}
-              <div className={`w-[190px] shrink-0 h-full border-r ${theme.border} flex flex-col p-2.5 gap-0.5 overflow-y-auto`}>
+              <div className={`w-[190px] shrink-0 h-full border-r ${theme.border} ${theme.block} flex flex-col p-2.5 gap-0.5 overflow-y-auto`}>
                 <div className={`flex items-center gap-2 px-1 pb-2 mb-0.5 border-b ${theme.border}`}>
                   {snapshot.profile.photoURL ? (
                     <img src={snapshot.profile.photoURL} alt={snapshot.profile.name} className="w-7 h-7 rounded-full object-cover shrink-0" />
@@ -985,7 +998,7 @@ export default function DockApp() {
               <div className="flex-1 h-full flex flex-col min-w-0 relative">
                 {!section && <LiveClock theme={theme} />}
 
-                <div className={`px-4 py-3 border-b ${theme.border} shrink-0 flex items-center justify-between gap-2`}>
+                <div className={`px-4 py-3 border-b ${theme.border} ${theme.block} shrink-0 flex items-center justify-between gap-2`}>
                   <div>
                     <p className="text-sm font-bold">{sectionLabel}</p>
                     <p className="text-xs text-zinc-500">
