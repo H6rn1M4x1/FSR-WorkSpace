@@ -113,6 +113,16 @@ function createDockWindow() {
     skipTaskbar: true,
     backgroundColor: "#00000000",
     show: true,
+    // Punto 1 pedido (round 7): blur de verdad del escritorio detrás del dock ("efecto mica/
+    // acrylic"), no solo una capa de color translúcida por CSS — el backdrop-filter de Chromium
+    // no desenfoca lo que hay DETRÁS de una ventana de Windows realmente transparente, solo mezcla
+    // colores dentro de la propia página (por eso hasta ahora se veía el fondo de escritorio bien
+    // nítido debajo del tinte oscuro/claro). "acrylic" (no "mica": ese material no desenfoca en
+    // vivo lo que hay detrás, solo toma un color promedio del fondo de escritorio) es Windows 11
+    // build 22621+ únicamente. No se puede probar en este sandbox Linux — si el Windows del
+    // usuario no lo soporta, o no es compatible junto con una ventana transparente+sin bordes como
+    // esta, Electron lo ignora sin romper nada: el dock se sigue viendo exactamente como ahora.
+    ...(process.platform === "win32" ? { backgroundMaterial: "acrylic" } : {}),
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
