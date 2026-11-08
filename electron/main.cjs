@@ -91,6 +91,45 @@ function getDockDisplay() {
   return found || screen.getPrimaryDisplay();
 }
 
+// Radio de las esquinas de ABAJO (arriba siempre en escuadra) — 20 colapsado/aviso chico, 28
+// expandido, igual que PANEL_TRANSITION/borderBottomLeftRadius en DockApp.tsx. Se actualiza desde
+// dock-resize (ver más abajo) antes de reposicionar, así positionDockWindow siempre recorta con el
+// radio que corresponde al tamaño que se le está por aplicar.
+let dockCornerRadius = 20;
+
+// backgroundMaterial: "acrylic" (ver createDockWindow) lo pinta Windows (DWM) para el RECTÁNGULO
+// COMPLETO de la ventana, sin enterarse del borde redondeado que dibuja el CSS adentro — por eso
+// en el primer intento (round 7) aparecían puntas grises asomando en las esquinas de abajo. Esta
+// función arma esa misma esquina redondeada pero como una lista de franjas angostas (un rectángulo
+// grande arriba + una fila de 1px por cada línea de la curva, achicándose hacia abajo) para
+// recortar la FORMA real de la ventana con BrowserWindow.setShape() y que coincida exactamente con
+// lo que ya se ve dibujado — así el material no tiene manera de asomar fuera del borde redondeado.
+function roundedBottomRectShape(width, height, radius) {
+  const r = Math.max(0, Math.min(radius, Math.floor(height / 2), Math.floor(width / 2)));
+  const rects = [];
+  const topHeight = height - r;
+  if (topHeight > 0) rects.push({ x: 0, y: 0, width, height: topHeight });
+  for (let i = 0; i < r; i++) {
+    const dx = Math.sqrt(Math.max(0, r * r - i * i));
+    const inset = Math.round(r - dx);
+    const rowWidth = Math.max(0, width - inset * 2);
+    if (rowWidth > 0) rects.push({ x: inset, y: topHeight + i, width: rowWidth, height: 1 });
+  }
+  return rects;
+}
+
+// Solo tiene sentido junto con backgroundMaterial (Windows 11 únicamente) — en cualquier otra
+// plataforma la ventana ya es un rectángulo transparente de verdad, sin nada que recortar.
+function applyDockShape(win, width, height) {
+  if (process.platform !== "win32") return;
+  try {
+    win.setShape(roundedBottomRectShape(width, height, dockCornerRadius));
+  } catch {
+    // Si esta combinación puntual de Windows/Electron no lo soporta, la ventana se queda sin
+    // recortar — vuelve a verse como el rectángulo con el material parejo, no rompe nada.
+  }
+}
+
 // Siempre pegado al borde superior (y=0), colapsado o expandido — el panel expandido es "el dock
 // cerrado, pero más grande", no una tarjeta aparte flotando con un margen debajo (ver DockApp.tsx).
 function positionDockWindow(win, width, height) {
@@ -98,6 +137,7 @@ function positionDockWindow(win, width, height) {
   const { x: areaX, y: areaY, width: areaWidth } = display.workArea;
   const x = Math.round(areaX + (areaWidth - width) / 2);
   win.setBounds({ x, y: areaY, width, height }, true);
+  applyDockShape(win, width, height);
 }
 
 function createDockWindow() {
@@ -113,15 +153,13 @@ function createDockWindow() {
     skipTaskbar: true,
     backgroundColor: "#00000000",
     show: true,
-    // Se probó backgroundMaterial: "acrylic" acá (round 7) para un blur de verdad del escritorio
-    // detrás del dock — pero ese material lo pinta Windows (DWM) para el RECTÁNGULO completo de
-    // la ventana, sin enterarse del borde redondeado que define el CSS: por eso aparecían esas
-    // puntas grises asomando en las esquinas de abajo, donde el contenido ya venía redondeado pero
-    // la ventana de verdad seguía siendo un rectángulo recto por debajo. Se sacó (punto 1 pedido,
-    // round 8) — queda solo el tinte translúcido por CSS (ver theme.bg en DockApp.tsx), que si
-    // respeta el borde redondeado. Un blur real sin ese problema necesitaría recortar la FORMA de
-    // la ventana (BrowserWindow.setShape) para que coincida con las esquinas redondeadas — posible,
-    // pero no se puede afinar ni probar sin una Windows real a mano.
+    // Blur de verdad del escritorio detrás del dock, en vez de solo el tinte por CSS — Windows 11
+    // build 22621+ únicamente (en cualquier otra versión/plataforma, Electron lo ignora sin romper
+    // nada). Las puntas grises del primer intento (round 7) se resuelven con applyDockShape/
+    // positionDockWindow de arriba, que recorta la FORMA real de la ventana a juego con el borde
+    // redondeado — no se puede afinar sin una Windows real a mano, así que puede hacer falta otra
+    // vuelta de ajuste con feedback.
+    ...(process.platform === "win32" ? { backgroundMaterial: "acrylic" } : {}),
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
@@ -199,11 +237,49 @@ function pointInRect(x, y, r) {
   return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
 }
 
+let visibilityFadeTimer = null;
+const VISIBILITY_FADE_MS = 220;
+const VISIBILITY_FADE_STEPS = 10;
+
+// Punto 3.1 pedido (round 9): que aparecer/desaparecer por el mecanismo de pantalla completa (no
+// el abrir/cerrar con el mouse, que ya tiene su propia animación/sonido en DockApp.tsx) también
+// tenga animación y sonido. setOpacity() de Electron es instantáneo — se simula el fundido con
+// pasos cortos. El sonido lo tiene que poner el renderer (acá no hay audio), así que se le avisa
+// por IPC para que use exactamente los mismos uiSounds.expand()/collapse() que ya usa al abrir con
+// el mouse.
 function applyDockVisibility(visible) {
   if (!dockWindow || dockWindow.isDestroyed() || dockCurrentlyVisible === visible) return;
   dockCurrentlyVisible = visible;
-  dockWindow.setIgnoreMouseEvents(!visible, { forward: true });
-  dockWindow.setOpacity(visible ? 1 : 0);
+  if (visibilityFadeTimer) {
+    clearInterval(visibilityFadeTimer);
+    visibilityFadeTimer = null;
+  }
+
+  if (visible) {
+    dockWindow.setIgnoreMouseEvents(false, { forward: true });
+  }
+
+  dockWindow.webContents.send("dock-visibility-changed", { visible });
+
+  let step = 0;
+  const from = visible ? 0 : 1;
+  const to = visible ? 1 : 0;
+  dockWindow.setOpacity(from);
+  visibilityFadeTimer = setInterval(() => {
+    step += 1;
+    if (!dockWindow || dockWindow.isDestroyed()) {
+      clearInterval(visibilityFadeTimer);
+      visibilityFadeTimer = null;
+      return;
+    }
+    const t = Math.min(1, step / VISIBILITY_FADE_STEPS);
+    dockWindow.setOpacity(from + (to - from) * t);
+    if (t >= 1) {
+      clearInterval(visibilityFadeTimer);
+      visibilityFadeTimer = null;
+      if (!visible) dockWindow.setIgnoreMouseEvents(true, { forward: true });
+    }
+  }, VISIBILITY_FADE_MS / VISIBILITY_FADE_STEPS);
 }
 
 // Sondeo liviano (sin spawnear nada) de la posición del mouse — decide si hay que revelar el dock
@@ -265,7 +341,7 @@ function startForegroundWindowWatcher() {
     execFile(
       "powershell.exe",
       ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", FOREGROUND_PROBE_SCRIPT],
-      { windowsHide: true, timeout: 3000 },
+      { windowsHide: true, timeout: 1800 },
       (err, stdout) => {
         if (!err && stdout && dockWindow && !dockWindow.isDestroyed()) {
           try {
@@ -280,8 +356,10 @@ function startForegroundWindowWatcher() {
           }
         }
         // Encadenado (no setInterval a secas): así, si una corrida tarda más de lo normal, no se
-        // amontonan procesos de powershell.exe uno atrás del otro.
-        foregroundProbeTimer = setTimeout(poll, 2500);
+        // amontonan procesos de powershell.exe uno atrás del otro. Más seguido que antes (punto 3
+        // pedido, round 9: "le cuesta detectar" que debe reaparecer al minimizar lo que lo tapaba)
+        // — 1s en vez de 2.5s para que se sienta mucho más inmediato.
+        foregroundProbeTimer = setTimeout(poll, 1000);
       }
     );
   };
@@ -349,6 +427,11 @@ ipcMain.on("dock-notify", (_event, payload) => {
 
 ipcMain.on("dock-resize", (_event, size) => {
   if (dockWindow && !dockWindow.isDestroyed() && size && size.width && size.height) {
+    // "collapsed" ya viajaba en este payload (DockApp.tsx lo manda desde siempre) pero acá no se
+    // usaba para nada — ahora decide el radio de esquina con el que se recorta la forma real de
+    // la ventana (ver applyDockShape), para que calce con el borderBottomLeftRadius/Right que
+    // dibuja el CSS en cada tamaño.
+    dockCornerRadius = size.collapsed ? 20 : 28;
     positionDockWindow(dockWindow, size.width, size.height);
   }
 });

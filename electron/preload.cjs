@@ -55,6 +55,15 @@ contextBridge.exposeInMainWorld("FSR_ELECTRON_DOCK", {
     ipcRenderer.on("dock-notify", listener);
     return () => ipcRenderer.removeListener("dock-notify", listener);
   },
+  // Usado por el dock para enterarse de que electron/main.cjs lo mostró/escondió de golpe por el
+  // mecanismo de pantalla completa (punto 3.1 pedido, round 9) — el renderer no tiene forma propia
+  // de saber esto (lo decide el proceso principal solo, según lo que haya en pantalla), pero es el
+  // único lado que puede reproducir sonido.
+  onVisibilityChange: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on("dock-visibility-changed", listener);
+    return () => ipcRenderer.removeListener("dock-visibility-changed", listener);
+  },
   // Usado por la ventana principal (src/App.tsx) para enterarse de que el dock pidió abrir el
   // formulario de alta/edición de una categoría — ver dock-quick-add/dock-quick-edit más arriba.
   onQuickAdd: (callback) => {
