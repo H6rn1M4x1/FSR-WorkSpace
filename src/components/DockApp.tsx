@@ -35,6 +35,20 @@ import {
   BatteryCharging,
   Timer,
   RotateCcw,
+  Volume2,
+  VolumeX,
+  Minus,
+  Power,
+  Cpu,
+  MemoryStick,
+  HardDrive,
+  Wifi,
+  Moon,
+  Mic,
+  Video,
+  Bluetooth,
+  Clipboard,
+  Camera,
   type LucideIcon,
 } from "lucide-react";
 import Logo from "./Logo";
@@ -98,6 +112,43 @@ interface BatteryInfo {
   charging?: boolean;
 }
 
+// Resto de las funciones de Dynamic Island for Windows (punto pedido, round 14) — todo esto viene
+// consolidado en un solo sondeo (SYSTEM_PROBE_SCRIPT en electron/main.cjs) para no spawnear un
+// powershell.exe por cada función. Cada campo es opcional/nullable porque cada uno tiene su propio
+// try/catch allá: si uno falla (ej. dndState, que usa una clave no documentada por Microsoft), el
+// resto igual llega.
+interface SystemInfo {
+  clipboardSeq?: number;
+  clipboardPreview?: string;
+  lastScreenshotFile?: string;
+  lastScreenshotTicks?: number;
+  micInUse?: boolean | null;
+  camInUse?: boolean | null;
+  // GlobalSystemMediaTransportControlsSessionPlaybackStatus no aplica acá — esto es el estado de
+  // Enfoque asistido/No molestar: 0 Desactivado, 1 Solo prioritarias, 2 Solo alarmas, 3 Horas
+  // silenciosas; null = no se pudo leer (no es lo mismo que "desactivado").
+  dndState?: number | null;
+  volumePercent?: number;
+  muted?: boolean;
+  bluetoothDevices?: string[];
+  cpuPercent?: number;
+  ramPercent?: number;
+  ramUsedGB?: number;
+  ramTotalGB?: number;
+  diskFreeGB?: number;
+  diskTotalGB?: number;
+  netDownKBs?: number;
+  netUpKBs?: number;
+}
+
+function prettyDndState(state: number | null | undefined): string | null {
+  if (state === null || state === undefined || state === 0) return null;
+  if (state === 1) return "Solo prioritarias";
+  if (state === 2) return "Solo alarmas";
+  if (state === 3) return "Horas silenciosas";
+  return "Activado";
+}
+
 interface DockBridge {
   resize: (size: { width: number; height: number; collapsed: boolean }) => void;
   openMain: () => void;
@@ -108,6 +159,9 @@ interface DockBridge {
   mediaControl: (action: "playpause" | "next" | "previous") => void;
   onKeyLockUpdate: (cb: (payload: KeyLockInfo) => void) => () => void;
   onBatteryUpdate: (cb: (payload: BatteryInfo) => void) => () => void;
+  // Resto de las funciones de Dynamic Island for Windows (punto pedido, round 14).
+  onSystemUpdate: (cb: (payload: SystemInfo) => void) => () => void;
+  volumeControl: (action: "up" | "down" | "mute") => void;
   // Fuerza al dock a mostrarse un rato aunque algo esté en pantalla completa tapándolo (punto 3
   // pedido, round 13) — igual mecanismo que ya usan las notificaciones de la agenda (dock-notify en
   // electron/main.cjs), generalizado para cualquier aviso que se origine DENTRO del propio dock
@@ -186,6 +240,14 @@ const KEYLOCK_TOAST_MS = 2200;
 const FOCUS_TOAST_SIZE = { width: 280, height: 130 };
 const FOCUS_TOAST_MS = 2600;
 const FOCUS_MINI_SIZE = { width: 170, height: 40 };
+// Avisos del resto de las funciones de Dynamic Island (punto pedido, round 14) — todos chicos y
+// breves, igual que el de Bloq Mayús/Num.
+const VOLUME_TOAST_SIZE = { width: 260, height: 64 };
+const VOLUME_TOAST_MS = 1800;
+const CLIPBOARD_TOAST_SIZE = { width: 300, height: 70 };
+const CLIPBOARD_TOAST_MS = 2400;
+const SCREENSHOT_TOAST_SIZE = { width: 260, height: 64 };
+const SCREENSHOT_TOAST_MS = 2400;
 // Tiempo que espera antes de colapsar al sacar el mouse, para no cerrarse por un roce accidental.
 const COLLAPSE_DELAY_MS = 350;
 // La misma duración/curva la usan el resize del panel Y el crossfade del contenido — si no
@@ -802,6 +864,173 @@ function KeyLockToastContent({ kind, isOn }: { kind: "caps" | "num"; isOn: boole
   );
 }
 
+// Aviso al cambiar el volumen (punto pedido, round 14) — las teclas físicas de volumen las maneja
+// Windows directo, el dock no se entera del toque en sí, solo nota que el nivel cambió en el
+// siguiente sondeo (igual que Bloq Mayús/Num) y muestra esto.
+function VolumeToastContent({ percent, muted }: { percent: number; muted: boolean }) {
+  return (
+    <div className="w-full h-full flex items-center gap-3 px-4">
+      {muted ? <VolumeX className="w-5 h-5 text-zinc-500 shrink-0" /> : <Volume2 className="w-5 h-5 text-primary shrink-0" />}
+      <div className="flex-1 h-1.5 rounded-full overflow-hidden bg-zinc-500/20">
+        <div className="h-full bg-primary rounded-full" style={{ width: `${muted ? 0 : percent}%` }} />
+      </div>
+      <span className="text-sm font-bold tabular-nums w-11 text-right">{muted ? "Mute" : `${percent}%`}</span>
+    </div>
+  );
+}
+
+// Aviso al copiar algo (punto pedido, round 14) — detectado por el número de secuencia del
+// portapapeles de Windows (GetClipboardSequenceNumber), con una vista previa corta si es texto.
+function ClipboardToastContent({ preview }: { preview?: string }) {
+  return (
+    <div className="w-full h-full flex items-center gap-2.5 px-3.5">
+      <div className="w-8 h-8 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
+        <Clipboard className="w-4 h-4 text-primary" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold">Copiado</p>
+        {preview && <p className="text-xs text-zinc-500 truncate">{preview}</p>}
+      </div>
+    </div>
+  );
+}
+
+// Aviso al guardarse una captura de pantalla nueva (punto pedido, round 14) — Win+ImprPant guarda
+// solo en la carpeta de Capturas de Windows; se detecta mirando el archivo más nuevo ahí en cada
+// sondeo, sin necesitar un proceso aparte corriendo todo el tiempo.
+function ScreenshotToastContent({ fileName }: { fileName?: string }) {
+  return (
+    <div className="w-full h-full flex items-center gap-2.5 px-3.5">
+      <div className="w-8 h-8 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
+        <Camera className="w-4 h-4 text-primary" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold">Captura guardada</p>
+        {fileName && <p className="text-xs text-zinc-500 truncate">{fileName}</p>}
+      </div>
+    </div>
+  );
+}
+
+// Widget persistente en Inicio con el resto de las funciones de Dynamic Island (punto pedido,
+// round 14) — a diferencia de los avisos de arriba (momentáneos), esto es ESTADO ambiente (cuánto
+// volumen hay ahora, qué tan ocupada está la PC, qué está conectado por Bluetooth, si el micrófono/
+// cámara están en uso, si está activado Enfoque asistido), por eso va como indicador siempre
+// visible en vez de un aviso que aparece y desaparece.
+function SystemStatusWidget({
+  system,
+  theme,
+  onVolumeControl,
+}: {
+  system: SystemInfo | null;
+  theme: Theme;
+  onVolumeControl: (action: "up" | "down" | "mute") => void;
+}) {
+  if (!system) return null;
+  const dndLabel = prettyDndState(system.dndState);
+  const hasBt = (system.bluetoothDevices?.length ?? 0) > 0;
+  const hasPrivacy = system.micInUse || system.camInUse;
+  const hasBadges = hasBt || hasPrivacy || !!dndLabel;
+  const hasVolume = typeof system.volumePercent === "number";
+  const hasHardware =
+    typeof system.cpuPercent === "number" ||
+    typeof system.ramPercent === "number" ||
+    typeof system.diskFreeGB === "number" ||
+    typeof system.netDownKBs === "number";
+  if (!hasVolume && !hasHardware && !hasBadges) return null;
+
+  return (
+    <div className={`mx-3 mt-3 p-3 rounded-xl border ${theme.border} ${theme.solidBlock} shrink-0 space-y-2.5`}>
+      {hasVolume && (
+        <div className="flex items-center gap-2">
+          {system.muted ? (
+            <VolumeX className="w-4 h-4 text-zinc-500 shrink-0" />
+          ) : (
+            <Volume2 className="w-4 h-4 text-primary shrink-0" />
+          )}
+          <div className={`flex-1 h-1 rounded-full overflow-hidden ${theme.subtle}`}>
+            <div className="h-full bg-primary rounded-full" style={{ width: `${system.muted ? 0 : system.volumePercent}%` }} />
+          </div>
+          <span className="text-[11px] tabular-nums text-zinc-500 w-8 text-right shrink-0">
+            {system.muted ? "Mute" : `${system.volumePercent}%`}
+          </span>
+          <div className="flex items-center gap-0.5 shrink-0">
+            <button type="button" onClick={() => onVolumeControl("down")} className={`p-1 rounded cursor-pointer ${theme.hover}`}>
+              <Minus className="w-3 h-3" />
+            </button>
+            <button type="button" onClick={() => onVolumeControl("mute")} className={`p-1 rounded cursor-pointer ${theme.hover}`}>
+              <Power className="w-3 h-3" />
+            </button>
+            <button type="button" onClick={() => onVolumeControl("up")} className={`p-1 rounded cursor-pointer ${theme.hover}`}>
+              <Plus className="w-3 h-3" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {hasHardware && (
+        <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px]">
+          {typeof system.cpuPercent === "number" && (
+            <div className="flex items-center gap-1.5">
+              <Cpu className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+              <span className="text-zinc-500">CPU</span>
+              <span className="ml-auto font-semibold tabular-nums">{system.cpuPercent}%</span>
+            </div>
+          )}
+          {typeof system.ramPercent === "number" && (
+            <div className="flex items-center gap-1.5">
+              <MemoryStick className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+              <span className="text-zinc-500">RAM</span>
+              <span className="ml-auto font-semibold tabular-nums">{system.ramPercent}%</span>
+            </div>
+          )}
+          {typeof system.diskFreeGB === "number" && (
+            <div className="flex items-center gap-1.5">
+              <HardDrive className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+              <span className="text-zinc-500">Disco</span>
+              <span className="ml-auto font-semibold tabular-nums">{system.diskFreeGB}GB libres</span>
+            </div>
+          )}
+          {typeof system.netDownKBs === "number" && (
+            <div className="flex items-center gap-1.5">
+              <Wifi className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+              <span className="text-zinc-500">Red</span>
+              <span className="ml-auto font-semibold tabular-nums">
+                ↓{system.netDownKBs} ↑{system.netUpKBs ?? 0} KB/s
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {hasBadges && (
+        <div className={`pt-2 border-t ${theme.border} flex flex-wrap items-center gap-1.5`}>
+          {dndLabel && (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-primary/15 text-primary text-[10px] font-bold">
+              <Moon className="w-3 h-3" /> {dndLabel}
+            </span>
+          )}
+          {system.micInUse && (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-500/15 text-red-500 text-[10px] font-bold">
+              <Mic className="w-3 h-3" /> Mic
+            </span>
+          )}
+          {system.camInUse && (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-500/15 text-red-500 text-[10px] font-bold">
+              <Video className="w-3 h-3" /> Cámara
+            </span>
+          )}
+          {hasBt && (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-zinc-500/15 text-zinc-500 text-[10px] font-bold truncate max-w-full">
+              <Bluetooth className="w-3 h-3 shrink-0" /> {system.bluetoothDevices!.join(", ")}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Tarjeta de cada nota (punto 1 pedido, round 5): mismo estilo visual que ya tiene Finanzas en la
 // app real (categoría/estado arriba, ícono + título, fecha, monto si corresponde, botones de
 // acción) — pero aplicado DIRECTO en la lista de cada sección, no solo al abrir un detalle aparte.
@@ -1042,6 +1271,11 @@ export default function DockApp() {
   // Aviso grande al arrancar/pausar/terminar el foco (punto 2/3 pedidos, round 13) — null = no se
   // muestra nada; se achica solo a FocusMiniPill mientras focusRunning siga en true.
   const [focusToast, setFocusToast] = useState<"start" | "pause" | "done" | null>(null);
+  // Resto de las funciones de Dynamic Island (punto pedido, round 14).
+  const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
+  const [volumeToast, setVolumeToast] = useState<{ percent: number; muted: boolean } | null>(null);
+  const [clipboardToast, setClipboardToast] = useState<{ preview?: string } | null>(null);
+  const [screenshotToast, setScreenshotToast] = useState<{ fileName?: string } | null>(null);
   // Ids borrados desde acá mismo — se esconden al toque (ocultamiento optimista) mientras la
   // ventana principal confirma el borrado de verdad.
   const [locallyResolvedIds, setLocallyResolvedIds] = useState<Set<string>>(new Set());
@@ -1072,6 +1306,12 @@ export default function DockApp() {
   const prevKeyLockRef = useRef<KeyLockInfo | null>(null);
   const focusToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const focusIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const volumeToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clipboardToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const screenshotToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Último estado conocido del sondeo de sistema, para detectar QUÉ cambió (volumen, portapapeles,
+  // captura) — igual idea que prevKeyLockRef, no dispara nada en el primer sondeo (estado inicial).
+  const prevSystemRef = useRef<SystemInfo | null>(null);
   // Espejo de "expanded" en un ref: el handler de notificaciones se registra una sola vez (ver
   // más abajo) y necesita leer el valor más reciente sin tener que re-suscribirse cada vez que
   // cambia (lo que reiniciaría la conexión con el bridge).
@@ -1260,6 +1500,46 @@ export default function DockApp() {
         batteryLowAlertedRef.current = false;
       }
     });
+    // Resto de las funciones de Dynamic Island (punto pedido, round 14) — volumen/portapapeles/
+    // captura son avisos momentáneos (se detecta el CAMBIO, igual que Bloq Mayús/Num); privacidad/
+    // No molestar/Bluetooth/hardware son estado ambiente, no disparan nada acá, solo actualizan
+    // systemInfo (ver SystemStatusWidget).
+    const unsubSystem = bridge.onSystemUpdate((info) => {
+      const prev = prevSystemRef.current;
+      setSystemInfo(info);
+
+      if (prev && typeof info.volumePercent === "number" && (info.volumePercent !== prev.volumePercent || info.muted !== prev.muted)) {
+        if (volumeToastTimerRef.current) clearTimeout(volumeToastTimerRef.current);
+        setVolumeToast({ percent: info.volumePercent, muted: !!info.muted });
+        bridgeRef.current?.forceReveal(VOLUME_TOAST_MS + 600);
+        volumeToastTimerRef.current = setTimeout(() => setVolumeToast(null), VOLUME_TOAST_MS);
+      }
+
+      if (
+        prev &&
+        typeof info.clipboardSeq === "number" &&
+        typeof prev.clipboardSeq === "number" &&
+        info.clipboardSeq !== prev.clipboardSeq
+      ) {
+        if (clipboardToastTimerRef.current) clearTimeout(clipboardToastTimerRef.current);
+        setClipboardToast({ preview: info.clipboardPreview });
+        bridgeRef.current?.forceReveal(CLIPBOARD_TOAST_MS + 600);
+        clipboardToastTimerRef.current = setTimeout(() => setClipboardToast(null), CLIPBOARD_TOAST_MS);
+      }
+
+      if (
+        prev &&
+        typeof info.lastScreenshotTicks === "number" &&
+        info.lastScreenshotTicks !== prev.lastScreenshotTicks
+      ) {
+        if (screenshotToastTimerRef.current) clearTimeout(screenshotToastTimerRef.current);
+        setScreenshotToast({ fileName: info.lastScreenshotFile });
+        bridgeRef.current?.forceReveal(SCREENSHOT_TOAST_MS + 600);
+        screenshotToastTimerRef.current = setTimeout(() => setScreenshotToast(null), SCREENSHOT_TOAST_MS);
+      }
+
+      prevSystemRef.current = info;
+    });
     bridge
       .getDisplays()
       .then(setDisplays)
@@ -1270,6 +1550,7 @@ export default function DockApp() {
       unsubMedia();
       unsubKeyLock();
       unsubBattery();
+      unsubSystem();
       unsubVisibility();
       if (pulseTimerRef.current) clearTimeout(pulseTimerRef.current);
       if (keyLockToastTimerRef.current) clearTimeout(keyLockToastTimerRef.current);
@@ -1278,26 +1559,44 @@ export default function DockApp() {
       if (collapseTimerRef.current) clearTimeout(collapseTimerRef.current);
       if (notifToastTimerRef.current) clearTimeout(notifToastTimerRef.current);
       if (mediaToastTimerRef.current) clearTimeout(mediaToastTimerRef.current);
+      if (volumeToastTimerRef.current) clearTimeout(volumeToastTimerRef.current);
+      if (clipboardToastTimerRef.current) clearTimeout(clipboardToastTimerRef.current);
+      if (screenshotToastTimerRef.current) clearTimeout(screenshotToastTimerRef.current);
     };
   }, []);
 
-  // Prioridad del pill colapsado (punto 2 pedido, round 12, extendida punto 1/2/3 pedidos, round
-  // 13): notificación > aviso de Bloq Mayús/Num > aviso de "cambió la música" > aviso del foco >
-  // pill chico de música sonando > pill chico del foco corriendo > estado por defecto.
-  const collapsedVariant: "notif" | "keylock" | "mediaToast" | "focusToast" | "miniPlaying" | "focusMini" | "default" =
-    notifToast
-      ? "notif"
-      : keyLockToast
-      ? "keylock"
-      : mediaToast && mediaInfo?.hasSession
-      ? "mediaToast"
-      : focusToast
-      ? "focusToast"
-      : mediaInfo?.hasSession
-      ? "miniPlaying"
-      : focusRunning
-      ? "focusMini"
-      : "default";
+  // Prioridad del pill colapsado (punto 2 pedido, round 12, extendida rounds 13/14): notificación >
+  // Bloq Mayús/Num > volumen > portapapeles > captura > "cambió la música" > aviso del foco > pill
+  // de música sonando > pill del foco corriendo > estado por defecto.
+  const collapsedVariant:
+    | "notif"
+    | "keylock"
+    | "volume"
+    | "clipboard"
+    | "screenshot"
+    | "mediaToast"
+    | "focusToast"
+    | "miniPlaying"
+    | "focusMini"
+    | "default" = notifToast
+    ? "notif"
+    : keyLockToast
+    ? "keylock"
+    : volumeToast
+    ? "volume"
+    : clipboardToast
+    ? "clipboard"
+    : screenshotToast
+    ? "screenshot"
+    : mediaToast && mediaInfo?.hasSession
+    ? "mediaToast"
+    : focusToast
+    ? "focusToast"
+    : mediaInfo?.hasSession
+    ? "miniPlaying"
+    : focusRunning
+    ? "focusMini"
+    : "default";
 
   useEffect(() => {
     const size = expanded
@@ -1306,6 +1605,12 @@ export default function DockApp() {
       ? NOTIF_TOAST_SIZE
       : collapsedVariant === "keylock"
       ? KEYLOCK_TOAST_SIZE
+      : collapsedVariant === "volume"
+      ? VOLUME_TOAST_SIZE
+      : collapsedVariant === "clipboard"
+      ? CLIPBOARD_TOAST_SIZE
+      : collapsedVariant === "screenshot"
+      ? SCREENSHOT_TOAST_SIZE
       : collapsedVariant === "mediaToast"
       ? MEDIA_TOAST_SIZE
       : collapsedVariant === "focusToast"
@@ -1340,6 +1645,21 @@ export default function DockApp() {
         mediaToastTimerRef.current = null;
       }
       setMediaToast(false);
+      if (volumeToastTimerRef.current) {
+        clearTimeout(volumeToastTimerRef.current);
+        volumeToastTimerRef.current = null;
+      }
+      setVolumeToast(null);
+      if (clipboardToastTimerRef.current) {
+        clearTimeout(clipboardToastTimerRef.current);
+        clipboardToastTimerRef.current = null;
+      }
+      setClipboardToast(null);
+      if (screenshotToastTimerRef.current) {
+        clearTimeout(screenshotToastTimerRef.current);
+        screenshotToastTimerRef.current = null;
+      }
+      setScreenshotToast(null);
     }
   };
 
@@ -1418,6 +1738,11 @@ export default function DockApp() {
 
   const handleMediaControl = (action: "playpause" | "next" | "previous") => {
     bridgeRef.current?.mediaControl(action);
+  };
+
+  const handleVolumeControl = (action: "up" | "down" | "mute") => {
+    uiSounds.click();
+    bridgeRef.current?.volumeControl(action);
   };
 
   // Estado "resuelto" efectivo de un ítem, considerando el toggle optimista local (ver
@@ -1520,6 +1845,12 @@ export default function DockApp() {
             ? NOTIF_TOAST_SIZE.width
             : collapsedVariant === "keylock"
             ? KEYLOCK_TOAST_SIZE.width
+            : collapsedVariant === "volume"
+            ? VOLUME_TOAST_SIZE.width
+            : collapsedVariant === "clipboard"
+            ? CLIPBOARD_TOAST_SIZE.width
+            : collapsedVariant === "screenshot"
+            ? SCREENSHOT_TOAST_SIZE.width
             : collapsedVariant === "mediaToast"
             ? MEDIA_TOAST_SIZE.width
             : collapsedVariant === "focusToast"
@@ -1535,6 +1866,12 @@ export default function DockApp() {
             ? NOTIF_TOAST_SIZE.height
             : collapsedVariant === "keylock"
             ? KEYLOCK_TOAST_SIZE.height
+            : collapsedVariant === "volume"
+            ? VOLUME_TOAST_SIZE.height
+            : collapsedVariant === "clipboard"
+            ? CLIPBOARD_TOAST_SIZE.height
+            : collapsedVariant === "screenshot"
+            ? SCREENSHOT_TOAST_SIZE.height
             : collapsedVariant === "mediaToast"
             ? MEDIA_TOAST_SIZE.height
             : collapsedVariant === "focusToast"
@@ -1603,6 +1940,21 @@ export default function DockApp() {
             // Aviso al tocar Bloq Mayús/Bloq Num (punto 1/3 pedidos, round 13).
             <motion.div key="keylock-toast" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={CONTENT_TRANSITION} className="w-full h-full">
               <KeyLockToastContent kind={keyLockToast.kind} isOn={keyLockToast.isOn} />
+            </motion.div>
+          ) : !expanded && collapsedVariant === "volume" && volumeToast ? (
+            // Aviso al cambiar el volumen (punto pedido, round 14).
+            <motion.div key="volume-toast" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={CONTENT_TRANSITION} className="w-full h-full">
+              <VolumeToastContent percent={volumeToast.percent} muted={volumeToast.muted} />
+            </motion.div>
+          ) : !expanded && collapsedVariant === "clipboard" && clipboardToast ? (
+            // Aviso al copiar algo (punto pedido, round 14).
+            <motion.div key="clipboard-toast" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={CONTENT_TRANSITION} className="w-full h-full">
+              <ClipboardToastContent preview={clipboardToast.preview} />
+            </motion.div>
+          ) : !expanded && collapsedVariant === "screenshot" && screenshotToast ? (
+            // Aviso al guardarse una captura de pantalla nueva (punto pedido, round 14).
+            <motion.div key="screenshot-toast" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={CONTENT_TRANSITION} className="w-full h-full">
+              <ScreenshotToastContent fileName={screenshotToast.fileName} />
             </motion.div>
           ) : !expanded && collapsedVariant === "mediaToast" && mediaInfo?.hasSession ? (
             // Aviso grande que se abre solo al cambiar lo que suena (punto 2.1 pedido, round 12).
@@ -1777,6 +2129,7 @@ export default function DockApp() {
               <div className="flex-1 h-full flex flex-col min-w-0 relative">
                 {!section && <LiveClock />}
                 {!section && <NowPlayingWidget media={mediaInfo} theme={theme} onControl={handleMediaControl} />}
+                {!section && <SystemStatusWidget system={systemInfo} theme={theme} onVolumeControl={handleVolumeControl} />}
                 {/* El foco va en Académico, no en Inicio (punto 2 pedido, round 13) — el estado
                     vive en DockApp (ver más arriba), este componente es solo la vista. */}
                 {section === "academico" && (
