@@ -72,6 +72,18 @@ contextBridge.exposeInMainWorld("FSR_ELECTRON_DOCK", {
     ipcRenderer.on("dock-media-update", listener);
     return () => ipcRenderer.removeListener("dock-media-update", listener);
   },
+  // Bloq Mayús/Bloq Num y batería (punto 3 pedido, round 12, bloque 1 de Dynamic Island) — ver
+  // electron/main.cjs (FOREGROUND_PROBE_SCRIPT y BATTERY_PROBE_SCRIPT).
+  onKeyLockUpdate: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on("dock-keylock-update", listener);
+    return () => ipcRenderer.removeListener("dock-keylock-update", listener);
+  },
+  onBatteryUpdate: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on("dock-battery-update", listener);
+    return () => ipcRenderer.removeListener("dock-battery-update", listener);
+  },
   // Usado por la ventana principal (src/App.tsx) para enterarse de que el dock pidió abrir el
   // formulario de alta/edición de una categoría — ver dock-quick-add/dock-quick-edit más arriba.
   onQuickAdd: (callback) => {

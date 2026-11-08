@@ -31,6 +31,10 @@ import {
   SkipBack,
   SkipForward,
   Music2,
+  Battery,
+  BatteryCharging,
+  Timer,
+  RotateCcw,
   type LucideIcon,
 } from "lucide-react";
 import Logo from "./Logo";
@@ -80,6 +84,20 @@ function mediaThumbnailUri(media: MediaInfo | null | undefined): string | null {
   return `data:${media.thumbnailContentType || "image/jpeg"};base64,${media.thumbnailBase64}`;
 }
 
+// Bloq Mayús/Bloq Num y batería (punto 3 pedido, round 12, bloque 1 de "Dynamic Island for
+// Windows") — vienen de electron/main.cjs (FOREGROUND_PROBE_SCRIPT/BATTERY_PROBE_SCRIPT), acá solo
+// se muestran como indicadores chicos (ver StatusStrip).
+interface KeyLockInfo {
+  capsLockOn: boolean;
+  numLockOn: boolean;
+}
+
+interface BatteryInfo {
+  hasBattery: boolean;
+  percent?: number;
+  charging?: boolean;
+}
+
 interface DockBridge {
   resize: (size: { width: number; height: number; collapsed: boolean }) => void;
   openMain: () => void;
@@ -88,6 +106,8 @@ interface DockBridge {
   onVisibilityChange: (cb: (payload: { visible: boolean }) => void) => () => void;
   onMediaUpdate: (cb: (payload: MediaInfo) => void) => () => void;
   mediaControl: (action: "playpause" | "next" | "previous") => void;
+  onKeyLockUpdate: (cb: (payload: KeyLockInfo) => void) => () => void;
+  onBatteryUpdate: (cb: (payload: BatteryInfo) => void) => () => void;
   getDisplays: () => Promise<DockDisplayOption[]>;
   setDisplay: (displayId: number) => void;
   quickAdd: (category: string) => void;
@@ -122,6 +142,9 @@ const CATEGORY_LABELS: Record<string, string> = {
   salud: "Salud",
   comidas: "Comidas",
   general: "General",
+  // Avisos del propio sistema operativo (batería baja, etc. — punto 3 pedido, round 12, Dynamic
+  // Island), no de una sección de la app.
+  sistema: "Sistema",
 };
 
 // Misma clave que usa QUICK_ADD_TARGETS en App.tsx — para el botón "+" de cada sección (siempre
@@ -630,6 +653,120 @@ function MediaToastContent({
   );
 }
 
+// Bloq Mayús/Bloq Num + batería (punto 3 pedido, round 12, bloque 1 de Dynamic Island) — indicador
+// chico, no un bloque sólido propio: flota junto al perfil igual que LiveClock, porque es
+// información ambiente ("así está la PC ahora"), no uno de los 9 bloques ya fijados.
+function StatusStrip({ battery, keyLock }: { battery: BatteryInfo | null; keyLock: KeyLockInfo | null }) {
+  const showBattery = battery?.hasBattery && typeof battery.percent === "number";
+  const showCaps = keyLock?.capsLockOn;
+  const showNum = keyLock?.numLockOn;
+  if (!showBattery && !showCaps && !showNum) return null;
+  const low = showBattery && !battery!.charging && (battery!.percent as number) <= 20;
+  return (
+    <div className="flex items-center gap-1.5 px-1 shrink-0">
+      {showBattery && (
+        <span className={`inline-flex items-center gap-1 text-[11px] font-semibold ${low ? "text-red-500" : "text-zinc-500"}`}>
+          {battery!.charging ? <BatteryCharging className="w-3.5 h-3.5" /> : <Battery className="w-3.5 h-3.5" />}
+          {battery!.percent}%
+        </span>
+      )}
+      {showCaps && <span className="px-1.5 py-0.5 rounded bg-primary/15 text-primary text-[10px] font-bold">MAYÚS</span>}
+      {showNum && <span className="px-1.5 py-0.5 rounded bg-primary/15 text-primary text-[10px] font-bold">NUM</span>}
+    </div>
+  );
+}
+
+const FOCUS_PRESETS_MIN = [25, 15, 5];
+
+// Temporizador de foco (punto 3 pedido, round 12, bloque 1 de Dynamic Island) — a diferencia de
+// Now Playing, este no necesita nada de Windows: es una cuenta regresiva propia, autocontenida.
+function FocusTimerWidget({ theme }: { theme: Theme }) {
+  const [totalSeconds, setTotalSeconds] = useState(FOCUS_PRESETS_MIN[0] * 60);
+  const [remaining, setRemaining] = useState(FOCUS_PRESETS_MIN[0] * 60);
+  const [running, setRunning] = useState(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (!running) return;
+    intervalRef.current = setInterval(() => {
+      setRemaining((r) => {
+        if (r <= 1) {
+          setRunning(false);
+          uiSounds.notify();
+          return 0;
+        }
+        return r - 1;
+      });
+    }, 1000);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [running]);
+
+  const pick = (minutes: number) => {
+    uiSounds.click();
+    setRunning(false);
+    setTotalSeconds(minutes * 60);
+    setRemaining(minutes * 60);
+  };
+
+  const toggle = () => {
+    if (remaining <= 0) return;
+    uiSounds.toggle();
+    setRunning((r) => !r);
+  };
+
+  const reset = () => {
+    uiSounds.click();
+    setRunning(false);
+    setRemaining(totalSeconds);
+  };
+
+  const progressPct = totalSeconds > 0 ? ((totalSeconds - remaining) / totalSeconds) * 100 : 0;
+
+  return (
+    <div className={`mx-3 mt-3 p-3 rounded-xl border ${theme.border} ${theme.solidBlock} shrink-0`}>
+      <div className="flex items-center justify-between gap-2">
+        <span className="inline-flex items-center gap-1.5 text-xs font-bold text-zinc-500">
+          <Timer className="w-3.5 h-3.5" /> Foco
+        </span>
+        <span className="text-lg font-bold tabular-nums">{formatMediaTime(remaining)}</span>
+      </div>
+      <div className={`h-1 rounded-full overflow-hidden mt-2 ${theme.subtle}`}>
+        <div className="h-full bg-primary rounded-full" style={{ width: `${progressPct}%` }} />
+      </div>
+      <div className="flex items-center justify-between mt-2.5">
+        <div className="flex items-center gap-1">
+          {FOCUS_PRESETS_MIN.map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => pick(m)}
+              className={`px-2 py-1 rounded-lg text-[11px] font-semibold cursor-pointer ${
+                totalSeconds === m * 60 ? "bg-primary text-white" : theme.subtle
+              }`}
+            >
+              {m}m
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-1.5">
+          <button type="button" onClick={reset} className={`p-1.5 rounded-lg cursor-pointer ${theme.hover}`}>
+            <RotateCcw className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={toggle}
+            className="w-7 h-7 rounded-full bg-primary text-white flex items-center justify-center cursor-pointer"
+          >
+            {running ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 ml-0.5" />}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Tarjeta de cada nota (punto 1 pedido, round 5): mismo estilo visual que ya tiene Finanzas en la
 // app real (categoría/estado arriba, ícono + título, fecha, monto si corresponde, botones de
 // acción) — pero aplicado DIRECTO en la lista de cada sección, no solo al abrir un detalle aparte.
@@ -857,6 +994,9 @@ export default function DockApp() {
   // Aviso grande que se abre solo al cambiar lo que suena (punto 2.1 pedido, round 12) — true
   // mientras se muestra; se achica solo al pill animado chico (MiniPlayingPill), no al default.
   const [mediaToast, setMediaToast] = useState(false);
+  // Bloq Mayús/Bloq Num + batería (punto 3 pedido, round 12, bloque 1 de Dynamic Island).
+  const [keyLock, setKeyLock] = useState<KeyLockInfo | null>(null);
+  const [battery, setBattery] = useState<BatteryInfo | null>(null);
   // Ids borrados desde acá mismo — se esconden al toque (ocultamiento optimista) mientras la
   // ventana principal confirma el borrado de verdad.
   const [locallyResolvedIds, setLocallyResolvedIds] = useState<Set<string>>(new Set());
@@ -878,6 +1018,9 @@ export default function DockApp() {
   // Última "clave" (título|artista) de lo que sonaba, para detectar cuándo CAMBIA (y no disparar
   // el aviso grande en cada sondeo de PowerShell, que llega cada 2s aunque no haya cambiado nada).
   const mediaTrackKeyRef = useRef<string>("");
+  // Para avisar batería baja una sola vez por "episodio" (no en cada sondeo de 20s mientras sigue
+  // baja) — se resetea solo cuando vuelve a cargar o sube por encima del umbral.
+  const batteryLowAlertedRef = useRef(false);
   // Espejo de "expanded" en un ref: el handler de notificaciones se registra una sola vez (ver
   // más abajo) y necesita leer el valor más reciente sin tener que re-suscribirse cada vez que
   // cambia (lo que reiniciaría la conexión con el bridge).
@@ -963,6 +1106,35 @@ export default function DockApp() {
       }
       mediaTrackKeyRef.current = key;
     });
+    const unsubKeyLock = bridge.onKeyLockUpdate(setKeyLock);
+    const unsubBattery = bridge.onBatteryUpdate((info) => {
+      setBattery(info);
+      const isLow = info.hasBattery && !info.charging && typeof info.percent === "number" && info.percent <= 20;
+      if (isLow && !batteryLowAlertedRef.current) {
+        // Aviso de batería baja (punto 3 pedido, round 12) — reusa el mismo mecanismo de
+        // notifToast que ya tienen las notificaciones de la agenda, en vez de uno nuevo aparte.
+        batteryLowAlertedRef.current = true;
+        uiSounds.notify();
+        setPulse(true);
+        if (pulseTimerRef.current) clearTimeout(pulseTimerRef.current);
+        pulseTimerRef.current = setTimeout(() => setPulse(false), 1600);
+        const entry: NotifEntry = {
+          id: `${Date.now()}-${Math.random()}`,
+          title: "Batería baja",
+          body: `Te queda ${info.percent}% de batería — conectá el cargador.`,
+          category: "sistema",
+          receivedAt: Date.now(),
+        };
+        setNotifFeed((prev) => [entry, ...prev].slice(0, 12));
+        if (!expandedRef.current) {
+          if (notifToastTimerRef.current) clearTimeout(notifToastTimerRef.current);
+          setNotifToast(entry);
+          notifToastTimerRef.current = setTimeout(() => setNotifToast(null), NOTIF_TOAST_MS);
+        }
+      } else if (!isLow) {
+        batteryLowAlertedRef.current = false;
+      }
+    });
     bridge
       .getDisplays()
       .then(setDisplays)
@@ -971,6 +1143,8 @@ export default function DockApp() {
       unsubSnapshot();
       unsubNotify();
       unsubMedia();
+      unsubKeyLock();
+      unsubBattery();
       unsubVisibility();
       if (pulseTimerRef.current) clearTimeout(pulseTimerRef.current);
       if (collapseTimerRef.current) clearTimeout(collapseTimerRef.current);
@@ -1322,6 +1496,8 @@ export default function DockApp() {
                   </div>
                 </div>
 
+                <StatusStrip battery={battery} keyLock={keyLock} />
+
                 {/* Inicio + las 4 secciones son UN SOLO bloque (punto 1 pedido, round 9) — no 5
                     bloques sólidos separados, sino un único contenedor con los botones adentro. */}
                 <div className={`flex flex-col gap-0.5 p-1.5 rounded-xl border ${theme.border} ${theme.solidBlock}`}>
@@ -1432,6 +1608,7 @@ export default function DockApp() {
               <div className="flex-1 h-full flex flex-col min-w-0 relative">
                 {!section && <LiveClock />}
                 {!section && <NowPlayingWidget media={mediaInfo} theme={theme} onControl={handleMediaControl} />}
+                {!section && <FocusTimerWidget theme={theme} />}
 
                 {/* Título de la sección como su propio bloque sólido (punto 1 pedido, round 11) —
                     antes flotaba directo sobre el fondo translúcido, sin bloque. */}
