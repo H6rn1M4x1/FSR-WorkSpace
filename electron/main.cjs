@@ -169,6 +169,96 @@ $min = [FsrForegroundProbe]::IsIconic($h)
 Write-Output "$($r.Left),$($r.Top),$($r.Right),$($r.Bottom),$min"
 `.trim();
 
+// "Now Playing" de todo Windows (punto 2 pedido, round 11: Dynamic Island for Windows) — igual
+// que el sondeo de ventana en primer plano de arriba, esto usa PowerShell (ya viene con Windows,
+// cero dependencias nuevas) en vez de un módulo nativo compilado, que acá no se podría ni armar ni
+// probar sin una PC Windows real. La API de "sesiones de medios" (qué suena, de qué app, play/
+// pause/siguiente/anterior) es de WinRT (Windows.Media.Control), no COM clásico — PowerShell
+// puede cargar tipos de WinRT directo con la sintaxis de corchetes de abajo, pero sus métodos son
+// todos async (devuelven IAsyncOperation/IAsyncAction), y Windows PowerShell no tiene "await" — el
+// helper Await/AwaitAction de acá es la forma estándar y documentada de resolver eso desde
+// PowerShell (usa reflection para invocar la extensión AsTask() y bloquea con .Wait()).
+//
+// IMPORTANTE: no se pudo probar contra una sesión de medios real (Spotify/Chrome/VLC) porque este
+// entorno es Linux — si en la práctica no detecta nada, el fallo más probable está en esta parte
+// (la combinación exacta de PowerShell 5.1 + reflection), no en el resto del mecanismo (que reusa
+// el mismo patrón ya probado del sondeo de pantalla completa).
+const WINRT_MEDIA_AWAIT_HELPERS = `
+Add-Type -AssemblyName System.Runtime.WindowsRuntime
+$asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
+  $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation\`1'
+})[0]
+$asTaskAction = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
+  $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncAction'
+})[0]
+function Await($WinRtTask, $ResultType) {
+  $asTask = $asTaskGeneric.MakeGenericMethod($ResultType)
+  $netTask = $asTask.Invoke($null, @($WinRtTask))
+  $netTask.Wait(-1) | Out-Null
+  $netTask.Result
+}
+function AwaitAction($WinRtAction) {
+  $netTask = $asTaskAction.Invoke($null, @($WinRtAction))
+  $netTask.Wait(-1) | Out-Null
+}
+function Get-CurrentMediaSession {
+  [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager,Windows.Media.Control,ContentType=WindowsRuntime] | Out-Null
+  $manager = Await ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager])
+  $manager.GetCurrentSession()
+}
+`;
+
+const MEDIA_PROBE_SCRIPT = (
+  WINRT_MEDIA_AWAIT_HELPERS +
+  `
+try {
+  $session = Get-CurrentMediaSession
+  if ($null -eq $session) {
+    Write-Output (@{ hasSession = $false } | ConvertTo-Json -Compress)
+  } else {
+    $props = Await ($session.TryGetMediaPropertiesAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties])
+    $playbackInfo = $session.GetPlaybackInfo()
+    $timeline = $session.GetTimelineProperties()
+    $result = @{
+      hasSession = $true
+      title = $props.Title
+      artist = $props.Artist
+      album = $props.AlbumTitle
+      appId = $session.SourceAppUserModelId
+      status = [int]$playbackInfo.PlaybackStatus
+      positionSeconds = [math]::Round($timeline.Position.TotalSeconds, 2)
+      endSeconds = [math]::Round($timeline.EndTime.TotalSeconds, 2)
+    }
+    Write-Output ($result | ConvertTo-Json -Compress)
+  }
+} catch {
+  Write-Output (@{ hasSession = $false; error = "$_" } | ConvertTo-Json -Compress)
+}
+`
+).trim();
+
+// $action: "playpause" | "next" | "previous" — un proceso aparte por cada toque de botón (no
+// conviene reusar el mismo proceso del sondeo, que ya tiene su propio ciclo encadenado).
+function buildMediaControlScript(action) {
+  const actionScript =
+    action === "next"
+      ? `Await ($session.TrySkipNextAsync()) ([bool]) | Out-Null`
+      : action === "previous"
+      ? `Await ($session.TrySkipPreviousAsync()) ([bool]) | Out-Null`
+      : `if ($session.GetPlaybackInfo().PlaybackStatus -eq 4) { Await ($session.TryPauseAsync()) ([bool]) | Out-Null } else { Await ($session.TryPlayAsync()) ([bool]) | Out-Null }`;
+  return (
+    WINRT_MEDIA_AWAIT_HELPERS +
+    `
+try {
+  $session = Get-CurrentMediaSession
+  if ($null -ne $session) {
+    ${actionScript}
+  }
+} catch {}
+`
+  ).trim();
+}
+
 // Si lo último que se sabe es que hay algo en pantalla completa tapando el monitor del dock.
 // Arranca en false (nunca se asume tapado hasta que el sondeo diga lo contrario).
 let fullscreenCovered = false;
@@ -330,6 +420,65 @@ function startForegroundWindowWatcher() {
   setInterval(tickDockVisibility, 150);
 }
 
+let mediaProbeTimer = null;
+// Para no mandarle al dock un snapshot de medios idéntico al anterior en cada sondeo (cada 2s) —
+// solo cuando cambia algo de verdad (canción, estado, o deja de haber sesión). null fuerza que la
+// próxima corrida mande el estado igual, aunque no haya cambiado (ver dock-media-control).
+let lastMediaStateKey = null;
+
+// Una sola corrida del sondeo — la usan tanto el watcher periódico de abajo como el control de
+// play/pausa/siguiente/anterior, para que tocar un botón actualice el dock al toque en vez de
+// esperar hasta el próximo sondeo programado (hasta 2s de diferencia, se nota).
+function probeMediaOnce(cb) {
+  execFile(
+    "powershell.exe",
+    ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", MEDIA_PROBE_SCRIPT],
+    { windowsHide: true, timeout: 3000 },
+    (err, stdout) => {
+      if (!err && stdout && dockWindow && !dockWindow.isDestroyed()) {
+        try {
+          const parsed = JSON.parse(stdout.trim());
+          const key = JSON.stringify(parsed);
+          if (key !== lastMediaStateKey) {
+            lastMediaStateKey = key;
+            dockWindow.webContents.send("dock-media-update", parsed);
+          }
+        } catch {
+          // Salida inesperada (el helper Await/WinRT no se pudo probar contra una sesión real,
+          // ver el comentario de MEDIA_PROBE_SCRIPT) — se ignora esta corrida, sin romper nada.
+        }
+      }
+      cb?.();
+    }
+  );
+}
+
+// "Now Playing" de todo Windows (punto 2 pedido, round 11) — mismo patrón que
+// startForegroundWindowWatcher: solo tiene sentido en Windows, sondeo encadenado (no
+// setInterval a secas) para no amontonar procesos de powershell.exe si una corrida tarda de más.
+function startMediaWatcher() {
+  if (process.platform !== "win32") return;
+  const poll = () => probeMediaOnce(() => { mediaProbeTimer = setTimeout(poll, 2000); });
+  poll();
+}
+
+// Play/pausa/siguiente/anterior desde el dock (punto 2 pedido, round 11) — un proceso de
+// PowerShell aparte del sondeo (ver dock-media-control más abajo); al terminar, dispara un sondeo
+// extra enseguida (forzado con lastMediaStateKey=null) para que el dock vea el nuevo estado sin
+// esperar los 2s normales del watcher periódico.
+function runMediaControl(action, onDone) {
+  if (process.platform !== "win32") {
+    onDone?.();
+    return;
+  }
+  execFile(
+    "powershell.exe",
+    ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", buildMediaControlScript(action)],
+    { windowsHide: true, timeout: 3000 },
+    () => onDone?.()
+  );
+}
+
 function createTray() {
   // "dist/logo.png" (generado por scripts/generate-icons.js a partir de public/pwa-icon.svg) ya
   // viaja empaquetado dentro de "dist/**/*" (ver package.json#build.files) — no hace falta un
@@ -436,6 +585,16 @@ ipcMain.on("dock-quick-delete", (_event, payload) => {
   }
 });
 
+// Play/pausa/siguiente/anterior desde el dock (punto 2 pedido, round 11) — a diferencia de
+// quick-toggle/quick-delete, esto no pasa por la ventana principal: PowerShell controla la sesión
+// de medios directo desde el proceso principal (ver runMediaControl).
+ipcMain.on("dock-media-control", (_event, action) => {
+  runMediaControl(action, () => {
+    lastMediaStateKey = null; // fuerza que esta corrida mande el estado aunque no haya cambiado
+    probeMediaOnce(() => {});
+  });
+});
+
 // Selector de monitor (punto 6 pedido por el usuario) — el dock pide la lista y manda el id
 // elegido; acá se persiste y se reposiciona ya mismo con el tamaño que la ventana tenga en ese
 // momento (si está colapsada o expandida).
@@ -520,6 +679,7 @@ app.whenReady().then(() => {
   createDockWindow();
   createTray();
   startForegroundWindowWatcher();
+  startMediaWatcher();
   // Sin chequeo automático al arrancar por ahora: el instalador (~250MB) todavía no tiene un feed
   // real donde publicarse (ver package.json#build.publish y la Card de Configuración), así que
   // intentarlo solo generaría un error de "no encontrado" cada vez que se abre la app. El puente
@@ -537,6 +697,7 @@ app.whenReady().then(() => {
 app.on("before-quit", () => {
   app.isQuitting = true;
   if (foregroundProbeTimer) clearTimeout(foregroundProbeTimer);
+  if (mediaProbeTimer) clearTimeout(mediaProbeTimer);
 });
 
 app.on("window-all-closed", () => {
