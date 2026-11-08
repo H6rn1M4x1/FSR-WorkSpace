@@ -55,6 +55,7 @@ interface DockBridge {
   openMain: () => void;
   onSnapshot: (cb: (snapshot: DockSnapshot) => void) => () => void;
   onNotify: (cb: (payload: { title: string; body: string; category: string }) => void) => () => void;
+  onVisibilityChange: (cb: (payload: { visible: boolean }) => void) => () => void;
   getDisplays: () => Promise<DockDisplayOption[]>;
   setDisplay: (displayId: number) => void;
   quickAdd: (category: string) => void;
@@ -590,6 +591,14 @@ export default function DockApp() {
         notifToastTimerRef.current = setTimeout(() => setNotifToast(null), NOTIF_TOAST_MS);
       }
     });
+    // Punto 3.1 pedido (round 9): el main process decide solo (según lo que haya en pantalla)
+    // cuándo mostrar/esconder el dock entero por el mecanismo de pantalla completa — la animación
+    // de opacidad ya la hace electron/main.cjs sobre la ventana misma, acá solo hace falta el
+    // sonido (mismo que ya usa el abrir/cerrar con el mouse, para que se sienta consistente).
+    const unsubVisibility = bridge.onVisibilityChange(({ visible }) => {
+      if (visible) uiSounds.expand();
+      else uiSounds.collapse();
+    });
     bridge
       .getDisplays()
       .then(setDisplays)
@@ -597,6 +606,7 @@ export default function DockApp() {
     return () => {
       unsubSnapshot();
       unsubNotify();
+      unsubVisibility();
       if (pulseTimerRef.current) clearTimeout(pulseTimerRef.current);
       if (collapseTimerRef.current) clearTimeout(collapseTimerRef.current);
       if (notifToastTimerRef.current) clearTimeout(notifToastTimerRef.current);
@@ -892,42 +902,46 @@ export default function DockApp() {
                   </div>
                 </div>
 
-                <motion.button
-                  type="button"
-                  whileTap={{ scale: 0.96 }}
-                  onClick={() => {
-                    uiSounds.navigate();
-                    setSection(null);
-                  }}
-                  className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-sm border transition-colors cursor-pointer ${
-                    !section ? `border-primary bg-primary text-white` : `${theme.border} ${theme.solidBlock} ${theme.navInactive} ${theme.hover}`
-                  }`}
-                >
-                  <Home className="w-4 h-4 shrink-0" />
-                  <span className="flex-1 text-left truncate">Inicio</span>
-                </motion.button>
+                {/* Inicio + las 4 secciones son UN SOLO bloque (punto 1 pedido, round 9) — no 5
+                    bloques sólidos separados, sino un único contenedor con los botones adentro. */}
+                <div className={`flex flex-col gap-0.5 p-1.5 rounded-xl border ${theme.border} ${theme.solidBlock}`}>
+                  <motion.button
+                    type="button"
+                    whileTap={{ scale: 0.96 }}
+                    onClick={() => {
+                      uiSounds.navigate();
+                      setSection(null);
+                    }}
+                    className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm transition-colors cursor-pointer ${
+                      !section ? "bg-primary text-white" : `${theme.navInactive} ${theme.hover}`
+                    }`}
+                  >
+                    <Home className="w-4 h-4 shrink-0" />
+                    <span className="flex-1 text-left truncate">Inicio</span>
+                  </motion.button>
 
-                {SECTIONS.map(({ key, label, icon: Icon }) => {
-                  const count = pendingCountOf(filteredByKey[key]);
-                  const active = section === key;
-                  return (
-                    <motion.button
-                      key={key}
-                      type="button"
-                      whileTap={{ scale: 0.96 }}
-                      onClick={() => handleSectionClick(key)}
-                      className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-sm border transition-colors cursor-pointer ${
-                        active ? "border-primary bg-primary text-white" : `${theme.border} ${theme.solidBlock} ${theme.navInactive} ${theme.hover}`
-                      }`}
-                    >
-                      <Icon className="w-4 h-4 shrink-0" />
-                      <span className="flex-1 text-left truncate">{label}</span>
-                      {count > 0 && (
-                        <span className={`text-[10px] font-bold rounded-full px-1.5 py-0.5 ${active ? "bg-white/25" : theme.subtle}`}>{count}</span>
-                      )}
-                    </motion.button>
-                  );
-                })}
+                  {SECTIONS.map(({ key, label, icon: Icon }) => {
+                    const count = pendingCountOf(filteredByKey[key]);
+                    const active = section === key;
+                    return (
+                      <motion.button
+                        key={key}
+                        type="button"
+                        whileTap={{ scale: 0.96 }}
+                        onClick={() => handleSectionClick(key)}
+                        className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm transition-colors cursor-pointer ${
+                          active ? "bg-primary text-white" : `${theme.navInactive} ${theme.hover}`
+                        }`}
+                      >
+                        <Icon className="w-4 h-4 shrink-0" />
+                        <span className="flex-1 text-left truncate">{label}</span>
+                        {count > 0 && (
+                          <span className={`text-[10px] font-bold rounded-full px-1.5 py-0.5 ${active ? "bg-white/25" : theme.subtle}`}>{count}</span>
+                        )}
+                      </motion.button>
+                    );
+                  })}
+                </div>
 
                 <div className="flex-1" />
 
