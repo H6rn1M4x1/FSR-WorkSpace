@@ -113,16 +113,15 @@ function createDockWindow() {
     skipTaskbar: true,
     backgroundColor: "#00000000",
     show: true,
-    // Punto 1 pedido (round 7): blur de verdad del escritorio detrás del dock ("efecto mica/
-    // acrylic"), no solo una capa de color translúcida por CSS — el backdrop-filter de Chromium
-    // no desenfoca lo que hay DETRÁS de una ventana de Windows realmente transparente, solo mezcla
-    // colores dentro de la propia página (por eso hasta ahora se veía el fondo de escritorio bien
-    // nítido debajo del tinte oscuro/claro). "acrylic" (no "mica": ese material no desenfoca en
-    // vivo lo que hay detrás, solo toma un color promedio del fondo de escritorio) es Windows 11
-    // build 22621+ únicamente. No se puede probar en este sandbox Linux — si el Windows del
-    // usuario no lo soporta, o no es compatible junto con una ventana transparente+sin bordes como
-    // esta, Electron lo ignora sin romper nada: el dock se sigue viendo exactamente como ahora.
-    ...(process.platform === "win32" ? { backgroundMaterial: "acrylic" } : {}),
+    // Se probó backgroundMaterial: "acrylic" acá (round 7) para un blur de verdad del escritorio
+    // detrás del dock — pero ese material lo pinta Windows (DWM) para el RECTÁNGULO completo de
+    // la ventana, sin enterarse del borde redondeado que define el CSS: por eso aparecían esas
+    // puntas grises asomando en las esquinas de abajo, donde el contenido ya venía redondeado pero
+    // la ventana de verdad seguía siendo un rectángulo recto por debajo. Se sacó (punto 1 pedido,
+    // round 8) — queda solo el tinte translúcido por CSS (ver theme.bg en DockApp.tsx), que si
+    // respeta el borde redondeado. Un blur real sin ese problema necesitaría recortar la FORMA de
+    // la ventana (BrowserWindow.setShape) para que coincida con las esquinas redondeadas — posible,
+    // pero no se puede afinar ni probar sin una Windows real a mano.
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,

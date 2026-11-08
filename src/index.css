@@ -24,7 +24,10 @@ html.dock-mode body {
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
   /* Custom Semantic Colors */
-  --color-primary: #1a73e8;
+  /* Gris por defecto (antes azul) hasta que el usuario elija otro color de acento — ver
+     AestheticStorageService.getThemeColor() en src/lib/storage.ts, mismo criterio en todas las
+     plataformas (web, Electron y Android comparten este mismo código). */
+  --color-primary: #52525b;
   --color-primary-hover: color-mix(in srgb, var(--color-primary) 85%, black);
   --color-primary-container: color-mix(in srgb, var(--color-primary) 12%, #ffffff);
   --color-primary-on-container: color-mix(in srgb, var(--color-primary) 90%, black);
@@ -47,7 +50,7 @@ html.dock-mode body {
 /* Dark Mode Tokens */
 .dark, @media (prefers-color-scheme: dark) {
   @theme {
-    --color-primary: #8ab4f8;
+    --color-primary: #a1a1aa;
     --color-primary-hover: color-mix(in srgb, var(--color-primary) 85%, white);
     --color-primary-container: color-mix(in srgb, var(--color-primary) 20%, transparent);
     --color-primary-on-container: color-mix(in srgb, var(--color-primary) 85%, white);

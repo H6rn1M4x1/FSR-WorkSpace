@@ -123,7 +123,7 @@ const EMPTY_SNAPSHOT: DockSnapshot = {
   turnos: [],
   salud: [],
   academico: [],
-  themeColor: "#8ab4f8",
+  themeColor: "#71717a",
   darkMode: true,
   profile: { name: "Usuario", photoURL: null },
 };
@@ -176,14 +176,20 @@ function toDateOnly(d: Date): string {
 }
 
 interface Theme {
+  // Fondo general del dock: translúcido + blur (mica/acrylic en Windows, ver electron/main.cjs),
+  // negro o blanco según el tema — todo lo que NO es uno de los bloques de abajo "flota" sobre
+  // este fondo (punto 4 pedido, round 8).
   bg: string;
-  // Translúcido propio para una sección/bloque interno (sidebar, encabezado) — una segunda capa
-  // de transparencia por encima del fondo general del dock, para que esa franja se lea como su
-  // propia sección en vez de estar separada solo por una línea (punto 2 pedido, round 7).
-  block: string;
   text: string;
   border: string;
   hover: string;
+  // El bloque sólido (perfil, cada botón de sección, calendario, notas, notificaciones — punto 2
+  // pedido, round 8): negro o blanco liso según el tema, sin nada de transparencia, para que se
+  // distinga con claridad del fondo translúcido detrás (punto 3 pedido).
+  solidBlock: string;
+  // Superficie secundaria DENTRO de un bloque sólido (ej. el botón "Marcar como pendiente" ya
+  // tildado, el numerito de pendientes de cada sección) — un escalón más sutil que solidBlock,
+  // no uno de los bloques principales de la lista.
   subtle: string;
   popoverBg: string;
   navInactive: string;
@@ -265,7 +271,7 @@ function WeatherMini() {
   );
 }
 
-function LiveClock({ theme }: { theme: Theme }) {
+function LiveClock() {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 15000);
@@ -274,7 +280,7 @@ function LiveClock({ theme }: { theme: Theme }) {
   const time = now.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
   const date = now.toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" });
   return (
-    <div className={`text-center py-2.5 border-b ${theme.border} ${theme.block} shrink-0`}>
+    <div className="text-center py-2.5 shrink-0">
       <p className="text-3xl font-bold tabular-nums leading-none">{time}</p>
       <div className="flex items-center justify-center gap-2 mt-1">
         <p className="text-xs text-zinc-500 capitalize">{date}</p>
@@ -329,7 +335,7 @@ function ItemRow({
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "0px 0px -10% 0px" }}
       transition={{ duration: 0.25 }}
-      className={`rounded-xl border ${theme.border} ${theme.subtle} p-3 ${done ? "opacity-60" : ""}`}
+      className={`rounded-xl border ${theme.border} ${theme.solidBlock} p-3 ${done ? "opacity-60" : ""}`}
     >
       <div className="flex items-center justify-between gap-2 mb-2">
         <span className="text-[9px] uppercase tracking-wide font-bold text-primary bg-primary/15 rounded-full px-2 py-0.5 truncate max-w-[60%]">
@@ -434,7 +440,7 @@ function MiniCalendar({
   const monthLabel = month.toLocaleDateString("es-AR", { month: "long", year: "numeric" });
 
   return (
-    <div className={`pt-2 border-t ${theme.border}`}>
+    <div className={`p-2.5 rounded-2xl border ${theme.border} ${theme.solidBlock}`}>
       <div className="flex items-center justify-between px-0.5 mb-1">
         <button
           type="button"
@@ -765,21 +771,17 @@ export default function DockApp() {
 
   const isDark = snapshot.darkMode;
   const theme: Theme = {
-    // Mismo fondo translúcido + blur que ya usa la app en otras zonas (ej. el aviso de "MODO
-    // LOCAL" en App.tsx: bg-black/75 / bg-white/80 con backdrop-blur-2xl) — punto 1 pedido.
-    bg: isDark ? "bg-black/75 backdrop-blur-2xl" : "bg-white/80 backdrop-blur-2xl",
-    // Segunda capa de translucidez para una sección interna (sidebar, encabezados) — mismo patrón
-    // que ya usa la app para su propio Sidebar.tsx (bg-zinc-950/60 / bg-white/60 con
-    // backdrop-blur-xl): una sección que antes solo se separaba con una línea ahora se lee como
-    // su propio bloque (punto 2 pedido, round 7).
-    block: isDark ? "bg-black/20 backdrop-blur-sm" : "bg-white/25 backdrop-blur-sm",
+    // Negro o blanco al 80% de opacidad + blur (punto 4 pedido, round 8) — en Windows, el blur de
+    // verdad lo da backgroundMaterial: "acrylic" de la ventana (ver electron/main.cjs); esta clase
+    // es el respaldo por CSS para cuando no está disponible (u otra plataforma).
+    bg: isDark ? "bg-black/80 backdrop-blur-2xl" : "bg-white/80 backdrop-blur-2xl",
     text: isDark ? "text-[#e3e2e6]" : "text-[#1a1a1a]",
     border: isDark ? "border-white/10" : "border-black/10",
     hover: isDark ? "hover:bg-white/5" : "hover:bg-black/5",
-    // Lo que va AL FRENTE de un bloque (tarjetas de notas, badges, botones secundarios) es de
-    // color SÓLIDO — mismo patrón que ya usa la app (ej. bg-zinc-100 dark:bg-zinc-800 en sus
-    // superficies secundarias) — para que se distinga con claridad del bloque translúcido detrás,
-    // en vez de sumar otra capa de transparencia encima (punto 2 pedido, round 7).
+    // Negro o blanco LISO (sin transparencia) para el perfil, cada botón de sección, el
+    // calendario, las notas y las notificaciones (punto 2/3 pedidos, round 8) — se distingue del
+    // fondo translúcido de arriba por ser opaco (sin blur de por medio) más el borde fino.
+    solidBlock: isDark ? "bg-black" : "bg-white",
     subtle: isDark ? "bg-zinc-800" : "bg-zinc-100",
     popoverBg: isDark ? "bg-zinc-900" : "bg-zinc-50",
     navInactive: isDark ? "text-zinc-300" : "text-zinc-700",
@@ -872,10 +874,11 @@ export default function DockApp() {
               transition={CONTENT_TRANSITION}
               className="flex h-full"
             >
-              {/* Sidebar: perfil + secciones + mini calendario a la izquierda. Compacto a propósito
-                  (punto 2 pedido) para que el mini calendario entre completo sin recortarse. */}
-              <div className={`w-[190px] shrink-0 h-full border-r ${theme.border} ${theme.block} flex flex-col p-2.5 gap-0.5 overflow-y-auto`}>
-                <div className={`flex items-center gap-2 px-1 pb-2 mb-0.5 border-b ${theme.border}`}>
+              {/* Sidebar: perfil + secciones + mini calendario, flotando sobre el fondo translúcido
+                  del dock (punto 4 pedido) — cada uno de estos es su propio bloque sólido (punto
+                  2/3 pedidos, round 8), no una franja separada por una línea. */}
+              <div className="w-[190px] shrink-0 h-full flex flex-col p-2.5 gap-2 overflow-y-auto">
+                <div className={`flex items-center gap-2 px-2.5 py-2 rounded-xl border ${theme.border} ${theme.solidBlock}`}>
                   {snapshot.profile.photoURL ? (
                     <img src={snapshot.profile.photoURL} alt={snapshot.profile.name} className="w-7 h-7 rounded-full object-cover shrink-0" />
                   ) : (
@@ -896,8 +899,8 @@ export default function DockApp() {
                     uiSounds.navigate();
                     setSection(null);
                   }}
-                  className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-sm transition-colors cursor-pointer ${
-                    !section ? "bg-primary text-white" : `${theme.navInactive} ${theme.hover}`
+                  className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-sm border transition-colors cursor-pointer ${
+                    !section ? `border-primary bg-primary text-white` : `${theme.border} ${theme.solidBlock} ${theme.navInactive} ${theme.hover}`
                   }`}
                 >
                   <Home className="w-4 h-4 shrink-0" />
@@ -913,8 +916,8 @@ export default function DockApp() {
                       type="button"
                       whileTap={{ scale: 0.96 }}
                       onClick={() => handleSectionClick(key)}
-                      className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-sm transition-colors cursor-pointer ${
-                        active ? "bg-primary text-white" : `${theme.navInactive} ${theme.hover}`
+                      className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-sm border transition-colors cursor-pointer ${
+                        active ? "border-primary bg-primary text-white" : `${theme.border} ${theme.solidBlock} ${theme.navInactive} ${theme.hover}`
                       }`}
                     >
                       <Icon className="w-4 h-4 shrink-0" />
@@ -928,20 +931,17 @@ export default function DockApp() {
 
                 <div className="flex-1" />
 
-                {/* mb-2 para que no quede pegado contra la fila de abajo (punto 3 pedido). */}
-                <div className="mb-2">
-                  <MiniCalendar
-                    month={calendarMonth}
-                    selectedDate={selectedDate}
-                    todayStr={todayStr}
-                    theme={theme}
-                    markedDates={markedDates}
-                    onSelect={setSelectedDate}
-                    onMonthChange={setCalendarMonth}
-                  />
-                </div>
+                <MiniCalendar
+                  month={calendarMonth}
+                  selectedDate={selectedDate}
+                  todayStr={todayStr}
+                  theme={theme}
+                  markedDates={markedDates}
+                  onSelect={setSelectedDate}
+                  onMonthChange={setCalendarMonth}
+                />
 
-                <div className={`relative flex items-center gap-1 pt-2 border-t ${theme.border}`}>
+                <div className="relative flex items-center gap-1">
                   <button
                     type="button"
                     title="Elegir monitor"
@@ -996,9 +996,9 @@ export default function DockApp() {
 
               {/* Contenido: Inicio (reloj + todo mezclado) o la sección elegida. */}
               <div className="flex-1 h-full flex flex-col min-w-0 relative">
-                {!section && <LiveClock theme={theme} />}
+                {!section && <LiveClock />}
 
-                <div className={`px-4 py-3 border-b ${theme.border} ${theme.block} shrink-0 flex items-center justify-between gap-2`}>
+                <div className="px-4 py-3 shrink-0 flex items-center justify-between gap-2">
                   <div>
                     <p className="text-sm font-bold">{sectionLabel}</p>
                     <p className="text-xs text-zinc-500">
@@ -1065,7 +1065,7 @@ export default function DockApp() {
                               transition={{ duration: 0.25 }}
                               role="button"
                               tabIndex={0}
-                              className={`w-full text-left px-3 py-2 rounded-xl text-sm cursor-pointer ${theme.subtle}`}
+                              className={`w-full text-left px-3 py-2 rounded-xl text-sm cursor-pointer border ${theme.border} ${theme.solidBlock}`}
                             >
                               <p className="font-semibold truncate">{n.title}</p>
                               <p className="text-xs opacity-70 truncate">{n.body}</p>

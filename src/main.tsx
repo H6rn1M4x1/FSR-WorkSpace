@@ -54,7 +54,6 @@ if (typeof window !== 'undefined') {
 
 import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
-import App from './App.tsx';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import './index.css';
@@ -98,8 +97,8 @@ if (typeof window !== 'undefined' && L && L.DomUtil) {
 }
 
 // El dock flotante de Electron (ver electron/main.cjs) navega a esta misma app con
-// "?mode=dock" en vez de crear un HTML/bundle separado — así comparte origen (y por lo tanto
-// localStorage/sesión de Supabase) con la ventana principal sin esfuerzo extra.
+// "?mode=dock" en vez de crear un HTML/bundle separado — así comparte origen con la ventana
+// principal sin esfuerzo extra.
 const isDockMode = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('mode') === 'dock';
 
 if (isDockMode) {
@@ -117,15 +116,29 @@ if (isDockMode) {
   // Enable global click-and-drag scroll on all table containers
   initDragToScroll();
 
-  createRoot(document.getElementById('root')!).render(
-    <StrictMode>
-      <ErrorBoundary>
-        <ToastProvider>
-          <App />
-        </ToastProvider>
-      </ErrorBoundary>
-    </StrictMode>,
-  );
+  // App.tsx (y por lo tanto src/lib/supabase.ts, que ese módulo importa) se cargan recién acá,
+  // con un import() dinámico, en vez de un "import App from './App.tsx'" estático arriba del
+  // archivo — un import estático se ejecuta igual aunque <App/> nunca se renderice, así que la
+  // ventana del dock (que entra por la rama de arriba) terminaba igual evaluando supabase.ts y
+  // creando su PROPIO cliente de Supabase, aunque nunca lo usara. Con dos clientes de Supabase
+  // corriendo en paralelo contra la MISMA sesión guardada (mainWindow y dockWindow comparten
+  // origen/localStorage), ambos intentaban refrescar el token al mismo tiempo apenas Windows
+  // relanzaba la app sola al prender la PC — y si el proyecto tiene rotación de refresh token
+  // (lo habitual en Supabase hoy), el segundo refresco en llegar pisa al primero con un error de
+  // token ya usado, dejando la sesión invalidada de verdad. Evitar que el dock cargue supabase.ts
+  // de arranque saca esa carrera de encima: el dock nunca necesitó su propio cliente, ya que toda
+  // su data le llega por IPC desde la ventana principal.
+  import('./App').then(({ default: App }) => {
+    createRoot(document.getElementById('root')!).render(
+      <StrictMode>
+        <ErrorBoundary>
+          <ToastProvider>
+            <App />
+          </ToastProvider>
+        </ErrorBoundary>
+      </StrictMode>,
+    );
+  });
 }
 
 

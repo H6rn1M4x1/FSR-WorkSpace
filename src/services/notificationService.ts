@@ -45,7 +45,7 @@ export function getDeviceAccentColor(): string {
   } catch {
     // fallback
   }
-  return "#8ab4f8";
+  return "#71717a";
 }
 
 /**
