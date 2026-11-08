@@ -26,6 +26,11 @@ import {
   CloudFog,
   CloudLightning,
   Snowflake,
+  Play,
+  Pause,
+  SkipBack,
+  SkipForward,
+  Music2,
   type LucideIcon,
 } from "lucide-react";
 import Logo from "./Logo";
@@ -50,12 +55,30 @@ interface NotifEntry {
 
 // Puente expuesto por electron/preload.cjs SOLO dentro de la ventana del dock — ver
 // electron/main.cjs (createDockWindow) y electron/preload.cjs.
+// "Now Playing" de todo Windows (punto 2 pedido, round 11, inspirado en Dynamic Island for
+// Windows) — lo arma electron/main.cjs vía PowerShell/WinRT (Windows.Media.Control), no esto. Ver
+// MEDIA_PROBE_SCRIPT ahí para el porqué (y el "no se pudo probar contra una sesión real").
+interface MediaInfo {
+  hasSession: boolean;
+  title?: string;
+  artist?: string;
+  album?: string;
+  appId?: string;
+  // GlobalSystemMediaTransportControlsSessionPlaybackStatus: 0 Closed, 1 Opened, 2 Changing,
+  // 3 Stopped, 4 Playing, 5 Paused.
+  status?: number;
+  positionSeconds?: number;
+  endSeconds?: number;
+}
+
 interface DockBridge {
   resize: (size: { width: number; height: number; collapsed: boolean }) => void;
   openMain: () => void;
   onSnapshot: (cb: (snapshot: DockSnapshot) => void) => () => void;
   onNotify: (cb: (payload: { title: string; body: string; category: string }) => void) => () => void;
   onVisibilityChange: (cb: (payload: { visible: boolean }) => void) => () => void;
+  onMediaUpdate: (cb: (payload: MediaInfo) => void) => () => void;
+  mediaControl: (action: "playpause" | "next" | "previous") => void;
   getDisplays: () => Promise<DockDisplayOption[]>;
   setDisplay: (displayId: number) => void;
   quickAdd: (category: string) => void;
@@ -291,6 +314,184 @@ function LiveClock() {
   );
 }
 
+interface LyricLine {
+  time: number;
+  text: string;
+}
+
+// Letras en formato LRC ("[mm:ss.xx]texto" por línea) — LRCLIB (lrclib.net) es gratis, sin API key
+// y sin login, por eso se eligió para el punto 2 pedido (round 11, letras sincronizadas).
+function parseSyncedLyrics(raw: string): LyricLine[] {
+  const lines: LyricLine[] = [];
+  const re = /^\[(\d+):(\d+(?:\.\d+)?)\](.*)$/;
+  for (const rawLine of raw.split("\n")) {
+    const m = re.exec(rawLine.trim());
+    if (!m) continue;
+    const text = m[3].trim();
+    if (text) lines.push({ time: Number(m[1]) * 60 + Number(m[2]), text });
+  }
+  return lines.sort((a, b) => a.time - b.time);
+}
+
+// SourceAppUserModelId de WinRT no es un nombre lindo para mostrar (ej. "Google.Chrome" o un App
+// User Model ID largo tipo "...!App") — se traducen los más comunes, el resto se muestra tal cual
+// viene en vez de nada.
+function prettyAppId(appId?: string): string | null {
+  if (!appId) return null;
+  const lower = appId.toLowerCase();
+  if (lower.includes("chrome")) return "Chrome";
+  if (lower.includes("msedge") || lower.includes("edge")) return "Edge";
+  if (lower.includes("firefox")) return "Firefox";
+  if (lower.includes("spotify")) return "Spotify";
+  if (lower.includes("vlc")) return "VLC";
+  if (lower.includes("itunes") || lower.includes("applemusic")) return "Apple Music";
+  return appId;
+}
+
+function formatMediaTime(totalSeconds: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+const MEDIA_STATUS_PLAYING = 4;
+
+// "Now Playing" de todo Windows, con letras sincronizadas (punto 2 pedido, round 11, inspirado en
+// Dynamic Island for Windows) — el estado (qué suena, play/pausa, posición) viaja desde
+// electron/main.cjs vía dock-media-update; acá solo se muestra y se estima la posición entre un
+// sondeo y el siguiente (cada 2s) para que la barra/letra avancen fluido, no a los saltos.
+function NowPlayingWidget({
+  media,
+  theme,
+  onControl,
+}: {
+  media: MediaInfo | null;
+  theme: Theme;
+  onControl: (action: "playpause" | "next" | "previous") => void;
+}) {
+  const [lyrics, setLyrics] = useState<LyricLine[]>([]);
+  const lyricsKeyRef = useRef<string>("");
+  const anchorRef = useRef<{ position: number; at: number } | null>(null);
+  const [, forceTick] = useState(0);
+
+  useEffect(() => {
+    if (!media?.hasSession) {
+      anchorRef.current = null;
+      return;
+    }
+    anchorRef.current = { position: media.positionSeconds ?? 0, at: Date.now() };
+  }, [media?.positionSeconds, media?.status, media?.hasSession]);
+
+  // Vuelve a pintar cada 500ms para que la barra de progreso y la línea de letra actual avancen
+  // solas entre un sondeo de PowerShell y el siguiente, en vez de quedarse quietas 2 segundos.
+  useEffect(() => {
+    const id = setInterval(() => forceTick((t) => t + 1), 500);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    if (!media?.hasSession || !media.title) {
+      setLyrics([]);
+      lyricsKeyRef.current = "";
+      return;
+    }
+    const key = `${media.title}|${media.artist ?? ""}`;
+    if (lyricsKeyRef.current === key) return;
+    lyricsKeyRef.current = key;
+    let cancelled = false;
+    (async () => {
+      try {
+        const params = new URLSearchParams({ track_name: media.title ?? "", artist_name: media.artist ?? "" });
+        const res = await fetch(`https://lrclib.net/api/get?${params.toString()}`);
+        if (!res.ok) throw new Error("lrclib miss");
+        const data = await res.json();
+        const raw = (data?.syncedLyrics as string | undefined) || "";
+        if (!cancelled) setLyrics(raw ? parseSyncedLyrics(raw) : []);
+      } catch {
+        // Sin letra para este tema (no está en LRCLIB, o falló la red) — no es crítico, el widget
+        // sigue mostrando título/artista y los controles igual.
+        if (!cancelled) setLyrics([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [media?.title, media?.artist, media?.hasSession]);
+
+  if (!media?.hasSession) return null;
+
+  const isPlaying = media.status === MEDIA_STATUS_PLAYING;
+  const estimatedPosition = anchorRef.current
+    ? anchorRef.current.position + (isPlaying ? (Date.now() - anchorRef.current.at) / 1000 : 0)
+    : media.positionSeconds ?? 0;
+  const duration = media.endSeconds ?? 0;
+  const progressPct = duration > 0 ? Math.min(100, Math.max(0, (estimatedPosition / duration) * 100)) : 0;
+  const currentLyric = [...lyrics].reverse().find((l) => l.time <= estimatedPosition)?.text;
+
+  return (
+    <div className={`mx-3 mt-3 p-3 rounded-xl border ${theme.border} ${theme.solidBlock} shrink-0`}>
+      <div className="flex items-center gap-2.5">
+        <div className="w-9 h-9 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
+          <Music2 className="w-4 h-4 text-primary" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-bold truncate">{media.title || "Reproduciendo"}</p>
+          <p className="text-xs text-zinc-500 truncate">
+            {media.artist || "—"}
+            {prettyAppId(media.appId) && <span className="opacity-70"> · {prettyAppId(media.appId)}</span>}
+          </p>
+        </div>
+      </div>
+
+      {currentLyric && <p className="text-xs text-primary font-semibold mt-2 text-center truncate">{currentLyric}</p>}
+
+      {duration > 0 && (
+        <div className="mt-2.5">
+          <div className={`h-1 rounded-full overflow-hidden ${theme.subtle}`}>
+            <div className="h-full bg-primary rounded-full" style={{ width: `${progressPct}%` }} />
+          </div>
+          <div className="flex items-center justify-between mt-1">
+            <span className="text-[10px] text-zinc-500 tabular-nums">{formatMediaTime(estimatedPosition)}</span>
+            <span className="text-[10px] text-zinc-500 tabular-nums">-{formatMediaTime(Math.max(0, duration - estimatedPosition))}</span>
+          </div>
+        </div>
+      )}
+
+      <div className="flex items-center justify-center gap-4 mt-2.5">
+        <button
+          type="button"
+          onClick={() => {
+            uiSounds.click();
+            onControl("previous");
+          }}
+          className={`p-1.5 rounded-lg cursor-pointer ${theme.hover}`}
+        >
+          <SkipBack className="w-4 h-4" />
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            uiSounds.click();
+            onControl("playpause");
+          }}
+          className="w-9 h-9 rounded-full bg-primary text-white flex items-center justify-center cursor-pointer"
+        >
+          {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            uiSounds.click();
+            onControl("next");
+          }}
+          className={`p-1.5 rounded-lg cursor-pointer ${theme.hover}`}
+        >
+          <SkipForward className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // Tarjeta de cada nota (punto 1 pedido, round 5): mismo estilo visual que ya tiene Finanzas en la
 // app real (categoría/estado arriba, ícono + título, fecha, monto si corresponde, botones de
 // acción) — pero aplicado DIRECTO en la lista de cada sección, no solo al abrir un detalle aparte.
@@ -512,6 +713,9 @@ export default function DockApp() {
   // Aviso que se abre solo ante una notificación nueva (punto 2 pedido, round 6), sin que haga
   // falta pasar el mouse — null cuando no hay ninguno mostrándose.
   const [notifToast, setNotifToast] = useState<NotifEntry | null>(null);
+  // "Now Playing" de todo Windows (punto 2 pedido, round 11) — null mientras no haya ninguna
+  // sesión de medios activa.
+  const [mediaInfo, setMediaInfo] = useState<MediaInfo | null>(null);
   // Ids borrados desde acá mismo — se esconden al toque (ocultamiento optimista) mientras la
   // ventana principal confirma el borrado de verdad.
   const [locallyResolvedIds, setLocallyResolvedIds] = useState<Set<string>>(new Set());
@@ -599,6 +803,7 @@ export default function DockApp() {
       if (visible) uiSounds.expand();
       else uiSounds.collapse();
     });
+    const unsubMedia = bridge.onMediaUpdate(setMediaInfo);
     bridge
       .getDisplays()
       .then(setDisplays)
@@ -606,6 +811,7 @@ export default function DockApp() {
     return () => {
       unsubSnapshot();
       unsubNotify();
+      unsubMedia();
       unsubVisibility();
       if (pulseTimerRef.current) clearTimeout(pulseTimerRef.current);
       if (collapseTimerRef.current) clearTimeout(collapseTimerRef.current);
@@ -709,6 +915,10 @@ export default function DockApp() {
   const handleSectionAdd = (key: DockSectionKey) => {
     uiSounds.click();
     bridgeRef.current?.quickAdd(SECTION_ADD_KEY[key]);
+  };
+
+  const handleMediaControl = (action: "playpause" | "next" | "previous") => {
+    bridgeRef.current?.mediaControl(action);
   };
 
   // Estado "resuelto" efectivo de un ítem, considerando el toggle optimista local (ver
@@ -1011,6 +1221,7 @@ export default function DockApp() {
               {/* Contenido: Inicio (reloj + todo mezclado) o la sección elegida. */}
               <div className="flex-1 h-full flex flex-col min-w-0 relative">
                 {!section && <LiveClock />}
+                {!section && <NowPlayingWidget media={mediaInfo} theme={theme} onControl={handleMediaControl} />}
 
                 {/* Título de la sección como su propio bloque sólido (punto 1 pedido, round 11) —
                     antes flotaba directo sobre el fondo translúcido, sin bloque. */}

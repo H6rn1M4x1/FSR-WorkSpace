@@ -45,6 +45,9 @@ contextBridge.exposeInMainWorld("FSR_ELECTRON_DOCK", {
   // kind es uno de los DockItemKind de src/lib/dockSnapshot.ts.
   quickToggle: (kind, itemId) => ipcRenderer.send("dock-quick-toggle", { kind, itemId }),
   quickDelete: (kind, itemId) => ipcRenderer.send("dock-quick-delete", { kind, itemId }),
+  // "Now Playing" de todo Windows (punto 2 pedido, round 11) — play/pausa/siguiente/anterior de
+  // lo que esté sonando en cualquier app, vía PowerShell/WinRT (ver electron/main.cjs).
+  mediaControl: (action) => ipcRenderer.send("dock-media-control", action),
   onSnapshot: (callback) => {
     const listener = (_event, snapshot) => callback(snapshot);
     ipcRenderer.on("dock-snapshot", listener);
@@ -63,6 +66,11 @@ contextBridge.exposeInMainWorld("FSR_ELECTRON_DOCK", {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on("dock-visibility-changed", listener);
     return () => ipcRenderer.removeListener("dock-visibility-changed", listener);
+  },
+  onMediaUpdate: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on("dock-media-update", listener);
+    return () => ipcRenderer.removeListener("dock-media-update", listener);
   },
   // Usado por la ventana principal (src/App.tsx) para enterarse de que el dock pidió abrir el
   // formulario de alta/edición de una categoría — ver dock-quick-add/dock-quick-edit más arriba.
