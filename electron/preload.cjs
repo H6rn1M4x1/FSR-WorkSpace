@@ -48,6 +48,9 @@ contextBridge.exposeInMainWorld("FSR_ELECTRON_DOCK", {
   // "Now Playing" de todo Windows (punto 2 pedido, round 11) — play/pausa/siguiente/anterior de
   // lo que esté sonando en cualquier app, vía PowerShell/WinRT (ver electron/main.cjs).
   mediaControl: (action) => ipcRenderer.send("dock-media-control", action),
+  // Fuerza al dock a mostrarse un rato aunque algo esté en pantalla completa (punto 3 pedido,
+  // round 13) — ver dock-force-reveal en electron/main.cjs.
+  forceReveal: (ms) => ipcRenderer.send("dock-force-reveal", ms),
   onSnapshot: (callback) => {
     const listener = (_event, snapshot) => callback(snapshot);
     ipcRenderer.on("dock-snapshot", listener);

@@ -311,6 +311,15 @@ let dockCurrentlyVisible = true;
 // dock-notify más abajo. 0 = no hay ninguna notificación forzando nada ahora mismo.
 let notifyForceVisibleUntil = 0;
 
+// Generaliza el "mostrar a la fuerza" que antes solo usaba dock-notify (ver más abajo) a
+// cualquier aviso que se origine DENTRO del propio dock — Bloq Mayús/Num, cambio de canción,
+// batería baja, foco (punto 3 pedido, round 13: "sin importar si hay algo que está maximizado").
+function forceDockVisible(ms) {
+  notifyForceVisibleUntil = Date.now() + ms;
+  dockRevealedOverFullscreen = true;
+  applyDockVisibility(true);
+}
+
 function rectCoversDisplay(winRect, displayBounds) {
   const TOLERANCE = 2; // algunas apps dejan 1-2px de diferencia por el borde/sombra de la ventana
   return (
@@ -647,9 +656,16 @@ ipcMain.on("dock-notify", (_event, payload) => {
     // algo en pantalla completa en ese momento — se fuerza visible un rato (más que lo que tarda
     // el aviso chico del lado del renderer en cerrarse solo, ver NOTIF_TOAST_MS en DockApp.tsx,
     // para no esconderlo de golpe mientras todavía se está mostrando).
-    notifyForceVisibleUntil = Date.now() + 8000;
-    dockRevealedOverFullscreen = true;
-    applyDockVisibility(true);
+    forceDockVisible(8000);
+  }
+});
+
+// Mismo mecanismo que dock-notify de arriba, pero para avisos que se originan DENTRO del propio
+// dock (Bloq Mayús/Num, cambio de canción, batería baja, foco — punto 3 pedido, round 13), que no
+// pasan por la ventana principal y por eso no disparaban dock-notify.
+ipcMain.on("dock-force-reveal", (_event, ms) => {
+  if (dockWindow && !dockWindow.isDestroyed()) {
+    forceDockVisible(typeof ms === "number" && ms > 0 ? ms : 3000);
   }
 });
 
