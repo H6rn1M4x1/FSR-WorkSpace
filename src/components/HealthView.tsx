@@ -17,7 +17,7 @@ import { useToast } from "../context/ToastContext";
 import AnimatedList from "./AnimatedList";
 import { PillFilterBar } from "./PillFilterBar";
 import { ConfirmationModal } from "./ConfirmationModal";
-import { DetailModal } from "./DetailModal";
+import { DetailModal, DetailBlock, DetailBlockGrid } from "./DetailModal";
 import { LocationPickerMap } from "./LocationPickerMap";
 import { calculateIngredientCalories, calcularNutricionPlato, getIngredientWeight, getIngredientNutriVal, getCalorieDensity } from "../lib/calories";
 import { createPortal } from "react-dom";
@@ -72,6 +72,14 @@ import {
   Layers,
   BookOpen,
   BarChart2,
+  Thermometer,
+  Wind,
+  Gauge,
+  GraduationCap,
+  Paperclip,
+  User,
+  Boxes,
+  CalendarClock,
 } from "lucide-react";
 import {
   Medication,
@@ -3469,6 +3477,7 @@ export default function HealthView({
                                       </button>
                                       <button
                                         type="button"
+                                        data-no-global-sound
                                         onClick={(e) => { e.stopPropagation(); setExpandedDispId(isExpanded ? null : disp.id); }}
                                         className="p-0.5 rounded hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
                                         title="Ver detalles"
@@ -3505,50 +3514,35 @@ export default function HealthView({
                                   isOpen={isExpanded}
                                   onClose={() => setExpandedDispId(null)}
                                   title={details.marca}
+                                  subtitle={details.droga || undefined}
                                   icon={Pill}
                                   onEdit={() => handleOpenEditDisp(disp)}
                                 >
-                                  <div className="flex flex-col gap-3">
-                                    {details.droga && (
-                                    <div>
-                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                        Droga / Fármaco
-                                      </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
-                                        {details.droga}
-                                      </span>
-                                    </div>
-                                    )}
-
+                                  <DetailBlockGrid>
                                     {details.funcionTratamiento && (
-                                    <div>
-                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                        Función / Tratamiento
-                                      </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
+                                      <DetailBlock icon={Activity} label="Función / Tratamiento" span>
                                         {details.funcionTratamiento}
-                                      </span>
-                                    </div>
+                                      </DetailBlock>
                                     )}
-
-                                    <div>
-                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                        Disponibilidad
-                                      </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
-                                        {formatFechaDMY(details.disponibleHasta)} ({details.disponibleParaDias.toFixed(1)} días)
-                                      </span>
-                                    </div>
-
-                                    <div>
-                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                        Stock (Inicial / Restante)
-                                      </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
-                                        {disp.cantidadRegistrada} registradas / {details.cantidadDisponible.toFixed(1)} restantes
-                                      </span>
-                                    </div>
-                                  </div>
+                                    <DetailBlock
+                                      icon={CalendarClock}
+                                      label="Disponible Hasta"
+                                      tone={details.estado === "Comprar Medicamento" ? "danger" : "success"}
+                                      emphasis
+                                    >
+                                      {formatFechaDMY(details.disponibleHasta)} ({details.disponibleParaDias.toFixed(1)} días)
+                                    </DetailBlock>
+                                    <DetailBlock
+                                      icon={Boxes}
+                                      label="Stock (Inicial / Restante)"
+                                      tone={details.estado === "Comprar Medicamento" ? "danger" : "default"}
+                                    >
+                                      {disp.cantidadRegistrada} registradas / {details.cantidadDisponible.toFixed(1)} restantes
+                                    </DetailBlock>
+                                    <DetailBlock icon={Tag} label="Estado" tone={details.estado === "Comprar Medicamento" ? "danger" : "success"}>
+                                      {details.estado}
+                                    </DetailBlock>
+                                  </DetailBlockGrid>
                                 </DetailModal>
                               </div>
                             );
@@ -3587,6 +3581,7 @@ export default function HealthView({
                                     )}
                                     <button
                                       type="button"
+                                      data-no-global-sound
                                       onClick={(e) => { e.stopPropagation(); setExpandedDispId(isExpanded ? null : turno.id); }}
                                       className="p-0.5 rounded hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
                                       title="Ver detalles"
@@ -3626,63 +3621,36 @@ export default function HealthView({
                                 isOpen={isExpanded}
                                 onClose={() => setExpandedDispId(null)}
                                 title={turno.descripcion || "Turno Médico"}
+                                subtitle={turno.categoria}
                                 icon={Stethoscope}
                                 onEdit={onQuickEdit ? () => onQuickEdit("turno", turno.id) : undefined}
                               >
-                                <div className="flex flex-col gap-3">
-                                  <div>
-                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                      Fecha y Hora
-                                    </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
-                                      {formatDateFriendly(turno.fecha)}
-                                    </span>
-                                  </div>
-
+                                <DetailBlockGrid>
+                                  <DetailBlock icon={Clock} label="Fecha y Hora" tone="primary" emphasis>
+                                    {formatDateFriendly(turno.fecha)}
+                                  </DetailBlock>
+                                  <DetailBlock icon={Tag} label="Categoría / Paciente">
+                                    {turno.categoria}
+                                  </DetailBlock>
                                   {turno.lugar && (
-                                    <div>
-                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                        Lugar / Centro Médico
-                                      </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 flex items-center gap-1 mt-0.5 pl-2">
-                                        <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
-                                        {turno.lugar}
-                                      </span>
-                                    </div>
+                                    <DetailBlock icon={MapPin} label="Lugar / Centro Médico">
+                                      {turno.lugar}
+                                    </DetailBlock>
                                   )}
-
                                   {turno.doctor && (
-                                    <div>
-                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                        Médico / Especialista
-                                      </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
-                                        {turno.doctor}
-                                      </span>
-                                    </div>
+                                    <DetailBlock icon={Stethoscope} label="Médico / Especialista">
+                                      {turno.doctor}
+                                    </DetailBlock>
                                   )}
-
-                                  <div>
-                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                      Categoría / Paciente
-                                    </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
-                                      {turno.categoria}
-                                    </span>
-                                  </div>
-                                </div>
-
-                                {turno.informacionPersonalizada && (
-                                  <div>
-                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                      Información Personalizada
-                                    </span>
-                                    <div
-                                      className="text-[10px] text-zinc-700 dark:text-zinc-300 italic block pl-2 prose dark:prose-invert prose-sm max-h-[120px] overflow-y-auto [&_*]:!text-[10px]"
-                                      dangerouslySetInnerHTML={{ __html: turno.informacionPersonalizada }}
-                                    />
-                                  </div>
-                                )}
+                                  {turno.informacionPersonalizada && (
+                                    <DetailBlock icon={FileText} label="Información Personalizada" span>
+                                      <div
+                                        className="italic prose dark:prose-invert prose-sm max-h-[120px] overflow-y-auto [&_*]:!text-[11px]"
+                                        dangerouslySetInnerHTML={{ __html: turno.informacionPersonalizada }}
+                                      />
+                                    </DetailBlock>
+                                  )}
+                                </DetailBlockGrid>
 
                                 {typeof turno.lat === "number" &&
                                   typeof turno.lon === "number" &&
@@ -4644,6 +4612,7 @@ export default function HealthView({
                                       <td className="p-2 font-bold whitespace-nowrap">
                                         <button
                                           type="button"
+                                          data-no-global-sound
                                           onClick={() => setDetailMedidaId(m.id)}
                                           title="Ver detalle"
                                           className="hover:text-primary hover:underline cursor-pointer"
@@ -5827,6 +5796,7 @@ export default function HealthView({
                               <td className="px-4 py-4 whitespace-nowrap md:sticky md:left-0 z-20 bg-white dark:bg-zinc-950 group-hover:bg-slate-50 dark:group-hover:bg-zinc-900 transition-colors min-w-[220px] sm:min-w-[260px] max-w-[300px]">
                                 <button
                                   type="button"
+                                  data-no-global-sound
                                   onClick={() => setDetailDoctorId(doc.id)}
                                   title="Ver detalle"
                                   className="font-bold text-slate-900 dark:text-zinc-100 truncate block text-left hover:text-primary hover:underline cursor-pointer w-full"
@@ -6147,6 +6117,7 @@ export default function HealthView({
                               <td className="px-4 py-4 whitespace-nowrap font-bold text-slate-900 dark:text-zinc-100 md:sticky md:left-[70px] z-20 bg-white dark:bg-zinc-950 group-hover:bg-slate-50 dark:group-hover:bg-zinc-900 transition-colors min-w-[160px] w-[160px] max-w-[160px]">
                                 <button
                                   type="button"
+                                  data-no-global-sound
                                   onClick={() => setDetailMedId(med.id)}
                                   title="Ver detalle"
                                   className="truncate block text-left hover:text-primary hover:underline cursor-pointer w-full"
@@ -6454,6 +6425,7 @@ export default function HealthView({
                                 <td className="px-3 py-4 md:sticky md:left-[70px] z-20 bg-white dark:bg-zinc-950 group-hover:bg-slate-100 dark:group-hover:bg-zinc-900 transition-colors min-w-[180px] w-[180px] max-w-[180px]">
                                   <button
                                     type="button"
+                                    data-no-global-sound
                                     onClick={() => setDetailDispId(disp.id)}
                                     title="Ver detalle"
                                     className="text-left hover:text-primary cursor-pointer w-full"
@@ -6771,6 +6743,7 @@ export default function HealthView({
                                 <td className="px-6 py-4 font-semibold text-slate-750 dark:text-zinc-200 whitespace-nowrap min-w-[140px]">
                                   <button
                                     type="button"
+                                    data-no-global-sound
                                     onClick={() => setDetailBpLogId(log.id)}
                                     title="Ver detalle"
                                     className="hover:text-primary hover:underline cursor-pointer"
@@ -7115,6 +7088,7 @@ export default function HealthView({
                                   <td className="px-3 py-3.5 md:sticky md:left-[265px] z-20 bg-white dark:bg-zinc-950 group-hover:bg-slate-100 dark:group-hover:bg-zinc-900 transition-colors min-w-[200px] w-[200px]">
                                     <button
                                       type="button"
+                                      data-no-global-sound
                                       onClick={() => setDetailEstudioId(record.id)}
                                       title="Ver detalle"
                                       className="font-semibold text-slate-800 dark:text-zinc-200 text-xs whitespace-nowrap truncate block text-left hover:text-primary hover:underline cursor-pointer w-full"
@@ -9776,31 +9750,24 @@ export default function HealthView({
             title={detailMedida ? `Medición del ${detailMedida.fecha}` : undefined}
             icon={Scale}
             onEdit={detailMedida ? () => handleEditMedida(detailMedida) : undefined}
+            onDelete={detailMedida ? () => handleDeleteMedida(detailMedida.id) : undefined}
+            deleteLabel="Eliminar medición"
           >
             {detailMedida && (
-              <div className="flex flex-col gap-3">
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Peso</span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">{detailMedida.peso} kg</span>
-                </div>
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Cintura / Cadera / Cuello</span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {detailMedida.cintura ? `${detailMedida.cintura} cm` : "-"} • {detailMedida.cadera ? `${detailMedida.cadera} cm` : "-"} • {detailMedida.cuello ? `${detailMedida.cuello} cm` : "-"}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const id = detailMedida.id;
-                    setDetailMedidaId(null);
-                    handleDeleteMedida(id);
-                  }}
-                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[11px] font-bold transition-all cursor-pointer mt-1"
-                >
-                  <Trash2 className="w-3.5 h-3.5" /> Eliminar medición
-                </button>
-              </div>
+              <DetailBlockGrid>
+                <DetailBlock icon={Scale} label="Peso" tone="primary" emphasis span>
+                  {detailMedida.peso} kg
+                </DetailBlock>
+                <DetailBlock icon={Activity} label="Cintura">
+                  {detailMedida.cintura ? `${detailMedida.cintura} cm` : "-"}
+                </DetailBlock>
+                <DetailBlock icon={Activity} label="Cadera">
+                  {detailMedida.cadera ? `${detailMedida.cadera} cm` : "-"}
+                </DetailBlock>
+                <DetailBlock icon={Activity} label="Cuello" span>
+                  {detailMedida.cuello ? `${detailMedida.cuello} cm` : "-"}
+                </DetailBlock>
+              </DetailBlockGrid>
             )}
           </DetailModal>
         );
@@ -9813,35 +9780,24 @@ export default function HealthView({
             isOpen={!!detailDoctor}
             onClose={() => setDetailDoctorId(null)}
             title={detailDoctor?.name}
+            subtitle={detailDoctor?.specialty}
             icon={Stethoscope}
             onEdit={detailDoctor ? () => handleOpenEditDoctorModal(detailDoctor) : undefined}
+            onDelete={detailDoctor ? () => handleDeleteDoctor(detailDoctor.id) : undefined}
+            deleteLabel="Eliminar doctor"
           >
             {detailDoctor && (
-              <div className="flex flex-col gap-3">
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Especialidad</span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">{detailDoctor.specialty}</span>
-                </div>
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Lugar</span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">{detailDoctor.address || "No asignado"}</span>
-                </div>
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Contacto</span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">{detailDoctor.phone || "-"}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const id = detailDoctor.id;
-                    setDetailDoctorId(null);
-                    handleDeleteDoctor(id);
-                  }}
-                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[11px] font-bold transition-all cursor-pointer mt-1"
-                >
-                  <Trash2 className="w-3.5 h-3.5" /> Eliminar doctor
-                </button>
-              </div>
+              <DetailBlockGrid>
+                <DetailBlock icon={Tag} label="Especialidad" tone="primary" emphasis span>
+                  {detailDoctor.specialty}
+                </DetailBlock>
+                <DetailBlock icon={MapPin} label="Lugar" span>
+                  {detailDoctor.address || "No asignado"}
+                </DetailBlock>
+                <DetailBlock icon={Phone} label="Contacto" span>
+                  {detailDoctor.phone || "-"}
+                </DetailBlock>
+              </DetailBlockGrid>
             )}
           </DetailModal>
         );
@@ -9854,39 +9810,49 @@ export default function HealthView({
             isOpen={!!detailMed}
             onClose={() => setDetailMedId(null)}
             title={detailMed?.marca}
+            subtitle={detailMed?.droga}
             icon={Pill}
             onEdit={detailMed ? () => openEditModal(detailMed) : undefined}
+            onDelete={detailMed ? () => handleDeleteDetailedMed(detailMed.id) : undefined}
+            deleteLabel="Eliminar medicamento"
           >
             {detailMed && (
-              <div className="flex flex-col gap-3">
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Droga / Función</span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {detailMed.droga} • {detailMed.funcionTratamiento || "Quimioterapia"}
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Dosis / Cantidad / Consumo diario</span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {detailMed.mg} mg ({detailMed.unidadMedida}) • {detailMed.cantidad ?? 0} u. • {detailMed.consumoDiario}/día
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Estado</span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">{detailMed.estado}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const id = detailMed.id;
-                    setDetailMedId(null);
-                    handleDeleteDetailedMed(id);
-                  }}
-                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[11px] font-bold transition-all cursor-pointer mt-1"
+              <DetailBlockGrid>
+                {detailMed.imagen && (
+                  <DetailBlock icon={ImageIcon} label="Foto" span className="!p-2">
+                    <img
+                      src={detailMed.imagen}
+                      alt={detailMed.marca}
+                      className="w-full h-28 object-cover rounded-xl"
+                      referrerPolicy="no-referrer"
+                    />
+                  </DetailBlock>
+                )}
+                <DetailBlock icon={Pill} label="Droga" span>
+                  {detailMed.droga}
+                </DetailBlock>
+                <DetailBlock icon={Heart} label="Función / Tratamiento">
+                  {detailMed.funcionTratamiento || "Quimioterapia"}
+                </DetailBlock>
+                <DetailBlock
+                  icon={Tag}
+                  label="Estado"
+                  tone={detailMed.estado === "Consumiendo" ? "success" : detailMed.estado === "Dejo de Consumir" ? "danger" : "default"}
                 >
-                  <Trash2 className="w-3.5 h-3.5" /> Eliminar medicamento
-                </button>
-              </div>
+                  {detailMed.estado}
+                </DetailBlock>
+                <DetailBlock icon={Activity} label="Dosis" emphasis>
+                  {detailMed.mg} {detailMed.unidadMedida}
+                </DetailBlock>
+                <DetailBlock icon={Package} label="Cantidad / Consumo diario">
+                  {detailMed.cantidad ?? 0} u. • {detailMed.consumoDiario}/día
+                </DetailBlock>
+                {detailMed.fechaInicio && (
+                  <DetailBlock icon={Calendar} label="Inicio de Tratamiento">
+                    {formatFechaDMY(detailMed.fechaInicio)}
+                  </DetailBlock>
+                )}
+              </DetailBlockGrid>
             )}
           </DetailModal>
         );
@@ -9900,41 +9866,49 @@ export default function HealthView({
             isOpen={!!detailDispRaw}
             onClose={() => setDetailDispId(null)}
             title={detailDisp?.marca}
+            subtitle={detailDisp?.droga}
             icon={Clock}
             onEdit={detailDispRaw ? () => handleOpenEditDisp(detailDispRaw) : undefined}
+            onDelete={detailDispRaw ? () => handleDeleteDisp(detailDispRaw.id) : undefined}
+            deleteLabel="Eliminar registro"
           >
             {detailDispRaw && detailDisp && (
-              <div className="flex flex-col gap-3">
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Droga / Estado</span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {detailDisp.droga} • {detailDisp.estado}
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Registrado / Límite</span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {formatFechaDMY(detailDispRaw.fechaRegistro)} • {formatFechaDMY(detailDisp.disponibleHasta)}
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Registrado / Disponible</span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {detailDispRaw.cantidadRegistrada} u. • {Number(detailDisp.cantidadDisponible.toFixed(1))} u. ({Number(detailDisp.disponibleParaDias.toFixed(1))} días)
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const id = detailDispRaw.id;
-                    setDetailDispId(null);
-                    handleDeleteDisp(id);
-                  }}
-                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[11px] font-bold transition-all cursor-pointer mt-1"
+              <DetailBlockGrid>
+                <DetailBlock
+                  icon={Tag}
+                  label="Estado"
+                  tone={
+                    detailDisp.estado === "Comprar Medicamento"
+                      ? "danger"
+                      : detailDisp.estado === "Pedir Receta"
+                      ? "warning"
+                      : "success"
+                  }
+                  emphasis
+                  span
                 >
-                  <Trash2 className="w-3.5 h-3.5" /> Eliminar registro
-                </button>
-              </div>
+                  {detailDisp.estado}
+                </DetailBlock>
+                <DetailBlock icon={FileCheck} label="Receta" tone={detailDispRaw.receta ? "success" : "default"}>
+                  {detailDispRaw.receta ? "Con receta" : "Sin receta"}
+                </DetailBlock>
+                <DetailBlock icon={Heart} label="Tratamiento">
+                  {detailDisp.funcionTratamiento}
+                </DetailBlock>
+                <DetailBlock icon={Calendar} label="Registrado">
+                  {formatFechaDMY(detailDispRaw.fechaRegistro)}
+                </DetailBlock>
+                <DetailBlock
+                  icon={CalendarClock}
+                  label="Disponible Hasta"
+                  tone={detailDisp.estado === "Comprar Medicamento" ? "danger" : "default"}
+                >
+                  {formatFechaDMY(detailDisp.disponibleHasta)} ({Number(detailDisp.disponibleParaDias.toFixed(1))} días)
+                </DetailBlock>
+                <DetailBlock icon={Boxes} label="Stock (Reg. / Disp.)" span>
+                  {detailDispRaw.cantidadRegistrada} u. registradas • {Number(detailDisp.cantidadDisponible.toFixed(1))} u. disponibles
+                </DetailBlock>
+              </DetailBlockGrid>
             )}
           </DetailModal>
         );
@@ -9947,39 +9921,40 @@ export default function HealthView({
             isOpen={!!detailBpLog}
             onClose={() => setDetailBpLogId(null)}
             title={detailBpLog ? `Presión del ${detailBpLog.date ? detailBpLog.date.replace("T", " ").replace("Z", "").split(":").slice(0, 2).join(":") : ""}` : undefined}
+            subtitle={detailBpLog?.patient || "Hernan"}
             icon={Heart}
             onEdit={detailBpLog ? () => handleOpenEditBpTableModal(detailBpLog) : undefined}
+            onDelete={detailBpLog ? () => handleDeleteBpLog(detailBpLog.id) : undefined}
+            deleteLabel="Eliminar registro"
           >
             {detailBpLog && (
-              <div className="flex flex-col gap-3">
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Paciente</span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">{detailBpLog.patient || "Hernan"}</span>
-                </div>
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Presión Alta / Baja</span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {detailBpLog.systolic} mmHg • {detailBpLog.diastolic} mmHg
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Temperatura / Oxígeno</span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {detailBpLog.temperature !== undefined ? `${detailBpLog.temperature} °C` : "-"} • {detailBpLog.oxygen !== undefined ? `${detailBpLog.oxygen}%` : "-"}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const id = detailBpLog.id;
-                    setDetailBpLogId(null);
-                    handleDeleteBpLog(id);
-                  }}
-                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[11px] font-bold transition-all cursor-pointer mt-1"
+              <DetailBlockGrid>
+                <DetailBlock
+                  icon={Gauge}
+                  label="Presión Alta / Baja"
+                  tone={detailBpLog.systolic >= 140 || detailBpLog.diastolic >= 90 ? "danger" : "success"}
+                  emphasis
+                  span
                 >
-                  <Trash2 className="w-3.5 h-3.5" /> Eliminar registro
-                </button>
-              </div>
+                  {detailBpLog.systolic} / {detailBpLog.diastolic} mmHg
+                </DetailBlock>
+                {detailBpLog.pulse !== undefined && (
+                  <DetailBlock icon={Activity} label="Pulso">
+                    {detailBpLog.pulse} lpm
+                  </DetailBlock>
+                )}
+                <DetailBlock icon={Thermometer} label="Temperatura">
+                  {detailBpLog.temperature !== undefined ? `${detailBpLog.temperature} °C` : "-"}
+                </DetailBlock>
+                <DetailBlock icon={Wind} label="Oxígeno">
+                  {detailBpLog.oxygen !== undefined ? `${detailBpLog.oxygen}%` : "-"}
+                </DetailBlock>
+                {detailBpLog.notes && (
+                  <DetailBlock icon={FileText} label="Notas" span>
+                    {detailBpLog.notes}
+                  </DetailBlock>
+                )}
+              </DetailBlockGrid>
             )}
           </DetailModal>
         );
@@ -9994,53 +9969,54 @@ export default function HealthView({
             isOpen={!!detailEstudio}
             onClose={() => setDetailEstudioId(null)}
             title={detailEstudio?.info || detailEstudio?.type}
+            subtitle={detailEstudio?.type}
             icon={FileText}
             onEdit={detailEstudio ? () => handleOpenEditEstudio(detailEstudio) : undefined}
+            onDelete={detailEstudio ? () => handleDeleteEstudio(detailEstudio.id) : undefined}
+            deleteLabel="Eliminar registro"
           >
             {detailEstudio && (
-              <div className="flex flex-col gap-3">
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Paciente / Tipo</span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {detailEstudio.patient || "Hernan"} • {detailEstudio.type}
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Lugar / Doctor</span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {detailEstudio.location} • {detailDocDisplay}
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Fecha</span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">{detailEstudio.studyDate}</span>
-                </div>
+              <DetailBlockGrid>
+                <DetailBlock icon={User} label="Paciente">
+                  {detailEstudio.patient || "Hernan"}
+                </DetailBlock>
+                <DetailBlock icon={CalendarDays} label="Fecha" emphasis>
+                  {detailEstudio.studyDate}
+                </DetailBlock>
+                <DetailBlock icon={MapPin} label="Lugar">
+                  {detailEstudio.location}
+                </DetailBlock>
+                <DetailBlock icon={Stethoscope} label="Doctor">
+                  {detailDocDisplay}
+                </DetailBlock>
                 {detailEstudio.type === "Internacion" && (
-                  <div>
-                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Internación</span>
-                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                      Ingreso: {detailEstudio.entryDate} • Egreso: {detailEstudio.exitDate} • Días: {detailEstudio.daysCount}
-                    </span>
-                  </div>
+                  <DetailBlock icon={Clock} label="Internación" tone="warning" span>
+                    Ingreso: {detailEstudio.entryDate} • Egreso: {detailEstudio.exitDate} • Días: {detailEstudio.daysCount}
+                  </DetailBlock>
                 )}
+                <DetailBlock icon={Paperclip} label="Adjunto" tone={detailEstudio.fileName ? "primary" : "default"} span>
+                  {detailEstudio.fileName ? (
+                    <a
+                      href={detailEstudio.fileData || "#"}
+                      download={detailEstudio.fileName}
+                      onClick={(e) => {
+                        if (!detailEstudio.fileData) e.preventDefault();
+                      }}
+                      className="flex items-center gap-1.5 hover:underline text-primary"
+                    >
+                      <FileText className="w-3.5 h-3.5 shrink-0" />
+                      {detailEstudio.fileName}
+                    </a>
+                  ) : (
+                    "Sin archivo"
+                  )}
+                </DetailBlock>
                 {detailEstudio.report && (
-                  <div>
-                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Informe</span>
-                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2 whitespace-pre-wrap">{detailEstudio.report}</span>
-                  </div>
+                  <DetailBlock icon={Info} label="Informe" span>
+                    <span className="whitespace-pre-wrap">{detailEstudio.report}</span>
+                  </DetailBlock>
                 )}
-                <button
-                  type="button"
-                  onClick={() => {
-                    const id = detailEstudio.id;
-                    setDetailEstudioId(null);
-                    handleDeleteEstudio(id);
-                  }}
-                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[11px] font-bold transition-all cursor-pointer mt-1"
-                >
-                  <Trash2 className="w-3.5 h-3.5" /> Eliminar registro
-                </button>
-              </div>
+              </DetailBlockGrid>
             )}
           </DetailModal>
         );

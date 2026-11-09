@@ -7,7 +7,7 @@ import { generateUniqueId } from "../utils/id";
 import { motion, AnimatePresence } from "motion/react";
 import { createPortal } from "react-dom";
 import { ConfirmationModal } from "./ConfirmationModal";
-import { DetailModal } from "./DetailModal";
+import { DetailModal, DetailBlock, DetailBlockGrid } from "./DetailModal";
 import { useToast } from "../context/ToastContext";
 import { GastoVario } from "../types";
 import { SmartDateTimePicker } from "./SmartDateTimePicker";
@@ -824,6 +824,7 @@ export default function GastosVariosTable({
                         type="button"
                         onClick={() => setDetailGastoId(gasto.id)}
                         title="Ver detalle"
+                        data-no-global-sound
                         className="text-left hover:text-primary hover:underline cursor-pointer"
                       >
                         {gasto.descripcion}
@@ -1362,41 +1363,26 @@ export default function GastosVariosTable({
             isOpen={!!detailGasto}
             onClose={() => setDetailGastoId(null)}
             title={detailGasto?.descripcion}
+            subtitle={detailGasto?.categoria}
             icon={Receipt}
             onEdit={detailGasto ? () => handleOpenEdit(detailGasto) : undefined}
+            onDelete={detailGasto ? () => handleDelete(detailGasto.id) : undefined}
           >
             {detailGasto && (
-              <div className="flex flex-col gap-3">
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Fecha</span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {formatFechaDMY(detailGasto.fecha)}
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Categoría / Monto</span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {detailGasto.categoria} • {formatCurrency(detailGasto.monto)}
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Método</span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {detailGasto.metodo}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const id = detailGasto.id;
-                    setDetailGastoId(null);
-                    handleDelete(id);
-                  }}
-                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[11px] font-bold transition-all cursor-pointer mt-1"
-                >
-                  <Trash2 className="w-3.5 h-3.5" /> Eliminar gasto
-                </button>
-              </div>
+              <DetailBlockGrid>
+                <DetailBlock icon={Calendar} label="Fecha">
+                  {formatFechaDMY(detailGasto.fecha)}
+                </DetailBlock>
+                <DetailBlock icon={Tag} label="Categoría" tone="primary">
+                  {detailGasto.categoria}
+                </DetailBlock>
+                <DetailBlock icon={CreditCard} label="Método">
+                  {detailGasto.metodo}
+                </DetailBlock>
+                <DetailBlock icon={DollarSign} label="Importe" tone="primary" emphasis>
+                  {formatCurrency(detailGasto.monto)}
+                </DetailBlock>
+              </DetailBlockGrid>
             )}
           </DetailModal>
         );

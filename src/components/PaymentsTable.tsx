@@ -8,7 +8,7 @@ import { useToast } from "../context/ToastContext";
 import { motion, AnimatePresence } from "motion/react";
 import { createPortal } from "react-dom";
 import { ConfirmationModal } from "./ConfirmationModal";
-import { DetailModal } from "./DetailModal";
+import { DetailModal, DetailBlock, DetailBlockGrid } from "./DetailModal";
 import { DetailedPayment, PaymentMethodCard } from "../types";
 import { SmartDateTimePicker } from "./SmartDateTimePicker";
 import { PaymentMethodPicker } from "./PaymentMethodPicker";
@@ -51,6 +51,7 @@ import {
   Pencil,
   Save,
   Repeat,
+  StickyNote,
 } from "lucide-react";
 import { uiSounds } from "../lib/sounds";
 import { uploadPaymentDocument } from "../lib/paymentDocumentsService";
@@ -1336,6 +1337,7 @@ export default function PaymentsTable({
                         type="button"
                         onClick={() => setDetailPaymentId(p.id)}
                         title="Ver detalle"
+                        data-no-global-sound
                         className="flex items-center gap-1.5 text-left hover:text-primary hover:underline cursor-pointer"
                       >
                         <PaymentIconGlyph
@@ -1875,90 +1877,92 @@ export default function PaymentsTable({
                 : Receipt
             }
             onEdit={detailPayment ? () => handleEdit(detailPayment) : undefined}
+            onDelete={detailPayment ? () => handleDelete(detailPayment.id) : undefined}
           >
-            {detailPayment && (
-              <div className="flex flex-col gap-3">
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                    Fechas (Vencimiento / Cierre)
-                  </span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    Vence: {formatFechaDMY(detailPayment.fechaVencimiento)}
-                    {detailPayment.fechaCierre ? ` • Cierre: ${formatFechaDMY(detailPayment.fechaCierre)}` : ""}
-                  </span>
-                </div>
+            {detailPayment && (() => {
+              const detailEstado = computeEstado(detailPayment);
+              const estadoTone = detailEstado === "Vencimiento" ? "danger" : detailEstado === "Pagado" || detailEstado === "Cancelado" ? "success" : "primary";
+              return (
+                <DetailBlockGrid>
+                  <DetailBlock icon={Tag} label="Categoría" tone="primary">
+                    {detailPayment.categoria}
+                  </DetailBlock>
+                  <DetailBlock icon={DollarSign} label="Monto" tone="primary" emphasis>
+                    AR$ {new Intl.NumberFormat("es-AR", { minimumFractionDigits: 2 }).format(detailPayment.montoAPagar)}
+                  </DetailBlock>
 
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                    Categoría / Monto
-                  </span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {detailPayment.categoria} • AR$ {new Intl.NumberFormat("es-AR", { minimumFractionDigits: 2 }).format(detailPayment.montoAPagar)}
-                  </span>
-                </div>
+                  <DetailBlock icon={Calendar} label="Vence">
+                    {formatFechaDMY(detailPayment.fechaVencimiento)}
+                  </DetailBlock>
+                  <DetailBlock icon={Clock} label="Cierre">
+                    {detailPayment.fechaCierre ? formatFechaDMY(detailPayment.fechaCierre) : "-"}
+                  </DetailBlock>
 
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                    Método de Pago
-                  </span>
-                  <div className="pl-2 space-y-1.5">
-                    <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-semibold block">
-                      {detailPayment.metodoPago || "Debito Automatico"}
-                    </span>
-                    {detailPayment.conQuePagar && (
-                      <PaymentMethodCardResolved
-                        userId={paymentMethodsUserId}
-                        describedCard={detailPayment.conQuePagar}
+                  <DetailBlock icon={Activity} label="Estado" tone={estadoTone as any}>
+                    {detailEstado}
+                  </DetailBlock>
+                  <DetailBlock icon={Repeat} label="Recurrencia">
+                    {detailPayment.pagoRecurrente ? "Pago Recurrente" : "Pago Único"}
+                  </DetailBlock>
+
+                  <DetailBlock icon={CreditCard} label="Método de Pago" span>
+                    <div className="space-y-1.5">
+                      <span className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-200 block">
+                        {detailPayment.metodoPago || "Debito Automatico"}
+                      </span>
+                      {detailPayment.conQuePagar && (
+                        <PaymentMethodCardResolved
+                          userId={paymentMethodsUserId}
+                          describedCard={detailPayment.conQuePagar}
+                        />
+                      )}
+                    </div>
+                  </DetailBlock>
+
+                  {detailPayment.dondePagar && (
+                    <DetailBlock icon={MapPin} label="Dónde Pagar" span>
+                      <div
+                        className="prose dark:prose-invert prose-sm max-w-none [&_*]:!text-inherit"
+                        dangerouslySetInnerHTML={{ __html: detailPayment.dondePagar }}
                       />
+                    </DetailBlock>
+                  )}
+
+                  <DetailBlock icon={Receipt} label="Factura Emitida">
+                    {detailPayment.facturaEmitida ? (
+                      <button
+                        type="button"
+                        onClick={() => openStoredFile(detailPayment.facturaEmitida!, buildPaymentFileName(detailPayment.descripcion, detailPayment.categoria, detailPayment.fechaVencimiento, "facturaEmitida", guessExtFromDataUrl(detailPayment.facturaEmitida!)))}
+                        className="flex items-center gap-1 text-primary hover:underline cursor-pointer font-bold"
+                      >
+                        <FileDown className="w-3 h-3" /> Ver archivo
+                      </button>
+                    ) : (
+                      <span className="text-zinc-400 dark:text-zinc-600">Sin archivo</span>
                     )}
-                  </div>
-                </div>
+                  </DetailBlock>
+                  <DetailBlock icon={FileCheck} label="Comprobante de Pago">
+                    {detailPayment.comprobantePago ? (
+                      <button
+                        type="button"
+                        onClick={() => openStoredFile(detailPayment.comprobantePago!, buildPaymentFileName(detailPayment.descripcion, detailPayment.categoria, detailPayment.fechaVencimiento, "comprobantePago", guessExtFromDataUrl(detailPayment.comprobantePago!)))}
+                        className="flex items-center gap-1 text-primary hover:underline cursor-pointer font-bold"
+                      >
+                        <FileDown className="w-3 h-3" /> Ver archivo
+                      </button>
+                    ) : (
+                      <span className="text-zinc-400 dark:text-zinc-600">Sin archivo</span>
+                    )}
+                  </DetailBlock>
 
-                {detailPayment.dondePagar && (
-                  <div>
-                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                      Dónde pagar
-                    </span>
-                    <div
-                      className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words pl-2 prose dark:prose-invert prose-sm max-w-none [&_*]:!text-inherit"
-                      dangerouslySetInnerHTML={{ __html: detailPayment.dondePagar }}
-                    />
-                  </div>
-                )}
-
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                    Recurrencia y Estado
-                  </span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {detailPayment.pagoRecurrente ? "Pago Recurrente" : "Pago Único"} • {computeEstado(detailPayment)}
-                  </span>
-                </div>
-
-                {detailPayment.observaciones && (
-                  <div>
-                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                      Contenido / Notas
-                    </span>
-                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2 whitespace-pre-wrap">
-                      {detailPayment.observaciones}
-                    </span>
-                  </div>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    const id = detailPayment.id;
-                    setDetailPaymentId(null);
-                    handleDelete(id);
-                  }}
-                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[11px] font-bold transition-all cursor-pointer mt-1"
-                >
-                  <Trash2 className="w-3.5 h-3.5" /> Eliminar pago
-                </button>
-              </div>
-            )}
+                  {detailPayment.observaciones && (
+                    <DetailBlock icon={StickyNote} label="Contenido / Notas" span>
+                      <span className="whitespace-pre-wrap">{detailPayment.observaciones}</span>
+                    </DetailBlock>
+                  )}
+                </DetailBlockGrid>
+              );
+            })()}
           </DetailModal>
         );
       })()}

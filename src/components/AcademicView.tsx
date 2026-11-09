@@ -54,7 +54,7 @@ import {
 } from "lucide-react";
 import AnimatedList from "./AnimatedList";
 import { ConfirmationModal } from "./ConfirmationModal";
-import { DetailModal } from "./DetailModal";
+import { DetailModal, DetailBlock, DetailBlockGrid } from "./DetailModal";
 import {
   AcademicSubject,
   AcademicTask,
@@ -3141,6 +3141,7 @@ export default function AcademicView({
                           type="button"
                           onClick={() => setDetailMateriaId(item.id)}
                           title="Ver detalle"
+                          data-no-global-sound
                           className="truncate block text-left hover:text-primary hover:underline cursor-pointer w-full"
                         >
                           {item.materia}
@@ -3622,6 +3623,7 @@ export default function AcademicView({
                                   type="button"
                                   onClick={() => setDetailMateriaId(item.id)}
                                   title="Ver detalle"
+                                  data-no-global-sound
                                   className="flex items-center gap-2 min-w-0 text-left hover:text-primary cursor-pointer w-full"
                                 >
                                   <BookOpen className="w-3.5 h-3.5 text-primary shrink-0" />
@@ -3959,6 +3961,7 @@ export default function AcademicView({
                                 type="button"
                                 onClick={() => setDetailHorarioId(h.id)}
                                 title="Ver detalle"
+                                data-no-global-sound
                                 className="font-bold text-slate-900 dark:text-white hover:text-primary hover:underline cursor-pointer text-left"
                               >
                                 {h.materia}
@@ -4256,6 +4259,7 @@ export default function AcademicView({
                                 type="button"
                                 onClick={() => setDetailExamenId(ex.id)}
                                 title="Ver detalle"
+                                data-no-global-sound
                                 className="font-bold text-slate-900 dark:text-white hover:text-primary hover:underline cursor-pointer text-left"
                               >
                                 {ex.materia}
@@ -5156,60 +5160,63 @@ export default function AcademicView({
           patrón que ya tiene PaymentsTable en Finanzas. */}
       {(() => {
         const detailMateria = detailMateriaId ? materiasInfo.find((m) => m.id === detailMateriaId) || null : null;
+        const statusObj = detailMateria ? getAcademicStatus(detailMateria) : null;
+        const vencimientoText = detailMateria
+          ? calculateVencimiento(detailMateria.fechaRegularidad, detailMateria.fechaVencimiento)
+          : "";
+        const estadoTone = detailMateria?.estado === "Aprobado" || detailMateria?.estado === "Regularizado" ? "success" : "default";
+        const statusTone =
+          statusObj?.type === "aprobado" || statusObj?.type === "puede_rendir" || statusObj?.type === "puede_cursar"
+            ? "success"
+            : statusObj?.type
+              ? "danger"
+              : "default";
         return (
           <DetailModal
             isOpen={!!detailMateria}
             onClose={() => setDetailMateriaId(null)}
             title={detailMateria?.materia}
+            subtitle={detailMateria ? `${detailMateria.anoCursado} • ${detailMateria.cuatrimestre}` : undefined}
             icon={BookOpen}
             onEdit={detailMateria ? () => handleEditMateriaClick(detailMateria) : undefined}
+            onDelete={detailMateria ? () => handleDeleteMateria(detailMateria.id) : undefined}
+            deleteLabel="Eliminar materia"
           >
             {detailMateria && (
-              <div className="flex flex-col gap-3">
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Estado</span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {detailMateria.estado}
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Año / Cuatrimestre</span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {detailMateria.anoCursado} • {detailMateria.cuatrimestre}
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Correlativas (Cursar Débil / Fuerte)</span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {detailMateria.cursadoDebil || "Sin correlativas"} • {detailMateria.cursadoFuerte || "Sin correlativas"}
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Correlativas (Rendir Fuerte)</span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {detailMateria.rendirFuerte || "Sin correlativas"}
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Fechas (Regularidad / Vencimiento / Aprobado)</span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {detailMateria.fechaRegularidad ? detailMateria.fechaRegularidad.split("-").reverse().join("/") : "---"} •{" "}
-                    {detailMateria.fechaVencimiento ? detailMateria.fechaVencimiento.split("-").reverse().join("/") : "---"} •{" "}
-                    {detailMateria.fechaAprobado ? detailMateria.fechaAprobado.split("-").reverse().join("/") : "---"}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const id = detailMateria.id;
-                    setDetailMateriaId(null);
-                    handleDeleteMateria(id);
-                  }}
-                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[11px] font-bold transition-all cursor-pointer mt-1"
-                >
-                  <Trash2 className="w-3.5 h-3.5" /> Eliminar materia
-                </button>
-              </div>
+              <DetailBlockGrid>
+                <DetailBlock icon={CheckCircle} label="Estado" tone={estadoTone} emphasis>
+                  {detailMateria.estado}
+                </DetailBlock>
+                <DetailBlock icon={GraduationCap} label="Año / Cuatrimestre">
+                  {detailMateria.anoCursado} • {detailMateria.cuatrimestre}
+                </DetailBlock>
+                <DetailBlock icon={TrendingUp} label="Correlativas (Cursar Débil / Fuerte)" span>
+                  {detailMateria.cursadoDebil || "Sin correlativas"} • {detailMateria.cursadoFuerte || "Sin correlativas"}
+                </DetailBlock>
+                <DetailBlock icon={BookOpen} label="Correlativas (Rendir Fuerte)" span>
+                  {detailMateria.rendirFuerte || "Sin correlativas"}
+                </DetailBlock>
+                <DetailBlock icon={Calendar} label="Fechas (Regularidad / Vencimiento / Aprobado)" span>
+                  {detailMateria.fechaRegularidad ? detailMateria.fechaRegularidad.split("-").reverse().join("/") : "---"} •{" "}
+                  {detailMateria.fechaVencimiento ? detailMateria.fechaVencimiento.split("-").reverse().join("/") : "---"} •{" "}
+                  {detailMateria.fechaAprobado ? detailMateria.fechaAprobado.split("-").reverse().join("/") : "---"}
+                </DetailBlock>
+                {statusObj && (
+                  <DetailBlock icon={CheckCircle} label="Estado Académico" tone={statusTone} span>
+                    {statusObj.text}
+                  </DetailBlock>
+                )}
+                {vencimientoText && vencimientoText !== "---" && (
+                  <DetailBlock
+                    icon={Clock}
+                    label="Próximo Vencimiento"
+                    tone={vencimientoText.startsWith("Vencido") ? "danger" : "default"}
+                    span
+                  >
+                    {vencimientoText}
+                  </DetailBlock>
+                )}
+              </DetailBlockGrid>
             )}
           </DetailModal>
         );
@@ -5239,39 +5246,24 @@ export default function AcademicView({
                   }
                 : undefined
             }
+            onDelete={detailHorario ? () => handleDeleteHorario(detailHorario.id) : undefined}
+            deleteLabel="Eliminar horario"
           >
             {detailHorario && (
-              <div className="flex flex-col gap-3">
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Día / Horario</span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {detailHorario.dia} • {detailHorario.horaInicio} - {detailHorario.horaFin}
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Aula</span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {detailHorario.aulas || "---"}
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Profesor/es</span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {detailHorario.profesores || "---"}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const id = detailHorario.id;
-                    setDetailHorarioId(null);
-                    handleDeleteHorario(id);
-                  }}
-                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[11px] font-bold transition-all cursor-pointer mt-1"
-                >
-                  <Trash2 className="w-3.5 h-3.5" /> Eliminar horario
-                </button>
-              </div>
+              <DetailBlockGrid>
+                <DetailBlock icon={Calendar} label="Día" emphasis>
+                  {detailHorario.dia}
+                </DetailBlock>
+                <DetailBlock icon={Clock} label="Horario" emphasis>
+                  {detailHorario.horaInicio} - {detailHorario.horaFin}
+                </DetailBlock>
+                <DetailBlock icon={FolderOpen} label="Aula">
+                  {detailHorario.aulas || "---"}
+                </DetailBlock>
+                <DetailBlock icon={GraduationCap} label="Profesor/es">
+                  {detailHorario.profesores || "---"}
+                </DetailBlock>
+              </DetailBlockGrid>
             )}
           </DetailModal>
         );
@@ -5300,40 +5292,24 @@ export default function AcademicView({
                   }
                 : undefined
             }
+            onDelete={detailExamen ? () => handleDeleteExamen(detailExamen.id) : undefined}
+            deleteLabel="Eliminar registro"
           >
             {detailExamen && (
-              <div className="flex flex-col gap-3">
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Fecha</span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {new Date(detailExamen.fecha).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" }).replace(",", "")}
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Estado / Instancia</span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {detailExamen.estado}
-                    {detailExamen.instancia ? ` • ${detailExamen.instancia}` : ""}
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Aula</span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {detailExamen.aula || "---"}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const id = detailExamen.id;
-                    setDetailExamenId(null);
-                    handleDeleteExamen(id);
-                  }}
-                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[11px] font-bold transition-all cursor-pointer mt-1"
-                >
-                  <Trash2 className="w-3.5 h-3.5" /> Eliminar registro
-                </button>
-              </div>
+              <DetailBlockGrid>
+                <DetailBlock icon={Calendar} label="Fecha" emphasis span>
+                  {new Date(detailExamen.fecha).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" }).replace(",", "")}
+                </DetailBlock>
+                <DetailBlock icon={CheckCircle} label="Estado" tone={detailExamen.estado === "Aprobado" ? "success" : "primary"}>
+                  {detailExamen.estado}
+                </DetailBlock>
+                <DetailBlock icon={TrendingUp} label="Instancia">
+                  {detailExamen.instancia || "---"}
+                </DetailBlock>
+                <DetailBlock icon={FolderOpen} label="Aula" span>
+                  {detailExamen.aula || "---"}
+                </DetailBlock>
+              </DetailBlockGrid>
             )}
           </DetailModal>
         );

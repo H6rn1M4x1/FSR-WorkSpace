@@ -24,7 +24,7 @@ import {
 import { useToast } from "../context/ToastContext";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import { NbaLogo } from "./icons/NbaLogo";
-import { DetailModal } from "./DetailModal";
+import { DetailModal, DetailBlock, DetailBlockGrid } from "./DetailModal";
 import { PillFilterBar } from "./PillFilterBar";
 import { SPORTS_CATALOG } from "../lib/sportsCatalog";
 import { StorageService } from "../lib/storage";
@@ -1154,6 +1154,7 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
                             </span>
                             <button
                               type="button"
+                              data-no-global-sound
                               onClick={(e) => { e.stopPropagation(); setExpandedDayEventId(i); }}
                               className="p-1 rounded-lg hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
                               title="Ver detalles"
@@ -1193,37 +1194,33 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
                             <img
                               src={ev.imageUrl}
                               alt={ev.label}
-                              className="w-full max-h-72 object-contain rounded-xl bg-black/5 dark:bg-white/5"
+                              className="w-full max-h-72 object-contain rounded-xl bg-black/5 dark:bg-white/5 mb-2.5"
                               referrerPolicy="no-referrer"
                             />
                           )}
-                          <div className="flex flex-col gap-3">
-                            <div>
-                              <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Categoría</span>
-                              <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">{ev.categoryLabel}</span>
-                            </div>
+                          <DetailBlockGrid>
+                            <DetailBlock icon={Trophy} label="Categoría" tone="primary" emphasis={!ev.time} span={!ev.time}>
+                              {ev.categoryLabel}
+                            </DetailBlock>
                             {ev.time && (
-                              <div>
-                                <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Hora</span>
-                                <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">{ev.time}</span>
-                              </div>
+                              <DetailBlock icon={Clock} label="Hora" tone="primary" emphasis>
+                                {ev.time}
+                              </DetailBlock>
                             )}
                             {ev.location && (
-                              <div>
-                                <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Lugar</span>
-                                <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">{ev.location}</span>
-                              </div>
+                              <DetailBlock icon={MapPin} label="Lugar" span={!(ev.homeTeamBadge || ev.awayTeamBadge)}>
+                                {ev.location}
+                              </DetailBlock>
                             )}
                             {(ev.homeTeamBadge || ev.awayTeamBadge) && (
-                              <div>
-                                <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Equipos</span>
+                              <DetailBlock icon={Users} label="Equipos" span>
                                 <div className="flex items-center gap-3">
                                   {ev.homeTeamBadge && <img src={ev.homeTeamBadge} alt="" className="w-8 h-8 rounded-full bg-white object-contain border border-white" />}
                                   {ev.awayTeamBadge && <img src={ev.awayTeamBadge} alt="" className="w-8 h-8 rounded-full bg-white object-contain border border-white" />}
                                 </div>
-                              </div>
+                              </DetailBlock>
                             )}
-                          </div>
+                          </DetailBlockGrid>
                         </DetailModal>
                       </div>
                     );

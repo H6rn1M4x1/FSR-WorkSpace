@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
+import { uiSounds } from "../lib/sounds";
 import { useBriefLoading } from "../hooks/useBriefLoading";
 import { TableSkeleton } from "./TableSkeleton";
 import { generateUniqueId } from "../utils/id";
@@ -220,6 +221,19 @@ export default function CotizacionesAccionesTable({
     Boolean(showAddModal || editingItem || viewingItem)
   );
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
+  // Sonido de apertura/cierre del modal de detalle — mismo patrón que src/components/DetailModal.tsx,
+  // enganchado a la transición real de `viewingItem` en vez del click que lo dispara.
+  const wasViewingItemOpen = useRef(false);
+  useEffect(() => {
+    const isOpenNow = !!viewingItem;
+    if (isOpenNow && !wasViewingItemOpen.current) {
+      uiSounds.expand();
+    } else if (!isOpenNow && wasViewingItemOpen.current) {
+      uiSounds.collapse();
+    }
+    wasViewingItemOpen.current = isOpenNow;
+  }, [viewingItem]);
 
   // Form State
   const [formSimbolo, setFormSimbolo] = useState("");
@@ -1058,6 +1072,7 @@ export default function CotizacionesAccionesTable({
                           type="button"
                           onClick={() => setViewingItem(item)}
                           title="Ver detalle"
+                          data-no-global-sound
                           className="font-bold text-slate-900 dark:text-white block truncate text-left hover:text-primary hover:underline cursor-pointer w-full"
                         >
                           {item.descripcion}
@@ -1137,6 +1152,7 @@ export default function CotizacionesAccionesTable({
                         <div className="flex items-center justify-center gap-1 opacity-80 group-hover:opacity-100">
                           <button
                             onClick={() => setViewingItem(item)}
+                            data-no-global-sound
                             className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-600 dark:text-zinc-300 transition-colors cursor-pointer"
                             title="Ver detalle"
                           >
@@ -1315,37 +1331,14 @@ export default function CotizacionesAccionesTable({
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      onClick={() => {
-                        const item = viewingItem;
-                        setViewingItem(null);
-                        window.setTimeout(() => handleOpenEdit(item), 220);
-                      }}
-                      className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer"
-                      title="Editar"
-                    >
-                      <Edit3 className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => {
-                        const id = viewingItem.id;
-                        setViewingItem(null);
-                        setDeleteConfirmId(id);
-                      }}
-                      className="p-2 rounded-xl hover:bg-red-500/10 text-slate-400 hover:text-red-500 cursor-pointer"
-                      title="Eliminar"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => setViewingItem(null)}
-                      className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer"
-                      title="Cerrar"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => setViewingItem(null)}
+                    data-no-global-sound
+                    className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer shrink-0"
+                    title="Cerrar"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 my-4">
@@ -1400,10 +1393,39 @@ export default function CotizacionesAccionesTable({
                   </p>
                 </div>
 
-                <div className="pt-3 border-t border-slate-200 dark:border-zinc-800 text-center">
+                <div className="pt-3 border-t border-slate-200 dark:border-zinc-800 text-center mb-4">
                   <p className="text-[11px] text-slate-400 dark:text-zinc-500">
                     Fuente: InvertirOnline (IOL) | Última act: {viewingItem.fechaActualizacion || "-"}
                   </p>
+                </div>
+
+                <div className="flex items-center gap-2 -mx-6 -mb-6 px-6 py-3.5 border-t border-slate-100 dark:border-zinc-800/80 bg-slate-50/60 dark:bg-black/20">
+                  <button
+                    type="button"
+                    data-no-global-sound
+                    onClick={() => {
+                      const item = viewingItem;
+                      setViewingItem(null);
+                      window.setTimeout(() => handleOpenEdit(item), 220);
+                      uiSounds.edit();
+                    }}
+                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 hover:bg-slate-100 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 text-[11px] font-bold transition-all cursor-pointer active:scale-[0.97]"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" /> Editar
+                  </button>
+                  <button
+                    type="button"
+                    data-no-global-sound
+                    onClick={() => {
+                      const id = viewingItem.id;
+                      setViewingItem(null);
+                      setDeleteConfirmId(id);
+                      uiSounds.delete();
+                    }}
+                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[11px] font-bold transition-all cursor-pointer active:scale-[0.97]"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /> Eliminar
+                  </button>
                 </div>
               </motion.div>
             </motion.div>
