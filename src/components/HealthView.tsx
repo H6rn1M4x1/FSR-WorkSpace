@@ -895,6 +895,13 @@ export default function HealthView({
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showMedidasModal, setShowMedidasModal] = useState(false);
   const [editingMedidaId, setEditingMedidaId] = useState<string | null>(null);
+  // Detalle clickeable (punto pedido): mismo patrón que ya tiene PaymentsTable en Finanzas.
+  const [detailMedidaId, setDetailMedidaId] = useState<string | null>(null);
+  const [detailDoctorId, setDetailDoctorId] = useState<string | null>(null);
+  const [detailMedId, setDetailMedId] = useState<string | null>(null);
+  const [detailDispId, setDetailDispId] = useState<string | null>(null);
+  const [detailBpLogId, setDetailBpLogId] = useState<string | null>(null);
+  const [detailEstudioId, setDetailEstudioId] = useState<string | null>(null);
   const [medidasPage, setMedidasPage] = useState(1);
 
   // Form states for profile editing
@@ -4634,7 +4641,16 @@ export default function HealthView({
                                 ) : paginatedMedidas.length > 0 ? (
                                   paginatedMedidas.map((m) => (
                                     <tr key={m.id} className="border-b border-slate-100/40 dark:border-zinc-800/20 hover:bg-slate-100/20 dark:hover:bg-zinc-900/30">
-                                      <td className="p-2 font-bold whitespace-nowrap">{m.fecha}</td>
+                                      <td className="p-2 font-bold whitespace-nowrap">
+                                        <button
+                                          type="button"
+                                          onClick={() => setDetailMedidaId(m.id)}
+                                          title="Ver detalle"
+                                          className="hover:text-primary hover:underline cursor-pointer"
+                                        >
+                                          {m.fecha}
+                                        </button>
+                                      </td>
                                       <td className="p-2 font-mono text-primary font-bold whitespace-nowrap">{m.peso} kg</td>
                                       <td className="p-2 font-mono whitespace-nowrap">{m.cintura ? `${m.cintura} cm` : "-"}</td>
                                       <td className="p-2 font-mono whitespace-nowrap">{m.cadera ? `${m.cadera} cm` : "-"}</td>
@@ -5809,9 +5825,14 @@ export default function HealthView({
                               className="group hover:bg-slate-50/80 dark:hover:bg-zinc-900/10 transition-all cursor-pointer"
                             >
                               <td className="px-4 py-4 whitespace-nowrap md:sticky md:left-0 z-20 bg-white dark:bg-zinc-950 group-hover:bg-slate-50 dark:group-hover:bg-zinc-900 transition-colors min-w-[220px] sm:min-w-[260px] max-w-[300px]">
-                                <div className="font-bold text-slate-900 dark:text-zinc-100 truncate block" title={doc.name}>
+                                <button
+                                  type="button"
+                                  onClick={() => setDetailDoctorId(doc.id)}
+                                  title="Ver detalle"
+                                  className="font-bold text-slate-900 dark:text-zinc-100 truncate block text-left hover:text-primary hover:underline cursor-pointer w-full"
+                                >
                                   {doc.name}
-                                </div>
+                                </button>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <span
@@ -6124,7 +6145,14 @@ export default function HealthView({
                                 )}
                               </td>
                               <td className="px-4 py-4 whitespace-nowrap font-bold text-slate-900 dark:text-zinc-100 md:sticky md:left-[70px] z-20 bg-white dark:bg-zinc-950 group-hover:bg-slate-50 dark:group-hover:bg-zinc-900 transition-colors min-w-[160px] w-[160px] max-w-[160px]">
-                                <span className="truncate block" title={med.marca}>{med.marca}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setDetailMedId(med.id)}
+                                  title="Ver detalle"
+                                  className="truncate block text-left hover:text-primary hover:underline cursor-pointer w-full"
+                                >
+                                  {med.marca}
+                                </button>
                               </td>
                               <td className="px-4 py-4 whitespace-nowrap text-slate-600 dark:text-zinc-300 font-medium md:sticky md:left-[230px] z-20 bg-white dark:bg-zinc-950 group-hover:bg-slate-50 dark:group-hover:bg-zinc-900 transition-colors min-w-[200px] w-[200px] max-w-[200px]">
                                 <span className="truncate block" title={med.droga}>{med.droga}</span>
@@ -6424,12 +6452,19 @@ export default function HealthView({
                                   />
                                 </td>
                                 <td className="px-3 py-4 md:sticky md:left-[70px] z-20 bg-white dark:bg-zinc-950 group-hover:bg-slate-100 dark:group-hover:bg-zinc-900 transition-colors min-w-[180px] w-[180px] max-w-[180px]">
-                                  <div className="font-bold text-slate-900 dark:text-zinc-100">
-                                    {d.marca}
-                                  </div>
-                                  <div className="text-[10px] text-slate-500 dark:text-zinc-400">
-                                    {d.droga}
-                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => setDetailDispId(disp.id)}
+                                    title="Ver detalle"
+                                    className="text-left hover:text-primary cursor-pointer w-full"
+                                  >
+                                    <div className="font-bold text-slate-900 dark:text-zinc-100 hover:underline">
+                                      {d.marca}
+                                    </div>
+                                    <div className="text-[10px] text-slate-500 dark:text-zinc-400">
+                                      {d.droga}
+                                    </div>
+                                  </button>
                                 </td>
                                 <td className="px-3 py-4 text-center md:sticky md:left-[250px] z-20 bg-white dark:bg-zinc-950 group-hover:bg-slate-100 dark:group-hover:bg-zinc-900 transition-colors min-w-[140px] w-[140px] max-w-[140px]">
                                   <span
@@ -6734,7 +6769,14 @@ export default function HealthView({
                                   </span>
                                 </td>
                                 <td className="px-6 py-4 font-semibold text-slate-750 dark:text-zinc-200 whitespace-nowrap min-w-[140px]">
-                                  {log.date ? log.date.replace('T', ' ').replace('Z', '').split(':').slice(0, 2).join(':') : ''}
+                                  <button
+                                    type="button"
+                                    onClick={() => setDetailBpLogId(log.id)}
+                                    title="Ver detalle"
+                                    className="hover:text-primary hover:underline cursor-pointer"
+                                  >
+                                    {log.date ? log.date.replace('T', ' ').replace('Z', '').split(':').slice(0, 2).join(':') : ''}
+                                  </button>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   <span className="font-extrabold font-mono text-primary">
@@ -7071,12 +7113,14 @@ export default function HealthView({
                                     </span>
                                   </td>
                                   <td className="px-3 py-3.5 md:sticky md:left-[265px] z-20 bg-white dark:bg-zinc-950 group-hover:bg-slate-100 dark:group-hover:bg-zinc-900 transition-colors min-w-[200px] w-[200px]">
-                                    <span
-                                      className="font-semibold text-slate-800 dark:text-zinc-200 text-xs whitespace-nowrap truncate block"
-                                      title={record.info}
+                                    <button
+                                      type="button"
+                                      onClick={() => setDetailEstudioId(record.id)}
+                                      title="Ver detalle"
+                                      className="font-semibold text-slate-800 dark:text-zinc-200 text-xs whitespace-nowrap truncate block text-left hover:text-primary hover:underline cursor-pointer w-full"
                                     >
                                       {record.info || "-"}
-                                    </span>
+                                    </button>
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap font-semibold text-slate-700 dark:text-zinc-300">
                                     {record.location}
@@ -9720,6 +9764,287 @@ export default function HealthView({
           </div>,
           document.body,
         )}
+
+      {/* Detalle clickeable (punto pedido): mismo patrón que ya tiene PaymentsTable en Finanzas,
+          aplicado a las 6 tablas de Salud que todavía no lo tenían. */}
+      {(() => {
+        const detailMedida = detailMedidaId ? medidasHistory.find((m) => m.id === detailMedidaId) || null : null;
+        return (
+          <DetailModal
+            isOpen={!!detailMedida}
+            onClose={() => setDetailMedidaId(null)}
+            title={detailMedida ? `Medición del ${detailMedida.fecha}` : undefined}
+            icon={Scale}
+            onEdit={detailMedida ? () => handleEditMedida(detailMedida) : undefined}
+          >
+            {detailMedida && (
+              <div className="flex flex-col gap-3">
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Peso</span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">{detailMedida.peso} kg</span>
+                </div>
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Cintura / Cadera / Cuello</span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {detailMedida.cintura ? `${detailMedida.cintura} cm` : "-"} • {detailMedida.cadera ? `${detailMedida.cadera} cm` : "-"} • {detailMedida.cuello ? `${detailMedida.cuello} cm` : "-"}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const id = detailMedida.id;
+                    setDetailMedidaId(null);
+                    handleDeleteMedida(id);
+                  }}
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[11px] font-bold transition-all cursor-pointer mt-1"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Eliminar medición
+                </button>
+              </div>
+            )}
+          </DetailModal>
+        );
+      })()}
+
+      {(() => {
+        const detailDoctor = detailDoctorId ? (doctors || []).find((d) => d.id === detailDoctorId) || null : null;
+        return (
+          <DetailModal
+            isOpen={!!detailDoctor}
+            onClose={() => setDetailDoctorId(null)}
+            title={detailDoctor?.name}
+            icon={Stethoscope}
+            onEdit={detailDoctor ? () => handleOpenEditDoctorModal(detailDoctor) : undefined}
+          >
+            {detailDoctor && (
+              <div className="flex flex-col gap-3">
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Especialidad</span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">{detailDoctor.specialty}</span>
+                </div>
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Lugar</span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">{detailDoctor.address || "No asignado"}</span>
+                </div>
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Contacto</span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">{detailDoctor.phone || "-"}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const id = detailDoctor.id;
+                    setDetailDoctorId(null);
+                    handleDeleteDoctor(id);
+                  }}
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[11px] font-bold transition-all cursor-pointer mt-1"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Eliminar doctor
+                </button>
+              </div>
+            )}
+          </DetailModal>
+        );
+      })()}
+
+      {(() => {
+        const detailMed = detailMedId ? (medicamentosDetallados || []).find((m) => m.id === detailMedId) || null : null;
+        return (
+          <DetailModal
+            isOpen={!!detailMed}
+            onClose={() => setDetailMedId(null)}
+            title={detailMed?.marca}
+            icon={Pill}
+            onEdit={detailMed ? () => openEditModal(detailMed) : undefined}
+          >
+            {detailMed && (
+              <div className="flex flex-col gap-3">
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Droga / Función</span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {detailMed.droga} • {detailMed.funcionTratamiento || "Quimioterapia"}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Dosis / Cantidad / Consumo diario</span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {detailMed.mg} mg ({detailMed.unidadMedida}) • {detailMed.cantidad ?? 0} u. • {detailMed.consumoDiario}/día
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Estado</span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">{detailMed.estado}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const id = detailMed.id;
+                    setDetailMedId(null);
+                    handleDeleteDetailedMed(id);
+                  }}
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[11px] font-bold transition-all cursor-pointer mt-1"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Eliminar medicamento
+                </button>
+              </div>
+            )}
+          </DetailModal>
+        );
+      })()}
+
+      {(() => {
+        const detailDispRaw = detailDispId ? (disponibilidadMedicamentos || []).find((d) => d.id === detailDispId) || null : null;
+        const detailDisp = detailDispRaw ? calculateDispDetails(detailDispRaw) : null;
+        return (
+          <DetailModal
+            isOpen={!!detailDispRaw}
+            onClose={() => setDetailDispId(null)}
+            title={detailDisp?.marca}
+            icon={Clock}
+            onEdit={detailDispRaw ? () => handleOpenEditDisp(detailDispRaw) : undefined}
+          >
+            {detailDispRaw && detailDisp && (
+              <div className="flex flex-col gap-3">
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Droga / Estado</span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {detailDisp.droga} • {detailDisp.estado}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Registrado / Límite</span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {formatFechaDMY(detailDispRaw.fechaRegistro)} • {formatFechaDMY(detailDisp.disponibleHasta)}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Registrado / Disponible</span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {detailDispRaw.cantidadRegistrada} u. • {Number(detailDisp.cantidadDisponible.toFixed(1))} u. ({Number(detailDisp.disponibleParaDias.toFixed(1))} días)
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const id = detailDispRaw.id;
+                    setDetailDispId(null);
+                    handleDeleteDisp(id);
+                  }}
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[11px] font-bold transition-all cursor-pointer mt-1"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Eliminar registro
+                </button>
+              </div>
+            )}
+          </DetailModal>
+        );
+      })()}
+
+      {(() => {
+        const detailBpLog = detailBpLogId ? (bpLogs || []).find((l) => l.id === detailBpLogId) || null : null;
+        return (
+          <DetailModal
+            isOpen={!!detailBpLog}
+            onClose={() => setDetailBpLogId(null)}
+            title={detailBpLog ? `Presión del ${detailBpLog.date ? detailBpLog.date.replace("T", " ").replace("Z", "").split(":").slice(0, 2).join(":") : ""}` : undefined}
+            icon={Heart}
+            onEdit={detailBpLog ? () => handleOpenEditBpTableModal(detailBpLog) : undefined}
+          >
+            {detailBpLog && (
+              <div className="flex flex-col gap-3">
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Paciente</span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">{detailBpLog.patient || "Hernan"}</span>
+                </div>
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Presión Alta / Baja</span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {detailBpLog.systolic} mmHg • {detailBpLog.diastolic} mmHg
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Temperatura / Oxígeno</span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {detailBpLog.temperature !== undefined ? `${detailBpLog.temperature} °C` : "-"} • {detailBpLog.oxygen !== undefined ? `${detailBpLog.oxygen}%` : "-"}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const id = detailBpLog.id;
+                    setDetailBpLogId(null);
+                    handleDeleteBpLog(id);
+                  }}
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[11px] font-bold transition-all cursor-pointer mt-1"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Eliminar registro
+                </button>
+              </div>
+            )}
+          </DetailModal>
+        );
+      })()}
+
+      {(() => {
+        const detailEstudio = detailEstudioId ? medicalRecords.find((r) => r.id === detailEstudioId) || null : null;
+        const detailDoc = detailEstudio ? doctors.find((d) => d.id === detailEstudio.doctorId) : null;
+        const detailDocDisplay = detailDoc ? `${detailDoc.name} (${detailDoc.specialty})` : "No especificado";
+        return (
+          <DetailModal
+            isOpen={!!detailEstudio}
+            onClose={() => setDetailEstudioId(null)}
+            title={detailEstudio?.info || detailEstudio?.type}
+            icon={FileText}
+            onEdit={detailEstudio ? () => handleOpenEditEstudio(detailEstudio) : undefined}
+          >
+            {detailEstudio && (
+              <div className="flex flex-col gap-3">
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Paciente / Tipo</span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {detailEstudio.patient || "Hernan"} • {detailEstudio.type}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Lugar / Doctor</span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {detailEstudio.location} • {detailDocDisplay}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Fecha</span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">{detailEstudio.studyDate}</span>
+                </div>
+                {detailEstudio.type === "Internacion" && (
+                  <div>
+                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Internación</span>
+                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                      Ingreso: {detailEstudio.entryDate} • Egreso: {detailEstudio.exitDate} • Días: {detailEstudio.daysCount}
+                    </span>
+                  </div>
+                )}
+                {detailEstudio.report && (
+                  <div>
+                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Informe</span>
+                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2 whitespace-pre-wrap">{detailEstudio.report}</span>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const id = detailEstudio.id;
+                    setDetailEstudioId(null);
+                    handleDeleteEstudio(id);
+                  }}
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[11px] font-bold transition-all cursor-pointer mt-1"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Eliminar registro
+                </button>
+              </div>
+            )}
+          </DetailModal>
+        );
+      })()}
 
       {/* CUSTOM CONFIRMATION DIALOG MODAL CON ANIMACIÓN & ESTADO ELIMINANDO */}
       <ConfirmationModal

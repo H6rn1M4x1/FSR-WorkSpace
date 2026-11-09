@@ -1054,12 +1054,14 @@ export default function CotizacionesAccionesTable({
 
                       {/* Instrumento */}
                       <td className="py-3 px-4 min-w-[200px] w-[200px] max-w-[200px] sticky left-[120px] z-20 bg-white dark:bg-zinc-950 group-hover:bg-slate-100 dark:group-hover:bg-zinc-900 transition-colors">
-                        <span
-                          className="font-bold text-slate-900 dark:text-white block truncate"
-                          title={item.descripcion}
+                        <button
+                          type="button"
+                          onClick={() => setViewingItem(item)}
+                          title="Ver detalle"
+                          className="font-bold text-slate-900 dark:text-white block truncate text-left hover:text-primary hover:underline cursor-pointer w-full"
                         >
                           {item.descripcion}
-                        </span>
+                        </button>
                       </td>
 
                       {/* Categoría */}
@@ -1313,12 +1315,37 @@ export default function CotizacionesAccionesTable({
                       </p>
                     </div>
                   </div>
-                  <button
-                    onClick={() => setViewingItem(null)}
-                    className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => {
+                        const item = viewingItem;
+                        setViewingItem(null);
+                        window.setTimeout(() => handleOpenEdit(item), 220);
+                      }}
+                      className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer"
+                      title="Editar"
+                    >
+                      <Edit3 className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => {
+                        const id = viewingItem.id;
+                        setViewingItem(null);
+                        setDeleteConfirmId(id);
+                      }}
+                      className="p-2 rounded-xl hover:bg-red-500/10 text-slate-400 hover:text-red-500 cursor-pointer"
+                      title="Eliminar"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setViewingItem(null)}
+                      className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer"
+                      title="Cerrar"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 my-4">

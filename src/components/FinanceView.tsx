@@ -1632,8 +1632,19 @@ export default function FinanceView({
         setDetailedPayments((prev) =>
           prev.map((p) => (p.id === paymentId ? toSave : p)),
         );
-        const userId = userEmail || "hernanmaximiliano10@gmail.com";
-        await saveItemToFirestore(userId, "detailed_payments", toSave);
+        try {
+          const userId = userEmail || "hernanmaximiliano10@gmail.com";
+          await saveItemToFirestore(userId, "detailed_payments", toSave);
+          showToast(
+            field === "facturaEmitida" ? "Archivo de factura desvinculado." : "Comprobante de pago desvinculado.",
+            "success",
+          );
+        } catch (err: any) {
+          setDetailedPayments((prev) =>
+            prev.map((p) => (p.id === paymentId ? existing : p)),
+          );
+          showToast(err?.message || "No se pudo desvincular el archivo.", "error");
+        }
       },
     );
   };

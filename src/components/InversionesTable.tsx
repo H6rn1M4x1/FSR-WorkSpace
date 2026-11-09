@@ -7,6 +7,7 @@ import { generateUniqueId } from "../utils/id";
 import { motion, AnimatePresence } from "motion/react";
 import { createPortal } from "react-dom";
 import { useToast } from "../context/ToastContext";
+import { DetailModal } from "./DetailModal";
 import { Inversion, CotizacionAccion } from "../types";
 import {
   Plus,
@@ -419,6 +420,8 @@ export default function InversionesTable({
     Boolean(showAddModal || showTickerPicker || editingItem)
   );
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  // Detalle clickeable (punto pedido): mismo patrón que ya tiene PaymentsTable.
+  const [detailInversionId, setDetailInversionId] = useState<string | null>(null);
 
   // Real-time Dólar CCL state from Market Quotes (IOL / dolarapi)
   const [marketDolarCCL, setMarketDolarCCL] = useState<string>("1.198,00");
@@ -1487,9 +1490,14 @@ export default function InversionesTable({
 
                     {/* Ticker */}
                     <td className="py-3 px-3.5 whitespace-nowrap">
-                      <span className="px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 font-black font-mono tracking-wider">
+                      <button
+                        type="button"
+                        onClick={() => setDetailInversionId(item.id)}
+                        title="Ver detalle"
+                        className="px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 font-black font-mono tracking-wider hover:underline cursor-pointer"
+                      >
                         {item.ticker}
-                      </span>
+                      </button>
                     </td>
 
                     {/* Fecha */}
@@ -2386,6 +2394,61 @@ export default function InversionesTable({
         </AnimatePresence>,
         document.body
       )}
+
+      {/* Detalle del registro de inversión — se abre tocando el ticker en la tabla (punto
+          pedido), mismo patrón que ya tiene PaymentsTable. */}
+      {(() => {
+        const detailItem = detailInversionId ? paginatedData.find((i) => i.id === detailInversionId) || null : null;
+        return (
+          <DetailModal
+            isOpen={!!detailItem}
+            onClose={() => setDetailInversionId(null)}
+            title={detailItem ? `${detailItem.ticker} • ${detailItem.lugar}` : undefined}
+            icon={BarChart3}
+            onEdit={detailItem ? () => handleOpenEdit(detailItem) : undefined}
+          >
+            {detailItem && (
+              <div className="flex flex-col gap-3">
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Operación / Fecha</span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {detailItem.operacion} • {detailItem.fecha} • Cant. {detailItem.cantidad}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">En Pesos</span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    Unit. {detailItem.valorUnitarioPesos || "-"} • Total {detailItem.valorTotalPesos || "-"} • G/P {detailItem.gananciasAcumuladasPesos || "-"}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">En Dólares</span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    Unit. {detailItem.valorUnitarioDolares || "-"} • Total {detailItem.valorTotalDolares || "-"} • G/P {detailItem.gananciasAcumuladasDolares || "-"}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Estado / Resultado</span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {detailItem.estado} • {detailItem.resultado?.toLowerCase() === "ganancia" ? "Ganancia" : "Pérdida"}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const id = detailItem.id;
+                    setDetailInversionId(null);
+                    setDeleteConfirmId(id);
+                  }}
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[11px] font-bold transition-all cursor-pointer mt-1"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Eliminar inversión
+                </button>
+              </div>
+            )}
+          </DetailModal>
+        );
+      })()}
 
       {/* Delete Confirmation Modal Portal */}
       {createPortal(

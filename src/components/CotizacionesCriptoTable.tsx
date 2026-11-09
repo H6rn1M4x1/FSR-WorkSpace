@@ -8,6 +8,7 @@ import React, { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { createPortal } from "react-dom";
 import { ConfirmationModal } from "./ConfirmationModal";
+import { DetailModal } from "./DetailModal";
 import { CotizacionCripto } from "../types";
 import {
   Search,
@@ -83,6 +84,8 @@ export default function CotizacionesCriptoTable({
   const [isSaving, setIsSaving] = useState(false);
   const [editingItem, setEditingItem] = useState<CotizacionCripto | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  // Detalle clickeable (punto pedido): mismo patrón que ya tiene PaymentsTable.
+  const [detailCriptoId, setDetailCriptoId] = useState<string | null>(null);
 
   useLockBodyScroll(Boolean(showAddModal || editingItem));
 
@@ -616,9 +619,14 @@ export default function CotizacionesCriptoTable({
                         ) : (
                           <Bitcoin className="w-5 h-5 text-slate-400 dark:text-zinc-500" />
                         )}
-                        <span className="cripto-table-name text-xs font-black text-slate-900 dark:text-white">
+                        <button
+                          type="button"
+                          onClick={() => setDetailCriptoId(cripto.id)}
+                          title="Ver detalle"
+                          className="cripto-table-name text-xs font-black text-slate-900 dark:text-white hover:text-primary hover:underline cursor-pointer text-left"
+                        >
                           {toTitleCase(cripto.name)}
-                        </span>
+                        </button>
                       </div>
                     </td>
                     <td className="px-3 py-3.5 align-middle whitespace-nowrap text-left md:sticky md:left-[180px] z-20 bg-white dark:bg-zinc-950 group-hover:bg-slate-50 dark:group-hover:bg-zinc-900 transition-colors min-w-[100px] w-[100px] max-w-[100px]">
@@ -1018,6 +1026,61 @@ export default function CotizacionesCriptoTable({
           </AnimatePresence>,
           document.body
         )}
+
+      {/* Detalle de la cripto — se abre tocando el nombre en la tabla (punto pedido), mismo
+          patrón que ya tiene PaymentsTable. */}
+      {(() => {
+        const detailItem = detailCriptoId ? paginatedData.find((c) => c.id === detailCriptoId) || null : null;
+        return (
+          <DetailModal
+            isOpen={!!detailItem}
+            onClose={() => setDetailCriptoId(null)}
+            title={detailItem ? `${toTitleCase(detailItem.name)} (${detailItem.symbol || getCriptoSymbol(detailItem)})` : undefined}
+            icon={Bitcoin}
+            onEdit={detailItem ? () => openEditModal(detailItem) : undefined}
+          >
+            {detailItem && (
+              <div className="flex flex-col gap-3">
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Precio</span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {detailItem.price}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Variación (1h / 24h / 7d)</span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {detailItem.percent1h}% • {detailItem.percent24h}% • {detailItem.percent7d}%
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Cap. de Mercado / Volumen 24h</span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {detailItem.marketCap} • {detailItem.volume24h}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Suministro Circulante / Sentimiento</span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {detailItem.circulatingSupply} • {detailItem.sentiment}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const id = detailItem.id;
+                    setDetailCriptoId(null);
+                    setConfirmDeleteId(id);
+                  }}
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[11px] font-bold transition-all cursor-pointer mt-1"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Eliminar criptomoneda
+                </button>
+              </div>
+            )}
+          </DetailModal>
+        );
+      })()}
 
       {/* Confirmation Modal */}
       <ConfirmationModal

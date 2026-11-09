@@ -765,6 +765,8 @@ export default function AcademicView({
   const [hSelectedMateria, setHSelectedMateria] = useState("Todos");
   const [showHorarioModal, setShowHorarioModal] = useState(false);
   const [editingHorarioId, setEditingHorarioId] = useState<string | null>(null);
+  // Detalle clickeable (punto pedido): mismo patrón que ya tiene PaymentsTable en Finanzas.
+  const [detailHorarioId, setDetailHorarioId] = useState<string | null>(null);
   const [hDia, setHDia] = useState<HorarioItem["dia"]>("Lunes");
   const [hHoraInicio, setHHoraInicio] = useState("");
   const [hHoraFin, setHHoraFin] = useState("");
@@ -782,6 +784,8 @@ export default function AcademicView({
   const [exSelectedEstado, setExSelectedEstado] = useState("Todos");
   const [showExamenModal, setShowExamenModal] = useState(false);
   const [editingExamenId, setEditingExamenId] = useState<string | null>(null);
+  // Detalle clickeable (punto pedido): mismo patrón que ya tiene PaymentsTable en Finanzas.
+  const [detailExamenId, setDetailExamenId] = useState<string | null>(null);
   const [exMateria, setExMateria] = useState("");
   const [exFecha, setExFecha] = useState("");
   const [exEstado, setExEstado] = useState("Parcial");
@@ -924,6 +928,8 @@ export default function AcademicView({
   // Modal State
   const [showMateriaModal, setShowMateriaModal] = useState(false);
   const [editingMateriaId, setEditingMateriaId] = useState<string | null>(null);
+  // Detalle clickeable (punto pedido): mismo patrón que ya tiene PaymentsTable en Finanzas.
+  const [detailMateriaId, setDetailMateriaId] = useState<string | null>(null);
 
   // Form fields
   const [mEstado, setMEstado] = useState<
@@ -3131,7 +3137,14 @@ export default function AcademicView({
                         </span>
                       </td>
                       <td className="py-3 px-4 font-bold text-slate-900 dark:text-white whitespace-nowrap md:sticky md:left-[120px] z-20 bg-white dark:bg-zinc-950 group-hover:bg-slate-50 dark:group-hover:bg-zinc-900 transition-colors min-w-[220px] w-[220px] max-w-[220px]" style={{ color: darkMode ? undefined : '#000000' }}>
-                        <span className="truncate block" title={item.materia}>{item.materia}</span>
+                        <button
+                          type="button"
+                          onClick={() => setDetailMateriaId(item.id)}
+                          title="Ver detalle"
+                          className="truncate block text-left hover:text-primary hover:underline cursor-pointer w-full"
+                        >
+                          {item.materia}
+                        </button>
                       </td>
                       <td className="py-3 px-4 text-slate-500 dark:text-zinc-400 whitespace-nowrap">
                         {item.anoCursado}
@@ -3605,12 +3618,17 @@ export default function AcademicView({
                               className="group hover:bg-slate-50/80 dark:hover:bg-zinc-950/20 transition-colors"
                             >
                               <td className="py-3.5 px-4 whitespace-nowrap md:sticky md:left-0 z-20 bg-white dark:bg-zinc-950 group-hover:bg-slate-50 dark:group-hover:bg-zinc-900 transition-colors min-w-[240px] w-[240px] max-w-[240px]">
-                                <div className="flex items-center gap-2 min-w-0">
+                                <button
+                                  type="button"
+                                  onClick={() => setDetailMateriaId(item.id)}
+                                  title="Ver detalle"
+                                  className="flex items-center gap-2 min-w-0 text-left hover:text-primary cursor-pointer w-full"
+                                >
                                   <BookOpen className="w-3.5 h-3.5 text-primary shrink-0" />
-                                  <span className="font-bold text-black dark:text-white truncate block" title={item.materia} style={{ color: darkMode ? undefined : '#000000' }}>
+                                  <span className="font-bold text-black dark:text-white truncate block hover:underline" title={item.materia} style={{ color: darkMode ? undefined : '#000000' }}>
                                     {item.materia}
                                   </span>
-                                </div>
+                                </button>
                               </td>
                               <td className="py-3.5 px-4 text-slate-600 dark:text-zinc-300 font-medium whitespace-nowrap">
                                 {item.anoCursado}
@@ -3937,9 +3955,14 @@ export default function AcademicView({
                               </div>
                             </td>
                             <td className="py-3.5 px-4 whitespace-nowrap">
-                              <div className="font-bold text-slate-900 dark:text-white">
+                              <button
+                                type="button"
+                                onClick={() => setDetailHorarioId(h.id)}
+                                title="Ver detalle"
+                                className="font-bold text-slate-900 dark:text-white hover:text-primary hover:underline cursor-pointer text-left"
+                              >
                                 {h.materia}
-                              </div>
+                              </button>
                             </td>
                             <td className="py-3.5 px-4 text-slate-600 dark:text-zinc-300 whitespace-nowrap">
                               {h.aulas || "---"}
@@ -4229,9 +4252,14 @@ export default function AcademicView({
                             className="hover:bg-slate-50/80 dark:hover:bg-zinc-950/20 transition-colors"
                           >
                             <td className="py-3.5 px-4 whitespace-nowrap">
-                              <div className="font-bold text-slate-900 dark:text-white">
+                              <button
+                                type="button"
+                                onClick={() => setDetailExamenId(ex.id)}
+                                title="Ver detalle"
+                                className="font-bold text-slate-900 dark:text-white hover:text-primary hover:underline cursor-pointer text-left"
+                              >
                                 {ex.materia}
-                              </div>
+                              </button>
                             </td>
                             <td className="py-3.5 px-4 whitespace-nowrap">
                               <div className="flex items-center gap-1.5 font-mono text-slate-600 dark:text-zinc-300">
@@ -5123,6 +5151,193 @@ export default function AcademicView({
       </AnimatePresence>,
       document.body,
     )}
+
+      {/* Detalle de la materia — se abre tocando el nombre en la tabla (punto pedido), mismo
+          patrón que ya tiene PaymentsTable en Finanzas. */}
+      {(() => {
+        const detailMateria = detailMateriaId ? materiasInfo.find((m) => m.id === detailMateriaId) || null : null;
+        return (
+          <DetailModal
+            isOpen={!!detailMateria}
+            onClose={() => setDetailMateriaId(null)}
+            title={detailMateria?.materia}
+            icon={BookOpen}
+            onEdit={detailMateria ? () => handleEditMateriaClick(detailMateria) : undefined}
+          >
+            {detailMateria && (
+              <div className="flex flex-col gap-3">
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Estado</span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {detailMateria.estado}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Año / Cuatrimestre</span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {detailMateria.anoCursado} • {detailMateria.cuatrimestre}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Correlativas (Cursar Débil / Fuerte)</span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {detailMateria.cursadoDebil || "Sin correlativas"} • {detailMateria.cursadoFuerte || "Sin correlativas"}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Correlativas (Rendir Fuerte)</span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {detailMateria.rendirFuerte || "Sin correlativas"}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Fechas (Regularidad / Vencimiento / Aprobado)</span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {detailMateria.fechaRegularidad ? detailMateria.fechaRegularidad.split("-").reverse().join("/") : "---"} •{" "}
+                    {detailMateria.fechaVencimiento ? detailMateria.fechaVencimiento.split("-").reverse().join("/") : "---"} •{" "}
+                    {detailMateria.fechaAprobado ? detailMateria.fechaAprobado.split("-").reverse().join("/") : "---"}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const id = detailMateria.id;
+                    setDetailMateriaId(null);
+                    handleDeleteMateria(id);
+                  }}
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[11px] font-bold transition-all cursor-pointer mt-1"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Eliminar materia
+                </button>
+              </div>
+            )}
+          </DetailModal>
+        );
+      })()}
+
+      {/* Detalle del horario — se abre tocando la materia en la tabla de Horario Semanal (punto
+          pedido), mismo patrón que ya tiene PaymentsTable en Finanzas. */}
+      {(() => {
+        const detailHorario = detailHorarioId ? horarios.find((h) => h.id === detailHorarioId) || null : null;
+        return (
+          <DetailModal
+            isOpen={!!detailHorario}
+            onClose={() => setDetailHorarioId(null)}
+            title={detailHorario?.materia}
+            icon={Clock}
+            onEdit={
+              detailHorario
+                ? () => {
+                    setEditingHorarioId(detailHorario.id);
+                    setHDia(detailHorario.dia);
+                    setHHoraInicio(detailHorario.horaInicio);
+                    setHHoraFin(detailHorario.horaFin);
+                    setHMateria(detailHorario.materia);
+                    setHAulas(detailHorario.aulas);
+                    setHProfesores(detailHorario.profesores);
+                    setShowHorarioModal(true);
+                  }
+                : undefined
+            }
+          >
+            {detailHorario && (
+              <div className="flex flex-col gap-3">
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Día / Horario</span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {detailHorario.dia} • {detailHorario.horaInicio} - {detailHorario.horaFin}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Aula</span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {detailHorario.aulas || "---"}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Profesor/es</span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {detailHorario.profesores || "---"}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const id = detailHorario.id;
+                    setDetailHorarioId(null);
+                    handleDeleteHorario(id);
+                  }}
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[11px] font-bold transition-all cursor-pointer mt-1"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Eliminar horario
+                </button>
+              </div>
+            )}
+          </DetailModal>
+        );
+      })()}
+
+      {/* Detalle del examen/trabajo — se abre tocando la materia en la tabla (punto pedido),
+          mismo patrón que ya tiene PaymentsTable en Finanzas. */}
+      {(() => {
+        const detailExamen = detailExamenId ? examenes.find((ex) => ex.id === detailExamenId) || null : null;
+        return (
+          <DetailModal
+            isOpen={!!detailExamen}
+            onClose={() => setDetailExamenId(null)}
+            title={detailExamen?.materia}
+            icon={CheckCircle}
+            onEdit={
+              detailExamen
+                ? () => {
+                    setEditingExamenId(detailExamen.id);
+                    setExMateria(detailExamen.materia);
+                    setExFecha(detailExamen.fecha);
+                    setExEstado(detailExamen.estado);
+                    setExInstancia(detailExamen.instancia || "Primero");
+                    setExAula(detailExamen.aula);
+                    setShowExamenModal(true);
+                  }
+                : undefined
+            }
+          >
+            {detailExamen && (
+              <div className="flex flex-col gap-3">
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Fecha</span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {new Date(detailExamen.fecha).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" }).replace(",", "")}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Estado / Instancia</span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {detailExamen.estado}
+                    {detailExamen.instancia ? ` • ${detailExamen.instancia}` : ""}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Aula</span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {detailExamen.aula || "---"}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const id = detailExamen.id;
+                    setDetailExamenId(null);
+                    handleDeleteExamen(id);
+                  }}
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[11px] font-bold transition-all cursor-pointer mt-1"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Eliminar registro
+                </button>
+              </div>
+            )}
+          </DetailModal>
+        );
+      })()}
 
       {/* CUSTOM CONFIRMATION DIALOG MODAL CON ANIMACIÓN & ESTADO ELIMINANDO */}
       <ConfirmationModal
