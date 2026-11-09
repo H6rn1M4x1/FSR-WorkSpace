@@ -1744,6 +1744,12 @@ export default function MealsView({
         activeDetailItem
     )
   );
+  // Detalle clickeable (punto pedido): mismo patrón que ya tiene PaymentsTable en Finanzas.
+  const [detailMercaderiaId, setDetailMercaderiaId] = useState<string | null>(null);
+  const [detailAlimentoId, setDetailAlimentoId] = useState<string | null>(null);
+  const [detailPlatoId, setDetailPlatoId] = useState<string | null>(null);
+  const [detailOrgId, setDetailOrgId] = useState<string | null>(null);
+  const [detailShoppingIndex, setDetailShoppingIndex] = useState<number | null>(null);
   const [editingMercaderiaId, setEditingMercaderiaId] = useState<string | null>(
     null,
   );
@@ -3028,7 +3034,14 @@ export default function MealsView({
                       className="group hover:bg-slate-50/80 dark:hover:bg-zinc-900/10 transition-colors"
                     >
                       <td className="px-4 py-4 whitespace-nowrap font-semibold text-slate-900 dark:text-zinc-100 md:sticky md:left-0 z-20 bg-white dark:bg-zinc-950 group-hover:bg-slate-50 dark:group-hover:bg-zinc-900 transition-colors min-w-[220px] w-[220px] max-w-[220px]">
-                        <span className="truncate block" title={item.ingredientes}>{item.ingredientes}</span>
+                        <button
+                          type="button"
+                          onClick={() => setDetailMercaderiaId(item.id)}
+                          title="Ver detalle"
+                          className="truncate block text-left hover:text-primary hover:underline cursor-pointer w-full"
+                        >
+                          {item.ingredientes}
+                        </button>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span
@@ -3400,7 +3413,14 @@ export default function MealsView({
                         className="group hover:bg-slate-50/80 dark:hover:bg-zinc-900/10 transition-colors"
                       >
                         <td className="py-3.5 px-4 whitespace-nowrap font-semibold text-slate-900 dark:text-white md:sticky md:left-0 z-20 bg-white dark:bg-zinc-950 group-hover:bg-slate-50 dark:group-hover:bg-zinc-900 transition-colors min-w-[220px] w-[220px] max-w-[220px]">
-                          <span className="truncate block" title={item.mercaderiaName}>{item.mercaderiaName}</span>
+                          <button
+                            type="button"
+                            onClick={() => setDetailAlimentoId(item.id)}
+                            title="Ver detalle"
+                            className="truncate block text-left hover:text-primary hover:underline cursor-pointer w-full"
+                          >
+                            {item.mercaderiaName}
+                          </button>
                         </td>
                         <td className="py-3.5 px-4 whitespace-nowrap text-slate-600 dark:text-zinc-300">
                           {item.ingrediente1 || (
@@ -3779,7 +3799,14 @@ export default function MealsView({
                       >
                         <td className="py-3.5 px-4 whitespace-nowrap font-semibold text-slate-900 dark:text-white md:sticky md:left-0 z-20 bg-white dark:bg-zinc-950 group-hover:bg-slate-50 dark:group-hover:bg-zinc-900 transition-colors min-w-[240px] w-[240px] max-w-[240px]">
                           <span className="flex items-center gap-1.5 min-w-0">
-                            <span className="truncate" title={item.nombrePlato}>{item.nombrePlato}</span>
+                            <button
+                              type="button"
+                              onClick={() => setDetailPlatoId(item.id)}
+                              title="Ver detalle"
+                              className="truncate text-left hover:text-primary hover:underline cursor-pointer transition-colors"
+                            >
+                              {item.nombrePlato}
+                            </button>
                             <SharedBadge
                               item={item}
                               isSharedOut={isSharedOut("platos", item.id)}
@@ -4102,10 +4129,14 @@ export default function MealsView({
                         </td>
                         <td className="py-3.5 px-4 whitespace-nowrap text-slate-900 dark:text-white font-medium text-sm">
                           <div className="flex flex-col gap-0.5">
-                            <span className="font-semibold force-text-black organizacion-semanal-plato-title dark:text-white flex items-center gap-1.5" data-plato-title="true" style={{ color: darkMode ? "#ffffff" : "#000000" }}>
+                            <button
+                              type="button"
+                              onClick={() => setDetailOrgId(item.id)}
+                              title="Ver detalle"
+                              className="font-semibold force-text-black organizacion-semanal-plato-title dark:text-white flex items-center gap-1.5 hover:text-primary hover:underline cursor-pointer text-left" data-plato-title="true" style={{ color: darkMode ? "#ffffff" : "#000000" }}>
                               <UtensilsCrossed className="w-3.5 h-3.5 text-primary shrink-0 self-center" />
                               <span className="self-center translate-y-[0.5px]">{getPlatoName(item.platoId)}</span>
-                            </span>
+                            </button>
                             {(() => {
                               const plato = platos.find(
                                 (p) => p.id === item.platoId,
@@ -4379,7 +4410,14 @@ export default function MealsView({
                             className={`py-3.5 px-4 whitespace-nowrap font-semibold text-slate-900 dark:text-white text-sm md:sticky md:left-[50px] z-20 bg-white dark:bg-zinc-950 group-hover:bg-slate-50 dark:group-hover:bg-zinc-900 transition-colors min-w-[220px] w-[220px] max-w-[220px] ${isCompleted ? "line-through text-slate-400 dark:text-zinc-500" : ""}`}
                           >
                             <div className="flex items-center gap-2">
-                              <span>{item.name}</span>
+                              <button
+                                type="button"
+                                onClick={() => setDetailShoppingIndex(index)}
+                                title="Ver detalle"
+                                className="hover:text-primary hover:underline cursor-pointer text-left"
+                              >
+                                {item.name}
+                              </button>
                               {item.isManual && item.isAuto && (
                                 <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-primary/10 text-primary uppercase tracking-wider">
                                   Mixto
@@ -5984,6 +6022,293 @@ export default function MealsView({
                 </div>
               )}
             </div>
+          </DetailModal>
+        );
+      })()}
+
+      {/* Detalle clickeable: Mercadería */}
+      {(() => {
+        const detailMercaderia = detailMercaderiaId
+          ? mercaderia.find((m) => m.id === detailMercaderiaId) || null
+          : null;
+        const vn = detailMercaderia
+          ? detailMercaderia.valoresNutricionales ||
+            generarNutricionEstimada(detailMercaderia.ingredientes, detailMercaderia.categoria)
+          : null;
+        return (
+          <DetailModal
+            isOpen={!!detailMercaderia}
+            onClose={() => setDetailMercaderiaId(null)}
+            title={detailMercaderia?.ingredientes}
+            icon={Package}
+            onEdit={detailMercaderia ? () => handleEditClick(detailMercaderia) : undefined}
+          >
+            {detailMercaderia && (
+              <div className="flex flex-col gap-3">
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
+                    Categoría / Sector
+                  </span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {detailMercaderia.categoria} • {detailMercaderia.sector || "General"}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
+                    Comercio / U.M.
+                  </span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {detailMercaderia.comercio || "No especificado"} • {detailMercaderia.unidadMedida}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
+                    Valores Nutricionales (100g)
+                  </span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    P: {vn?.proteinas}g | C: {vn?.carbohidratos}g | G: {vn?.grasas}g | Azúcares: {vn?.azucares}g | Fibra: {vn?.fibra}g | Sodio: {vn?.sodio}mg
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
+                    Calorías / Precio
+                  </span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {detailMercaderia.calorias !== undefined && detailMercaderia.calorias !== null ? `${detailMercaderia.calorias} kcal` : `${getCalorieDensity(detailMercaderia.ingredientes, detailMercaderia.categoria, detailMercaderia.sector)} kcal`}
+                    {detailMercaderia.precio ? ` • $${detailMercaderia.precio.toLocaleString("es-AR", { minimumFractionDigits: 2 })}` : ""}
+                  </span>
+                </div>
+                <button
+                  onClick={() => {
+                    const id = detailMercaderia.id;
+                    setDetailMercaderiaId(null);
+                    handleDeleteMercaderia(id);
+                  }}
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[11px] font-bold transition-all cursor-pointer mt-1"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Eliminar Artículo
+                </button>
+              </div>
+            )}
+          </DetailModal>
+        );
+      })()}
+
+      {/* Detalle clickeable: Alimentos / Recetas */}
+      {(() => {
+        const detailAlimento = detailAlimentoId
+          ? alimentos.find((a) => a.id === detailAlimentoId) || null
+          : null;
+        return (
+          <DetailModal
+            isOpen={!!detailAlimento}
+            onClose={() => setDetailAlimentoId(null)}
+            title={detailAlimento?.mercaderiaName}
+            icon={Database}
+            onEdit={detailAlimento ? () => handleEditAlimentoClick(detailAlimento) : undefined}
+          >
+            {detailAlimento && (
+              <div className="flex flex-col gap-3">
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
+                    Ingrediente 1
+                  </span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {detailAlimento.ingrediente1 || "-"} {detailAlimento.cantidad1 !== undefined ? `• ${detailAlimento.cantidad1} ${detailAlimento.unidad1 || ""}` : ""}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
+                    Ingrediente 2
+                  </span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {detailAlimento.ingrediente2 || "-"} {detailAlimento.cantidad2 !== undefined ? `• ${detailAlimento.cantidad2} ${detailAlimento.unidad2 || ""}` : ""}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
+                    Ingrediente 3
+                  </span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {detailAlimento.ingrediente3 || "-"} {detailAlimento.cantidad3 !== undefined ? `• ${detailAlimento.cantidad3} ${detailAlimento.unidad3 || ""}` : ""}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
+                    Val. Nutricional / Calorías (Total)
+                  </span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {calculateAlimentoCalories(detailAlimento) > 0 ? `${Math.round(calculateAlimentoCalories(detailAlimento))} kcal` : "-"}
+                  </span>
+                </div>
+                <button
+                  onClick={() => {
+                    const id = detailAlimento.id;
+                    setDetailAlimentoId(null);
+                    handleDeleteAlimento(id);
+                  }}
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[11px] font-bold transition-all cursor-pointer mt-1"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Eliminar Alimento
+                </button>
+              </div>
+            )}
+          </DetailModal>
+        );
+      })()}
+
+      {/* Detalle clickeable: Platos */}
+      {(() => {
+        const detailPlato = detailPlatoId
+          ? platos.find((p) => p.id === detailPlatoId) || null
+          : null;
+        const detailPlatoAlimentos = detailPlato
+          ? [detailPlato.alimentoId1, detailPlato.alimentoId2, detailPlato.alimentoId3]
+              .filter(Boolean)
+              .map((id) => getAlimentoName(id as string))
+              .filter((n) => n && n !== "-")
+          : [];
+        return (
+          <DetailModal
+            isOpen={!!detailPlato}
+            onClose={() => setDetailPlatoId(null)}
+            title={detailPlato?.nombrePlato}
+            icon={ChefHat}
+            onEdit={detailPlato ? () => handleEditPlatoClick(detailPlato) : undefined}
+          >
+            {detailPlato && (
+              <div className="flex flex-col gap-3">
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
+                    Alimentos / Recetas
+                  </span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {detailPlatoAlimentos.length > 0 ? detailPlatoAlimentos.join(" • ") : "Sin alimentos asignados"}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
+                    Calorías (Total)
+                  </span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {calculatePlatoCalories(detailPlato) > 0 ? `${calculatePlatoCalories(detailPlato)} kcal` : "-"}
+                  </span>
+                </div>
+                <button
+                  onClick={() => {
+                    const id = detailPlato.id;
+                    setDetailPlatoId(null);
+                    handleDeletePlato(id);
+                  }}
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[11px] font-bold transition-all cursor-pointer mt-1"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Eliminar Plato
+                </button>
+              </div>
+            )}
+          </DetailModal>
+        );
+      })()}
+
+      {/* Detalle clickeable: Organización Semanal */}
+      {(() => {
+        const detailOrg = detailOrgId
+          ? organizacionSemanal.find((o) => o.id === detailOrgId) || null
+          : null;
+        return (
+          <DetailModal
+            isOpen={!!detailOrg}
+            onClose={() => setDetailOrgId(null)}
+            title={detailOrg ? getPlatoName(detailOrg.platoId) : undefined}
+            icon={CalendarDays}
+            onEdit={detailOrg ? () => handleEditOrgClick(detailOrg) : undefined}
+          >
+            {detailOrg && (
+              <div className="flex flex-col gap-3">
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
+                    Fecha / Día
+                  </span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {formatFechaDMY(detailOrg.fecha)} • {getDiaDeLaSemana(detailOrg.fecha)}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
+                    Ingredientes
+                  </span>
+                  <div className="pl-2 flex flex-wrap gap-1.5">
+                    {renderPlatoIngredientsBadges(detailOrg.platoId)}
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    const id = detailOrg.id;
+                    setDetailOrgId(null);
+                    handleDeleteOrg(id);
+                  }}
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[11px] font-bold transition-all cursor-pointer mt-1"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Eliminar Planificación
+                </button>
+              </div>
+            )}
+          </DetailModal>
+        );
+      })()}
+
+      {/* Detalle clickeable: Lista de Compras */}
+      {(() => {
+        const detailShopping =
+          detailShoppingIndex !== null
+            ? filteredShoppingList[detailShoppingIndex] || null
+            : null;
+        return (
+          <DetailModal
+            isOpen={!!detailShopping}
+            onClose={() => setDetailShoppingIndex(null)}
+            title={detailShopping?.name}
+            icon={ShoppingBag}
+          >
+            {detailShopping && (
+              <div className="flex flex-col gap-3">
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
+                    Cantidad / U.M.
+                  </span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {detailShopping.cantidad} {detailShopping.unidadMedida}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
+                    Categoría / Sector
+                  </span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {detailShopping.categoria} • {detailShopping.sector}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
+                    Comercio
+                  </span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {detailShopping.comercio}
+                  </span>
+                </div>
+                <button
+                  onClick={() => {
+                    const name = detailShopping.name;
+                    const mercaderiaId = detailShopping.mercaderiaId;
+                    setDetailShoppingIndex(null);
+                    handleDeleteShoppingItem(name, mercaderiaId);
+                  }}
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[11px] font-bold transition-all cursor-pointer mt-1"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Eliminar de la Lista
+                </button>
+              </div>
+            )}
           </DetailModal>
         );
       })()}

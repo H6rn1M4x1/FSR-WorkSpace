@@ -472,6 +472,15 @@ function BankNameInput({ value, onChange, darkMode }: { value: string; onChange:
   );
 }
 
+// Inserta la barra automáticamente después de los primeros 2 dígitos del vencimiento (punto
+// pedido) — reformatea desde los dígitos crudos en cada tecla, así el borrado también se comporta
+// bien (al borrar la barra con backspace, vuelve a quedar en "MM" sin forzar nada raro).
+function formatCardExpiry(raw: string): string {
+  const digits = raw.replace(/\D/g, "").slice(0, 4);
+  if (digits.length <= 2) return digits;
+  return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+}
+
 function CreateCardModal({
   darkMode,
   editingCard,
@@ -635,7 +644,9 @@ function CreateCardModal({
                   <input
                     type="text"
                     value={vencimiento}
-                    onChange={(e) => setVencimiento(e.target.value.slice(0, 5))}
+                    onChange={(e) => setVencimiento(formatCardExpiry(e.target.value))}
+                    inputMode="numeric"
+                    maxLength={5}
                     placeholder="MM/AA"
                     className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-zinc-950/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white outline-none transition-all text-sm focus:border-primary"
                   />

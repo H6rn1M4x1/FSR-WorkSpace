@@ -1423,14 +1423,23 @@ export default function PaymentsTable({
                               askConfirmation(
                                 "Desvincular Archivo",
                                 "¿Estás seguro de que deseas desvincular este archivo de factura?",
-                                () => {
+                                async () => {
+                                  const updated = { ...p, facturaEmitida: undefined };
                                   setPayments((prev) =>
                                     prev.map((item) =>
-                                      item.id === p.id
-                                        ? { ...item, facturaEmitida: undefined }
-                                        : item,
+                                      item.id === p.id ? updated : item,
                                     ),
                                   );
+                                  try {
+                                    const userId = userEmail || "hernanmaximiliano10@gmail.com";
+                                    await saveItemToFirestore(userId, "detailed_payments", updated);
+                                    showToast("Archivo de factura desvinculado.", "success");
+                                  } catch (err: any) {
+                                    setPayments((prev) =>
+                                      prev.map((item) => (item.id === p.id ? p : item)),
+                                    );
+                                    showToast(err?.message || "No se pudo desvincular el archivo.", "error");
+                                  }
                                 },
                               );
                             }}
@@ -1481,17 +1490,23 @@ export default function PaymentsTable({
                               askConfirmation(
                                 "Desvincular Archivo",
                                 "¿Estás seguro de que deseas desvincular este comprobante de pago?",
-                                () => {
+                                async () => {
+                                  const updated = { ...p, comprobantePago: undefined };
                                   setPayments((prev) =>
                                     prev.map((item) =>
-                                      item.id === p.id
-                                        ? {
-                                            ...item,
-                                            comprobantePago: undefined,
-                                          }
-                                        : item,
+                                      item.id === p.id ? updated : item,
                                     ),
                                   );
+                                  try {
+                                    const userId = userEmail || "hernanmaximiliano10@gmail.com";
+                                    await saveItemToFirestore(userId, "detailed_payments", updated);
+                                    showToast("Comprobante de pago desvinculado.", "success");
+                                  } catch (err: any) {
+                                    setPayments((prev) =>
+                                      prev.map((item) => (item.id === p.id ? p : item)),
+                                    );
+                                    showToast(err?.message || "No se pudo desvincular el archivo.", "error");
+                                  }
                                 },
                               );
                             }}

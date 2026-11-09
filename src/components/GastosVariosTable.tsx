@@ -7,6 +7,7 @@ import { generateUniqueId } from "../utils/id";
 import { motion, AnimatePresence } from "motion/react";
 import { createPortal } from "react-dom";
 import { ConfirmationModal } from "./ConfirmationModal";
+import { DetailModal } from "./DetailModal";
 import { useToast } from "../context/ToastContext";
 import { GastoVario } from "../types";
 import { SmartDateTimePicker } from "./SmartDateTimePicker";
@@ -308,6 +309,9 @@ export default function GastosVariosTable({
   // Add / Edit Modal state
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingGasto, setEditingGasto] = useState<GastoVario | null>(null);
+  // Detalle clickeable (punto pedido): mismo patrón que ya tiene PaymentsTable — tocar el nombre
+  // abre un modal con la info completa + editar/eliminar, en vez de ir directo a editar.
+  const [detailGastoId, setDetailGastoId] = useState<string | null>(null);
   const [showAiModal, setShowAiModal] = useState(false);
 
   useLockBodyScroll(Boolean(showAddModal || showAiModal || editingGasto));
@@ -816,7 +820,14 @@ export default function GastosVariosTable({
                     className="hover:bg-slate-50/80 dark:hover:bg-zinc-800/30 transition-colors group"
                   >
                     <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white whitespace-nowrap">
-                      {gasto.descripcion}
+                      <button
+                        type="button"
+                        onClick={() => setDetailGastoId(gasto.id)}
+                        title="Ver detalle"
+                        className="text-left hover:text-primary hover:underline cursor-pointer"
+                      >
+                        {gasto.descripcion}
+                      </button>
                     </td>
 
                     <td className="py-3.5 px-4 whitespace-nowrap">
@@ -1341,6 +1352,55 @@ export default function GastosVariosTable({
       </AnimatePresence>,
       document.body,
     )}
+
+      {/* Detalle del gasto — se abre tocando la descripción en la tabla (punto pedido), mismo
+          patrón que ya tiene PaymentsTable. */}
+      {(() => {
+        const detailGasto = detailGastoId ? gastosVarios.find((g) => g.id === detailGastoId) || null : null;
+        return (
+          <DetailModal
+            isOpen={!!detailGasto}
+            onClose={() => setDetailGastoId(null)}
+            title={detailGasto?.descripcion}
+            icon={Receipt}
+            onEdit={detailGasto ? () => handleOpenEdit(detailGasto) : undefined}
+          >
+            {detailGasto && (
+              <div className="flex flex-col gap-3">
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Fecha</span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {formatFechaDMY(detailGasto.fecha)}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Categoría / Monto</span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {detailGasto.categoria} • {formatCurrency(detailGasto.monto)}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Método</span>
+                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+                    {detailGasto.metodo}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const id = detailGasto.id;
+                    setDetailGastoId(null);
+                    handleDelete(id);
+                  }}
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[11px] font-bold transition-all cursor-pointer mt-1"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Eliminar gasto
+                </button>
+              </div>
+            )}
+          </DetailModal>
+        );
+      })()}
 
       {/* Confirmation Modal con Animación y Estado Eliminando */}
       <ConfirmationModal
