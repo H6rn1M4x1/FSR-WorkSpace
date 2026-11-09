@@ -7,7 +7,7 @@ import { generateUniqueId } from "../utils/id";
 import { motion, AnimatePresence } from "motion/react";
 import { createPortal } from "react-dom";
 import { useToast } from "../context/ToastContext";
-import { DetailModal } from "./DetailModal";
+import { DetailModal, DetailBlock, DetailBlockGrid } from "./DetailModal";
 import { Inversion, CotizacionAccion } from "../types";
 import {
   Plus,
@@ -1494,6 +1494,7 @@ export default function InversionesTable({
                         type="button"
                         onClick={() => setDetailInversionId(item.id)}
                         title="Ver detalle"
+                        data-no-global-sound
                         className="px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 font-black font-mono tracking-wider hover:underline cursor-pointer"
                       >
                         {item.ticker}
@@ -2404,47 +2405,62 @@ export default function InversionesTable({
             isOpen={!!detailItem}
             onClose={() => setDetailInversionId(null)}
             title={detailItem ? `${detailItem.ticker} • ${detailItem.lugar}` : undefined}
+            subtitle={detailItem?.operacion}
             icon={BarChart3}
             onEdit={detailItem ? () => handleOpenEdit(detailItem) : undefined}
+            onDelete={detailItem ? () => setDeleteConfirmId(detailItem.id) : undefined}
           >
             {detailItem && (
-              <div className="flex flex-col gap-3">
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Operación / Fecha</span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {detailItem.operacion} • {detailItem.fecha} • Cant. {detailItem.cantidad}
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">En Pesos</span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    Unit. {detailItem.valorUnitarioPesos || "-"} • Total {detailItem.valorTotalPesos || "-"} • G/P {detailItem.gananciasAcumuladasPesos || "-"}
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">En Dólares</span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    Unit. {detailItem.valorUnitarioDolares || "-"} • Total {detailItem.valorTotalDolares || "-"} • G/P {detailItem.gananciasAcumuladasDolares || "-"}
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Estado / Resultado</span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {detailItem.estado} • {detailItem.resultado?.toLowerCase() === "ganancia" ? "Ganancia" : "Pérdida"}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const id = detailItem.id;
-                    setDetailInversionId(null);
-                    setDeleteConfirmId(id);
-                  }}
-                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[11px] font-bold transition-all cursor-pointer mt-1"
+              <DetailBlockGrid>
+                <DetailBlock
+                  icon={detailItem.operacion?.toLowerCase() === "venta" ? ArrowDownRight : ArrowUpRight}
+                  label="Operación"
                 >
-                  <Trash2 className="w-3.5 h-3.5" /> Eliminar inversión
-                </button>
-              </div>
+                  {detailItem.operacion}
+                </DetailBlock>
+                <DetailBlock icon={Calendar} label="Fecha">
+                  {detailItem.fecha}
+                </DetailBlock>
+                <DetailBlock icon={Layers} label="Cantidad">
+                  {detailItem.cantidad}
+                </DetailBlock>
+                <DetailBlock icon={Clock} label="Estado" tone={detailItem.estado?.toLowerCase() === "abierto" ? "primary" : "default"}>
+                  {detailItem.estado}
+                </DetailBlock>
+                <DetailBlock icon={DollarSign} label="Valor en Pesos" tone="primary">
+                  Unit. {detailItem.valorUnitarioPesos || "-"}
+                  <br />
+                  Total {detailItem.valorTotalPesos || "-"}
+                </DetailBlock>
+                <DetailBlock icon={DollarSign} label="Valor en Dólares" tone="primary">
+                  Unit. {detailItem.valorUnitarioDolares || "-"}
+                  <br />
+                  Total {detailItem.valorTotalDolares || "-"}
+                </DetailBlock>
+                <DetailBlock
+                  icon={TrendingUp}
+                  label="G/P en Pesos"
+                  tone={detailItem.resultado?.toLowerCase() === "ganancia" ? "success" : "danger"}
+                  emphasis
+                >
+                  {detailItem.gananciasAcumuladasPesos || "-"}
+                </DetailBlock>
+                <DetailBlock
+                  icon={TrendingUp}
+                  label="G/P en Dólares"
+                  tone={detailItem.resultado?.toLowerCase() === "ganancia" ? "success" : "danger"}
+                >
+                  {detailItem.gananciasAcumuladasDolares || "-"}
+                </DetailBlock>
+                <DetailBlock
+                  icon={Percent}
+                  label="Resultado"
+                  tone={detailItem.resultado?.toLowerCase() === "ganancia" ? "success" : "danger"}
+                  span
+                >
+                  {detailItem.resultado?.toLowerCase() === "ganancia" ? "Ganancia" : "Pérdida"}
+                </DetailBlock>
+              </DetailBlockGrid>
             )}
           </DetailModal>
         );

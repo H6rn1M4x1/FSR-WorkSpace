@@ -8,7 +8,7 @@ import React, { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { createPortal } from "react-dom";
 import { ConfirmationModal } from "./ConfirmationModal";
-import { DetailModal } from "./DetailModal";
+import { DetailModal, DetailBlock, DetailBlockGrid } from "./DetailModal";
 import { CotizacionCripto } from "../types";
 import {
   Search,
@@ -623,6 +623,7 @@ export default function CotizacionesCriptoTable({
                           type="button"
                           onClick={() => setDetailCriptoId(cripto.id)}
                           title="Ver detalle"
+                          data-no-global-sound
                           className="cripto-table-name text-xs font-black text-slate-900 dark:text-white hover:text-primary hover:underline cursor-pointer text-left"
                         >
                           {toTitleCase(cripto.name)}
@@ -1035,48 +1036,51 @@ export default function CotizacionesCriptoTable({
           <DetailModal
             isOpen={!!detailItem}
             onClose={() => setDetailCriptoId(null)}
-            title={detailItem ? `${toTitleCase(detailItem.name)} (${detailItem.symbol || getCriptoSymbol(detailItem)})` : undefined}
+            title={detailItem ? toTitleCase(detailItem.name) : undefined}
+            subtitle={detailItem ? (detailItem.symbol || getCriptoSymbol(detailItem)) : undefined}
             icon={Bitcoin}
             onEdit={detailItem ? () => openEditModal(detailItem) : undefined}
+            onDelete={detailItem ? () => setConfirmDeleteId(detailItem.id) : undefined}
           >
             {detailItem && (
-              <div className="flex flex-col gap-3">
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Precio</span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {detailItem.price}
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Variación (1h / 24h / 7d)</span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {detailItem.percent1h}% • {detailItem.percent24h}% • {detailItem.percent7d}%
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Cap. de Mercado / Volumen 24h</span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {detailItem.marketCap} • {detailItem.volume24h}
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">Suministro Circulante / Sentimiento</span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {detailItem.circulatingSupply} • {detailItem.sentiment}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const id = detailItem.id;
-                    setDetailCriptoId(null);
-                    setConfirmDeleteId(id);
-                  }}
-                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[11px] font-bold transition-all cursor-pointer mt-1"
+              <DetailBlockGrid>
+                <DetailBlock icon={DollarSign} label="Precio" tone="primary" emphasis span>
+                  {detailItem.price}
+                </DetailBlock>
+                <DetailBlock
+                  icon={(detailItem.percent1h || 0) >= 0 ? TrendingUp : TrendingDown}
+                  label="Variación 1h"
+                  tone={(detailItem.percent1h || 0) >= 0 ? "success" : "danger"}
                 >
-                  <Trash2 className="w-3.5 h-3.5" /> Eliminar criptomoneda
-                </button>
-              </div>
+                  {detailItem.percent1h}%
+                </DetailBlock>
+                <DetailBlock
+                  icon={(detailItem.percent24h || 0) >= 0 ? TrendingUp : TrendingDown}
+                  label="Variación 24h"
+                  tone={(detailItem.percent24h || 0) >= 0 ? "success" : "danger"}
+                >
+                  {detailItem.percent24h}%
+                </DetailBlock>
+                <DetailBlock
+                  icon={(detailItem.percent7d || 0) >= 0 ? TrendingUp : TrendingDown}
+                  label="Variación 7d"
+                  tone={(detailItem.percent7d || 0) >= 0 ? "success" : "danger"}
+                >
+                  {detailItem.percent7d}%
+                </DetailBlock>
+                <DetailBlock icon={Layers} label="Suministro Circulante">
+                  {detailItem.circulatingSupply}
+                </DetailBlock>
+                <DetailBlock icon={DollarSign} label="Cap. de Mercado">
+                  {detailItem.marketCap}
+                </DetailBlock>
+                <DetailBlock icon={DollarSign} label="Volumen (24h)">
+                  {detailItem.volume24h}
+                </DetailBlock>
+                <DetailBlock icon={ShieldCheck} label="Sentimiento">
+                  {detailItem.sentiment}
+                </DetailBlock>
+              </DetailBlockGrid>
             )}
           </DetailModal>
         );

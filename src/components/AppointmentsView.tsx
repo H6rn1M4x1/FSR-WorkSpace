@@ -25,7 +25,7 @@ import { getAccentColorHex } from "./WeeklyScheduleGrid";
 import { fetchStreetRoute } from "../utils/routing";
 import { PillFilterBar } from "./PillFilterBar";
 import { ConfirmationModal } from "./ConfirmationModal";
-import { DetailModal } from "./DetailModal";
+import { DetailModal, DetailBlock, DetailBlockGrid } from "./DetailModal";
 import { motion, AnimatePresence } from "motion/react";
 import { createPortal } from "react-dom";
 import {
@@ -1601,6 +1601,7 @@ export default function AppointmentsView({
   const [statusFilter, setStatusFilter] = useState<string>("Pendiente");
   const [agendaStatusFilter, setAgendaStatusFilter] = useState<string>("Todos");
   const [listSearchTerm, setListSearchTerm] = useState("");
+  const [detailTurnoTableId, setDetailTurnoTableId] = useState<string | null>(null);
 
   // Places Search API Autocomplete states
   const [lugarQuery, setLugarQuery] = useState("");
@@ -3292,105 +3293,76 @@ export default function AppointmentsView({
                                 title={tc.descripcion.replace(/⚽\s*/g, "")}
                                 icon={getCategoryIcon(tc.categoria)}
                                 onEdit={() => handleEditTurnoCompromiso(tc)}
+                                onDelete={() => handleDeleteTurnoCompromiso(tc.id)}
+                                deleteLabel="Eliminar Registro"
                               >
-                                <div className="flex flex-col gap-3">
-                                  <div>
-                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                      Fecha y Hora
-                                    </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
-                                      {formatDateFriendly(tc.fecha)}
-                                    </span>
-                                  </div>
-
+                                <DetailBlockGrid>
+                                  <DetailBlock icon={Calendar} label="Fecha y Hora" tone="primary" emphasis span>
+                                    {formatDateFriendly(tc.fecha)}
+                                  </DetailBlock>
+                                  {!isAutoScheduledMatchTurno(tc.id) && (
+                                    <>
+                                      <DetailBlock icon={Tag} label="Categoría">
+                                        {getCategoryLabel(tc.categoria)}
+                                      </DetailBlock>
+                                      <DetailBlock
+                                        icon={Zap}
+                                        label="Estado"
+                                        tone={estado === "Realizado" ? "success" : estado === "Initinere Diario" ? "warning" : "default"}
+                                      >
+                                        {estado}
+                                      </DetailBlock>
+                                    </>
+                                  )}
                                   {tc.lugar &&
                                   tc.lugar.trim() &&
                                   tc.lugar.toLowerCase() !== "sin dirección" &&
                                   tc.lugar.toLowerCase() !== "sin direccion" &&
                                   tc.lugar.toLowerCase() !== "sin lugar asignado" && (
-                                  <div>
-                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                      Lugar / Ubicación
-                                    </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
+                                    <DetailBlock icon={MapPin} label="Lugar / Ubicación" span>
                                       {tc.lugar}
-                                    </span>
-                                  </div>
+                                    </DetailBlock>
                                   )}
-
                                   {!isAutoScheduledMatchTurno(tc.id) && tc.doctor && tc.doctor.trim() && (
-                                  <div>
-                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                      Profesional / Asignado
-                                    </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
+                                    <DetailBlock icon={Stethoscope} label="Profesional / Asignado" span>
                                       {tc.doctor}
-                                    </span>
-                                  </div>
+                                    </DetailBlock>
                                   )}
-
-                                  {!isAutoScheduledMatchTurno(tc.id) && (
-                                  <div>
-                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                      Categoría y Estatus
-                                    </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
-                                      {getCategoryLabel(tc.categoria)} • {estado}
-                                    </span>
-                                  </div>
+                                  {tc.informacionPersonalizada && !isAutoScheduledMatchTurno(tc.id) && (
+                                    <DetailBlock icon={FileText} label="Información Personalizada" span>
+                                      <div
+                                        className="prose dark:prose-invert prose-sm max-h-[120px] overflow-y-auto [&_*]:!text-[11px]"
+                                        dangerouslySetInnerHTML={{ __html: tc.informacionPersonalizada }}
+                                      />
+                                    </DetailBlock>
                                   )}
-                                </div>
-
-                                {tc.informacionPersonalizada && !isAutoScheduledMatchTurno(tc.id) && (
-                                  <div>
-                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                      Información Personalizada
-                                    </span>
-                                    <div
-                                      className="text-[10px] text-zinc-700 dark:text-zinc-300 italic block pl-2 prose dark:prose-invert prose-sm max-h-[120px] overflow-y-auto [&_*]:!text-[10px]"
-                                      dangerouslySetInnerHTML={{ __html: tc.informacionPersonalizada }}
-                                    />
-                                  </div>
-                                )}
-
-                                {tc.transcripcionAutomatica && (
-                                  <div>
-                                    <span className="flex items-center gap-1 mb-1">
-                                      <AudioLines className="w-3 h-3 text-green-500" /> <span className="inline-block text-[13px] font-extrabold text-green-500 detail-label">Transcripción de audio</span>
-                                    </span>
-                                    {(() => {
-                                      const audioFile = tc.archivosNecesarios?.find(a => a.name.startsWith('Audio_') && a.url.startsWith('data:audio/'));
-                                      if (audioFile) {
-                                        return <AudioTranscriptionPlayer audioUrl={audioFile.url} transcript={tc.transcripcionAutomatica} />;
-                                      }
-                                      return (
-                                        <div className="text-[10px] text-zinc-700 dark:text-zinc-300 italic max-h-[100px] overflow-y-auto block pl-2">
-                                          {tc.transcripcionAutomatica}
-                                        </div>
-                                      );
-                                    })()}
-                                  </div>
-                                )}
-
-                                {typeof tc.lat === "number" &&
-                                  typeof tc.lon === "number" &&
-                                  !isNaN(tc.lat) &&
-                                  !isNaN(tc.lon) &&
-                                  !(tc.lat === 0 && tc.lon === 0) && (
-                                  <div>
-                                    <div className="w-full h-px bg-primary/50 mb-2" />
-                                    <span className="flex items-center gap-1 mb-1.5">
-                                      <MapPin className="w-3 h-3 text-primary" /> <span className="inline-block text-[13px] font-extrabold text-primary detail-label">Mapa</span>
-                                    </span>
-                                    <LocationPickerMap
-                                      lat={tc.lat}
-                                      lon={tc.lon}
-                                      locationName={tc.lugar}
-                                      heightClass="h-40"
-                                      readOnly
-                                    />
-                                  </div>
-                                )}
+                                  {tc.transcripcionAutomatica && (
+                                    <DetailBlock icon={AudioLines} label="Transcripción de Audio" tone="success" span>
+                                      {(() => {
+                                        const audioFile = tc.archivosNecesarios?.find(a => a.name.startsWith('Audio_') && a.url.startsWith('data:audio/'));
+                                        if (audioFile) {
+                                          return <AudioTranscriptionPlayer audioUrl={audioFile.url} transcript={tc.transcripcionAutomatica} />;
+                                        }
+                                        return <div className="italic max-h-[100px] overflow-y-auto">{tc.transcripcionAutomatica}</div>;
+                                      })()}
+                                    </DetailBlock>
+                                  )}
+                                  {typeof tc.lat === "number" &&
+                                    typeof tc.lon === "number" &&
+                                    !isNaN(tc.lat) &&
+                                    !isNaN(tc.lon) &&
+                                    !(tc.lat === 0 && tc.lon === 0) && (
+                                    <DetailBlock icon={MapPin} label="Mapa" span>
+                                      <LocationPickerMap
+                                        lat={tc.lat}
+                                        lon={tc.lon}
+                                        locationName={tc.lugar}
+                                        heightClass="h-40"
+                                        readOnly
+                                      />
+                                    </DetailBlock>
+                                  )}
+                                </DetailBlockGrid>
                               </DetailModal>
 
                             {/* Attached Files Section if any */}
@@ -3634,7 +3606,15 @@ export default function AppointmentsView({
                           <td className={`px-4 py-3 font-semibold md:sticky md:left-[70px] z-20 bg-white dark:bg-zinc-950 group-hover:bg-slate-50 dark:group-hover:bg-zinc-900 transition-colors min-w-[200px] w-[220px] max-w-[280px] ${tc.estatus ? "line-through text-zinc-400 dark:text-zinc-500" : "text-slate-800 dark:text-zinc-200"}`} style={{ color: tc.estatus ? undefined : (darkMode ? undefined : '#000000') }}>
                             <div className="flex flex-col gap-1">
                               <span className="flex items-center gap-1.5">
-                                <span className={tc.estatus ? "line-through text-zinc-400 dark:text-zinc-500" : ""}>{tc.descripcion}</span>
+                                <button
+                                  type="button"
+                                  data-no-global-sound
+                                  onClick={() => setDetailTurnoTableId(tc.id)}
+                                  title="Ver detalle"
+                                  className={`text-left hover:text-primary hover:underline cursor-pointer ${tc.estatus ? "line-through text-zinc-400 dark:text-zinc-500" : ""}`}
+                                >
+                                  {tc.descripcion}
+                                </button>
                                 <SharedBadge
                                   item={tc}
                                   isSharedOut={isSharedOut("turnos_compromisos", tc.id)}
@@ -5067,6 +5047,126 @@ export default function AppointmentsView({
           })(),
           document.body,
         )}
+
+      {/* Detalle clickeable: tabla de Registro de Turnos y Compromisos */}
+      {(() => {
+        const detailTurno = detailTurnoTableId
+          ? turnosCompromisos.find((t) => t.id === detailTurnoTableId) || null
+          : null;
+        const detailEstado = detailTurno ? getEstadoLabel(detailTurno.estatus, detailTurno.fecha) : "";
+        const estadoTone = detailEstado === "Realizado" ? "success" : detailEstado === "Initinere Diario" ? "warning" : "default";
+        const hasLugar = !!(
+          detailTurno?.lugar &&
+          detailTurno.lugar.trim() &&
+          !["sin dirección", "sin direccion", "sin lugar asignado"].includes(detailTurno.lugar.toLowerCase())
+        );
+        return (
+          <DetailModal
+            isOpen={!!detailTurno}
+            onClose={() => setDetailTurnoTableId(null)}
+            title={detailTurno?.descripcion}
+            icon={detailTurno ? getCategoryIcon(detailTurno.categoria) : undefined}
+            onEdit={detailTurno ? () => handleEditTurnoCompromiso(detailTurno) : undefined}
+            onDelete={detailTurno ? () => handleDeleteTurnoCompromiso(detailTurno.id) : undefined}
+            deleteLabel="Eliminar Registro"
+          >
+            {detailTurno && (
+              <DetailBlockGrid>
+                <DetailBlock icon={Calendar} label="Fecha y Hora" tone="primary" emphasis span>
+                  {formatDateFriendly(detailTurno.fecha)}
+                </DetailBlock>
+                <DetailBlock icon={Tag} label="Categoría">
+                  {getCategoryLabel(detailTurno.categoria)}
+                </DetailBlock>
+                <DetailBlock icon={Zap} label="Estado" tone={estadoTone as any}>
+                  {detailEstado}
+                </DetailBlock>
+                {hasLugar && (
+                  <DetailBlock icon={MapPin} label="Lugar / Ubicación" span>
+                    {detailTurno.lugar}
+                  </DetailBlock>
+                )}
+                {!isAutoScheduledMatchTurno(detailTurno.id) && detailTurno.doctor && detailTurno.doctor.trim() && (
+                  <DetailBlock icon={Stethoscope} label="Profesional / Asignado" span>
+                    {detailTurno.doctor}
+                  </DetailBlock>
+                )}
+                {detailTurno.informacionPersonalizada && !isAutoScheduledMatchTurno(detailTurno.id) && (
+                  <DetailBlock icon={FileText} label="Información Personalizada" span>
+                    <div
+                      className="prose dark:prose-invert prose-sm max-h-[120px] overflow-y-auto [&_*]:!text-[11px]"
+                      dangerouslySetInnerHTML={{ __html: detailTurno.informacionPersonalizada }}
+                    />
+                  </DetailBlock>
+                )}
+                {detailTurno.transcripcionAutomatica && (
+                  <DetailBlock icon={AudioLines} label="Transcripción de Audio" tone="success" span>
+                    {(() => {
+                      const audioFile = detailTurno.archivosNecesarios?.find((a) => a.name.startsWith("Audio_") && a.url.startsWith("data:audio/"));
+                      if (audioFile) {
+                        return <AudioTranscriptionPlayer audioUrl={audioFile.url} transcript={detailTurno.transcripcionAutomatica} />;
+                      }
+                      return <div className="italic max-h-[100px] overflow-y-auto">{detailTurno.transcripcionAutomatica}</div>;
+                    })()}
+                  </DetailBlock>
+                )}
+                {(detailTurno.pedidoDocumento || detailTurno.estudioInformeDoc || (detailTurno.archivosNecesarios && detailTurno.archivosNecesarios.length > 0)) && (
+                  <DetailBlock icon={Paperclip} label="Archivos Adjuntos" span>
+                    <div className="flex flex-wrap gap-2">
+                      {detailTurno.pedidoDocumento && (
+                        <button
+                          type="button"
+                          onClick={() => { setPreviewFileUrl(detailTurno.pedidoDocumento || null); setPreviewFileName("Pedido / Documento"); }}
+                          className="flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-lg text-[10px] font-extrabold hover:underline"
+                        >
+                          <FileDown className="w-3 h-3" /> Ver Pedido
+                        </button>
+                      )}
+                      {detailTurno.estudioInformeDoc && (
+                        <button
+                          type="button"
+                          onClick={() => { setPreviewFileUrl(detailTurno.estudioInformeDoc || null); setPreviewFileName("Estudio / Informe"); }}
+                          className="flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-lg text-[10px] font-extrabold hover:underline"
+                        >
+                          <FileDown className="w-3 h-3" /> Ver Estudio
+                        </button>
+                      )}
+                      {(detailTurno.archivosNecesarios || []).map((archivo, idx) => (
+                        <a
+                          key={`detail-att-${idx}`}
+                          href={archivo.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          download={archivo.name}
+                          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 dark:bg-zinc-800 text-[10px] font-bold text-slate-600 dark:text-zinc-400"
+                        >
+                          <FileText className="w-3 h-3 shrink-0" />
+                          <span className="max-w-[100px] truncate">{archivo.name}</span>
+                        </a>
+                      ))}
+                    </div>
+                  </DetailBlock>
+                )}
+                {typeof detailTurno.lat === "number" &&
+                  typeof detailTurno.lon === "number" &&
+                  !isNaN(detailTurno.lat) &&
+                  !isNaN(detailTurno.lon) &&
+                  !(detailTurno.lat === 0 && detailTurno.lon === 0) && (
+                  <DetailBlock icon={MapPin} label="Mapa" span>
+                    <LocationPickerMap
+                      lat={detailTurno.lat}
+                      lon={detailTurno.lon}
+                      locationName={detailTurno.lugar}
+                      heightClass="h-40"
+                      readOnly
+                    />
+                  </DetailBlock>
+                )}
+              </DetailBlockGrid>
+            )}
+          </DetailModal>
+        );
+      })()}
 
       {/* CUSTOM CONFIRMATION DIALOG MODAL CON ANIMACIÓN & ESTADO ELIMINANDO */}
       <ConfirmationModal

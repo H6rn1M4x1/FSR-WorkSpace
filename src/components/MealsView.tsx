@@ -14,7 +14,7 @@ import { createPortal } from "react-dom";
 import { useToast } from "../context/ToastContext";
 import AnimatedList from "./AnimatedList";
 import { ConfirmationModal } from "./ConfirmationModal";
-import { DetailModal } from "./DetailModal";
+import { DetailModal, DetailBlock, DetailBlockGrid } from "./DetailModal";
 import {
   Loader2,
   UtensilsCrossed,
@@ -2629,6 +2629,7 @@ export default function MealsView({
                                       </button>
                                       <button
                                         onClick={() => setActiveDetailItem(os)}
+                                        data-no-global-sound
                                         className="p-1 hover:bg-primary/10 rounded-lg text-slate-500 dark:text-zinc-400 hover:text-primary transition-all cursor-pointer"
                                         title="Ver detalles"
                                       >
@@ -3037,6 +3038,7 @@ export default function MealsView({
                         <button
                           type="button"
                           onClick={() => setDetailMercaderiaId(item.id)}
+                          data-no-global-sound
                           title="Ver detalle"
                           className="truncate block text-left hover:text-primary hover:underline cursor-pointer w-full"
                         >
@@ -3416,6 +3418,7 @@ export default function MealsView({
                           <button
                             type="button"
                             onClick={() => setDetailAlimentoId(item.id)}
+                            data-no-global-sound
                             title="Ver detalle"
                             className="truncate block text-left hover:text-primary hover:underline cursor-pointer w-full"
                           >
@@ -3802,6 +3805,7 @@ export default function MealsView({
                             <button
                               type="button"
                               onClick={() => setDetailPlatoId(item.id)}
+                              data-no-global-sound
                               title="Ver detalle"
                               className="truncate text-left hover:text-primary hover:underline cursor-pointer transition-colors"
                             >
@@ -4132,6 +4136,7 @@ export default function MealsView({
                             <button
                               type="button"
                               onClick={() => setDetailOrgId(item.id)}
+                              data-no-global-sound
                               title="Ver detalle"
                               className="font-semibold force-text-black organizacion-semanal-plato-title dark:text-white flex items-center gap-1.5 hover:text-primary hover:underline cursor-pointer text-left" data-plato-title="true" style={{ color: darkMode ? "#ffffff" : "#000000" }}>
                               <UtensilsCrossed className="w-3.5 h-3.5 text-primary shrink-0 self-center" />
@@ -4413,6 +4418,7 @@ export default function MealsView({
                               <button
                                 type="button"
                                 onClick={() => setDetailShoppingIndex(index)}
+                                data-no-global-sound
                                 title="Ver detalle"
                                 className="hover:text-primary hover:underline cursor-pointer text-left"
                               >
@@ -5929,8 +5935,10 @@ export default function MealsView({
             isOpen={!!activeDetailItem}
             onClose={() => setActiveDetailItem(null)}
             title={matchedPlato ? matchedPlato.nombrePlato : "Comida Desconocida"}
+            subtitle={activeDetailItem ? formatFechaDMY(activeDetailItem.fecha) : undefined}
             icon={UtensilsCrossed}
             onEdit={activeDetailItem ? () => handleEditOrgClick(activeDetailItem) : undefined}
+            onDelete={activeDetailItem ? () => handleDeleteOrg(activeDetailItem.id) : undefined}
           >
             <img
               src={`https://tse2.mm.bing.net/th?q=${encodeURIComponent((matchedPlato ? matchedPlato.nombrePlato : "Comida") + " comida receta")}&w=800&h=400&c=7&rs=1`}
@@ -5938,35 +5946,30 @@ export default function MealsView({
               className="w-full h-32 object-cover rounded-xl"
               referrerPolicy="no-referrer"
             />
-            <div className="flex flex-col gap-3">
-              <div>
-                <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                  Día de la Semana
-                </span>
-                <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
-                  {activeDetailItem ? getDiaDeLaSemana(activeDetailItem.fecha) : ""}
-                </span>
-              </div>
-              <div>
-                <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                  Fecha del Menú
-                </span>
-                <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
-                  {activeDetailItem ? formatFechaDMY(activeDetailItem.fecha) : ""}
-                </span>
-              </div>
-            </div>
+            <DetailBlockGrid>
+              <DetailBlock icon={CalendarDays} label="Día de la Semana">
+                {activeDetailItem ? getDiaDeLaSemana(activeDetailItem.fecha) : ""}
+              </DetailBlock>
+              <DetailBlock icon={Calendar} label="Fecha del Menú">
+                {activeDetailItem ? formatFechaDMY(activeDetailItem.fecha) : ""}
+              </DetailBlock>
+              {matchedPlato && calculatePlatoCalories(matchedPlato) > 0 && (
+                <DetailBlock icon={Flame} label="Calorías (Total)" tone="primary" emphasis span>
+                  {calculatePlatoCalories(matchedPlato)} kcal
+                </DetailBlock>
+              )}
+            </DetailBlockGrid>
 
-            <div className="space-y-3">
-              <h4 className="text-xs font-extrabold uppercase tracking-widest text-zinc-400">
-                Ingredientes y Composición del Plato:
+            <div className="space-y-2">
+              <h4 className="text-[10px] font-extrabold uppercase tracking-widest text-zinc-400 px-0.5">
+                Ingredientes y Composición del Plato
               </h4>
               {matchedAlimentos.length > 0 ? (
                 <div className="space-y-2">
                   {matchedAlimentos.map((ali: any, idx: number) => (
                     <div
                       key={idx}
-                      className="p-3.5 rounded-xl bg-slate-50 dark:bg-black/40 border border-slate-100 dark:border-zinc-800/60"
+                      className="p-3.5 rounded-2xl bg-slate-50 dark:bg-white/[0.04] border border-slate-200/70 dark:border-white/10"
                     >
                       <p className="text-xs font-extrabold text-primary">
                         {ali.mercaderiaName}
@@ -6016,7 +6019,7 @@ export default function MealsView({
                   ))}
                 </div>
               ) : (
-                <div className="p-4 rounded-xl bg-slate-50 dark:bg-black/40 border border-dashed border-zinc-700 text-center text-xs text-zinc-400 font-medium">
+                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-white/[0.04] border border-dashed border-zinc-300 dark:border-zinc-700 text-center text-xs text-zinc-400 font-medium">
                   No hay ingredientes específicos guardados para este
                   plato en tu despensa.
                 </div>
@@ -6042,53 +6045,33 @@ export default function MealsView({
             title={detailMercaderia?.ingredientes}
             icon={Package}
             onEdit={detailMercaderia ? () => handleEditClick(detailMercaderia) : undefined}
+            onDelete={detailMercaderia ? () => handleDeleteMercaderia(detailMercaderia.id) : undefined}
+            deleteLabel="Eliminar Artículo"
           >
             {detailMercaderia && (
-              <div className="flex flex-col gap-3">
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                    Categoría / Sector
-                  </span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {detailMercaderia.categoria} • {detailMercaderia.sector || "General"}
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                    Comercio / U.M.
-                  </span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {detailMercaderia.comercio || "No especificado"} • {detailMercaderia.unidadMedida}
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                    Valores Nutricionales (100g)
-                  </span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    P: {vn?.proteinas}g | C: {vn?.carbohidratos}g | G: {vn?.grasas}g | Azúcares: {vn?.azucares}g | Fibra: {vn?.fibra}g | Sodio: {vn?.sodio}mg
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                    Calorías / Precio
-                  </span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {detailMercaderia.calorias !== undefined && detailMercaderia.calorias !== null ? `${detailMercaderia.calorias} kcal` : `${getCalorieDensity(detailMercaderia.ingredientes, detailMercaderia.categoria, detailMercaderia.sector)} kcal`}
-                    {detailMercaderia.precio ? ` • $${detailMercaderia.precio.toLocaleString("es-AR", { minimumFractionDigits: 2 })}` : ""}
-                  </span>
-                </div>
-                <button
-                  onClick={() => {
-                    const id = detailMercaderia.id;
-                    setDetailMercaderiaId(null);
-                    handleDeleteMercaderia(id);
-                  }}
-                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[11px] font-bold transition-all cursor-pointer mt-1"
-                >
-                  <Trash2 className="w-3.5 h-3.5" /> Eliminar Artículo
-                </button>
-              </div>
+              <DetailBlockGrid>
+                <DetailBlock icon={Tag} label="Categoría">
+                  {detailMercaderia.categoria}
+                </DetailBlock>
+                <DetailBlock icon={MapPin} label="Sector">
+                  {detailMercaderia.sector || "General"}
+                </DetailBlock>
+                <DetailBlock icon={MapPin} label="Comercio">
+                  {detailMercaderia.comercio || "No especificado"}
+                </DetailBlock>
+                <DetailBlock icon={Scale} label="U.M.">
+                  {detailMercaderia.unidadMedida}
+                </DetailBlock>
+                <DetailBlock icon={Flame} label="Calorías (100g)" tone="primary" emphasis>
+                  {detailMercaderia.calorias !== undefined && detailMercaderia.calorias !== null ? `${detailMercaderia.calorias} kcal` : `${getCalorieDensity(detailMercaderia.ingredientes, detailMercaderia.categoria, detailMercaderia.sector)} kcal`}
+                </DetailBlock>
+                <DetailBlock icon={DollarSign} label="Precio" tone={detailMercaderia.precio ? "success" : "default"} emphasis={!!detailMercaderia.precio}>
+                  {detailMercaderia.precio ? `$${detailMercaderia.precio.toLocaleString("es-AR", { minimumFractionDigits: 2 })}` : "Sin sincronizar"}
+                </DetailBlock>
+                <DetailBlock icon={Flame} label="Valores Nutricionales (100g)" span>
+                  P: {vn?.proteinas}g | C: {vn?.carbohidratos}g | G: {vn?.grasas}g | Azúcares: {vn?.azucares}g | Fibra: {vn?.fibra}g | Sodio: {vn?.sodio}mg
+                </DetailBlock>
+              </DetailBlockGrid>
             )}
           </DetailModal>
         );
@@ -6099,6 +6082,9 @@ export default function MealsView({
         const detailAlimento = detailAlimentoId
           ? alimentos.find((a) => a.id === detailAlimentoId) || null
           : null;
+        const detailAlimentoVn = detailAlimento
+          ? detailAlimento.valoresNutricionales || calcularNutricionAlimento(detailAlimento, mercaderia)
+          : null;
         return (
           <DetailModal
             isOpen={!!detailAlimento}
@@ -6106,52 +6092,27 @@ export default function MealsView({
             title={detailAlimento?.mercaderiaName}
             icon={Database}
             onEdit={detailAlimento ? () => handleEditAlimentoClick(detailAlimento) : undefined}
+            onDelete={detailAlimento ? () => handleDeleteAlimento(detailAlimento.id) : undefined}
+            deleteLabel="Eliminar Alimento"
           >
             {detailAlimento && (
-              <div className="flex flex-col gap-3">
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                    Ingrediente 1
-                  </span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {detailAlimento.ingrediente1 || "-"} {detailAlimento.cantidad1 !== undefined ? `• ${detailAlimento.cantidad1} ${detailAlimento.unidad1 || ""}` : ""}
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                    Ingrediente 2
-                  </span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {detailAlimento.ingrediente2 || "-"} {detailAlimento.cantidad2 !== undefined ? `• ${detailAlimento.cantidad2} ${detailAlimento.unidad2 || ""}` : ""}
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                    Ingrediente 3
-                  </span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {detailAlimento.ingrediente3 || "-"} {detailAlimento.cantidad3 !== undefined ? `• ${detailAlimento.cantidad3} ${detailAlimento.unidad3 || ""}` : ""}
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                    Val. Nutricional / Calorías (Total)
-                  </span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {calculateAlimentoCalories(detailAlimento) > 0 ? `${Math.round(calculateAlimentoCalories(detailAlimento))} kcal` : "-"}
-                  </span>
-                </div>
-                <button
-                  onClick={() => {
-                    const id = detailAlimento.id;
-                    setDetailAlimentoId(null);
-                    handleDeleteAlimento(id);
-                  }}
-                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[11px] font-bold transition-all cursor-pointer mt-1"
-                >
-                  <Trash2 className="w-3.5 h-3.5" /> Eliminar Alimento
-                </button>
-              </div>
+              <DetailBlockGrid>
+                <DetailBlock icon={Database} label="Ingrediente 1">
+                  {detailAlimento.ingrediente1 || "-"} {detailAlimento.cantidad1 !== undefined ? `• ${detailAlimento.cantidad1} ${detailAlimento.unidad1 || ""}` : ""}
+                </DetailBlock>
+                <DetailBlock icon={Database} label="Ingrediente 2">
+                  {detailAlimento.ingrediente2 || "-"} {detailAlimento.cantidad2 !== undefined ? `• ${detailAlimento.cantidad2} ${detailAlimento.unidad2 || ""}` : ""}
+                </DetailBlock>
+                <DetailBlock icon={Database} label="Ingrediente 3">
+                  {detailAlimento.ingrediente3 || "-"} {detailAlimento.cantidad3 !== undefined ? `• ${detailAlimento.cantidad3} ${detailAlimento.unidad3 || ""}` : ""}
+                </DetailBlock>
+                <DetailBlock icon={Flame} label="Calorías (Total)" tone="primary" emphasis>
+                  {calculateAlimentoCalories(detailAlimento) > 0 ? `${Math.round(calculateAlimentoCalories(detailAlimento))} kcal` : "-"}
+                </DetailBlock>
+                <DetailBlock icon={Flame} label="Val. Nutricional (Total)" span>
+                  P: {detailAlimentoVn?.proteinas}g | C: {detailAlimentoVn?.carbohidratos}g | G: {detailAlimentoVn?.grasas}g | Azúcares: {detailAlimentoVn?.azucares}g | Fibra: {detailAlimentoVn?.fibra}g | Sodio: {detailAlimentoVn?.sodio}mg
+                </DetailBlock>
+              </DetailBlockGrid>
             )}
           </DetailModal>
         );
@@ -6162,12 +6123,12 @@ export default function MealsView({
         const detailPlato = detailPlatoId
           ? platos.find((p) => p.id === detailPlatoId) || null
           : null;
-        const detailPlatoAlimentos = detailPlato
-          ? [detailPlato.alimentoId1, detailPlato.alimentoId2, detailPlato.alimentoId3]
-              .filter(Boolean)
-              .map((id) => getAlimentoName(id as string))
-              .filter((n) => n && n !== "-")
+        const detailPlatoAlimentoIds = detailPlato
+          ? [detailPlato.alimentoId1, detailPlato.alimentoId2, detailPlato.alimentoId3].filter(Boolean)
           : [];
+        const detailPlatoVn = detailPlato
+          ? calcularNutricionPlato(detailPlato, alimentos, mercaderia)
+          : null;
         return (
           <DetailModal
             isOpen={!!detailPlato}
@@ -6175,36 +6136,40 @@ export default function MealsView({
             title={detailPlato?.nombrePlato}
             icon={ChefHat}
             onEdit={detailPlato ? () => handleEditPlatoClick(detailPlato) : undefined}
+            onDelete={detailPlato ? () => handleDeletePlato(detailPlato.id) : undefined}
+            deleteLabel="Eliminar Plato"
           >
             {detailPlato && (
-              <div className="flex flex-col gap-3">
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                    Alimentos / Recetas
-                  </span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {detailPlatoAlimentos.length > 0 ? detailPlatoAlimentos.join(" • ") : "Sin alimentos asignados"}
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                    Calorías (Total)
-                  </span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
+              <>
+                <img
+                  src={`https://tse2.mm.bing.net/th?q=${encodeURIComponent(detailPlato.nombrePlato + " comida receta")}&w=800&h=400&c=7&rs=1`}
+                  alt={detailPlato.nombrePlato}
+                  className="w-full h-28 object-cover rounded-2xl"
+                  referrerPolicy="no-referrer"
+                />
+                <DetailBlockGrid>
+                  {detailPlatoAlimentoIds.length > 0 ? (
+                    detailPlatoAlimentoIds.map((id, idx) => (
+                      <DetailBlock key={id} icon={ChefHat} label={`Alimento ${idx + 1}`} span={detailPlatoAlimentoIds.length === 1}>
+                        <div className="flex flex-col gap-1">
+                          <span>{getAlimentoName(id as string)}</span>
+                          <div className="flex flex-wrap gap-1">{renderAlimentoIngredientsList(id as string)}</div>
+                        </div>
+                      </DetailBlock>
+                    ))
+                  ) : (
+                    <DetailBlock icon={ChefHat} label="Alimentos / Recetas" span>
+                      Sin alimentos asignados
+                    </DetailBlock>
+                  )}
+                  <DetailBlock icon={Flame} label="Calorías (Total)" tone="primary" emphasis>
                     {calculatePlatoCalories(detailPlato) > 0 ? `${calculatePlatoCalories(detailPlato)} kcal` : "-"}
-                  </span>
-                </div>
-                <button
-                  onClick={() => {
-                    const id = detailPlato.id;
-                    setDetailPlatoId(null);
-                    handleDeletePlato(id);
-                  }}
-                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[11px] font-bold transition-all cursor-pointer mt-1"
-                >
-                  <Trash2 className="w-3.5 h-3.5" /> Eliminar Plato
-                </button>
-              </div>
+                  </DetailBlock>
+                  <DetailBlock icon={Flame} label="Val. Nutricional (Total)" span>
+                    P: {Math.round(detailPlatoVn?.proteinas || 0)}g | C: {Math.round(detailPlatoVn?.carbohidratos || 0)}g | G: {Math.round(detailPlatoVn?.grasas || 0)}g | Azúcares: {Math.round(detailPlatoVn?.azucares || 0)}g | Fibra: {Math.round(detailPlatoVn?.fibra || 0)}g | Sodio: {Math.round(detailPlatoVn?.sodio || 0)}mg
+                  </DetailBlock>
+                </DetailBlockGrid>
+              </>
             )}
           </DetailModal>
         );
@@ -6215,43 +6180,37 @@ export default function MealsView({
         const detailOrg = detailOrgId
           ? organizacionSemanal.find((o) => o.id === detailOrgId) || null
           : null;
+        const detailOrgPlato = detailOrg ? platos.find((p) => p.id === detailOrg.platoId) : undefined;
         return (
           <DetailModal
             isOpen={!!detailOrg}
             onClose={() => setDetailOrgId(null)}
             title={detailOrg ? getPlatoName(detailOrg.platoId) : undefined}
+            subtitle={detailOrg ? formatFechaDMY(detailOrg.fecha) : undefined}
             icon={CalendarDays}
             onEdit={detailOrg ? () => handleEditOrgClick(detailOrg) : undefined}
+            onDelete={detailOrg ? () => handleDeleteOrg(detailOrg.id) : undefined}
+            deleteLabel="Eliminar Planificación"
           >
             {detailOrg && (
-              <div className="flex flex-col gap-3">
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                    Fecha / Día
-                  </span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {formatFechaDMY(detailOrg.fecha)} • {getDiaDeLaSemana(detailOrg.fecha)}
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                    Ingredientes
-                  </span>
-                  <div className="pl-2 flex flex-wrap gap-1.5">
+              <DetailBlockGrid>
+                <DetailBlock icon={Calendar} label="Fecha">
+                  {formatFechaDMY(detailOrg.fecha)}
+                </DetailBlock>
+                <DetailBlock icon={CalendarDays} label="Día de la Semana">
+                  {getDiaDeLaSemana(detailOrg.fecha)}
+                </DetailBlock>
+                {detailOrgPlato && calculatePlatoCalories(detailOrgPlato) > 0 && (
+                  <DetailBlock icon={Flame} label="Calorías (Total)" tone="primary" emphasis span>
+                    {calculatePlatoCalories(detailOrgPlato)} kcal
+                  </DetailBlock>
+                )}
+                <DetailBlock icon={Package} label="Ingredientes" span>
+                  <div className="flex flex-wrap gap-1.5">
                     {renderPlatoIngredientsBadges(detailOrg.platoId)}
                   </div>
-                </div>
-                <button
-                  onClick={() => {
-                    const id = detailOrg.id;
-                    setDetailOrgId(null);
-                    handleDeleteOrg(id);
-                  }}
-                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[11px] font-bold transition-all cursor-pointer mt-1"
-                >
-                  <Trash2 className="w-3.5 h-3.5" /> Eliminar Planificación
-                </button>
-              </div>
+                </DetailBlock>
+              </DetailBlockGrid>
             )}
           </DetailModal>
         );
@@ -6263,51 +6222,50 @@ export default function MealsView({
           detailShoppingIndex !== null
             ? filteredShoppingList[detailShoppingIndex] || null
             : null;
+        const detailShoppingCompleted = detailShopping
+          ? notesCheckedItems.includes(detailShopping.name.toLowerCase())
+          : false;
+        const detailShoppingOrigen = detailShopping
+          ? detailShopping.isManual && detailShopping.isAuto
+            ? "Mixto (manual + menú)"
+            : detailShopping.isManual
+              ? "Manual"
+              : "Menú"
+          : "";
         return (
           <DetailModal
             isOpen={!!detailShopping}
             onClose={() => setDetailShoppingIndex(null)}
             title={detailShopping?.name}
             icon={ShoppingBag}
+            onDelete={
+              detailShopping
+                ? () => handleDeleteShoppingItem(detailShopping.name, detailShopping.mercaderiaId)
+                : undefined
+            }
+            deleteLabel="Eliminar de la Lista"
           >
             {detailShopping && (
-              <div className="flex flex-col gap-3">
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                    Cantidad / U.M.
-                  </span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {detailShopping.cantidad} {detailShopping.unidadMedida}
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                    Categoría / Sector
-                  </span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {detailShopping.categoria} • {detailShopping.sector}
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                    Comercio
-                  </span>
-                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 break-words block pl-2">
-                    {detailShopping.comercio}
-                  </span>
-                </div>
-                <button
-                  onClick={() => {
-                    const name = detailShopping.name;
-                    const mercaderiaId = detailShopping.mercaderiaId;
-                    setDetailShoppingIndex(null);
-                    handleDeleteShoppingItem(name, mercaderiaId);
-                  }}
-                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[11px] font-bold transition-all cursor-pointer mt-1"
-                >
-                  <Trash2 className="w-3.5 h-3.5" /> Eliminar de la Lista
-                </button>
-              </div>
+              <DetailBlockGrid>
+                <DetailBlock icon={Package} label="Cantidad / U.M." tone="primary" emphasis>
+                  {detailShopping.cantidad} {detailShopping.unidadMedida}
+                </DetailBlock>
+                <DetailBlock icon={Check} label="Estado" tone={detailShoppingCompleted ? "success" : "warning"}>
+                  {detailShoppingCompleted ? "Comprado" : "Pendiente"}
+                </DetailBlock>
+                <DetailBlock icon={Tag} label="Categoría">
+                  {detailShopping.categoria}
+                </DetailBlock>
+                <DetailBlock icon={ShoppingBag} label="Sector">
+                  {detailShopping.sector}
+                </DetailBlock>
+                <DetailBlock icon={MapPin} label="Comercio">
+                  {detailShopping.comercio}
+                </DetailBlock>
+                <DetailBlock icon={ClipboardList} label="Origen">
+                  {detailShoppingOrigen}
+                </DetailBlock>
+              </DetailBlockGrid>
             )}
           </DetailModal>
         );

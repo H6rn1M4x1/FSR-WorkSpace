@@ -16,7 +16,7 @@ import { getMatchTeamLogos, syncMonthlyMatches } from "../lib/matchScheduler";
 import { motion, AnimatePresence } from "motion/react";
 import { ConfirmationModal } from "./ConfirmationModal";
 import { LocationPickerMap } from "./LocationPickerMap";
-import { DetailModal as HomeDetailModal } from "./DetailModal";
+import { DetailModal as HomeDetailModal, DetailBlock, DetailBlockGrid } from "./DetailModal";
 import { PaymentIconGlyph } from "./PaymentIconGlyph";
 import { getEffectivePaymentIconId } from "../utils/paymentIcons";
 import { shareItemWith, unshareItem } from "../lib/itemSharingService";
@@ -2215,6 +2215,7 @@ export default function HomeView({
                                   </div>
                                   <button
                                     type="button"
+                                    data-no-global-sound
                                     onClick={(evt) => { evt.stopPropagation(); setExpandedHomeItemId(isExpanded ? null : itemId); }}
                                     className="p-1 rounded-lg hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
                                     title="Ver detalles"
@@ -2252,38 +2253,28 @@ export default function HomeView({
                           </div>
 
                           <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} title={app.title} icon={Calendar}>
-                                <div className="flex flex-col gap-3">
-                                  {app.doctorName && (
-                                    <div>
-                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                        Profesional / Especialidad
-                                      </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
-                                        {app.doctorName} {app.specialty ? `(${app.specialty})` : ""}
-                                      </span>
-                                    </div>
+                                <DetailBlockGrid>
+                                  {app.time && (
+                                    <DetailBlock icon={Clock} label="Hora" tone="primary" emphasis>
+                                      {app.time} hs
+                                    </DetailBlock>
                                   )}
                                   {app.location && (
-                                    <div>
-                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                        Lugar / Dirección
-                                      </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
-                                        {app.location}
-                                      </span>
-                                    </div>
+                                    <DetailBlock icon={MapPin} label="Lugar / Dirección" span={!app.time}>
+                                      {app.location}
+                                    </DetailBlock>
                                   )}
-                                </div>
-                                {app.notes && (
-                                  <div>
-                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                      Notas
-                                    </span>
-                                    <p className="text-zinc-700 dark:text-zinc-300 italic">
-                                      {app.notes}
-                                    </p>
-                                  </div>
-                                )}
+                                  {app.doctorName && (
+                                    <DetailBlock icon={Stethoscope} label="Profesional / Especialidad" span>
+                                      {app.doctorName} {app.specialty ? `(${app.specialty})` : ""}
+                                    </DetailBlock>
+                                  )}
+                                  {app.notes && (
+                                    <DetailBlock icon={FileText} label="Notas" span>
+                                      <span className="italic">{app.notes}</span>
+                                    </DetailBlock>
+                                  )}
+                                </DetailBlockGrid>
                           </HomeDetailModal>
                         </div>
                       );
@@ -2341,6 +2332,7 @@ export default function HomeView({
                                   )}
                                   <button
                                     type="button"
+                                    data-no-global-sound
                                     onClick={(evt) => { evt.stopPropagation(); setExpandedHomeItemId(isExpanded ? null : itemId); }}
                                     className="p-1 rounded-lg hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
                                     title="Ver detalles"
@@ -2444,126 +2436,104 @@ export default function HomeView({
                           </div>
 
                           <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} title={tc.descripcion.replace(/⚽\s*/g, "")} icon={CatIcon} onEdit={onQuickEdit ? () => onQuickEdit("turno", tc.id) : undefined}>
-                                <div className="flex flex-col gap-3">
-                                  <div>
-                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                      Fecha y Hora
-                                    </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
-                                      {formatDateFriendly ? formatDateFriendly(tc.fecha) : tc.fecha}
-                                    </span>
-                                  </div>
+                                <DetailBlockGrid>
+                                  <DetailBlock icon={Clock} label="Fecha y Hora" tone="primary" emphasis span={!!matchLogos}>
+                                    {formatDateFriendly ? formatDateFriendly(tc.fecha) : tc.fecha}
+                                  </DetailBlock>
                                   {tc.lugar &&
                                     tc.lugar.trim() &&
                                     tc.lugar.toLowerCase() !== "sin dirección" &&
                                     tc.lugar.toLowerCase() !== "sin direccion" &&
                                     tc.lugar.toLowerCase() !== "sin lugar asignado" && (
-                                    <div>
-                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                        Lugar / Ubicación
-                                      </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
-                                        {tc.lugar}
-                                      </span>
-                                    </div>
+                                    <DetailBlock icon={MapPin} label="Lugar / Ubicación">
+                                      {tc.lugar}
+                                    </DetailBlock>
                                   )}
                                   {!matchLogos && tc.doctor && tc.doctor.trim() && (
-                                    <div>
-                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                        Profesional / Asignado
-                                      </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
-                                        {tc.doctor}
-                                      </span>
-                                    </div>
+                                    <DetailBlock icon={Stethoscope} label="Profesional / Asignado">
+                                      {tc.doctor}
+                                    </DetailBlock>
                                   )}
                                   {!matchLogos && (
-                                    <div>
-                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                        Categoría y Estatus
-                                      </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
-                                        {getCategoryLabel(tc.categoria)} • {(() => {
-                                          if (tc.estatus) return "Realizado";
-                                          const todayStr = getLocalDateString();
-                                          const datePortion = tc.fecha ? tc.fecha.substring(0, 10) : "";
-                                          if (datePortion && datePortion.length === 10 && datePortion < todayStr) return "Realizado";
-                                          if (tc.fecha === todayStr || datePortion === todayStr) return "Initinere Diario";
-                                          return "Pendiente";
-                                        })()}
-                                      </span>
-                                    </div>
+                                    <DetailBlock
+                                      icon={tc.estatus ? CheckCircle2 : AlertCircle}
+                                      label="Categoría y Estatus"
+                                      tone={tc.estatus ? "success" : "default"}
+                                      span
+                                    >
+                                      {getCategoryLabel(tc.categoria)} • {(() => {
+                                        if (tc.estatus) return "Realizado";
+                                        const todayStr = getLocalDateString();
+                                        const datePortion = tc.fecha ? tc.fecha.substring(0, 10) : "";
+                                        if (datePortion && datePortion.length === 10 && datePortion < todayStr) return "Realizado";
+                                        if (tc.fecha === todayStr || datePortion === todayStr) return "Initinere Diario";
+                                        return "Pendiente";
+                                      })()}
+                                    </DetailBlock>
                                   )}
-                                </div>
+                                </DetailBlockGrid>
                                 {tc.informacionPersonalizada && !matchLogos && (
-                                  <div>
-                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                      Información Personalizada
-                                    </span>
+                                  <DetailBlock icon={FileText} label="Información Personalizada" span>
                                     <div
-                                      className="text-[10px] text-zinc-700 dark:text-zinc-300 italic block pl-2 prose dark:prose-invert prose-sm max-h-[120px] overflow-y-auto [&_*]:!text-[10px]"
+                                      className="italic prose dark:prose-invert prose-sm max-h-[120px] overflow-y-auto [&_*]:!text-[11px]"
                                       dangerouslySetInnerHTML={{ __html: tc.informacionPersonalizada }}
                                     />
-                                  </div>
+                                  </DetailBlock>
                                 )}
                                 {tc.transcripcionAutomatica && (
-                                  <div>
-                                    <span className="flex items-center gap-1 mb-1">
-                                      <AudioLines className="w-3 h-3 text-green-500" /> <span className="inline-block text-[13px] font-extrabold text-green-500 detail-label">Transcripción de audio</span>
-                                    </span>
+                                  <DetailBlock icon={AudioLines} label="Transcripción de audio" tone="success" span>
                                     {(() => {
                                       const audioFile = tc.archivosNecesarios?.find((a: any) => a.name.startsWith('Audio_') && a.url.startsWith('data:audio/'));
                                       if (audioFile) {
                                         return <AudioTranscriptionPlayer audioUrl={audioFile.url} transcript={tc.transcripcionAutomatica} />;
                                       }
                                       return (
-                                        <div className="text-[10px] text-zinc-700 dark:text-zinc-300 italic max-h-[100px] overflow-y-auto block pl-2">
+                                        <div className="italic max-h-[100px] overflow-y-auto">
                                           {tc.transcripcionAutomatica}
                                         </div>
                                       );
                                     })()}
-                                  </div>
+                                  </DetailBlock>
                                 )}
                                 {(tc.pedidoDocumento || tc.estudioInformeDoc || (tc.archivosNecesarios && tc.archivosNecesarios.length > 0)) && (
-                                  <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-primary/15 border border-primary/20 dark:border-primary/30 flex flex-wrap gap-2">
-                                    {tc.pedidoDocumento && (
-                                      <button
-                                        type="button"
-                                        onClick={() => openStoredFile(tc.pedidoDocumento!, "Pedido")}
-                                        className="flex items-center gap-1 px-2 py-1 bg-primary/10 dark:bg-primary/10 text-primary dark:text-primary rounded-lg text-[10px] font-extrabold hover:underline cursor-pointer"
-                                      >
-                                        <FileDown className="w-3 h-3" />
-                                        <span>Ver Pedido</span>
-                                      </button>
-                                    )}
-                                    {tc.estudioInformeDoc && (
-                                      <button
-                                        type="button"
-                                        onClick={() => openStoredFile(tc.estudioInformeDoc!, "Estudio")}
-                                        className="flex items-center gap-1 px-2 py-1 bg-primary/10 dark:bg-primary/10 text-primary dark:text-primary rounded-lg text-[10px] font-extrabold hover:underline cursor-pointer"
-                                      >
-                                        <FileDown className="w-3 h-3" />
-                                        <span>Ver Estudio</span>
-                                      </button>
-                                    )}
-                                    {(tc.archivosNecesarios || []).map((archivo: any, idx: number) => (
-                                      <button
-                                        type="button"
-                                        key={`home-att-${idx}`}
-                                        onClick={() => openStoredFile(archivo.url, archivo.name)}
-                                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 dark:bg-zinc-800 text-[10px] font-bold text-slate-600 dark:text-zinc-400 hover:bg-slate-200 dark:hover:bg-zinc-700 transition-colors cursor-pointer"
-                                      >
-                                        <FileText className="w-3 h-3 text-slate-500 dark:text-zinc-500" />
-                                        <span className="max-w-[100px] truncate" title={archivo.name}>{archivo.name}</span>
-                                      </button>
-                                    ))}
-                                  </div>
+                                  <DetailBlock icon={FileDown} label="Documentos y Archivos" span>
+                                    <div className="flex flex-wrap gap-2">
+                                      {tc.pedidoDocumento && (
+                                        <button
+                                          type="button"
+                                          onClick={() => openStoredFile(tc.pedidoDocumento!, "Pedido")}
+                                          className="flex items-center gap-1 px-2 py-1 bg-primary/10 dark:bg-primary/10 text-primary dark:text-primary rounded-lg text-[10px] font-extrabold hover:underline cursor-pointer"
+                                        >
+                                          <FileDown className="w-3 h-3" />
+                                          <span>Ver Pedido</span>
+                                        </button>
+                                      )}
+                                      {tc.estudioInformeDoc && (
+                                        <button
+                                          type="button"
+                                          onClick={() => openStoredFile(tc.estudioInformeDoc!, "Estudio")}
+                                          className="flex items-center gap-1 px-2 py-1 bg-primary/10 dark:bg-primary/10 text-primary dark:text-primary rounded-lg text-[10px] font-extrabold hover:underline cursor-pointer"
+                                        >
+                                          <FileDown className="w-3 h-3" />
+                                          <span>Ver Estudio</span>
+                                        </button>
+                                      )}
+                                      {(tc.archivosNecesarios || []).map((archivo: any, idx: number) => (
+                                        <button
+                                          type="button"
+                                          key={`home-att-${idx}`}
+                                          onClick={() => openStoredFile(archivo.url, archivo.name)}
+                                          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 dark:bg-zinc-800 text-[10px] font-bold text-slate-600 dark:text-zinc-400 hover:bg-slate-200 dark:hover:bg-zinc-700 transition-colors cursor-pointer"
+                                        >
+                                          <FileText className="w-3 h-3 text-slate-500 dark:text-zinc-500" />
+                                          <span className="max-w-[100px] truncate" title={archivo.name}>{archivo.name}</span>
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </DetailBlock>
                                 )}
                                 {tc.medicamentosAPedir && tc.medicamentosAPedir.length > 0 && (
-                                  <div>
-                                    <span className="flex items-center gap-1 mb-1.5">
-                                      <Pill className="w-3 h-3 text-primary" /> <span className="inline-block text-[13px] font-extrabold text-primary detail-label">Medicamentos a Pedir</span>
-                                    </span>
+                                  <DetailBlock icon={Pill} label="Medicamentos a Pedir" span>
                                     <div className="flex flex-wrap gap-1.5">
                                       {tc.medicamentosAPedir.map((medId: string) => {
                                         const med = medicamentosDetallados.find((m) => m.id === medId);
@@ -2578,18 +2548,14 @@ export default function HomeView({
                                         );
                                       })}
                                     </div>
-                                  </div>
+                                  </DetailBlock>
                                 )}
                                 {typeof tc.lat === "number" &&
                                   typeof tc.lon === "number" &&
                                   !isNaN(tc.lat) &&
                                   !isNaN(tc.lon) &&
                                   !(tc.lat === 0 && tc.lon === 0) && (
-                                  <div>
-                                    <div className="w-full h-px bg-primary/50 mb-2" />
-                                    <span className="flex items-center gap-1 mb-1.5">
-                                      <MapPin className="w-3 h-3 text-primary" /> <span className="inline-block text-[13px] font-extrabold text-primary detail-label">Mapa</span>
-                                    </span>
+                                  <DetailBlock icon={MapPin} label="Mapa" span className="!p-1.5">
                                     <LocationPickerMap
                                       lat={tc.lat}
                                       lon={tc.lon}
@@ -2597,7 +2563,7 @@ export default function HomeView({
                                       heightClass="h-40"
                                       readOnly
                                     />
-                                  </div>
+                                  </DetailBlock>
                                 )}
                           </HomeDetailModal>
                         </div>
@@ -2646,6 +2612,7 @@ export default function HomeView({
                                 </div>
                                 <button
                                   type="button"
+                                  data-no-global-sound
                                   onClick={(evt) => { evt.stopPropagation(); setExpandedHomeItemId(isExpanded ? null : itemId); }}
                                   className="p-1 rounded-lg hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
                                   title="Ver detalles"
@@ -2679,44 +2646,28 @@ export default function HomeView({
                           </div>
 
                           <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} title={inv.title} icon={Receipt}>
-                                <div className="flex flex-col gap-3">
-                                  <div>
-                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                      Monto
-                                    </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
-                                      ${inv.amount.toLocaleString("es-AR")} ARS
-                                    </span>
-                                  </div>
-                                  <div>
-                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                      Estado de Pago
-                                    </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
-                                      {inv.paid ? "Pagado / Al día" : "Pendiente de pago"}
-                                    </span>
-                                  </div>
+                                <DetailBlockGrid>
+                                  <DetailBlock icon={DollarSign} label="Monto" tone="primary" emphasis span>
+                                    ${inv.amount.toLocaleString("es-AR")} ARS
+                                  </DetailBlock>
+                                  <DetailBlock
+                                    icon={inv.paid ? CheckCircle2 : AlertCircle}
+                                    label="Estado de Pago"
+                                    tone={inv.paid ? "success" : "danger"}
+                                  >
+                                    {inv.paid ? "Pagado / Al día" : "Pendiente de pago"}
+                                  </DetailBlock>
                                   {inv.dueDate && (
-                                  <div>
-                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                      Vencimiento
-                                    </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
+                                    <DetailBlock icon={Calendar} label="Vencimiento">
                                       {inv.dueDate}
-                                    </span>
-                                  </div>
+                                    </DetailBlock>
                                   )}
                                   {inv.category && (
-                                  <div>
-                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                      Categoría
-                                    </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
+                                    <DetailBlock icon={Receipt} label="Categoría" span={!inv.dueDate}>
                                       {inv.category}
-                                    </span>
-                                  </div>
+                                    </DetailBlock>
                                   )}
-                                </div>
+                                </DetailBlockGrid>
                           </HomeDetailModal>
                         </div>
                       );
@@ -2793,6 +2744,7 @@ export default function HomeView({
                                   )}
                                   <button
                                     type="button"
+                                    data-no-global-sound
                                     onClick={(evt) => { evt.stopPropagation(); setExpandedHomeItemId(isExpanded ? null : itemId); }}
                                     className="p-1 rounded-lg hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
                                     title="Ver detalles"
@@ -2847,74 +2799,49 @@ export default function HomeView({
                           </div>
 
                           <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} title={dp.descripcion} icon={isClosing || dp.categoria === "Tarjeta de Credito" ? CreditCard : Receipt} onEdit={onQuickEdit ? () => onQuickEdit("finanzas", dp.id) : undefined}>
-                                <div className="flex flex-col gap-3">
-                                  <div>
-                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                      Categoría / Método
-                                    </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
-                                      {dp.categoria || "General"} • {dp.metodoPago || "Efectivo/Debito"}
-                                    </span>
-                                  </div>
+                                <DetailBlockGrid>
+                                  <DetailBlock icon={DollarSign} label="Monto" tone="primary" emphasis>
+                                    ${dp.montoAPagar.toLocaleString("es-AR")} ARS
+                                  </DetailBlock>
+                                  <DetailBlock
+                                    icon={dp.pago ? CheckCircle2 : AlertCircle}
+                                    label="Estado"
+                                    tone={dp.pago ? "success" : "danger"}
+                                  >
+                                    {dp.pago ? "Liquidado" : isClosing ? "Pendiente" : "Impago"}
+                                  </DetailBlock>
+                                  <DetailBlock icon={Receipt} label="Categoría / Método" span>
+                                    {dp.categoria || "General"} • {dp.metodoPago || "Efectivo/Debito"}
+                                  </DetailBlock>
                                   {dp.dondePagar && (
-                                  <div>
-                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                      ¿Dónde Pagar?
-                                    </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
+                                    <DetailBlock icon={MapPin} label="¿Dónde Pagar?">
                                       {dp.dondePagar}
-                                    </span>
-                                  </div>
+                                    </DetailBlock>
                                   )}
                                   {dp.conQuePagar && (
-                                  <div>
-                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                      ¿Con Qué Pagar?
-                                    </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
+                                    <DetailBlock icon={CreditCard} label="¿Con Qué Pagar?">
                                       {dp.conQuePagar}
-                                    </span>
-                                  </div>
+                                    </DetailBlock>
                                   )}
-                                  <div>
-                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                      Recurrente
-                                    </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
-                                      {dp.pagoRecurrente ? "Sí" : "No"}
-                                    </span>
-                                  </div>
+                                  <DetailBlock icon={RefreshCw} label="Recurrente">
+                                    {dp.pagoRecurrente ? "Sí" : "No"}
+                                  </DetailBlock>
                                   {dp.fechaCierre && (
-                                    <div>
-                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                        Fecha de Cierre
-                                      </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
-                                        {dp.fechaCierre}
-                                      </span>
-                                    </div>
+                                    <DetailBlock icon={Calendar} label="Fecha de Cierre">
+                                      {dp.fechaCierre}
+                                    </DetailBlock>
                                   )}
                                   {(dp.facturaEmitida || dp.comprobantePago) && (
-                                    <div>
-                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                        Archivos
-                                      </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
-                                        {dp.facturaEmitida ? "Factura ✓" : "Sin factura"} • {dp.comprobantePago ? "Comprobante ✓" : "Sin comprobante"}
-                                      </span>
-                                    </div>
+                                    <DetailBlock icon={FileText} label="Archivos" span>
+                                      {dp.facturaEmitida ? "Factura ✓" : "Sin factura"} • {dp.comprobantePago ? "Comprobante ✓" : "Sin comprobante"}
+                                    </DetailBlock>
                                   )}
-                                </div>
-                                {dp.observaciones && (
-                                  <div>
-                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                      Observaciones
-                                    </span>
-                                    <p className="text-zinc-700 dark:text-zinc-300 italic">
-                                      {dp.observaciones}
-                                    </p>
-                                  </div>
-                                )}
+                                  {dp.observaciones && (
+                                    <DetailBlock icon={FileText} label="Observaciones" span>
+                                      <span className="italic">{dp.observaciones}</span>
+                                    </DetailBlock>
+                                  )}
+                                </DetailBlockGrid>
                           </HomeDetailModal>
                         </div>
                       );
@@ -2974,6 +2901,7 @@ export default function HomeView({
                                   )}
                                   <button
                                     type="button"
+                                    data-no-global-sound
                                     onClick={(evt) => { evt.stopPropagation(); setExpandedHomeItemId(isExpanded ? null : itemId); }}
                                     className="p-1 rounded-lg hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
                                     title="Ver detalles"
@@ -2998,47 +2926,32 @@ export default function HomeView({
                           </div>
 
                           <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} title={details.marca} icon={Stethoscope} onEdit={onQuickEdit ? () => onQuickEdit("salud", disp.id) : undefined}>
-                                <div className="flex flex-col gap-3">
+                                <DetailBlockGrid>
+                                  <DetailBlock
+                                    icon={details.estado === "Comprar Medicamento" ? AlertCircle : CheckCircle2}
+                                    label="Estado"
+                                    tone={details.estado === "Comprar Medicamento" ? "danger" : "success"}
+                                    span
+                                  >
+                                    {details.estado}
+                                  </DetailBlock>
                                   {details.droga && (
-                                  <div>
-                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                      Droga / Fármaco
-                                    </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
+                                    <DetailBlock icon={Pill} label="Droga / Fármaco">
                                       {details.droga}
-                                    </span>
-                                  </div>
+                                    </DetailBlock>
                                   )}
-
                                   {details.funcionTratamiento && (
-                                  <div>
-                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                      Función / Tratamiento
-                                    </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
+                                    <DetailBlock icon={Stethoscope} label="Función / Tratamiento" span={!details.droga}>
                                       {details.funcionTratamiento}
-                                    </span>
-                                  </div>
+                                    </DetailBlock>
                                   )}
-
-                                  <div>
-                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                      Disponibilidad
-                                    </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
-                                      {formatFechaDMY(details.disponibleHasta)} ({details.disponibleParaDias.toFixed(1)} días)
-                                    </span>
-                                  </div>
-
-                                  <div>
-                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                      Stock (Inicial / Restante)
-                                    </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
-                                      {disp.cantidadRegistrada} registradas / {details.cantidadDisponible.toFixed(1)} restantes
-                                    </span>
-                                  </div>
-                                </div>
+                                  <DetailBlock icon={Calendar} label="Disponibilidad" tone="primary" emphasis span>
+                                    {formatFechaDMY(details.disponibleHasta)} ({details.disponibleParaDias.toFixed(1)} días)
+                                  </DetailBlock>
+                                  <DetailBlock icon={Activity} label="Stock (Inicial / Restante)" span>
+                                    {disp.cantidadRegistrada} registradas / {details.cantidadDisponible.toFixed(1)} restantes
+                                  </DetailBlock>
+                                </DetailBlockGrid>
                           </HomeDetailModal>
                         </div>
                       );
@@ -3087,6 +3000,7 @@ export default function HomeView({
                                 )}
                                 <button
                                   type="button"
+                                  data-no-global-sound
                                   onClick={(evt) => { evt.stopPropagation(); setExpandedHomeItemId(isExpanded ? null : itemId); }}
                                   className="p-1 rounded-lg hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
                                   title="Ver detalles"
@@ -3108,46 +3022,28 @@ export default function HomeView({
                           </div>
 
                           <HomeDetailModal isOpen={isExpanded && !!matchedPlato} onClose={() => setExpandedHomeItemId(null)} title={matchedPlato?.nombrePlato} icon={UtensilsCrossed} onEdit={onQuickEdit ? () => onQuickEdit("comidas", m.id) : undefined}>
-                                <div>
-                                  <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                    Detalles del Plato
-                                  </span>
-                                  <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
-                                    {matchedPlato.nombrePlato}
-                                  </span>
-                                  {matchedPlato.descripcion && (
-                                    <p className="text-[10px] text-zinc-600 dark:text-zinc-400 mt-1 italic block pl-2">
-                                      {matchedPlato.descripcion}
-                                    </p>
-                                  )}
-                                </div>
-                                <div className="flex flex-col gap-3">
+                                <DetailBlockGrid>
                                   {matchedPlato.calorias !== undefined && matchedPlato.calorias !== null && (
-                                  <div>
-                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                      Calorías
-                                    </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
+                                    <DetailBlock icon={DollarSign} label="Calorías" tone="primary" emphasis span>
                                       {matchedPlato.calorias} kcal
-                                    </span>
-                                  </div>
+                                    </DetailBlock>
+                                  )}
+                                  {matchedPlato.descripcion && (
+                                    <DetailBlock icon={FileText} label="Descripción" span>
+                                      <span className="italic">{matchedPlato.descripcion}</span>
+                                    </DetailBlock>
                                   )}
                                   {(matchedPlato.ingredientesPersonalizados?.length > 0 || matchedPlato.alimentoId1 || matchedPlato.alimentoId2 || matchedPlato.alimentoId3) && (
-                                  <div>
-                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                      Ingredientes
-                                    </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
+                                    <DetailBlock icon={UtensilsCrossed} label="Ingredientes" span>
                                       {matchedPlato.ingredientesPersonalizados && matchedPlato.ingredientesPersonalizados.length > 0
                                         ? matchedPlato.ingredientesPersonalizados.join(", ")
                                         : [matchedPlato.alimentoId1, matchedPlato.alimentoId2, matchedPlato.alimentoId3]
                                             .filter(Boolean)
                                             .map((id) => (alimentos || []).find((a: any) => a.id === id)?.mercaderiaName || id)
                                             .join(", ")}
-                                    </span>
-                                  </div>
+                                    </DetailBlock>
                                   )}
-                                </div>
+                                </DetailBlockGrid>
                           </HomeDetailModal>
                         </div>
                       );
@@ -3182,6 +3078,7 @@ export default function HomeView({
                                   </div>
                                   <button
                                     type="button"
+                                    data-no-global-sound
                                     onClick={(evt) => { evt.stopPropagation(); setExpandedHomeItemId(isExpanded ? null : itemId); }}
                                     className="p-1 rounded-lg hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
                                     title="Ver detalles"
@@ -3213,56 +3110,31 @@ export default function HomeView({
                           </div>
 
                           <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} title={h.materia} icon={GraduationCap} onEdit={onQuickEdit ? () => onQuickEdit("universidad", h.id) : undefined}>
-                                <div className="flex flex-col gap-3">
-                                  <div>
-                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                      Día y Horario
-                                    </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
-                                      {h.dia} • {h.horaInicio || "--:--"} a {h.horaFin || "--:--"} hs
-                                    </span>
-                                  </div>
+                                <DetailBlockGrid>
+                                  <DetailBlock icon={Clock} label="Día y Horario" tone="primary" emphasis span>
+                                    {h.dia} • {h.horaInicio || "--:--"} a {h.horaFin || "--:--"} hs
+                                  </DetailBlock>
                                   {h.aulas && (
-                                    <div>
-                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                        Aula / Espacio
-                                      </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
-                                        {h.aulas}
-                                      </span>
-                                    </div>
+                                    <DetailBlock icon={MapPin} label="Aula / Espacio">
+                                      {h.aulas}
+                                    </DetailBlock>
                                   )}
                                   {h.profesores && (
-                                    <div>
-                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                        Profesores
-                                      </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
-                                        {h.profesores}
-                                      </span>
-                                    </div>
+                                    <DetailBlock icon={GraduationCap} label="Profesores">
+                                      {h.profesores}
+                                    </DetailBlock>
                                   )}
                                   {h.comision && (
-                                    <div>
-                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                        Comisión
-                                      </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
-                                        {h.comision}
-                                      </span>
-                                    </div>
+                                    <DetailBlock icon={Users} label="Comisión">
+                                      {h.comision}
+                                    </DetailBlock>
                                   )}
                                   {h.modalidad && (
-                                    <div>
-                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                        Modalidad
-                                      </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
-                                        {h.modalidad}
-                                      </span>
-                                    </div>
+                                    <DetailBlock icon={Info} label="Modalidad">
+                                      {h.modalidad}
+                                    </DetailBlock>
                                   )}
-                                </div>
+                                </DetailBlockGrid>
                           </HomeDetailModal>
                         </div>
                       );
@@ -3308,6 +3180,7 @@ export default function HomeView({
                                     )}
                                     <button
                                       type="button"
+                                      data-no-global-sound
                                       onClick={(evt) => { evt.stopPropagation(); setExpandedHomeItemId(isExpanded ? null : itemId); }}
                                       className="p-1 rounded-lg hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
                                       title="Ver detalles"
@@ -3346,56 +3219,31 @@ export default function HomeView({
                           </div>
 
                           <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} title={e.materia} icon={BookOpen} onEdit={onQuickEdit ? () => onQuickEdit("universidad", e.id) : undefined}>
-                                <div className="flex flex-col gap-3">
-                                  <div>
-                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                      Tipo / Estado Examen
-                                    </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
-                                      {e.estado || "Examen"}
-                                    </span>
-                                  </div>
-                                  {(e.instancia || e.aula) && (
-                                    <div>
-                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                        Instancia / Aula
-                                      </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
-                                        {[e.instancia && `Instancia: ${e.instancia}`, e.aula && `Aula: ${e.aula}`].filter(Boolean).join(" • ")}
-                                      </span>
-                                    </div>
-                                  )}
+                                <DetailBlockGrid>
                                   {(e.fecha || e.hora) && (
-                                    <div>
-                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                        Fecha y Hora
-                                      </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
-                                        {[e.fecha, e.hora && `${e.hora} hs`].filter(Boolean).join(" • ")}
-                                      </span>
-                                    </div>
+                                    <DetailBlock icon={Clock} label="Fecha y Hora" tone="primary" emphasis span>
+                                      {[e.fecha, e.hora && `${e.hora} hs`].filter(Boolean).join(" • ")}
+                                    </DetailBlock>
                                   )}
+                                  <DetailBlock icon={BookOpen} label="Tipo / Estado Examen">
+                                    {e.estado || "Examen"}
+                                  </DetailBlock>
                                   {e.nota !== undefined && e.nota !== null && (
-                                    <div>
-                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                        Calificación
-                                      </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
-                                        {e.nota}
-                                      </span>
-                                    </div>
+                                    <DetailBlock icon={CheckCircle2} label="Calificación" tone="success">
+                                      {e.nota}
+                                    </DetailBlock>
+                                  )}
+                                  {(e.instancia || e.aula) && (
+                                    <DetailBlock icon={MapPin} label="Instancia / Aula" span>
+                                      {[e.instancia && `Instancia: ${e.instancia}`, e.aula && `Aula: ${e.aula}`].filter(Boolean).join(" • ")}
+                                    </DetailBlock>
                                   )}
                                   {e.contenidos && (
-                                    <div>
-                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                        Temas / Contenidos
-                                      </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
-                                        {e.contenidos}
-                                      </span>
-                                    </div>
+                                    <DetailBlock icon={FileText} label="Temas / Contenidos" span>
+                                      {e.contenidos}
+                                    </DetailBlock>
                                   )}
-                                </div>
+                                </DetailBlockGrid>
                           </HomeDetailModal>
                         </div>
                       );
@@ -3445,6 +3293,7 @@ export default function HomeView({
                                   </div>
                                   <button
                                     type="button"
+                                    data-no-global-sound
                                     onClick={(evt) => { evt.stopPropagation(); setExpandedHomeItemId(isExpanded ? null : itemId); }}
                                     className="p-1 rounded-lg hover:bg-primary/10 text-zinc-400 hover:text-primary cursor-pointer shrink-0"
                                     title="Ver detalles"
@@ -3514,64 +3363,40 @@ export default function HomeView({
                           </div>
 
                           <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} title={t.title} icon={FileText}>
-                                <div className="flex flex-col gap-3">
-                                  <div>
-                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                      Estado de Entrega
-                                    </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
-                                      {t.completed ? "Completado" : "Pendiente"}
-                                    </span>
-                                  </div>
-                                  <div>
-                                    <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                      Materia
-                                    </span>
-                                    <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
-                                      {subjectName}
-                                    </span>
-                                  </div>
+                                <DetailBlockGrid>
+                                  <DetailBlock
+                                    icon={t.completed ? CheckCircle2 : AlertCircle}
+                                    label="Estado de Entrega"
+                                    tone={t.completed ? "success" : "warning"}
+                                    emphasis
+                                    span
+                                  >
+                                    {t.completed ? "Completado" : "Pendiente"}
+                                  </DetailBlock>
+                                  <DetailBlock icon={GraduationCap} label="Materia">
+                                    {subjectName}
+                                  </DetailBlock>
                                   {t.dueDate && (
-                                    <div>
-                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                        Fecha Límite
-                                      </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
-                                        {t.dueDate}
-                                      </span>
-                                    </div>
+                                    <DetailBlock icon={Clock} label="Fecha Límite">
+                                      {t.dueDate}
+                                    </DetailBlock>
                                   )}
                                   {t.type && (
-                                    <div>
-                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                        Tipo
-                                      </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
-                                        {t.type}
-                                      </span>
-                                    </div>
+                                    <DetailBlock icon={Info} label="Tipo">
+                                      {t.type}
+                                    </DetailBlock>
                                   )}
                                   {t.grade !== undefined && t.grade !== null && (
-                                    <div>
-                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                        Calificación
-                                      </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
-                                        {t.grade}
-                                      </span>
-                                    </div>
+                                    <DetailBlock icon={CheckCircle2} label="Calificación" tone="success">
+                                      {t.grade}
+                                    </DetailBlock>
                                   )}
                                   {t.description && (
-                                    <div>
-                                      <span className="block text-[13px] font-extrabold text-primary detail-label mb-2">
-                                        Descripción
-                                      </span>
-                                      <span className="text-[10px] text-zinc-800 dark:text-zinc-200 block pl-2">
-                                        {t.description}
-                                      </span>
-                                    </div>
+                                    <DetailBlock icon={FileText} label="Descripción" span>
+                                      {t.description}
+                                    </DetailBlock>
                                   )}
-                                </div>
+                                </DetailBlockGrid>
                           </HomeDetailModal>
                         </div>
                       );
