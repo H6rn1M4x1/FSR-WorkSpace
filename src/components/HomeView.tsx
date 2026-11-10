@@ -16,6 +16,7 @@ import { getMatchTeamLogos, syncMonthlyMatches } from "../lib/matchScheduler";
 import { motion, AnimatePresence } from "motion/react";
 import { ConfirmationModal } from "./ConfirmationModal";
 import { LocationPickerMap } from "./LocationPickerMap";
+import { ReverseGeocodedAddress } from "./ReverseGeocodedAddress";
 import { DetailModal as HomeDetailModal, DetailBlock, DetailBlockGrid } from "./DetailModal";
 import { PaymentIconGlyph } from "./PaymentIconGlyph";
 import { getEffectivePaymentIconId } from "../utils/paymentIcons";
@@ -88,6 +89,7 @@ import {
   AcademicSubject,
   MateriaInfo,
   InvestmentSnapshot,
+  DoctorCard,
 } from "../types";
 import { StorageService } from "../lib/storage";
 import { createShare, updateShare, deleteShare } from "../lib/sharing";
@@ -113,6 +115,7 @@ interface HomeViewProps {
   appointments: Appointment[];
   turnosCompromisos: TurnoCompromiso[];
   turnoCategorias?: TurnoCategoriaDef[];
+  doctors?: DoctorCard[];
   setAppointments: React.Dispatch<React.SetStateAction<Appointment[]>>;
   setTurnosCompromisos: React.Dispatch<React.SetStateAction<TurnoCompromiso[]>>;
   // Comidas
@@ -173,6 +176,7 @@ export default function HomeView({
   appointments,
   turnosCompromisos,
   turnoCategorias = [],
+  doctors = [],
   setAppointments,
   setTurnosCompromisos,
   organizacionSemanal,
@@ -1547,6 +1551,33 @@ export default function HomeView({
     return result;
   };
 
+  // Para el popup de detalle de turnos: separa la fecha (sin año, una sola línea) del año y la
+  // hora, que se muestran abajo como dos chips chicos — mismo patrón usado en Turnos.
+  const splitFechaHora = (dateStr: string) => {
+    if (!dateStr) return { fechaSinAno: "", anio: "", hora: "" };
+    let cleanDateStr = dateStr;
+    let timeStr = "";
+    if (dateStr.includes("T")) {
+      const parts = dateStr.split("T");
+      cleanDateStr = parts[0];
+      timeStr = parts[1];
+    } else if (dateStr.includes(" ")) {
+      const parts = dateStr.split(" ");
+      cleanDateStr = parts[0];
+      timeStr = parts.slice(1).join(" ");
+    }
+    const parts = cleanDateStr.split("-");
+    if (parts.length !== 3) return { fechaSinAno: dateStr, anio: "", hora: "" };
+    const dateObj = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    const dayOfWeekNames = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+    const dayOfWeek = dayOfWeekNames[dateObj.getDay()];
+    const dayNum = parts[2];
+    const monthName = monthNames[dateObj.getMonth()];
+    const anio = parts[0];
+    const hora = timeStr ? `${timeStr.replace("hs", "").trim()} hs` : "";
+    return { fechaSinAno: `${dayOfWeek} ${dayNum} de ${monthName}`, anio, hora };
+  };
+
   // DD-MM-YYYY para mostrar fechas cortas (tablas, badges) — la fecha se guarda en formato ISO
   // (YYYY-MM-DD) y mostrarla así, cruda, confunde al leerla.
   const formatFechaDMY = (fechaStr: string): string => {
@@ -2255,7 +2286,7 @@ export default function HomeView({
                           <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} title={app.title} icon={Calendar}>
                                 <DetailBlockGrid>
                                   {app.time && (
-                                    <DetailBlock icon={Clock} label="Hora" tone="primary" emphasis>
+                                    <DetailBlock icon={Clock} label="Hora" emphasis>
                                       {app.time} hs
                                     </DetailBlock>
                                   )}
@@ -2435,40 +2466,69 @@ export default function HomeView({
                             </div>
                           </div>
 
-                          <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} title={tc.descripcion.replace(/⚽\s*/g, "")} icon={CatIcon} onEdit={onQuickEdit ? () => onQuickEdit("turno", tc.id) : undefined}>
+                          {(() => {
+                            const estadoActual = tc.estatus
+                              ? "Realizado"
+                              : (() => {
+                                  const todayStr = getLocalDateString();
+                                  const datePortion = tc.fecha ? tc.fecha.substring(0, 10) : "";
+                                  if (datePortion && datePortion.length === 10 && datePortion < todayStr) return "Realizado";
+                                  if (tc.fecha === todayStr || datePortion === todayStr) return "Initinere Diario";
+                                  return "Pendiente";
+                                })();
+                            const matchedDoc = doctors.find((d) => d.name === tc.doctor);
+                            return (
+                              <HomeDetailModal
+                                isOpen={isExpanded}
+                                onClose={() => setExpandedHomeItemId(null)}
+                                title={tc.descripcion.replace(/⚽\s*/g, "")}
+                                status={!matchLogos ? estadoActual : undefined}
+                                statusTone={estadoActual === "Realizado" ? "success" : estadoActual === "Initinere Diario" ? "warning" : "default"}
+                                badge={!matchLogos ? getCategoryLabel(tc.categoria) : undefined}
+                                icon={CatIcon}
+                                onToggleComplete={!matchLogos ? () => handleToggleTurnoStatus(tc.id) : undefined}
+                                isComplete={tc.estatus}
+                                onEdit={onQuickEdit ? () => onQuickEdit("turno", tc.id) : undefined}
+                              >
                                 <DetailBlockGrid>
-                                  <DetailBlock icon={Clock} label="Fecha y Hora" tone="primary" emphasis span={!!matchLogos}>
-                                    {formatDateFriendly ? formatDateFriendly(tc.fecha) : tc.fecha}
-                                  </DetailBlock>
+                                  {(() => {
+                                    const { fechaSinAno, anio, hora } = splitFechaHora(tc.fecha);
+                                    return (
+                                      <DetailBlock icon={Clock} label="Fecha y Hora" emphasis span={!!matchLogos}>
+                                        <span className="block whitespace-nowrap">{fechaSinAno}</span>
+                                        <div className="flex items-center gap-1.5 mt-1">
+                                          {anio && (
+                                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-white/10 text-zinc-600 dark:text-zinc-300">
+                                              {anio}
+                                            </span>
+                                          )}
+                                          {hora && (
+                                            <span className="text-[10px] font-semibold text-zinc-400 dark:text-zinc-500">
+                                              {hora}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </DetailBlock>
+                                    );
+                                  })()}
                                   {tc.lugar &&
                                     tc.lugar.trim() &&
                                     tc.lugar.toLowerCase() !== "sin dirección" &&
                                     tc.lugar.toLowerCase() !== "sin direccion" &&
                                     tc.lugar.toLowerCase() !== "sin lugar asignado" && (
                                     <DetailBlock icon={MapPin} label="Lugar / Ubicación">
-                                      {tc.lugar}
+                                      <span className="truncate block">{tc.lugar}</span>
+                                      <ReverseGeocodedAddress lat={tc.lat} lon={tc.lon} />
                                     </DetailBlock>
                                   )}
                                   {!matchLogos && tc.doctor && tc.doctor.trim() && (
                                     <DetailBlock icon={Stethoscope} label="Profesional / Asignado">
-                                      {tc.doctor}
-                                    </DetailBlock>
-                                  )}
-                                  {!matchLogos && (
-                                    <DetailBlock
-                                      icon={tc.estatus ? CheckCircle2 : AlertCircle}
-                                      label="Categoría y Estatus"
-                                      tone={tc.estatus ? "success" : "default"}
-                                      span
-                                    >
-                                      {getCategoryLabel(tc.categoria)} • {(() => {
-                                        if (tc.estatus) return "Realizado";
-                                        const todayStr = getLocalDateString();
-                                        const datePortion = tc.fecha ? tc.fecha.substring(0, 10) : "";
-                                        if (datePortion && datePortion.length === 10 && datePortion < todayStr) return "Realizado";
-                                        if (tc.fecha === todayStr || datePortion === todayStr) return "Initinere Diario";
-                                        return "Pendiente";
-                                      })()}
+                                      <span className="truncate block">{tc.doctor}</span>
+                                      {matchedDoc?.specialty && (
+                                        <span className="text-[10px] font-medium text-zinc-400 dark:text-zinc-500 truncate block">
+                                          {matchedDoc.specialty}
+                                        </span>
+                                      )}
                                     </DetailBlock>
                                   )}
                                 </DetailBlockGrid>
@@ -2566,6 +2626,8 @@ export default function HomeView({
                                   </DetailBlock>
                                 )}
                           </HomeDetailModal>
+                            );
+                          })()}
                         </div>
                       );
                     }

@@ -18,6 +18,7 @@ import { auth } from "../lib/supabase";
 import { netlifyFn } from "../lib/apiBase";
 import { db } from "../lib/firebase"; // TODO Fase 2: migrar a Supabase
 import { LocationPickerMap } from "./LocationPickerMap";
+import { ReverseGeocodedAddress } from "./ReverseGeocodedAddress";
 import { useToast } from "../context/ToastContext";
 import { AddressBookModal, loadSavedAddressBook, saveAddressBook, AddressEntry } from "./AddressBookModal";
 import { UserProfileData } from "./UserSettingsModal";
@@ -2624,6 +2625,30 @@ export default function AppointmentsView({
     );
   };
 
+  // Marca un turno/compromiso como realizado o pendiente — misma lógica que ya usaba el
+  // checkbox de la tarjeta, extraída acá para poder reutilizarla también desde el botón del
+  // popup de detalle.
+  const handleToggleEstatus = async (tc: TurnoCompromiso) => {
+    const newChecked = !tc.estatus;
+    const updatedItem = { ...tc, estatus: newChecked, updatedAt: Date.now() };
+    setTurnosCompromisos((prev) => {
+      const updated = prev.map((item) => (item.id === tc.id ? updatedItem : item));
+      StorageService.setTurnosCompromisos(updated);
+      return updated;
+    });
+    try {
+      await saveItemToFirestore(activeUserId, "turnos_compromisos", updatedItem);
+      showToast(newChecked ? "Marcado como listo y guardado." : "Marcado como pendiente y guardado.", "success");
+    } catch (err: any) {
+      setTurnosCompromisos((prev) => {
+        const reverted = prev.map((item) => (item.id === tc.id ? tc : item));
+        StorageService.setTurnosCompromisos(reverted);
+        return reverted;
+      });
+      showToast(err?.message || "No se pudo guardar el cambio.", "error");
+    }
+  };
+
   // Doctor list items for select options
   const doctorOptions = [
     ...doctors.map((d) => ({
@@ -2767,6 +2792,33 @@ export default function AppointmentsView({
       result += ` - ${cleanTime} hs`;
     }
     return result;
+  };
+
+  // Para el popup de detalle: separa la fecha (sin año, una sola línea) del año y la hora, que se
+  // muestran abajo como dos chips chicos — mismo patrón que el mockup de referencia.
+  const splitFechaHora = (dateStr: string) => {
+    if (!dateStr) return { fechaSinAno: "", anio: "", hora: "" };
+    let cleanDateStr = dateStr;
+    let timeStr = "";
+    if (dateStr.includes("T")) {
+      const parts = dateStr.split("T");
+      cleanDateStr = parts[0];
+      timeStr = parts[1];
+    } else if (dateStr.includes(" ")) {
+      const parts = dateStr.split(" ");
+      cleanDateStr = parts[0];
+      timeStr = parts.slice(1).join(" ");
+    }
+    const parts = cleanDateStr.split("-");
+    if (parts.length !== 3) return { fechaSinAno: dateStr, anio: "", hora: "" };
+    const dateObj = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    const dayOfWeekNames = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+    const dayOfWeek = dayOfWeekNames[dateObj.getDay()];
+    const dayNum = parts[2];
+    const monthName = monthNames[dateObj.getMonth()];
+    const anio = parts[0];
+    const hora = timeStr ? `${timeStr.replace("hs", "").trim()} hs` : "";
+    return { fechaSinAno: `${dayOfWeek} ${dayNum} de ${monthName}`, anio, hora };
   };
 
   const getDaysInMonth = (date: Date) => {
@@ -3295,14 +3347,35 @@ export default function AppointmentsView({
                                 statusTone={estado === "Realizado" ? "success" : estado === "Initinere Diario" ? "warning" : "default"}
                                 badge={!isAutoScheduledMatchTurno(tc.id) ? getCategoryLabel(tc.categoria) : undefined}
                                 icon={getCategoryIcon(tc.categoria)}
+                                onToggleComplete={!isAutoScheduledMatchTurno(tc.id) ? () => handleToggleEstatus(tc) : undefined}
+                                isComplete={tc.estatus}
+                                completeLabel="Marcar Realizado"
+                                incompleteLabel="Marcar Pendiente"
                                 onEdit={() => handleEditTurnoCompromiso(tc)}
                                 onDelete={() => handleDeleteTurnoCompromiso(tc.id)}
                                 deleteLabel="Eliminar Registro"
                               >
                                 <DetailBlockGrid>
-                                  <DetailBlock icon={Calendar} label="Fecha y Hora" tone="primary" emphasis>
-                                    {formatDateFriendly(tc.fecha)}
-                                  </DetailBlock>
+                                  {(() => {
+                                    const { fechaSinAno, anio, hora } = splitFechaHora(tc.fecha);
+                                    return (
+                                      <DetailBlock icon={Calendar} label="Fecha y Hora" emphasis>
+                                        <span className="block whitespace-nowrap">{fechaSinAno}</span>
+                                        <div className="flex items-center gap-1.5 mt-1">
+                                          {anio && (
+                                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-white/10 text-zinc-600 dark:text-zinc-300">
+                                              {anio}
+                                            </span>
+                                          )}
+                                          {hora && (
+                                            <span className="text-[10px] font-semibold text-zinc-400 dark:text-zinc-500">
+                                              {hora}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </DetailBlock>
+                                    );
+                                  })()}
                                   {!isAutoScheduledMatchTurno(tc.id) && tc.doctor && tc.doctor.trim() ? (
                                     <DetailBlock icon={Stethoscope} label="Profesional / Asignado">
                                       <div className="flex items-center gap-2">
@@ -3315,7 +3388,17 @@ export default function AppointmentsView({
                                             .map((w) => w[0]?.toUpperCase())
                                             .join("")}
                                         </span>
-                                        <span className="truncate">{tc.doctor}</span>
+                                        <div className="min-w-0">
+                                          <span className="truncate block">{tc.doctor}</span>
+                                          {(() => {
+                                            const matchedDoc = doctors.find((d) => d.name === tc.doctor);
+                                            return matchedDoc?.specialty ? (
+                                              <span className="text-[10px] font-medium text-zinc-400 dark:text-zinc-500 truncate block">
+                                                {matchedDoc.specialty}
+                                              </span>
+                                            ) : null;
+                                          })()}
+                                        </div>
                                       </div>
                                     </DetailBlock>
                                   ) : (
@@ -3330,7 +3413,10 @@ export default function AppointmentsView({
                                   tc.lugar.toLowerCase() !== "sin lugar asignado" && (
                                     <DetailBlock icon={MapPin} label="Lugar / Ubicación" span>
                                       <div className="flex items-center justify-between gap-2">
-                                        <span className="truncate">{tc.lugar}</span>
+                                        <div className="min-w-0">
+                                          <span className="truncate block">{tc.lugar}</span>
+                                          <ReverseGeocodedAddress lat={tc.lat} lon={tc.lon} />
+                                        </div>
                                         <a
                                           href={tc.lat != null && tc.lon != null ? `https://www.openstreetmap.org/?mlat=${tc.lat}&mlon=${tc.lon}#map=17/${tc.lat}/${tc.lon}` : `https://www.openstreetmap.org/search?query=${encodeURIComponent(tc.lugar)}`}
                                           target="_blank"
@@ -5083,15 +5169,36 @@ export default function AppointmentsView({
             statusTone={estadoTone as any}
             badge={detailTurno ? getCategoryLabel(detailTurno.categoria) : undefined}
             icon={detailTurno ? getCategoryIcon(detailTurno.categoria) : undefined}
+            onToggleComplete={detailTurno && !isAutoScheduledMatchTurno(detailTurno.id) ? () => handleToggleEstatus(detailTurno) : undefined}
+            isComplete={detailTurno?.estatus}
+            completeLabel="Marcar Realizado"
+            incompleteLabel="Marcar Pendiente"
             onEdit={detailTurno ? () => handleEditTurnoCompromiso(detailTurno) : undefined}
             onDelete={detailTurno ? () => handleDeleteTurnoCompromiso(detailTurno.id) : undefined}
             deleteLabel="Eliminar Registro"
           >
             {detailTurno && (
               <DetailBlockGrid>
-                <DetailBlock icon={Calendar} label="Fecha y Hora" tone="primary" emphasis>
-                  {formatDateFriendly(detailTurno.fecha)}
-                </DetailBlock>
+                {(() => {
+                  const { fechaSinAno, anio, hora } = splitFechaHora(detailTurno.fecha);
+                  return (
+                    <DetailBlock icon={Calendar} label="Fecha y Hora" emphasis>
+                      <span className="block whitespace-nowrap">{fechaSinAno}</span>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        {anio && (
+                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-white/10 text-zinc-600 dark:text-zinc-300">
+                            {anio}
+                          </span>
+                        )}
+                        {hora && (
+                          <span className="text-[10px] font-semibold text-zinc-400 dark:text-zinc-500">
+                            {hora}
+                          </span>
+                        )}
+                      </div>
+                    </DetailBlock>
+                  );
+                })()}
                 {!isAutoScheduledMatchTurno(detailTurno.id) && detailTurno.doctor && detailTurno.doctor.trim() ? (
                   <DetailBlock icon={Stethoscope} label="Profesional / Asignado">
                     <div className="flex items-center gap-2">
@@ -5104,7 +5211,17 @@ export default function AppointmentsView({
                           .map((w) => w[0]?.toUpperCase())
                           .join("")}
                       </span>
-                      <span className="truncate">{detailTurno.doctor}</span>
+                      <div className="min-w-0">
+                        <span className="truncate block">{detailTurno.doctor}</span>
+                        {(() => {
+                          const matchedDoc = doctors.find((d) => d.name === detailTurno.doctor);
+                          return matchedDoc?.specialty ? (
+                            <span className="text-[10px] font-medium text-zinc-400 dark:text-zinc-500 truncate block">
+                              {matchedDoc.specialty}
+                            </span>
+                          ) : null;
+                        })()}
+                      </div>
                     </div>
                   </DetailBlock>
                 ) : (
@@ -5115,7 +5232,10 @@ export default function AppointmentsView({
                 {hasLugar && (
                   <DetailBlock icon={MapPin} label="Lugar / Ubicación" span>
                     <div className="flex items-center justify-between gap-2">
-                      <span className="truncate">{detailTurno.lugar}</span>
+                      <div className="min-w-0">
+                        <span className="truncate block">{detailTurno.lugar}</span>
+                        <ReverseGeocodedAddress lat={detailTurno.lat} lon={detailTurno.lon} />
+                      </div>
                       <a
                         href={detailTurno.lat != null && detailTurno.lon != null ? `https://www.openstreetmap.org/?mlat=${detailTurno.lat}&mlon=${detailTurno.lon}#map=17/${detailTurno.lat}/${detailTurno.lon}` : `https://www.openstreetmap.org/search?query=${encodeURIComponent(detailTurno.lugar)}`}
                         target="_blank"
