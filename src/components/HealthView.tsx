@@ -9838,15 +9838,21 @@ export default function HealthView({
           >
             {detailDoctor && (
               <DetailBlockGrid>
-                <DetailBlock icon={Tag} label="Especialidad" tone="primary" emphasis span>
-                  {detailDoctor.specialty}
-                </DetailBlock>
-                <DetailBlock icon={MapPin} label="Lugar" span>
-                  {detailDoctor.address || "No asignado"}
-                </DetailBlock>
-                <DetailBlock icon={Phone} label="Contacto" span>
-                  {detailDoctor.phone || "-"}
-                </DetailBlock>
+                {detailDoctor.specialty && (
+                  <DetailBlock icon={Tag} label="Especialidad" tone="primary" emphasis span>
+                    {detailDoctor.specialty}
+                  </DetailBlock>
+                )}
+                {detailDoctor.address && (
+                  <DetailBlock icon={MapPin} label="Lugar" span>
+                    {detailDoctor.address}
+                  </DetailBlock>
+                )}
+                {detailDoctor.phone && (
+                  <DetailBlock icon={Phone} label="Contacto" span>
+                    {detailDoctor.phone}
+                  </DetailBlock>
+                )}
               </DetailBlockGrid>
             )}
           </DetailModal>
@@ -9875,7 +9881,7 @@ export default function HealthView({
                     <img
                       src={detailMed.imagen}
                       alt={detailMed.marca}
-                      className="w-full h-28 object-cover rounded-xl"
+                      className="w-full max-h-64 object-contain rounded-xl bg-slate-100 dark:bg-zinc-950/40"
                       referrerPolicy="no-referrer"
                     />
                   </DetailBlock>

@@ -9,6 +9,7 @@ import { auth } from "../lib/supabase";
 import { motion, AnimatePresence } from "motion/react";
 import { createPortal } from "react-dom";
 import { CotizacionAccion } from "../types";
+import { DetailModal, DetailBlock, DetailBlockGrid } from "./DetailModal";
 import {
   Plus,
   Trash2,
@@ -22,6 +23,7 @@ import {
   LineChart,
   Building2,
   TrendingUp,
+  TrendingDown,
   ArrowUpRight,
   ArrowDownRight,
   RefreshCw,
@@ -1298,141 +1300,54 @@ export default function CotizacionesAccionesTable({
         )}
       </div>
 
-      {/* Detail Modal Portal */}
-      {createPortal(
-        <AnimatePresence>
-          {viewingItem && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs"
+      {/* Detalle de la acción/CEDEAR — mismo patrón (DetailModal) que ya tiene CotizacionesCriptoTable. */}
+      <DetailModal
+        isOpen={!!viewingItem}
+        onClose={() => setViewingItem(null)}
+        title={viewingItem?.descripcion}
+        subtitle={viewingItem ? `${viewingItem.simbolo} (${viewingItem.moneda || "ARS"})` : undefined}
+        badge={viewingItem?.panel}
+        icon={LineChart}
+        onEdit={viewingItem ? () => handleOpenEdit(viewingItem) : undefined}
+        onDelete={viewingItem ? () => setDeleteConfirmId(viewingItem.id) : undefined}
+      >
+        {viewingItem && (
+          <DetailBlockGrid>
+            <DetailBlock icon={DollarSign} label="Último Precio" tone="primary" emphasis span>
+              {viewingItem.moneda === "USD" ? "US$ " : "$ "}
+              {viewingItem.ultimoPrecio}
+            </DetailBlock>
+            <DetailBlock
+              icon={viewingItem.variacion >= 0 ? TrendingUp : TrendingDown}
+              label="Variación Diaria"
+              tone={viewingItem.variacion > 0 ? "success" : viewingItem.variacion < 0 ? "danger" : "default"}
+              emphasis
             >
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 15 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 15 }}
-                className={`w-full max-w-lg rounded-3xl p-6 shadow-2xl border ${
-                  darkMode
-                    ? "bg-zinc-900 border-zinc-800 text-white"
-                    : "bg-white border-zinc-200 text-zinc-900"
-                }`}
-              >
-                <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-200 dark:border-zinc-800">
-                  <div className="flex items-center gap-2">
-                    <span className="px-2.5 py-1 rounded-lg bg-primary/10 text-primary font-mono font-black text-sm border border-primary/20">
-                      {viewingItem.simbolo}
-                    </span>
-                    <div>
-                      <h3 className="font-black text-base">{viewingItem.descripcion}</h3>
-                      <p className="text-xs text-slate-400 dark:text-zinc-500 font-semibold flex items-center gap-2">
-                        <span>{viewingItem.panel}</span>
-                        <span className="font-mono text-primary font-bold">({viewingItem.moneda || "ARS"})</span>
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setViewingItem(null)}
-                    data-no-global-sound
-                    className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer shrink-0"
-                    title="Cerrar"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 my-4">
-                  <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-zinc-950/50 border border-slate-200/60 dark:border-zinc-800/50">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase">Último Precio</p>
-                    <p className="text-xl font-black font-mono text-slate-900 dark:text-white">
-                      {viewingItem.moneda === "USD" ? "US$ " : "$ "}
-                      {viewingItem.ultimoPrecio}
-                    </p>
-                  </div>
-
-                  <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-zinc-950/50 border border-slate-200/60 dark:border-zinc-800/50">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase">Variación Diaria</p>
-                    <p
-                      className={`text-xl font-black font-mono ${
-                        viewingItem.variacion > 0
-                          ? "text-emerald-600 dark:text-emerald-400"
-                          : viewingItem.variacion < 0
-                          ? "text-rose-600 dark:text-rose-400"
-                          : "text-slate-600 dark:text-zinc-400"
-                      }`}
-                    >
-                      {viewingItem.variacionTexto}
-                    </p>
-                  </div>
-
-                  <div className="p-3 rounded-xl bg-slate-50 dark:bg-zinc-950/50 border border-slate-100 dark:border-zinc-800/40">
-                    <p className="text-[10px] text-slate-400">Apertura</p>
-                    <p className="text-xs font-mono font-bold">{viewingItem.apertura}</p>
-                  </div>
-
-                  <div className="p-3 rounded-xl bg-slate-50 dark:bg-zinc-950/50 border border-slate-100 dark:border-zinc-800/40">
-                    <p className="text-[10px] text-slate-400">Cierre Anterior</p>
-                    <p className="text-xs font-mono font-bold">{viewingItem.ultimoCierre}</p>
-                  </div>
-
-                  <div className="p-3 rounded-xl bg-slate-50 dark:bg-zinc-950/50 border border-slate-100 dark:border-zinc-800/40">
-                    <p className="text-[10px] text-slate-400">Mínimo Día</p>
-                    <p className="text-xs font-mono font-bold">{viewingItem.minimo}</p>
-                  </div>
-
-                  <div className="p-3 rounded-xl bg-slate-50 dark:bg-zinc-950/50 border border-slate-100 dark:border-zinc-800/40">
-                    <p className="text-[10px] text-slate-400">Máximo Día</p>
-                    <p className="text-xs font-mono font-bold">{viewingItem.maximo}</p>
-                  </div>
-                </div>
-
-                <div className="p-3 rounded-xl bg-slate-50 dark:bg-zinc-950/50 border border-slate-100 dark:border-zinc-800/40 mb-4">
-                  <p className="text-[10px] text-slate-400">Monto Operado / Detalle</p>
-                  <p className="text-xs font-mono font-bold text-slate-800 dark:text-zinc-200">
-                    {viewingItem.montoOperado || "-"}
-                  </p>
-                </div>
-
-                <div className="pt-3 border-t border-slate-200 dark:border-zinc-800 text-center mb-4">
-                  <p className="text-[11px] text-slate-400 dark:text-zinc-500">
-                    Fuente: InvertirOnline (IOL) | Última act: {viewingItem.fechaActualizacion || "-"}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2 -mx-6 -mb-6 px-6 py-3.5 border-t border-slate-100 dark:border-zinc-800/80 bg-slate-50/60 dark:bg-black/20">
-                  <button
-                    type="button"
-                    data-no-global-sound
-                    onClick={() => {
-                      const item = viewingItem;
-                      setViewingItem(null);
-                      window.setTimeout(() => handleOpenEdit(item), 220);
-                      uiSounds.edit();
-                    }}
-                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 hover:bg-slate-100 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 text-[11px] font-bold transition-all cursor-pointer active:scale-[0.97]"
-                  >
-                    <Edit3 className="w-3.5 h-3.5" /> Editar
-                  </button>
-                  <button
-                    type="button"
-                    data-no-global-sound
-                    onClick={() => {
-                      const id = viewingItem.id;
-                      setViewingItem(null);
-                      setDeleteConfirmId(id);
-                      uiSounds.delete();
-                    }}
-                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[11px] font-bold transition-all cursor-pointer active:scale-[0.97]"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" /> Eliminar
-                  </button>
-                </div>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>,
-        document.body
-      )}
+              {viewingItem.variacionTexto}
+            </DetailBlock>
+            <DetailBlock icon={Clock} label="Última Actualización">
+              {viewingItem.fechaActualizacion || "-"}
+            </DetailBlock>
+            <DetailBlock icon={Layers} label="Apertura">
+              {viewingItem.apertura || "-"}
+            </DetailBlock>
+            <DetailBlock icon={Layers} label="Cierre Anterior">
+              {viewingItem.ultimoCierre || "-"}
+            </DetailBlock>
+            <DetailBlock icon={Layers} label="Mínimo Día">
+              {viewingItem.minimo || "-"}
+            </DetailBlock>
+            <DetailBlock icon={Layers} label="Máximo Día">
+              {viewingItem.maximo || "-"}
+            </DetailBlock>
+            {viewingItem.montoOperado && (
+              <DetailBlock icon={DollarSign} label="Monto Operado" span>
+                {viewingItem.montoOperado}
+              </DetailBlock>
+            )}
+          </DetailBlockGrid>
+        )}
+      </DetailModal>
 
       {/* Delete Confirmation Modal Portal */}
       {createPortal(
