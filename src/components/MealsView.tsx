@@ -6237,6 +6237,9 @@ export default function MealsView({
             isOpen={!!detailShopping}
             onClose={() => setDetailShoppingIndex(null)}
             title={detailShopping?.name}
+            status={detailShoppingCompleted ? "Comprado" : "Pendiente"}
+            statusTone={detailShoppingCompleted ? "success" : "warning"}
+            badge={detailShoppingOrigen || undefined}
             icon={ShoppingBag}
             onDelete={
               detailShopping
@@ -6250,9 +6253,6 @@ export default function MealsView({
                 <DetailBlock icon={Package} label="Cantidad / U.M." tone="primary" emphasis>
                   {detailShopping.cantidad} {detailShopping.unidadMedida}
                 </DetailBlock>
-                <DetailBlock icon={Check} label="Estado" tone={detailShoppingCompleted ? "success" : "warning"}>
-                  {detailShoppingCompleted ? "Comprado" : "Pendiente"}
-                </DetailBlock>
                 <DetailBlock icon={Tag} label="Categoría">
                   {detailShopping.categoria}
                 </DetailBlock>
@@ -6261,9 +6261,6 @@ export default function MealsView({
                 </DetailBlock>
                 <DetailBlock icon={MapPin} label="Comercio">
                   {detailShopping.comercio}
-                </DetailBlock>
-                <DetailBlock icon={ClipboardList} label="Origen">
-                  {detailShoppingOrigen}
                 </DetailBlock>
               </DetailBlockGrid>
             )}

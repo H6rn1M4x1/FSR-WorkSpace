@@ -3515,6 +3515,8 @@ export default function HealthView({
                                   onClose={() => setExpandedDispId(null)}
                                   title={details.marca}
                                   subtitle={details.droga || undefined}
+                                  status={details.estado}
+                                  statusTone={details.estado === "Comprar Medicamento" ? "danger" : "success"}
                                   icon={Pill}
                                   onEdit={() => handleOpenEditDisp(disp)}
                                 >
@@ -3538,9 +3540,6 @@ export default function HealthView({
                                       tone={details.estado === "Comprar Medicamento" ? "danger" : "default"}
                                     >
                                       {disp.cantidadRegistrada} registradas / {details.cantidadDisponible.toFixed(1)} restantes
-                                    </DetailBlock>
-                                    <DetailBlock icon={Tag} label="Estado" tone={details.estado === "Comprar Medicamento" ? "danger" : "success"}>
-                                      {details.estado}
                                     </DetailBlock>
                                   </DetailBlockGrid>
                                 </DetailModal>
@@ -9811,6 +9810,8 @@ export default function HealthView({
             onClose={() => setDetailMedId(null)}
             title={detailMed?.marca}
             subtitle={detailMed?.droga}
+            status={detailMed?.estado}
+            statusTone={detailMed?.estado === "Consumiendo" ? "success" : detailMed?.estado === "Dejo de Consumir" ? "danger" : "default"}
             icon={Pill}
             onEdit={detailMed ? () => openEditModal(detailMed) : undefined}
             onDelete={detailMed ? () => handleDeleteDetailedMed(detailMed.id) : undefined}
@@ -9833,13 +9834,6 @@ export default function HealthView({
                 </DetailBlock>
                 <DetailBlock icon={Heart} label="Función / Tratamiento">
                   {detailMed.funcionTratamiento || "Quimioterapia"}
-                </DetailBlock>
-                <DetailBlock
-                  icon={Tag}
-                  label="Estado"
-                  tone={detailMed.estado === "Consumiendo" ? "success" : detailMed.estado === "Dejo de Consumir" ? "danger" : "default"}
-                >
-                  {detailMed.estado}
                 </DetailBlock>
                 <DetailBlock icon={Activity} label="Dosis" emphasis>
                   {detailMed.mg} {detailMed.unidadMedida}
@@ -9867,6 +9861,14 @@ export default function HealthView({
             onClose={() => setDetailDispId(null)}
             title={detailDisp?.marca}
             subtitle={detailDisp?.droga}
+            status={detailDisp?.estado}
+            statusTone={
+              detailDisp?.estado === "Comprar Medicamento"
+                ? "danger"
+                : detailDisp?.estado === "Pedir Receta"
+                ? "warning"
+                : "success"
+            }
             icon={Clock}
             onEdit={detailDispRaw ? () => handleOpenEditDisp(detailDispRaw) : undefined}
             onDelete={detailDispRaw ? () => handleDeleteDisp(detailDispRaw.id) : undefined}
@@ -9874,21 +9876,6 @@ export default function HealthView({
           >
             {detailDispRaw && detailDisp && (
               <DetailBlockGrid>
-                <DetailBlock
-                  icon={Tag}
-                  label="Estado"
-                  tone={
-                    detailDisp.estado === "Comprar Medicamento"
-                      ? "danger"
-                      : detailDisp.estado === "Pedir Receta"
-                      ? "warning"
-                      : "success"
-                  }
-                  emphasis
-                  span
-                >
-                  {detailDisp.estado}
-                </DetailBlock>
                 <DetailBlock icon={FileCheck} label="Receta" tone={detailDispRaw.receta ? "success" : "default"}>
                   {detailDispRaw.receta ? "Con receta" : "Sin receta"}
                 </DetailBlock>

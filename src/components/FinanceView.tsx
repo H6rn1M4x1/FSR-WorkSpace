@@ -2436,7 +2436,9 @@ export default function FinanceView({
                                   isOpen={isExpanded}
                                   onClose={() => setExpandedPaymentId(null)}
                                   title={p.descripcion}
-                                  subtitle={p.categoria}
+                                  status="Pendiente"
+                                  statusTone="warning"
+                                  badge={p.categoria}
                                   icon={(props: { className?: string }) => (
                                     <PaymentIconGlyph iconId={getEffectivePaymentIconId(p)} colorId={p.iconoColor} className={props.className} />
                                   )}
@@ -2455,9 +2457,6 @@ export default function FinanceView({
                                     </DetailBlock>
                                     <DetailBlock icon={RefreshCw} label="Recurrencia">
                                       {p.pagoRecurrente ? "Pago Recurrente" : "Pago Único"}
-                                    </DetailBlock>
-                                    <DetailBlock icon={CheckSquare} label="Estado" tone="warning">
-                                      Pendiente
                                     </DetailBlock>
                                     <DetailBlock icon={CreditCard} label="Método de Pago" span>
                                       <div className="space-y-1.5">
@@ -2719,7 +2718,9 @@ export default function FinanceView({
                                   isOpen={isExpanded}
                                   onClose={() => setExpandedPaymentId(null)}
                                   title={p.descripcion}
-                                  subtitle={p.categoria}
+                                  status="Pagado"
+                                  statusTone="success"
+                                  badge={p.categoria}
                                   icon={(props: { className?: string }) => (
                                     <PaymentIconGlyph iconId={getEffectivePaymentIconId(p)} colorId={p.iconoColor} className={props.className} />
                                   )}
@@ -2738,9 +2739,6 @@ export default function FinanceView({
                                     </DetailBlock>
                                     <DetailBlock icon={RefreshCw} label="Recurrencia">
                                       {p.pagoRecurrente ? "Pago Recurrente" : "Pago Único"}
-                                    </DetailBlock>
-                                    <DetailBlock icon={CheckSquare} label="Estado" tone="success">
-                                      Pagado
                                     </DetailBlock>
                                     <DetailBlock icon={CreditCard} label="Método de Pago" span>
                                       <div className="space-y-1.5">

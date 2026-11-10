@@ -2405,27 +2405,20 @@ export default function InversionesTable({
             isOpen={!!detailItem}
             onClose={() => setDetailInversionId(null)}
             title={detailItem ? `${detailItem.ticker} • ${detailItem.lugar}` : undefined}
-            subtitle={detailItem?.operacion}
+            status={detailItem?.estado}
+            statusTone={detailItem?.estado?.toLowerCase() === "abierto" ? "primary" : "default"}
+            badge={detailItem?.operacion}
             icon={BarChart3}
             onEdit={detailItem ? () => handleOpenEdit(detailItem) : undefined}
             onDelete={detailItem ? () => setDeleteConfirmId(detailItem.id) : undefined}
           >
             {detailItem && (
               <DetailBlockGrid>
-                <DetailBlock
-                  icon={detailItem.operacion?.toLowerCase() === "venta" ? ArrowDownRight : ArrowUpRight}
-                  label="Operación"
-                >
-                  {detailItem.operacion}
-                </DetailBlock>
                 <DetailBlock icon={Calendar} label="Fecha">
                   {detailItem.fecha}
                 </DetailBlock>
                 <DetailBlock icon={Layers} label="Cantidad">
                   {detailItem.cantidad}
-                </DetailBlock>
-                <DetailBlock icon={Clock} label="Estado" tone={detailItem.estado?.toLowerCase() === "abierto" ? "primary" : "default"}>
-                  {detailItem.estado}
                 </DetailBlock>
                 <DetailBlock icon={DollarSign} label="Valor en Pesos" tone="primary">
                   Unit. {detailItem.valorUnitarioPesos || "-"}

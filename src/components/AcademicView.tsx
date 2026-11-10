@@ -5176,7 +5176,9 @@ export default function AcademicView({
             isOpen={!!detailMateria}
             onClose={() => setDetailMateriaId(null)}
             title={detailMateria?.materia}
-            subtitle={detailMateria ? `${detailMateria.anoCursado} • ${detailMateria.cuatrimestre}` : undefined}
+            status={detailMateria?.estado}
+            statusTone={estadoTone}
+            badge={detailMateria ? `${detailMateria.anoCursado} • ${detailMateria.cuatrimestre}` : undefined}
             icon={BookOpen}
             onEdit={detailMateria ? () => handleEditMateriaClick(detailMateria) : undefined}
             onDelete={detailMateria ? () => handleDeleteMateria(detailMateria.id) : undefined}
@@ -5184,12 +5186,6 @@ export default function AcademicView({
           >
             {detailMateria && (
               <DetailBlockGrid>
-                <DetailBlock icon={CheckCircle} label="Estado" tone={estadoTone} emphasis>
-                  {detailMateria.estado}
-                </DetailBlock>
-                <DetailBlock icon={GraduationCap} label="Año / Cuatrimestre">
-                  {detailMateria.anoCursado} • {detailMateria.cuatrimestre}
-                </DetailBlock>
                 <DetailBlock icon={TrendingUp} label="Correlativas (Cursar Débil / Fuerte)" span>
                   {detailMateria.cursadoDebil || "Sin correlativas"} • {detailMateria.cursadoFuerte || "Sin correlativas"}
                 </DetailBlock>
@@ -5278,6 +5274,9 @@ export default function AcademicView({
             isOpen={!!detailExamen}
             onClose={() => setDetailExamenId(null)}
             title={detailExamen?.materia}
+            status={detailExamen?.estado}
+            statusTone={detailExamen?.estado === "Aprobado" ? "success" : "primary"}
+            badge={detailExamen?.instancia || undefined}
             icon={CheckCircle}
             onEdit={
               detailExamen
@@ -5299,12 +5298,6 @@ export default function AcademicView({
               <DetailBlockGrid>
                 <DetailBlock icon={Calendar} label="Fecha" emphasis span>
                   {new Date(detailExamen.fecha).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" }).replace(",", "")}
-                </DetailBlock>
-                <DetailBlock icon={CheckCircle} label="Estado" tone={detailExamen.estado === "Aprobado" ? "success" : "primary"}>
-                  {detailExamen.estado}
-                </DetailBlock>
-                <DetailBlock icon={TrendingUp} label="Instancia">
-                  {detailExamen.instancia || "---"}
                 </DetailBlock>
                 <DetailBlock icon={FolderOpen} label="Aula" span>
                   {detailExamen.aula || "---"}
