@@ -3300,21 +3300,46 @@ export default function AppointmentsView({
                                 deleteLabel="Eliminar Registro"
                               >
                                 <DetailBlockGrid>
-                                  <DetailBlock icon={Calendar} label="Fecha y Hora" tone="primary" emphasis span>
+                                  <DetailBlock icon={Calendar} label="Fecha y Hora" tone="primary" emphasis>
                                     {formatDateFriendly(tc.fecha)}
                                   </DetailBlock>
+                                  {!isAutoScheduledMatchTurno(tc.id) && tc.doctor && tc.doctor.trim() ? (
+                                    <DetailBlock icon={Stethoscope} label="Profesional / Asignado">
+                                      <div className="flex items-center gap-2">
+                                        <span className="h-7 w-7 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-[10px] font-extrabold text-primary shrink-0">
+                                          {tc.doctor
+                                            .replace(/^(Dr\.|Dra\.|Lic\.)\s*/i, "")
+                                            .split(/\s+/)
+                                            .filter(Boolean)
+                                            .slice(0, 2)
+                                            .map((w) => w[0]?.toUpperCase())
+                                            .join("")}
+                                        </span>
+                                        <span className="truncate">{tc.doctor}</span>
+                                      </div>
+                                    </DetailBlock>
+                                  ) : (
+                                    <DetailBlock icon={Tag} label="Categoría">
+                                      {getCategoryLabel(tc.categoria)}
+                                    </DetailBlock>
+                                  )}
                                   {tc.lugar &&
                                   tc.lugar.trim() &&
                                   tc.lugar.toLowerCase() !== "sin dirección" &&
                                   tc.lugar.toLowerCase() !== "sin direccion" &&
                                   tc.lugar.toLowerCase() !== "sin lugar asignado" && (
                                     <DetailBlock icon={MapPin} label="Lugar / Ubicación" span>
-                                      {tc.lugar}
-                                    </DetailBlock>
-                                  )}
-                                  {!isAutoScheduledMatchTurno(tc.id) && tc.doctor && tc.doctor.trim() && (
-                                    <DetailBlock icon={Stethoscope} label="Profesional / Asignado" span>
-                                      {tc.doctor}
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span className="truncate">{tc.lugar}</span>
+                                        <a
+                                          href={tc.lat != null && tc.lon != null ? `https://www.openstreetmap.org/?mlat=${tc.lat}&mlon=${tc.lon}#map=17/${tc.lat}/${tc.lon}` : `https://www.openstreetmap.org/search?query=${encodeURIComponent(tc.lugar)}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="inline-flex items-center gap-1 text-[11px] font-bold text-zinc-600 dark:text-zinc-300 hover:text-primary bg-white dark:bg-white/[0.06] border border-slate-200 dark:border-white/10 px-2.5 py-1 rounded-full transition-colors shrink-0"
+                                        >
+                                          Ver ruta <ExternalLink className="w-3 h-3" />
+                                        </a>
+                                      </div>
                                     </DetailBlock>
                                   )}
                                   {tc.informacionPersonalizada && !isAutoScheduledMatchTurno(tc.id) && (
@@ -5064,17 +5089,42 @@ export default function AppointmentsView({
           >
             {detailTurno && (
               <DetailBlockGrid>
-                <DetailBlock icon={Calendar} label="Fecha y Hora" tone="primary" emphasis span>
+                <DetailBlock icon={Calendar} label="Fecha y Hora" tone="primary" emphasis>
                   {formatDateFriendly(detailTurno.fecha)}
                 </DetailBlock>
-                {hasLugar && (
-                  <DetailBlock icon={MapPin} label="Lugar / Ubicación" span>
-                    {detailTurno.lugar}
+                {!isAutoScheduledMatchTurno(detailTurno.id) && detailTurno.doctor && detailTurno.doctor.trim() ? (
+                  <DetailBlock icon={Stethoscope} label="Profesional / Asignado">
+                    <div className="flex items-center gap-2">
+                      <span className="h-7 w-7 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-[10px] font-extrabold text-primary shrink-0">
+                        {detailTurno.doctor
+                          .replace(/^(Dr\.|Dra\.|Lic\.)\s*/i, "")
+                          .split(/\s+/)
+                          .filter(Boolean)
+                          .slice(0, 2)
+                          .map((w) => w[0]?.toUpperCase())
+                          .join("")}
+                      </span>
+                      <span className="truncate">{detailTurno.doctor}</span>
+                    </div>
+                  </DetailBlock>
+                ) : (
+                  <DetailBlock icon={Tag} label="Categoría">
+                    {getCategoryLabel(detailTurno.categoria)}
                   </DetailBlock>
                 )}
-                {!isAutoScheduledMatchTurno(detailTurno.id) && detailTurno.doctor && detailTurno.doctor.trim() && (
-                  <DetailBlock icon={Stethoscope} label="Profesional / Asignado" span>
-                    {detailTurno.doctor}
+                {hasLugar && (
+                  <DetailBlock icon={MapPin} label="Lugar / Ubicación" span>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate">{detailTurno.lugar}</span>
+                      <a
+                        href={detailTurno.lat != null && detailTurno.lon != null ? `https://www.openstreetmap.org/?mlat=${detailTurno.lat}&mlon=${detailTurno.lon}#map=17/${detailTurno.lat}/${detailTurno.lon}` : `https://www.openstreetmap.org/search?query=${encodeURIComponent(detailTurno.lugar)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-[11px] font-bold text-zinc-600 dark:text-zinc-300 hover:text-primary bg-white dark:bg-white/[0.06] border border-slate-200 dark:border-white/10 px-2.5 py-1 rounded-full transition-colors shrink-0"
+                      >
+                        Ver ruta <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
                   </DetailBlock>
                 )}
                 {detailTurno.informacionPersonalizada && !isAutoScheduledMatchTurno(detailTurno.id) && (
