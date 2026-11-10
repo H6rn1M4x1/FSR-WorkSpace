@@ -20,6 +20,8 @@ import {
   Calendar,
   Clock,
   BookOpen,
+  MapPin,
+  Users,
   Plus,
   CheckCircle,
   FileText,
@@ -2320,178 +2322,60 @@ export default function AcademicView({
                                     title={item.title}
                                     icon={GraduationCap}
                                     onEdit={canEdit ? handleEditAgendaItem : undefined}
+                                    onDelete={
+                                      item.type === "clase" && item.rawHorario
+                                        ? () => handleDeleteHorario(item.rawHorario!.id)
+                                        : item.type === "examen" && item.rawExamen
+                                        ? () => handleDeleteExamen(item.rawExamen!.id)
+                                        : item.type === "trabajo" && item.rawTask
+                                        ? () => deleteTask(item.rawTask!.id)
+                                        : undefined
+                                    }
+                                    onToggleComplete={item.type === "trabajo" && item.rawTask ? () => toggleTask(item.rawTask!.id) : undefined}
+                                    isComplete={item.completed}
+                                    completeLabel="Marcar Completado"
+                                    incompleteLabel="Marcar Pendiente"
                                   >
-                                    <div className="flex flex-col gap-3 text-xs">
-                                          {item.type === "clase" && (
-                                            <>
-                                              {item.aulas && (
-                                              <div>
-                                                <span className="block text-[13px] font-extrabold text-primary dark:text-primary/90 detail-label mb-2">
-                                                  Aula / Ubicación
-                                                </span>
-                                                <span className="text-[10px] text-slate-900 dark:text-white block pl-2">
-                                                  {item.aulas}
-                                                </span>
-                                              </div>
-                                              )}
-                                              {item.profesores && (
-                                              <div>
-                                                <span className="block text-[13px] font-extrabold text-primary dark:text-primary/90 detail-label mb-2">
-                                                  Profesores / Cátedra
-                                                </span>
-                                                <span className="text-[10px] text-slate-900 dark:text-white block pl-2">
-                                                  {item.profesores}
-                                                </span>
-                                              </div>
-                                              )}
-                                            </>
+                                    <DetailBlockGrid>
+                                      {item.type === "clase" && (
+                                        <>
+                                          {item.aulas && (
+                                            <DetailBlock icon={MapPin} label="Aula / Ubicación">
+                                              {item.aulas}
+                                            </DetailBlock>
                                           )}
+                                          {item.profesores && (
+                                            <DetailBlock icon={Users} label="Profesores / Cátedra">
+                                              {item.profesores}
+                                            </DetailBlock>
+                                          )}
+                                        </>
+                                      )}
 
-                                          {item.type === "examen" && (
-                                            <>
-                                              <div>
-                                                <span className="block text-[13px] font-extrabold text-primary dark:text-primary/90 detail-label mb-2">
-                                                  Tipo / Estado Examen
-                                                </span>
-                                                <span className="text-[10px] text-slate-900 dark:text-white block pl-2">
-                                                  {item.estado || "Examen"}
-                                                </span>
-                                              </div>
-                                              {(item.instancia || item.aula) && (
-                                              <div>
-                                                <span className="block text-[13px] font-extrabold text-primary dark:text-primary/90 detail-label mb-2">
-                                                  Instancia / Aula
-                                                </span>
-                                                <span className="text-[10px] text-slate-900 dark:text-white block pl-2">
-                                                  {[item.instancia && `Instancia: ${item.instancia}`, item.aula && `Aula: ${item.aula}`].filter(Boolean).join(" • ")}
-                                                </span>
-                                              </div>
-                                              )}
-                                            </>
+                                      {item.type === "examen" && (
+                                        <>
+                                          <DetailBlock icon={BookOpen} label="Tipo / Estado Examen">
+                                            {item.estado || "Examen"}
+                                          </DetailBlock>
+                                          {(item.instancia || item.aula) && (
+                                            <DetailBlock icon={MapPin} label="Instancia / Aula">
+                                              {[item.instancia && `Instancia: ${item.instancia}`, item.aula && `Aula: ${item.aula}`].filter(Boolean).join(" • ")}
+                                            </DetailBlock>
                                           )}
+                                        </>
+                                      )}
 
-                                          {item.type === "trabajo" && (
-                                            <>
-                                              <div>
-                                                <span className="block text-[13px] font-extrabold text-primary dark:text-primary/90 detail-label mb-2">
-                                                  Estado de Entrega
-                                                </span>
-                                                <span className={`font-extrabold text-xs ${item.completed ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}>
-                                                  {item.completed ? "✓ Completado" : "⏳ Pendiente de Entrega"}
-                                                </span>
-                                              </div>
-                                              <div>
-                                                <span className="block text-[13px] font-extrabold text-primary dark:text-primary/90 detail-label mb-2">
-                                                  Materia Asociada
-                                                </span>
-                                                <span className="text-[10px] text-slate-900 dark:text-white block pl-2">
-                                                  {item.subjectName || "General"}
-                                                </span>
-                                              </div>
-                                            </>
-                                          )}
-                                        </div>
-
-                                        {/* ACTION BUTTONS */}
-                                        <div className="flex items-center justify-end gap-2 pt-2 mt-1 border-t border-slate-200/40 dark:border-zinc-800/50">
-                                          {item.type === "clase" && item.rawHorario && (
-                                            <>
-                                              <button
-                                                type="button"
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  setEditingHorarioId(item.rawHorario!.id);
-                                                  setHDia(item.rawHorario!.dia);
-                                                  setHHoraInicio(item.rawHorario!.horaInicio);
-                                                  setHHoraFin(item.rawHorario!.horaFin);
-                                                  setHMateria(item.rawHorario!.materia);
-                                                  setHAulas(item.rawHorario!.aulas);
-                                                  setHProfesores(item.rawHorario!.profesores);
-                                                  setShowHorarioModal(true);
-                                                }}
-                                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary text-xs font-bold transition-all cursor-pointer"
-                                              >
-                                                <Edit2 className="w-3.5 h-3.5" />
-                                                <span>Editar Horario</span>
-                                              </button>
-                                              <button
-                                                type="button"
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  handleDeleteHorario(item.rawHorario!.id);
-                                                }}
-                                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-xs font-bold transition-all cursor-pointer"
-                                              >
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                                <span>Eliminar</span>
-                                              </button>
-                                            </>
-                                          )}
-
-                                          {item.type === "examen" && item.rawExamen && (
-                                            <>
-                                              <button
-                                                type="button"
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  setEditingExamenId(item.rawExamen!.id);
-                                                  setExMateria(item.rawExamen!.materia);
-                                                  setExFecha(item.rawExamen!.fecha);
-                                                  setExEstado(item.rawExamen!.estado);
-                                                  setExInstancia(item.rawExamen!.instancia || "Primero");
-                                                  setExAula(item.rawExamen!.aula);
-                                                  setShowExamenModal(true);
-                                                }}
-                                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary text-xs font-bold transition-all cursor-pointer"
-                                              >
-                                                <Edit2 className="w-3.5 h-3.5" />
-                                                <span>Editar Examen</span>
-                                              </button>
-                                              <button
-                                                type="button"
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  handleDeleteExamen(item.rawExamen!.id);
-                                                }}
-                                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-xs font-bold transition-all cursor-pointer"
-                                              >
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                                <span>Eliminar</span>
-                                              </button>
-                                            </>
-                                          )}
-
-                                          {item.type === "trabajo" && item.rawTask && (
-                                            <>
-                                              <button
-                                                type="button"
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  toggleTask(item.rawTask!.id);
-                                                }}
-                                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                                                  item.completed
-                                                    ? "bg-amber-500/10 text-amber-500 hover:bg-amber-500/20"
-                                                    : "bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20"
-                                                }`}
-                                              >
-                                                <Check className="w-3.5 h-3.5" />
-                                                <span>{item.completed ? "Marcar Pendiente" : "Marcar Completado"}</span>
-                                              </button>
-                                              <button
-                                                type="button"
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  deleteTask(item.rawTask!.id);
-                                                }}
-                                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-xs font-bold transition-all cursor-pointer"
-                                              >
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                                <span>Eliminar</span>
-                                              </button>
-                                            </>
-                                          )}
-                                        </div>
+                                      {item.type === "trabajo" && (
+                                        <>
+                                          <DetailBlock icon={Check} label="Estado de Entrega" tone={item.completed ? "success" : "default"}>
+                                            {item.completed ? "Completado" : "Pendiente de Entrega"}
+                                          </DetailBlock>
+                                          <DetailBlock icon={BookOpen} label="Materia Asociada">
+                                            {item.subjectName || "General"}
+                                          </DetailBlock>
+                                        </>
+                                      )}
+                                    </DetailBlockGrid>
                                   </DetailModal>
                                 </div>
                               );

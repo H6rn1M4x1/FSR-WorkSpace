@@ -1881,6 +1881,10 @@ export default function PaymentsTable({
                   )
                 : Receipt
             }
+            onToggleComplete={detailPayment ? () => togglePago(detailPayment) : undefined}
+            isComplete={detailPayment?.pago}
+            completeLabel="Marcar Pagado"
+            incompleteLabel="Marcar Pendiente"
             onEdit={detailPayment ? () => handleEdit(detailPayment) : undefined}
             onDelete={detailPayment ? () => handleDelete(detailPayment.id) : undefined}
           >

@@ -1203,7 +1203,7 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
                               {ev.categoryLabel}
                             </DetailBlock>
                             {ev.time && (
-                              <DetailBlock icon={Clock} label="Hora" tone="primary" emphasis>
+                              <DetailBlock icon={Clock} label="Hora" emphasis>
                                 {ev.time}
                               </DetailBlock>
                             )}

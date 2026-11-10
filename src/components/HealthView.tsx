@@ -19,6 +19,7 @@ import { PillFilterBar } from "./PillFilterBar";
 import { ConfirmationModal } from "./ConfirmationModal";
 import { DetailModal, DetailBlock, DetailBlockGrid } from "./DetailModal";
 import { LocationPickerMap } from "./LocationPickerMap";
+import { ReverseGeocodedAddress } from "./ReverseGeocodedAddress";
 import { calculateIngredientCalories, calcularNutricionPlato, getIngredientWeight, getIngredientNutriVal, getCalorieDensity } from "../lib/calories";
 import { createPortal } from "react-dom";
 import {
@@ -686,6 +687,35 @@ export default function HealthView({
     const monthName = monthNames[dateObj.getMonth()];
     const yearNum = parts[0];
     return `${dayOfWeek} ${dayNum} de ${monthName} de ${yearNum}`;
+  };
+
+  const splitFechaHora = (dateStr: string) => {
+    if (!dateStr) return { fechaSinAno: "", anio: "", hora: "" };
+    let cleanDateStr = dateStr;
+    let timeStr = "";
+    if (dateStr.includes("T")) {
+      const parts = dateStr.split("T");
+      cleanDateStr = parts[0];
+      timeStr = parts[1];
+    } else if (dateStr.includes(" ")) {
+      const parts = dateStr.split(" ");
+      cleanDateStr = parts[0];
+      timeStr = parts.slice(1).join(" ");
+    }
+    const parts = cleanDateStr.split("-");
+    if (parts.length !== 3) return { fechaSinAno: dateStr, anio: "", hora: "" };
+    const dateObj = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    const dayOfWeekNames = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+    const monthNames = [
+      "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+      "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+    ];
+    const dayOfWeek = dayOfWeekNames[dateObj.getDay()];
+    const dayNum = parts[2];
+    const monthName = monthNames[dateObj.getMonth()];
+    const anio = parts[0];
+    const hora = timeStr ? `${timeStr.replace("hs", "").trim()} hs` : "";
+    return { fechaSinAno: `${dayOfWeek} ${dayNum} de ${monthName}`, anio, hora };
   };
 
   // DD-MM-YYYY para mostrar fechas cortas (tablas, badges) — la fecha se guarda en formato ISO
@@ -3625,20 +3655,46 @@ export default function HealthView({
                                 onEdit={onQuickEdit ? () => onQuickEdit("turno", turno.id) : undefined}
                               >
                                 <DetailBlockGrid>
-                                  <DetailBlock icon={Clock} label="Fecha y Hora" tone="primary" emphasis>
-                                    {formatDateFriendly(turno.fecha)}
-                                  </DetailBlock>
+                                  {(() => {
+                                    const { fechaSinAno, anio, hora } = splitFechaHora(turno.fecha);
+                                    return (
+                                      <DetailBlock icon={Clock} label="Fecha y Hora" emphasis>
+                                        <span className="block whitespace-nowrap">{fechaSinAno}</span>
+                                        <div className="flex items-center gap-1.5 mt-1">
+                                          {anio && (
+                                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-white/10 text-zinc-600 dark:text-zinc-300">
+                                              {anio}
+                                            </span>
+                                          )}
+                                          {hora && (
+                                            <span className="text-[10px] font-semibold text-zinc-400 dark:text-zinc-500">
+                                              {hora}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </DetailBlock>
+                                    );
+                                  })()}
                                   <DetailBlock icon={Tag} label="Categoría / Paciente">
                                     {turno.categoria}
                                   </DetailBlock>
                                   {turno.lugar && (
                                     <DetailBlock icon={MapPin} label="Lugar / Centro Médico">
-                                      {turno.lugar}
+                                      <span className="truncate block">{turno.lugar}</span>
+                                      <ReverseGeocodedAddress lat={turno.lat} lon={turno.lon} />
                                     </DetailBlock>
                                   )}
                                   {turno.doctor && (
                                     <DetailBlock icon={Stethoscope} label="Médico / Especialista">
-                                      {turno.doctor}
+                                      <span className="truncate block">{turno.doctor}</span>
+                                      {(() => {
+                                        const matchedDoc = doctors.find((d) => d.name === turno.doctor);
+                                        return matchedDoc?.specialty ? (
+                                          <span className="text-[10px] font-medium text-zinc-400 dark:text-zinc-500 truncate block">
+                                            {matchedDoc.specialty}
+                                          </span>
+                                        ) : null;
+                                      })()}
                                     </DetailBlock>
                                   )}
                                   {turno.informacionPersonalizada && (
@@ -3649,27 +3705,22 @@ export default function HealthView({
                                       />
                                     </DetailBlock>
                                   )}
+                                  {typeof turno.lat === "number" &&
+                                    typeof turno.lon === "number" &&
+                                    !isNaN(turno.lat) &&
+                                    !isNaN(turno.lon) &&
+                                    !(turno.lat === 0 && turno.lon === 0) && (
+                                    <DetailBlock icon={MapPin} label="Mapa" span>
+                                      <LocationPickerMap
+                                        lat={turno.lat}
+                                        lon={turno.lon}
+                                        locationName={turno.lugar}
+                                        heightClass="h-40"
+                                        readOnly
+                                      />
+                                    </DetailBlock>
+                                  )}
                                 </DetailBlockGrid>
-
-                                {typeof turno.lat === "number" &&
-                                  typeof turno.lon === "number" &&
-                                  !isNaN(turno.lat) &&
-                                  !isNaN(turno.lon) &&
-                                  !(turno.lat === 0 && turno.lon === 0) && (
-                                  <div>
-                                    <div className="w-full h-px bg-primary/50 mb-2" />
-                                    <span className="flex items-center gap-1 mb-1.5">
-                                      <MapPin className="w-3 h-3 text-primary" /> <span className="inline-block text-[13px] font-extrabold text-primary detail-label">Mapa</span>
-                                    </span>
-                                    <LocationPickerMap
-                                      lat={turno.lat}
-                                      lon={turno.lon}
-                                      locationName={turno.lugar}
-                                      heightClass="h-40"
-                                      readOnly
-                                    />
-                                  </div>
-                                )}
                               </DetailModal>
                             </div>
                           );

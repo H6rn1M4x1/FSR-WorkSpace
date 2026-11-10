@@ -2442,6 +2442,9 @@ export default function FinanceView({
                                   icon={(props: { className?: string }) => (
                                     <PaymentIconGlyph iconId={getEffectivePaymentIconId(p)} colorId={p.iconoColor} className={props.className} />
                                   )}
+                                  onToggleComplete={() => handlePayDetailedPayment(p.id)}
+                                  isComplete={false}
+                                  completeLabel="Pagar"
                                   onEdit={() => handleEditPaymentCard(p.id)}
                                   onDelete={() => handleDeleteDetailedPayment(p.id)}
                                 >
