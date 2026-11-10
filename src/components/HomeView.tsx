@@ -2540,23 +2540,26 @@ export default function HomeView({
                                     />
                                   </DetailBlock>
                                 )}
-                                {tc.transcripcionAutomatica && (
-                                  <DetailBlock icon={AudioLines} label="Transcripción de audio" tone="success" span>
-                                    {(() => {
-                                      const audioFile = tc.archivosNecesarios?.find((a: any) => a.name.startsWith('Audio_') && a.url.startsWith('data:audio/'));
-                                      if (audioFile) {
-                                        return <AudioTranscriptionPlayer audioUrl={audioFile.url} transcript={tc.transcripcionAutomatica} />;
-                                      }
-                                      return (
-                                        <div className="italic max-h-[100px] overflow-y-auto">
-                                          {tc.transcripcionAutomatica}
-                                        </div>
-                                      );
-                                    })()}
+                                {tc.medicamentosAPedir && tc.medicamentosAPedir.length > 0 && (
+                                  <DetailBlock icon={Pill} label="Medicamentos a Pedir" span>
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {tc.medicamentosAPedir.map((medId: string) => {
+                                        const med = medicamentosDetallados.find((m) => m.id === medId);
+                                        if (!med) return null;
+                                        return (
+                                          <span
+                                            key={medId}
+                                            className="px-2 py-1 rounded-full bg-white dark:bg-black/40 text-[10px] font-bold text-zinc-700 dark:text-zinc-300 border border-primary/20"
+                                          >
+                                            {med.marca}{med.droga ? ` (${med.droga})` : ""}
+                                          </span>
+                                        );
+                                      })}
+                                    </div>
                                   </DetailBlock>
                                 )}
                                 {(tc.pedidoDocumento || tc.estudioInformeDoc || (tc.archivosNecesarios && tc.archivosNecesarios.length > 0)) && (
-                                  <DetailBlock icon={FileDown} label="Documentos y Archivos" span>
+                                  <DetailBlock icon={FileDown} label="Documentos y Estudios" span>
                                     <div className="flex flex-wrap gap-2">
                                       {tc.pedidoDocumento && (
                                         <button
@@ -2592,22 +2595,19 @@ export default function HomeView({
                                     </div>
                                   </DetailBlock>
                                 )}
-                                {tc.medicamentosAPedir && tc.medicamentosAPedir.length > 0 && (
-                                  <DetailBlock icon={Pill} label="Medicamentos a Pedir" span>
-                                    <div className="flex flex-wrap gap-1.5">
-                                      {tc.medicamentosAPedir.map((medId: string) => {
-                                        const med = medicamentosDetallados.find((m) => m.id === medId);
-                                        if (!med) return null;
-                                        return (
-                                          <span
-                                            key={medId}
-                                            className="px-2 py-1 rounded-full bg-white dark:bg-black/40 text-[10px] font-bold text-zinc-700 dark:text-zinc-300 border border-primary/20"
-                                          >
-                                            {med.marca}{med.droga ? ` (${med.droga})` : ""}
-                                          </span>
-                                        );
-                                      })}
-                                    </div>
+                                {tc.transcripcionAutomatica && (
+                                  <DetailBlock icon={AudioLines} label="Transcripción de audio" tone="success" span>
+                                    {(() => {
+                                      const audioFile = tc.archivosNecesarios?.find((a: any) => a.name.startsWith('Audio_') && a.url.startsWith('data:audio/'));
+                                      if (audioFile) {
+                                        return <AudioTranscriptionPlayer audioUrl={audioFile.url} transcript={tc.transcripcionAutomatica} />;
+                                      }
+                                      return (
+                                        <div className="italic max-h-[100px] overflow-y-auto">
+                                          {tc.transcripcionAutomatica}
+                                        </div>
+                                      );
+                                    })()}
                                   </DetailBlock>
                                 )}
                                 {typeof tc.lat === "number" &&

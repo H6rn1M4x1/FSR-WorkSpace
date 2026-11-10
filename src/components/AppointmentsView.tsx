@@ -3378,28 +3378,15 @@ export default function AppointmentsView({
                                   })()}
                                   {!isAutoScheduledMatchTurno(tc.id) && tc.doctor && tc.doctor.trim() ? (
                                     <DetailBlock icon={Stethoscope} label="Profesional / Asignado">
-                                      <div className="flex items-center gap-2">
-                                        <span className="h-7 w-7 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-[10px] font-extrabold text-primary shrink-0">
-                                          {tc.doctor
-                                            .replace(/^(Dr\.|Dra\.|Lic\.)\s*/i, "")
-                                            .split(/\s+/)
-                                            .filter(Boolean)
-                                            .slice(0, 2)
-                                            .map((w) => w[0]?.toUpperCase())
-                                            .join("")}
-                                        </span>
-                                        <div className="min-w-0">
-                                          <span className="truncate block">{tc.doctor}</span>
-                                          {(() => {
-                                            const matchedDoc = doctors.find((d) => d.name === tc.doctor);
-                                            return matchedDoc?.specialty ? (
-                                              <span className="text-[10px] font-medium text-zinc-400 dark:text-zinc-500 truncate block">
-                                                {matchedDoc.specialty}
-                                              </span>
-                                            ) : null;
-                                          })()}
-                                        </div>
-                                      </div>
+                                      <span className="truncate block">{tc.doctor}</span>
+                                      {(() => {
+                                        const matchedDoc = doctors.find((d) => d.name === tc.doctor);
+                                        return matchedDoc?.specialty ? (
+                                          <span className="text-[10px] font-medium text-zinc-400 dark:text-zinc-500 truncate block">
+                                            {matchedDoc.specialty}
+                                          </span>
+                                        ) : null;
+                                      })()}
                                     </DetailBlock>
                                   ) : (
                                     <DetailBlock icon={Tag} label="Categoría">
@@ -3434,6 +3421,50 @@ export default function AppointmentsView({
                                         className="prose dark:prose-invert prose-sm max-h-[120px] overflow-y-auto [&_*]:!text-[11px]"
                                         dangerouslySetInnerHTML={{ __html: tc.informacionPersonalizada }}
                                       />
+                                    </DetailBlock>
+                                  )}
+                                  {tc.medicamentosAPedir && tc.medicamentosAPedir.length > 0 && (
+                                    <DetailBlock icon={Pill} label="Medicamentos a Pedir" span>
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {tc.medicamentosAPedir.map((medId) => {
+                                          const med = medicamentosDetallados.find((m) => m.id === medId);
+                                          if (!med) return null;
+                                          return (
+                                            <span
+                                              key={medId}
+                                              className="px-2 py-1 rounded-full bg-white dark:bg-black/40 text-[10px] font-bold text-zinc-700 dark:text-zinc-300 border border-primary/20"
+                                            >
+                                              {med.marca}{med.droga ? ` (${med.droga})` : ""}
+                                            </span>
+                                          );
+                                        })}
+                                      </div>
+                                    </DetailBlock>
+                                  )}
+                                  {(tc.pedidoDocumento || tc.estudioInformeDoc) && (
+                                    <DetailBlock icon={Paperclip} label="Documentos y Estudios" span>
+                                      <div className="flex flex-wrap gap-2">
+                                        {tc.pedidoDocumento && (
+                                          <button
+                                            type="button"
+                                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setPreviewFileUrl(tc.pedidoDocumento || null); setPreviewFileName("Pedido / Documento"); }}
+                                            className="flex items-center gap-1 px-2 py-1 bg-primary/10 dark:bg-primary/10 text-primary dark:text-primary rounded-lg text-[10px] font-extrabold hover:underline"
+                                          >
+                                            <FileDown className="w-3 h-3" />
+                                            <span>Ver Pedido</span>
+                                          </button>
+                                        )}
+                                        {tc.estudioInformeDoc && (
+                                          <button
+                                            type="button"
+                                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setPreviewFileUrl(tc.estudioInformeDoc || null); setPreviewFileName("Estudio / Informe"); }}
+                                            className="flex items-center gap-1 px-2 py-1 bg-primary/10 dark:bg-primary/10 text-primary dark:text-primary rounded-lg text-[10px] font-extrabold hover:underline"
+                                          >
+                                            <FileDown className="w-3 h-3" />
+                                            <span>Ver Estudio</span>
+                                          </button>
+                                        )}
+                                      </div>
                                     </DetailBlock>
                                   )}
                                   {tc.transcripcionAutomatica && (
@@ -5201,28 +5232,15 @@ export default function AppointmentsView({
                 })()}
                 {!isAutoScheduledMatchTurno(detailTurno.id) && detailTurno.doctor && detailTurno.doctor.trim() ? (
                   <DetailBlock icon={Stethoscope} label="Profesional / Asignado">
-                    <div className="flex items-center gap-2">
-                      <span className="h-7 w-7 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-[10px] font-extrabold text-primary shrink-0">
-                        {detailTurno.doctor
-                          .replace(/^(Dr\.|Dra\.|Lic\.)\s*/i, "")
-                          .split(/\s+/)
-                          .filter(Boolean)
-                          .slice(0, 2)
-                          .map((w) => w[0]?.toUpperCase())
-                          .join("")}
-                      </span>
-                      <div className="min-w-0">
-                        <span className="truncate block">{detailTurno.doctor}</span>
-                        {(() => {
-                          const matchedDoc = doctors.find((d) => d.name === detailTurno.doctor);
-                          return matchedDoc?.specialty ? (
-                            <span className="text-[10px] font-medium text-zinc-400 dark:text-zinc-500 truncate block">
-                              {matchedDoc.specialty}
-                            </span>
-                          ) : null;
-                        })()}
-                      </div>
-                    </div>
+                    <span className="truncate block">{detailTurno.doctor}</span>
+                    {(() => {
+                      const matchedDoc = doctors.find((d) => d.name === detailTurno.doctor);
+                      return matchedDoc?.specialty ? (
+                        <span className="text-[10px] font-medium text-zinc-400 dark:text-zinc-500 truncate block">
+                          {matchedDoc.specialty}
+                        </span>
+                      ) : null;
+                    })()}
                   </DetailBlock>
                 ) : (
                   <DetailBlock icon={Tag} label="Categoría">
@@ -5255,19 +5273,26 @@ export default function AppointmentsView({
                     />
                   </DetailBlock>
                 )}
-                {detailTurno.transcripcionAutomatica && (
-                  <DetailBlock icon={AudioLines} label="Transcripción de Audio" tone="success" span>
-                    {(() => {
-                      const audioFile = detailTurno.archivosNecesarios?.find((a) => a.name.startsWith("Audio_") && a.url.startsWith("data:audio/"));
-                      if (audioFile) {
-                        return <AudioTranscriptionPlayer audioUrl={audioFile.url} transcript={detailTurno.transcripcionAutomatica} />;
-                      }
-                      return <div className="italic max-h-[100px] overflow-y-auto">{detailTurno.transcripcionAutomatica}</div>;
-                    })()}
+                {detailTurno.medicamentosAPedir && detailTurno.medicamentosAPedir.length > 0 && (
+                  <DetailBlock icon={Pill} label="Medicamentos a Pedir" span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {detailTurno.medicamentosAPedir.map((medId) => {
+                        const med = medicamentosDetallados.find((m) => m.id === medId);
+                        if (!med) return null;
+                        return (
+                          <span
+                            key={medId}
+                            className="px-2 py-1 rounded-full bg-white dark:bg-black/40 text-[10px] font-bold text-zinc-700 dark:text-zinc-300 border border-primary/20"
+                          >
+                            {med.marca}{med.droga ? ` (${med.droga})` : ""}
+                          </span>
+                        );
+                      })}
+                    </div>
                   </DetailBlock>
                 )}
                 {(detailTurno.pedidoDocumento || detailTurno.estudioInformeDoc || (detailTurno.archivosNecesarios && detailTurno.archivosNecesarios.length > 0)) && (
-                  <DetailBlock icon={Paperclip} label="Archivos Adjuntos" span>
+                  <DetailBlock icon={Paperclip} label="Documentos y Estudios" span>
                     <div className="flex flex-wrap gap-2">
                       {detailTurno.pedidoDocumento && (
                         <button
@@ -5301,6 +5326,17 @@ export default function AppointmentsView({
                         </a>
                       ))}
                     </div>
+                  </DetailBlock>
+                )}
+                {detailTurno.transcripcionAutomatica && (
+                  <DetailBlock icon={AudioLines} label="Transcripción de Audio" tone="success" span>
+                    {(() => {
+                      const audioFile = detailTurno.archivosNecesarios?.find((a) => a.name.startsWith("Audio_") && a.url.startsWith("data:audio/"));
+                      if (audioFile) {
+                        return <AudioTranscriptionPlayer audioUrl={audioFile.url} transcript={detailTurno.transcripcionAutomatica} />;
+                      }
+                      return <div className="italic max-h-[100px] overflow-y-auto">{detailTurno.transcripcionAutomatica}</div>;
+                    })()}
                   </DetailBlock>
                 )}
                 {typeof detailTurno.lat === "number" &&

@@ -424,7 +424,13 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
   };
 
   return (
-    <div className="w-full rounded-2xl border border-primary/30 dark:border-primary/20 bg-slate-50 dark:bg-zinc-900/80 shadow-sm transition-all mt-2 ring-1 ring-primary/10 p-2">
+    <div
+      className={`w-full rounded-2xl bg-slate-50 dark:bg-zinc-900/80 shadow-sm transition-all mt-2 p-2 ${
+        readOnly
+          ? "border border-slate-200 dark:border-white/10"
+          : "border border-primary/30 dark:border-primary/20 ring-1 ring-primary/10"
+      }`}
+    >
       {/* Map Canvas / View — con este padding alrededor, el mapa queda "enmarcado" dentro de la
           cápsula en vez de pegado a su borde redondeado (antes los controles de zoom, pegados a
           la esquina, se veían cortados por el redondeo exterior). */}
