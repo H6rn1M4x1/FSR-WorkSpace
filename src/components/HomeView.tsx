@@ -2798,20 +2798,22 @@ export default function HomeView({
                             </div>
                           </div>
 
-                          <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} title={dp.descripcion} icon={isClosing || dp.categoria === "Tarjeta de Credito" ? CreditCard : Receipt} onEdit={onQuickEdit ? () => onQuickEdit("finanzas", dp.id) : undefined}>
+                          <HomeDetailModal
+                            isOpen={isExpanded}
+                            onClose={() => setExpandedHomeItemId(null)}
+                            title={dp.descripcion}
+                            status={dp.pago ? "Liquidado" : isClosing ? "Pendiente" : "Impago"}
+                            statusTone={dp.pago ? "success" : "danger"}
+                            badge={dp.categoria || "General"}
+                            icon={isClosing || dp.categoria === "Tarjeta de Credito" ? CreditCard : Receipt}
+                            onEdit={onQuickEdit ? () => onQuickEdit("finanzas", dp.id) : undefined}
+                          >
                                 <DetailBlockGrid>
-                                  <DetailBlock icon={DollarSign} label="Monto" tone="primary" emphasis>
+                                  <DetailBlock icon={DollarSign} label="Monto" tone="primary" emphasis span>
                                     ${dp.montoAPagar.toLocaleString("es-AR")} ARS
                                   </DetailBlock>
-                                  <DetailBlock
-                                    icon={dp.pago ? CheckCircle2 : AlertCircle}
-                                    label="Estado"
-                                    tone={dp.pago ? "success" : "danger"}
-                                  >
-                                    {dp.pago ? "Liquidado" : isClosing ? "Pendiente" : "Impago"}
-                                  </DetailBlock>
-                                  <DetailBlock icon={Receipt} label="Categoría / Método" span>
-                                    {dp.categoria || "General"} • {dp.metodoPago || "Efectivo/Debito"}
+                                  <DetailBlock icon={Receipt} label="Método de Pago" span>
+                                    {dp.metodoPago || "Efectivo/Debito"}
                                   </DetailBlock>
                                   {dp.dondePagar && (
                                     <DetailBlock icon={MapPin} label="¿Dónde Pagar?">
@@ -2925,16 +2927,16 @@ export default function HomeView({
                             </div>
                           </div>
 
-                          <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} title={details.marca} icon={Stethoscope} onEdit={onQuickEdit ? () => onQuickEdit("salud", disp.id) : undefined}>
+                          <HomeDetailModal
+                            isOpen={isExpanded}
+                            onClose={() => setExpandedHomeItemId(null)}
+                            title={details.marca}
+                            status={details.estado}
+                            statusTone={details.estado === "Comprar Medicamento" ? "danger" : "success"}
+                            icon={Stethoscope}
+                            onEdit={onQuickEdit ? () => onQuickEdit("salud", disp.id) : undefined}
+                          >
                                 <DetailBlockGrid>
-                                  <DetailBlock
-                                    icon={details.estado === "Comprar Medicamento" ? AlertCircle : CheckCircle2}
-                                    label="Estado"
-                                    tone={details.estado === "Comprar Medicamento" ? "danger" : "success"}
-                                    span
-                                  >
-                                    {details.estado}
-                                  </DetailBlock>
                                   {details.droga && (
                                     <DetailBlock icon={Pill} label="Droga / Fármaco">
                                       {details.droga}

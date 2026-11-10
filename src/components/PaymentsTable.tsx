@@ -1860,11 +1860,16 @@ export default function PaymentsTable({
           escritorio, sin tener que scrollear hasta la columna de Acciones al final. */}
       {(() => {
         const detailPayment = detailPaymentId ? payments.find((p) => p.id === detailPaymentId) || null : null;
+        const detailEstado = detailPayment ? computeEstado(detailPayment) : null;
+        const estadoTone = detailEstado === "Vencimiento" ? "danger" : detailEstado === "Pagado" || detailEstado === "Cancelado" ? "success" : "primary";
         return (
           <DetailModal
             isOpen={!!detailPayment}
             onClose={() => setDetailPaymentId(null)}
             title={detailPayment?.descripcion}
+            status={detailEstado || undefined}
+            statusTone={estadoTone as any}
+            badge={detailPayment ? detailPayment.categoria : undefined}
             icon={
               detailPayment
                 ? (props: { className?: string }) => (
@@ -1880,14 +1885,9 @@ export default function PaymentsTable({
             onDelete={detailPayment ? () => handleDelete(detailPayment.id) : undefined}
           >
             {detailPayment && (() => {
-              const detailEstado = computeEstado(detailPayment);
-              const estadoTone = detailEstado === "Vencimiento" ? "danger" : detailEstado === "Pagado" || detailEstado === "Cancelado" ? "success" : "primary";
               return (
                 <DetailBlockGrid>
-                  <DetailBlock icon={Tag} label="Categoría" tone="primary">
-                    {detailPayment.categoria}
-                  </DetailBlock>
-                  <DetailBlock icon={DollarSign} label="Monto" tone="primary" emphasis>
+                  <DetailBlock icon={DollarSign} label="Monto" tone="primary" emphasis span>
                     AR$ {new Intl.NumberFormat("es-AR", { minimumFractionDigits: 2 }).format(detailPayment.montoAPagar)}
                   </DetailBlock>
 
@@ -1898,10 +1898,7 @@ export default function PaymentsTable({
                     {detailPayment.fechaCierre ? formatFechaDMY(detailPayment.fechaCierre) : "-"}
                   </DetailBlock>
 
-                  <DetailBlock icon={Activity} label="Estado" tone={estadoTone as any}>
-                    {detailEstado}
-                  </DetailBlock>
-                  <DetailBlock icon={Repeat} label="Recurrencia">
+                  <DetailBlock icon={Repeat} label="Recurrencia" span>
                     {detailPayment.pagoRecurrente ? "Pago Recurrente" : "Pago Único"}
                   </DetailBlock>
 

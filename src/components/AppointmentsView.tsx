@@ -3291,6 +3291,9 @@ export default function AppointmentsView({
                                 isOpen={isExpanded}
                                 onClose={() => setExpandedTurnoId(null)}
                                 title={tc.descripcion.replace(/⚽\s*/g, "")}
+                                status={!isAutoScheduledMatchTurno(tc.id) ? estado : undefined}
+                                statusTone={estado === "Realizado" ? "success" : estado === "Initinere Diario" ? "warning" : "default"}
+                                badge={!isAutoScheduledMatchTurno(tc.id) ? getCategoryLabel(tc.categoria) : undefined}
                                 icon={getCategoryIcon(tc.categoria)}
                                 onEdit={() => handleEditTurnoCompromiso(tc)}
                                 onDelete={() => handleDeleteTurnoCompromiso(tc.id)}
@@ -3300,20 +3303,6 @@ export default function AppointmentsView({
                                   <DetailBlock icon={Calendar} label="Fecha y Hora" tone="primary" emphasis span>
                                     {formatDateFriendly(tc.fecha)}
                                   </DetailBlock>
-                                  {!isAutoScheduledMatchTurno(tc.id) && (
-                                    <>
-                                      <DetailBlock icon={Tag} label="Categoría">
-                                        {getCategoryLabel(tc.categoria)}
-                                      </DetailBlock>
-                                      <DetailBlock
-                                        icon={Zap}
-                                        label="Estado"
-                                        tone={estado === "Realizado" ? "success" : estado === "Initinere Diario" ? "warning" : "default"}
-                                      >
-                                        {estado}
-                                      </DetailBlock>
-                                    </>
-                                  )}
                                   {tc.lugar &&
                                   tc.lugar.trim() &&
                                   tc.lugar.toLowerCase() !== "sin dirección" &&
@@ -5065,6 +5054,9 @@ export default function AppointmentsView({
             isOpen={!!detailTurno}
             onClose={() => setDetailTurnoTableId(null)}
             title={detailTurno?.descripcion}
+            status={detailEstado || undefined}
+            statusTone={estadoTone as any}
+            badge={detailTurno ? getCategoryLabel(detailTurno.categoria) : undefined}
             icon={detailTurno ? getCategoryIcon(detailTurno.categoria) : undefined}
             onEdit={detailTurno ? () => handleEditTurnoCompromiso(detailTurno) : undefined}
             onDelete={detailTurno ? () => handleDeleteTurnoCompromiso(detailTurno.id) : undefined}
@@ -5074,12 +5066,6 @@ export default function AppointmentsView({
               <DetailBlockGrid>
                 <DetailBlock icon={Calendar} label="Fecha y Hora" tone="primary" emphasis span>
                   {formatDateFriendly(detailTurno.fecha)}
-                </DetailBlock>
-                <DetailBlock icon={Tag} label="Categoría">
-                  {getCategoryLabel(detailTurno.categoria)}
-                </DetailBlock>
-                <DetailBlock icon={Zap} label="Estado" tone={estadoTone as any}>
-                  {detailEstado}
                 </DetailBlock>
                 {hasLugar && (
                   <DetailBlock icon={MapPin} label="Lugar / Ubicación" span>
