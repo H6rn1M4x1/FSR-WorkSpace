@@ -10,7 +10,7 @@
     "start": "node dist/server.cjs",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "cap:sync": "vite build && cap sync android",
+    "cap:sync": "vite build && cap sync android && rm -rf android/app/src/main/assets/public/downloads",
     "cap:open:android": "cap open android",
     "electron:bundle-main": "esbuild electron/main.cjs --bundle --platform=node --format=cjs --external:electron --outfile=dist-electron/main.cjs && esbuild electron/preload.cjs --bundle --platform=node --format=cjs --external:electron --outfile=dist-electron/preload.cjs",
     "electron:start": "vite build && npm run electron:bundle-main && electron .",
