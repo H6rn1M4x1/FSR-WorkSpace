@@ -6241,6 +6241,21 @@ export default function MealsView({
             statusTone={detailShoppingCompleted ? "success" : "warning"}
             badge={detailShoppingOrigen || undefined}
             icon={ShoppingBag}
+            onToggleComplete={
+              detailShopping
+                ? () => {
+                    const lowerName = detailShopping.name.toLowerCase();
+                    setNotesCheckedItems(
+                      notesCheckedItems.includes(lowerName)
+                        ? notesCheckedItems.filter((i) => i !== lowerName)
+                        : [...notesCheckedItems, lowerName],
+                    );
+                  }
+                : undefined
+            }
+            isComplete={detailShoppingCompleted}
+            completeLabel="Marcar Comprado"
+            incompleteLabel="Marcar Pendiente"
             onDelete={
               detailShopping
                 ? () => handleDeleteShoppingItem(detailShopping.name, detailShopping.mercaderiaId)
