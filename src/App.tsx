@@ -2627,6 +2627,7 @@ export default function App() {
                   setAppointments={setAppointments}
                   turnosCompromisos={turnosCompromisosWithShared}
                   turnoCategorias={turnoCategorias}
+                  doctors={doctors}
                   setTurnosCompromisos={setTurnosCompromisos}
                   organizacionSemanal={organizacionSemanalWithShared}
                   setOrganizacionSemanal={setOrganizacionSemanal}

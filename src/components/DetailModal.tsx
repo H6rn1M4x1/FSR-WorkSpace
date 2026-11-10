@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
-import { X, Pencil, Trash2 } from "lucide-react";
+import { X, Pencil, Trash2, CheckCircle2, Circle } from "lucide-react";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import { uiSounds } from "../lib/sounds";
 
@@ -53,6 +53,10 @@ export function DetailModal({
   onDelete,
   deleteLabel = "Eliminar",
   editLabel = "Editar",
+  onToggleComplete,
+  isComplete = false,
+  completeLabel = "Marcar Realizado",
+  incompleteLabel = "Marcar Pendiente",
   children,
 }: {
   isOpen: boolean;
@@ -80,6 +84,14 @@ export function DetailModal({
   onDelete?: () => void;
   deleteLabel?: string;
   editLabel?: string;
+  // Acción de marcar como realizado/pendiente: cuando se pasa, esta toma el lugar del botón
+  // grande sólido de la barra inferior (en vez de Editar) y Editar/Eliminar pasan a ser dos
+  // íconos chicos al lado. Para los modales sin este concepto (la mayoría de las secciones),
+  // se omite y el pie sigue como antes (Editar grande + Eliminar al lado).
+  onToggleComplete?: () => void;
+  isComplete?: boolean;
+  completeLabel?: string;
+  incompleteLabel?: string;
   children: React.ReactNode;
 }) {
   // Bloquea el scroll del fondo mientras el modal está abierto (con contador global: si hay más
@@ -109,7 +121,7 @@ export function DetailModal({
           transition={{ duration: 0.18 }}
           // En mobile se ancla abajo (hoja que sube desde el borde inferior); desde sm hacia
           // arriba queda centrada como un diálogo normal.
-          className="fixed inset-0 z-[999] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm"
+          className="fixed inset-0 z-[999] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-white/60 dark:bg-black/60 backdrop-blur-sm"
           onClick={(e) => {
             // Este modal se renderiza por portal (createPortal) directamente en document.body,
             // pero React sigue burbujeando el evento sintético a través del árbol de React (no
@@ -197,9 +209,46 @@ export function DetailModal({
               {children}
             </div>
 
-            {(onEdit || onDelete) && (
-              <div className="flex flex-col sm:flex-row items-stretch gap-2.5 px-5 sm:px-6 py-4 border-t border-slate-100 dark:border-white/[0.06] bg-slate-50/60 dark:bg-black/20 shrink-0">
-                {onEdit && (
+            {(onEdit || onDelete || onToggleComplete) && (
+              <div
+                className={`flex items-stretch gap-2.5 px-5 sm:px-6 py-4 border-t border-slate-100 dark:border-white/[0.06] bg-slate-50/60 dark:bg-black/20 shrink-0 ${
+                  onToggleComplete ? "flex-row" : "flex-col sm:flex-row"
+                }`}
+              >
+                {onToggleComplete ? (
+                  <button
+                    type="button"
+                    data-no-global-sound
+                    onClick={() => {
+                      onToggleComplete();
+                      uiSounds.toggle();
+                    }}
+                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-3 rounded-2xl text-[12px] font-bold transition-all cursor-pointer active:scale-[0.98] shadow-sm ${
+                      isComplete
+                        ? "bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 text-zinc-600 dark:text-zinc-300"
+                        : "bg-primary hover:bg-primary-hover text-white"
+                    }`}
+                  >
+                    {isComplete ? <Circle className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                    {isComplete ? incompleteLabel : completeLabel}
+                  </button>
+                ) : (
+                  onEdit && (
+                    <button
+                      type="button"
+                      data-no-global-sound
+                      onClick={() => {
+                        onClose();
+                        window.setTimeout(() => onEdit(), 220);
+                        uiSounds.edit();
+                      }}
+                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-3 rounded-2xl bg-primary hover:bg-primary-hover text-white text-[12px] font-bold transition-all cursor-pointer active:scale-[0.98] shadow-sm"
+                    >
+                      <Pencil className="w-3.5 h-3.5" /> {editLabel}
+                    </button>
+                  )
+                )}
+                {onToggleComplete && onEdit && (
                   <button
                     type="button"
                     data-no-global-sound
@@ -208,9 +257,10 @@ export function DetailModal({
                       window.setTimeout(() => onEdit(), 220);
                       uiSounds.edit();
                     }}
-                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-3 rounded-2xl bg-primary hover:bg-primary-hover text-white text-[12px] font-bold transition-all cursor-pointer active:scale-[0.98] shadow-sm"
+                    title={editLabel}
+                    className="h-11 w-11 shrink-0 flex items-center justify-center rounded-2xl bg-white dark:bg-white/[0.04] hover:bg-slate-100 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 text-zinc-500 dark:text-zinc-300 transition-all cursor-pointer active:scale-[0.98]"
                   >
-                    <Pencil className="w-3.5 h-3.5" /> {editLabel}
+                    <Pencil className="w-4 h-4" />
                   </button>
                 )}
                 {onDelete && (
@@ -222,9 +272,15 @@ export function DetailModal({
                       onDelete();
                       uiSounds.delete();
                     }}
-                    className="flex-1 sm:flex-none sm:px-5 flex items-center justify-center gap-1.5 px-3 py-3 rounded-2xl bg-white dark:bg-white/[0.04] hover:bg-slate-100 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 text-red-500 text-[12px] font-bold transition-all cursor-pointer active:scale-[0.98]"
+                    title={deleteLabel}
+                    className={
+                      onToggleComplete
+                        ? "h-11 w-11 shrink-0 flex items-center justify-center rounded-2xl bg-white dark:bg-white/[0.04] hover:bg-slate-100 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 text-red-500 transition-all cursor-pointer active:scale-[0.98]"
+                        : "flex-1 sm:flex-none sm:px-5 flex items-center justify-center gap-1.5 px-3 py-3 rounded-2xl bg-white dark:bg-white/[0.04] hover:bg-slate-100 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 text-red-500 text-[12px] font-bold transition-all cursor-pointer active:scale-[0.98]"
+                    }
                   >
-                    <Trash2 className="w-3.5 h-3.5" /> {deleteLabel}
+                    <Trash2 className="w-4 h-4" />
+                    {!onToggleComplete && <span>{deleteLabel}</span>}
                   </button>
                 )}
               </div>
@@ -267,19 +323,19 @@ export function DetailBlock({
 }) {
   return (
     <div
-      className={`rounded-2xl p-4 bg-slate-50 dark:bg-white/[0.03] border border-slate-200/70 dark:border-white/[0.06] hover:border-slate-300 dark:hover:border-white/20 transition-colors min-w-0 ${span ? "w-full" : "grow basis-[220px]"} ${className}`}
+      className={`rounded-2xl p-3.5 bg-white dark:bg-black border border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20 transition-colors min-w-0 ${span ? "w-full" : "grow basis-[220px]"} ${className}`}
     >
-      <div className="flex items-center gap-1.5 mb-2">
-        {Icon && <Icon className={`w-3.5 h-3.5 shrink-0 ${TONE_TEXT[tone]}`} />}
-        <span className={`text-[10px] font-extrabold uppercase tracking-wider ${TONE_TEXT[tone]}`}>
+      <div className="flex items-center gap-1.5 mb-1.5">
+        {Icon && <Icon className={`w-3 h-3 shrink-0 ${TONE_TEXT[tone]}`} />}
+        <span className={`text-[9px] font-extrabold uppercase tracking-wider ${TONE_TEXT[tone]}`}>
           {label}
         </span>
       </div>
       <div
         className={
           emphasis
-            ? `text-xl font-extrabold leading-tight break-words ${TONE_VALUE_TEXT[tone]}`
-            : `text-[15px] font-bold leading-snug break-words ${TONE_VALUE_TEXT[tone]}`
+            ? `text-base font-extrabold leading-tight break-words ${TONE_VALUE_TEXT[tone]}`
+            : `text-[13px] font-bold leading-snug break-words ${TONE_VALUE_TEXT[tone]}`
         }
       >
         {children}
