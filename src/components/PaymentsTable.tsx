@@ -485,6 +485,23 @@ export default function PaymentsTable({
     return val;
   };
 
+  // Días que faltan (o pasaron) hasta una fecha ISO (YYYY-MM-DD), relativo a hoy — usado en el
+  // detalle de Vencimiento cuando no hay Fecha de Cierre para mostrar junto a la fecha completa.
+  const getDiasRestantesLabel = (fechaISO?: string): string => {
+    if (!fechaISO) return "";
+    const clean = fechaISO.split("T")[0].split(" ")[0];
+    const parts = clean.split("-");
+    if (parts.length !== 3) return "";
+    const [fy, fm, fd] = parts.map(Number);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const target = new Date(fy, fm - 1, fd);
+    const diffDays = Math.round((target.getTime() - today.getTime()) / 86400000);
+    if (diffDays === 0) return "Vence hoy";
+    if (diffDays > 0) return `En ${diffDays} día${diffDays === 1 ? "" : "s"}`;
+    return `Venció hace ${Math.abs(diffDays)} día${Math.abs(diffDays) === 1 ? "" : "s"}`;
+  };
+
   const getDefaultMonthDates = () => {
     const now = new Date();
     const y = now.getFullYear();
@@ -1891,22 +1908,26 @@ export default function PaymentsTable({
             {detailPayment && (() => {
               return (
                 <DetailBlockGrid>
-                  <DetailBlock icon={DollarSign} label="Monto" tone="primary" emphasis span>
+                  <DetailBlock icon={DollarSign} label="Monto" tone="primary" emphasis>
                     AR$ {new Intl.NumberFormat("es-AR", { minimumFractionDigits: 2 }).format(detailPayment.montoAPagar)}
                   </DetailBlock>
-
-                  <DetailBlock icon={Calendar} label="Vence">
-                    {formatFechaDMY(detailPayment.fechaVencimiento)}
-                  </DetailBlock>
-                  <DetailBlock icon={Clock} label="Cierre">
-                    {detailPayment.fechaCierre ? formatFechaDMY(detailPayment.fechaCierre) : "-"}
-                  </DetailBlock>
-
-                  <DetailBlock icon={Repeat} label="Recurrencia" span>
+                  <DetailBlock icon={Repeat} label="Recurrencia">
                     {detailPayment.pagoRecurrente ? "Pago Recurrente" : "Pago Único"}
                   </DetailBlock>
 
-                  <DetailBlock icon={CreditCard} label="Método de Pago" span>
+                  <DetailBlock icon={Calendar} label="Vence" span={!detailPayment.fechaCierre}>
+                    <span className="block">{formatFechaDMY(detailPayment.fechaVencimiento)}</span>
+                    <span className="text-[10px] font-semibold text-zinc-400 dark:text-zinc-500 block mt-0.5">
+                      {getDiasRestantesLabel(detailPayment.fechaVencimiento)}
+                    </span>
+                  </DetailBlock>
+                  {detailPayment.fechaCierre && (
+                    <DetailBlock icon={Clock} label="Cierre">
+                      {formatFechaDMY(detailPayment.fechaCierre)}
+                    </DetailBlock>
+                  )}
+
+                  <DetailBlock icon={CreditCard} label="Método de Pago">
                     <div className="space-y-1.5">
                       <span className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-200 block">
                         {detailPayment.metodoPago || "Debito Automatico"}
@@ -1921,7 +1942,7 @@ export default function PaymentsTable({
                   </DetailBlock>
 
                   {detailPayment.dondePagar && (
-                    <DetailBlock icon={MapPin} label="Dónde Pagar" span>
+                    <DetailBlock icon={MapPin} label="Dónde Pagar">
                       <div
                         className="prose dark:prose-invert prose-sm max-w-none [&_*]:!text-inherit"
                         dangerouslySetInnerHTML={{ __html: detailPayment.dondePagar }}
@@ -1929,32 +1950,30 @@ export default function PaymentsTable({
                     </DetailBlock>
                   )}
 
-                  <DetailBlock icon={Receipt} label="Factura Emitida">
-                    {detailPayment.facturaEmitida ? (
+                  {detailPayment.facturaEmitida && (
+                    <DetailBlock icon={Receipt} label="Factura Emitida" span>
                       <button
                         type="button"
                         onClick={() => openStoredFile(detailPayment.facturaEmitida!, buildPaymentFileName(detailPayment.descripcion, detailPayment.categoria, detailPayment.fechaVencimiento, "facturaEmitida", guessExtFromDataUrl(detailPayment.facturaEmitida!)))}
-                        className="flex items-center gap-1 text-primary hover:underline cursor-pointer font-bold"
+                        className="flex items-center gap-1.5 text-primary hover:underline cursor-pointer font-bold"
                       >
-                        <FileDown className="w-3 h-3" /> Ver archivo
+                        <FileDown className="w-3 h-3 shrink-0" />
+                        <span className="truncate">{buildPaymentFileName(detailPayment.descripcion, detailPayment.categoria, detailPayment.fechaVencimiento, "facturaEmitida", guessExtFromDataUrl(detailPayment.facturaEmitida))}</span>
                       </button>
-                    ) : (
-                      <span className="text-zinc-400 dark:text-zinc-600">Sin archivo</span>
-                    )}
-                  </DetailBlock>
-                  <DetailBlock icon={FileCheck} label="Comprobante de Pago">
-                    {detailPayment.comprobantePago ? (
+                    </DetailBlock>
+                  )}
+                  {detailPayment.comprobantePago && (
+                    <DetailBlock icon={FileCheck} label="Comprobante de Pago" span>
                       <button
                         type="button"
                         onClick={() => openStoredFile(detailPayment.comprobantePago!, buildPaymentFileName(detailPayment.descripcion, detailPayment.categoria, detailPayment.fechaVencimiento, "comprobantePago", guessExtFromDataUrl(detailPayment.comprobantePago!)))}
-                        className="flex items-center gap-1 text-primary hover:underline cursor-pointer font-bold"
+                        className="flex items-center gap-1.5 text-primary hover:underline cursor-pointer font-bold"
                       >
-                        <FileDown className="w-3 h-3" /> Ver archivo
+                        <FileDown className="w-3 h-3 shrink-0" />
+                        <span className="truncate">{buildPaymentFileName(detailPayment.descripcion, detailPayment.categoria, detailPayment.fechaVencimiento, "comprobantePago", guessExtFromDataUrl(detailPayment.comprobantePago))}</span>
                       </button>
-                    ) : (
-                      <span className="text-zinc-400 dark:text-zinc-600">Sin archivo</span>
-                    )}
-                  </DetailBlock>
+                    </DetailBlock>
+                  )}
 
                   {detailPayment.observaciones && (
                     <DetailBlock icon={StickyNote} label="Contenido / Notas" span>

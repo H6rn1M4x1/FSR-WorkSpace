@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { createPortal } from "react-dom";
 import { ConfirmationModal } from "./ConfirmationModal";
 import { DetailModal, DetailBlock, DetailBlockGrid } from "./DetailModal";
+import { PaymentMethodPicker } from "./PaymentMethodPicker";
 import { useToast } from "../context/ToastContext";
 import { GastoVario } from "../types";
 import { SmartDateTimePicker } from "./SmartDateTimePicker";
@@ -1051,22 +1052,6 @@ export default function GastosVariosTable({
 
                       <div>
                         <label className="block text-xs font-bold text-slate-700 dark:text-zinc-300 mb-1">
-                          Método / Tarjeta de Origen
-                        </label>
-                        <input
-                          type="text"
-                          disabled={isSaving}
-                          placeholder="Ej: Visa Galicia, Mastercard BBVA"
-                          value={formMetodo}
-                          onChange={(e) => setFormMetodo(e.target.value)}
-                          className="w-full px-3.5 py-2.5 text-xs font-semibold rounded-xl bg-slate-50 dark:bg-zinc-950/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white outline-none focus:border-primary disabled:opacity-50"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs font-bold text-slate-700 dark:text-zinc-300 mb-1">
                           Fecha
                         </label>
                         <SmartDateTimePicker
@@ -1074,21 +1059,28 @@ export default function GastosVariosTable({
                           onChange={(val) => setFormFecha(val)}
                         />
                       </div>
-
-                      <div>
-                        <label className="block text-xs font-bold text-slate-700 dark:text-zinc-300 mb-1">
-                          Monto (AR$) <span className="text-primary">*</span>
-                        </label>
-                        <CurrencyInput
-                          required
-                          disabled={isSaving}
-                          placeholder="0,00"
-                          value={formMonto}
-                          onChange={(val) => setFormMonto(val)}
-                          className="w-full px-3.5 py-2.5 text-xs font-black rounded-xl bg-slate-50 dark:bg-zinc-950/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white outline-none focus:border-primary disabled:opacity-50"
-                        />
-                      </div>
                     </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 dark:text-zinc-300 mb-1">
+                        Monto (AR$) <span className="text-primary">*</span>
+                      </label>
+                      <CurrencyInput
+                        required
+                        disabled={isSaving}
+                        placeholder="0,00"
+                        value={formMonto}
+                        onChange={(val) => setFormMonto(val)}
+                        className="w-full px-3.5 py-2.5 text-xs font-black rounded-xl bg-slate-50 dark:bg-zinc-950/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white outline-none focus:border-primary disabled:opacity-50"
+                      />
+                    </div>
+
+                    <PaymentMethodPicker
+                      userId={userEmail || "hernanmaximiliano10@gmail.com"}
+                      darkMode={darkMode}
+                      value={formMetodo}
+                      onChange={(value) => setFormMetodo(value)}
+                    />
 
                     <div className="flex items-center justify-center sm:justify-end gap-2.5 pt-4 border-t border-slate-100 dark:border-zinc-800/40">
                       <button

@@ -68,6 +68,7 @@ import {
   getEffectiveUserId
 } from "../lib/firestoreSyncService";
 import { WorkoutBuilderModal } from "./WorkoutBuilderModal";
+import { DetailModal, DetailBlock, DetailBlockGrid } from "./DetailModal";
 import { GYM_GIFS_DATABASE } from "../data/gymGifsDatabase";
 import { SmartDateTimePicker } from "./SmartDateTimePicker";
 import { ConfirmationModal } from "./ConfirmationModal";
@@ -757,6 +758,9 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
 
   // Modal para Técnica / Demostración en GIF
   const [selectedExerciseForTechnique, setSelectedExerciseForTechnique] = useState<EjercicioRutina | null>(null);
+
+  // Modal de detalle de una rutina completa: lista todos sus ejercicios con su GIF
+  const [detailRutinaId, setDetailRutinaId] = useState<string | null>(null);
 
   // Modal para Editar/Registrar Sesión Histórica
   const [editingSession, setEditingSession] = useState<RegistroEntrenamiento | null>(null);
@@ -2169,7 +2173,15 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
                     </div>
 
                     <div>
-                      <h3 className="text-base font-extrabold">{rutina.nombre}</h3>
+                      <button
+                        type="button"
+                        onClick={() => setDetailRutinaId(rutina.id)}
+                        title="Ver detalle"
+                        data-no-global-sound
+                        className="text-base font-extrabold hover:text-primary hover:underline cursor-pointer text-left"
+                      >
+                        {rutina.nombre}
+                      </button>
                       {rutina.descripcion && (
                         <p className="text-xs text-slate-500 dark:text-zinc-400 line-clamp-2 mt-0.5">
                           {rutina.descripcion}
@@ -3119,6 +3131,73 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
           </div>,
           document.body
         )}
+
+      {/* Detalle de una rutina completa — lista todos sus ejercicios con su GIF, mismo patrón
+          (DetailModal) que el resto de los popups de detalle de la app. */}
+      {(() => {
+        const detailRutina = detailRutinaId ? listRutinas.find((r) => r.id === detailRutinaId) || null : null;
+        const mainConf = detailRutina ? (MUSCLE_COLORS[detailRutina.grupoMuscularPrincipal] || MUSCLE_COLORS.Pecho) : null;
+        return (
+          <DetailModal
+            isOpen={!!detailRutina}
+            onClose={() => setDetailRutinaId(null)}
+            title={detailRutina?.nombre}
+            subtitle={detailRutina?.descripcion}
+            badge={detailRutina?.grupoMuscularPrincipal}
+            icon={Dumbbell}
+            onEdit={detailRutina ? () => { setDetailRutinaId(null); handleEditRoutine(detailRutina); } : undefined}
+            onDelete={detailRutina ? () => { setDetailRutinaId(null); handleDeleteRoutine(detailRutina.id); } : undefined}
+            deleteLabel="Eliminar rutina"
+          >
+            {detailRutina && (
+              <DetailBlockGrid>
+                {(detailRutina.ejercicios || []).map((ej, idx) => {
+                  const conf = MUSCLE_COLORS[ej.grupoMuscular] || mainConf;
+                  return (
+                    <DetailBlock key={`${ej.id}-${idx}`} icon={Dumbbell} label={ej.grupoMuscular} span>
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-extrabold text-sm text-slate-900 dark:text-white truncate">
+                            {ej.nombre}
+                          </span>
+                          {conf && (
+                            <span className={`shrink-0 px-2 py-0.5 rounded-full text-[9px] font-black uppercase border ${conf.bg} ${conf.text} ${conf.border}`}>
+                              {ej.grupoMuscular}
+                            </span>
+                          )}
+                        </div>
+                        {ej.gifUrl && (
+                          <img
+                            src={ej.gifUrl}
+                            alt={ej.nombre}
+                            className="w-full max-h-48 object-contain rounded-xl bg-slate-100 dark:bg-zinc-950/40"
+                            loading="lazy"
+                          />
+                        )}
+                        <div className="flex items-center gap-3 flex-wrap text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
+                          <span>
+                            <span className="font-extrabold text-zinc-700 dark:text-zinc-200">{ej.seriesObjetivo || 4}</span> series
+                          </span>
+                          <span>
+                            <span className="font-extrabold text-zinc-700 dark:text-zinc-200">{ej.repeticionesObjetivo || 10}</span> reps
+                          </span>
+                          <span>
+                            <span className="font-extrabold text-zinc-700 dark:text-zinc-200">{ej.pesoObjetivoKg || 0}</span> kg
+                          </span>
+                          {ej.equipamiento && <span className="truncate">{ej.equipamiento}</span>}
+                        </div>
+                        {ej.notasTecnica && (
+                          <p className="text-[11px] italic text-zinc-500 dark:text-zinc-400">{ej.notasTecnica}</p>
+                        )}
+                      </div>
+                    </DetailBlock>
+                  );
+                })}
+              </DetailBlockGrid>
+            )}
+          </DetailModal>
+        );
+      })()}
 
       {/* --- MODAL DEMOSTRACIÓN TÉCNICA EN GIF & FORM TIPS --- */}
       {selectedExerciseForTechnique &&
