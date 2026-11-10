@@ -193,7 +193,7 @@ export function DetailModal({
               </div>
             )}
 
-            <div className="flex-1 min-h-0 px-5 sm:px-6 py-4 sm:py-5 overflow-y-auto no-scrollbar text-xs space-y-3">
+            <div className="flex-1 min-h-0 min-w-0 px-5 sm:px-6 py-4 sm:py-5 overflow-y-auto no-scrollbar text-xs space-y-3">
               {children}
             </div>
 
@@ -267,19 +267,19 @@ export function DetailBlock({
 }) {
   return (
     <div
-      className={`rounded-2xl p-3.5 bg-slate-50 dark:bg-white/[0.03] border border-slate-200/70 dark:border-white/[0.06] hover:border-slate-300 dark:hover:border-white/20 transition-colors ${span ? "col-span-2" : ""} ${className}`}
+      className={`rounded-2xl p-4 bg-slate-50 dark:bg-white/[0.03] border border-slate-200/70 dark:border-white/[0.06] hover:border-slate-300 dark:hover:border-white/20 transition-colors min-w-0 ${span ? "w-full" : "grow basis-[220px]"} ${className}`}
     >
-      <div className="flex items-center gap-1.5 mb-1.5">
-        {Icon && <Icon className={`w-3 h-3 shrink-0 ${TONE_TEXT[tone]}`} />}
-        <span className={`text-[9px] font-extrabold uppercase tracking-wider ${TONE_TEXT[tone]}`}>
+      <div className="flex items-center gap-1.5 mb-2">
+        {Icon && <Icon className={`w-3.5 h-3.5 shrink-0 ${TONE_TEXT[tone]}`} />}
+        <span className={`text-[10px] font-extrabold uppercase tracking-wider ${TONE_TEXT[tone]}`}>
           {label}
         </span>
       </div>
       <div
         className={
           emphasis
-            ? `text-base font-extrabold leading-tight break-words ${TONE_VALUE_TEXT[tone]}`
-            : "text-[11px] font-semibold text-zinc-700 dark:text-zinc-200 leading-snug break-words"
+            ? `text-xl font-extrabold leading-tight break-words ${TONE_VALUE_TEXT[tone]}`
+            : `text-[15px] font-bold leading-snug break-words ${TONE_VALUE_TEXT[tone]}`
         }
       >
         {children}
@@ -288,10 +288,13 @@ export function DetailBlock({
   );
 }
 
-// Grilla de 2 columnas para acomodar varios DetailBlock — cada bloque decide si ocupa 1 columna o
-// las 2 (con `span`) según cuánto contenido tenga.
+// Fila flexible para acomodar varios DetailBlock — cada bloque decide si ocupa toda la fila (con
+// `span`) o comparte una fila con otro bloque de ~220px, envolviendo a la fila siguiente solo
+// cuando no entran 2 (hojas angostas en mobile). Flexbox con wrap en vez de CSS grid: más
+// predecible dentro del layout flex-col del modal (grid con auto-fit/minmax no calculaba bien el
+// ancho disponible anidado ahí adentro).
 export function DetailBlockGrid({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <div className={`grid grid-cols-2 gap-2.5 ${className}`}>{children}</div>;
+  return <div className={`flex flex-wrap gap-2.5 ${className}`}>{children}</div>;
 }
 
 export default DetailModal;
