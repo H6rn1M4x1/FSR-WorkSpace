@@ -24,7 +24,7 @@ import { ConfirmationModal } from "./ConfirmationModal";
 import { DetailModal, DetailBlock, DetailBlockGrid } from "./DetailModal";
 import { PaymentIconGlyph } from "./PaymentIconGlyph";
 import { getEffectivePaymentIconId } from "../utils/paymentIcons";
-import { PaymentMethodCardResolved } from "./PaymentMethodPicker";
+import { PaymentMethodCardResolved, PaymentMethodCardGallery } from "./PaymentMethodPicker";
 import {
   DollarSign,
   TrendingUp,
@@ -2490,7 +2490,7 @@ export default function FinanceView({
                                           {p.metodoPago || "Debito Automatico"}
                                         </span>
                                         {p.conQuePagar && (
-                                          <PaymentMethodCardResolved
+                                          <PaymentMethodCardGallery
                                             userId={userEmail || "hernanmaximiliano10@gmail.com"}
                                             describedCard={p.conQuePagar}
                                           />
@@ -2501,15 +2501,16 @@ export default function FinanceView({
                                       {p.dondePagar || "Homebanking / Entidad Bancaria"}
                                     </DetailBlock>
                                     {p.facturaEmitida && (
-                                      <DetailBlock icon={FileText} label="Factura Emitida" span>
+                                      <DetailBlock icon={FileText} label="Factura Emitida">
                                         <div className="flex items-center gap-1">
                                           <button
                                             type="button"
                                             onClick={() => openStoredDetailedPaymentFile(p.facturaEmitida!, buildPaymentFileName(p.descripcion, p.categoria, p.fechaVencimiento, "facturaEmitida", guessExtFromDataUrl(p.facturaEmitida!)))}
-                                            className="flex items-center gap-1.5 px-2 py-1 bg-primary/10 text-primary rounded-lg text-[10px] font-extrabold hover:underline cursor-pointer truncate"
+                                            title={buildPaymentFileName(p.descripcion, p.categoria, p.fechaVencimiento, "facturaEmitida", guessExtFromDataUrl(p.facturaEmitida))}
+                                            className="flex items-center gap-1.5 px-2 py-1 bg-primary/10 text-primary rounded-lg text-[10px] font-extrabold hover:underline cursor-pointer"
                                           >
                                             <FileDown className="w-3 h-3 shrink-0" />
-                                            <span className="truncate">{buildPaymentFileName(p.descripcion, p.categoria, p.fechaVencimiento, "facturaEmitida", guessExtFromDataUrl(p.facturaEmitida))}</span>
+                                            <span>Descargar Factura</span>
                                           </button>
                                           <button
                                             type="button"
@@ -2523,15 +2524,16 @@ export default function FinanceView({
                                       </DetailBlock>
                                     )}
                                     {p.comprobantePago && (
-                                      <DetailBlock icon={FileCheck} label="Comprobante de Pago" span>
+                                      <DetailBlock icon={FileCheck} label="Comprobante de Pago">
                                         <div className="flex items-center gap-1">
                                           <button
                                             type="button"
                                             onClick={() => openStoredDetailedPaymentFile(p.comprobantePago!, buildPaymentFileName(p.descripcion, p.categoria, p.fechaVencimiento, "comprobantePago", guessExtFromDataUrl(p.comprobantePago!)))}
-                                            className="flex items-center gap-1.5 px-2 py-1 bg-primary/10 text-primary rounded-lg text-[10px] font-extrabold hover:underline cursor-pointer truncate"
+                                            title={buildPaymentFileName(p.descripcion, p.categoria, p.fechaVencimiento, "comprobantePago", guessExtFromDataUrl(p.comprobantePago))}
+                                            className="flex items-center gap-1.5 px-2 py-1 bg-primary/10 text-primary rounded-lg text-[10px] font-extrabold hover:underline cursor-pointer"
                                           >
                                             <FileDown className="w-3 h-3 shrink-0" />
-                                            <span className="truncate">{buildPaymentFileName(p.descripcion, p.categoria, p.fechaVencimiento, "comprobantePago", guessExtFromDataUrl(p.comprobantePago))}</span>
+                                            <span>Descargar Comprobante</span>
                                           </button>
                                           <button
                                             type="button"
@@ -2746,7 +2748,7 @@ export default function FinanceView({
                                           {p.metodoPago || "Debito Automatico"}
                                         </span>
                                         {p.conQuePagar && (
-                                          <PaymentMethodCardResolved
+                                          <PaymentMethodCardGallery
                                             userId={userEmail || "hernanmaximiliano10@gmail.com"}
                                             describedCard={p.conQuePagar}
                                           />
@@ -2757,15 +2759,16 @@ export default function FinanceView({
                                       {p.dondePagar || "Homebanking / Entidad Bancaria"}
                                     </DetailBlock>
                                     {p.facturaEmitida && (
-                                      <DetailBlock icon={FileText} label="Factura Emitida" span>
+                                      <DetailBlock icon={FileText} label="Factura Emitida">
                                         <div className="flex items-center gap-1">
                                           <button
                                             type="button"
                                             onClick={() => openStoredDetailedPaymentFile(p.facturaEmitida!, buildPaymentFileName(p.descripcion, p.categoria, p.fechaVencimiento, "facturaEmitida", guessExtFromDataUrl(p.facturaEmitida!)))}
-                                            className="flex items-center gap-1.5 px-2 py-1 bg-primary/10 text-primary rounded-lg text-[10px] font-extrabold hover:underline cursor-pointer truncate"
+                                            title={buildPaymentFileName(p.descripcion, p.categoria, p.fechaVencimiento, "facturaEmitida", guessExtFromDataUrl(p.facturaEmitida))}
+                                            className="flex items-center gap-1.5 px-2 py-1 bg-primary/10 text-primary rounded-lg text-[10px] font-extrabold hover:underline cursor-pointer"
                                           >
                                             <FileDown className="w-3 h-3 shrink-0" />
-                                            <span className="truncate">{buildPaymentFileName(p.descripcion, p.categoria, p.fechaVencimiento, "facturaEmitida", guessExtFromDataUrl(p.facturaEmitida))}</span>
+                                            <span>Descargar Factura</span>
                                           </button>
                                           <button
                                             type="button"
@@ -2779,15 +2782,16 @@ export default function FinanceView({
                                       </DetailBlock>
                                     )}
                                     {p.comprobantePago && (
-                                      <DetailBlock icon={FileCheck} label="Comprobante de Pago" span>
+                                      <DetailBlock icon={FileCheck} label="Comprobante de Pago">
                                         <div className="flex items-center gap-1">
                                           <button
                                             type="button"
                                             onClick={() => openStoredDetailedPaymentFile(p.comprobantePago!, buildPaymentFileName(p.descripcion, p.categoria, p.fechaVencimiento, "comprobantePago", guessExtFromDataUrl(p.comprobantePago!)))}
-                                            className="flex items-center gap-1.5 px-2 py-1 bg-primary/10 text-primary rounded-lg text-[10px] font-extrabold hover:underline cursor-pointer truncate"
+                                            title={buildPaymentFileName(p.descripcion, p.categoria, p.fechaVencimiento, "comprobantePago", guessExtFromDataUrl(p.comprobantePago))}
+                                            className="flex items-center gap-1.5 px-2 py-1 bg-primary/10 text-primary rounded-lg text-[10px] font-extrabold hover:underline cursor-pointer"
                                           >
                                             <FileDown className="w-3 h-3 shrink-0" />
-                                            <span className="truncate">{buildPaymentFileName(p.descripcion, p.categoria, p.fechaVencimiento, "comprobantePago", guessExtFromDataUrl(p.comprobantePago))}</span>
+                                            <span>Descargar Comprobante</span>
                                           </button>
                                           <button
                                             type="button"

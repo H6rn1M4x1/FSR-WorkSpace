@@ -20,7 +20,7 @@ import { buildPaymentFileName, guessExtFromDataUrl } from "../utils/paymentFileN
 import { PaymentIconPicker } from "./PaymentIconPicker";
 import { PaymentIconGlyph } from "./PaymentIconGlyph";
 import { getEffectivePaymentIconId } from "../utils/paymentIcons";
-import { PaymentMethodCardResolved } from "./PaymentMethodPicker";
+import { PaymentMethodCardResolved, PaymentMethodCardGallery } from "./PaymentMethodPicker";
 import {
   Plus,
   Trash2,
@@ -1933,7 +1933,7 @@ export default function PaymentsTable({
                         {detailPayment.metodoPago || "Debito Automatico"}
                       </span>
                       {detailPayment.conQuePagar && (
-                        <PaymentMethodCardResolved
+                        <PaymentMethodCardGallery
                           userId={paymentMethodsUserId}
                           describedCard={detailPayment.conQuePagar}
                         />
@@ -1951,26 +1951,28 @@ export default function PaymentsTable({
                   )}
 
                   {detailPayment.facturaEmitida && (
-                    <DetailBlock icon={Receipt} label="Factura Emitida" span>
+                    <DetailBlock icon={Receipt} label="Factura Emitida">
                       <button
                         type="button"
                         onClick={() => openStoredFile(detailPayment.facturaEmitida!, buildPaymentFileName(detailPayment.descripcion, detailPayment.categoria, detailPayment.fechaVencimiento, "facturaEmitida", guessExtFromDataUrl(detailPayment.facturaEmitida!)))}
+                        title={buildPaymentFileName(detailPayment.descripcion, detailPayment.categoria, detailPayment.fechaVencimiento, "facturaEmitida", guessExtFromDataUrl(detailPayment.facturaEmitida))}
                         className="flex items-center gap-1.5 text-primary hover:underline cursor-pointer font-bold"
                       >
                         <FileDown className="w-3 h-3 shrink-0" />
-                        <span className="truncate">{buildPaymentFileName(detailPayment.descripcion, detailPayment.categoria, detailPayment.fechaVencimiento, "facturaEmitida", guessExtFromDataUrl(detailPayment.facturaEmitida))}</span>
+                        <span>Descargar Factura</span>
                       </button>
                     </DetailBlock>
                   )}
                   {detailPayment.comprobantePago && (
-                    <DetailBlock icon={FileCheck} label="Comprobante de Pago" span>
+                    <DetailBlock icon={FileCheck} label="Comprobante de Pago">
                       <button
                         type="button"
                         onClick={() => openStoredFile(detailPayment.comprobantePago!, buildPaymentFileName(detailPayment.descripcion, detailPayment.categoria, detailPayment.fechaVencimiento, "comprobantePago", guessExtFromDataUrl(detailPayment.comprobantePago!)))}
+                        title={buildPaymentFileName(detailPayment.descripcion, detailPayment.categoria, detailPayment.fechaVencimiento, "comprobantePago", guessExtFromDataUrl(detailPayment.comprobantePago))}
                         className="flex items-center gap-1.5 text-primary hover:underline cursor-pointer font-bold"
                       >
                         <FileDown className="w-3 h-3 shrink-0" />
-                        <span className="truncate">{buildPaymentFileName(detailPayment.descripcion, detailPayment.categoria, detailPayment.fechaVencimiento, "comprobantePago", guessExtFromDataUrl(detailPayment.comprobantePago))}</span>
+                        <span>Descargar Comprobante</span>
                       </button>
                     </DetailBlock>
                   )}
