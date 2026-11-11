@@ -248,6 +248,38 @@ export function PaymentMethodCardResolved({
   );
 }
 
+// Fila horizontal con TODAS las tarjetas de la billetera — la que se usó en este pago, primera
+// y a todo color; el resto, detrás y en gris, como si no estuvieran seleccionadas (mismo criterio
+// visual que el selector de "¿Con qué pagar?", pero de solo lectura, para el detalle de un pago
+// ya guardado).
+export function PaymentMethodCardGallery({
+  userId,
+  describedCard,
+}: {
+  userId: string;
+  describedCard: string;
+}) {
+  const { cards } = usePaymentMethods(userId);
+  if (cards.length === 0) return null;
+  const selectedIndex = describedCard ? cards.findIndex((c) => describeCard(c) === describedCard) : -1;
+  const ordered =
+    selectedIndex > 0
+      ? [cards[selectedIndex], ...cards.slice(0, selectedIndex), ...cards.slice(selectedIndex + 1)]
+      : cards;
+  return (
+    <div className="flex items-center gap-2.5 overflow-x-auto pb-1 -mx-0.5 px-0.5">
+      {ordered.map((card) => {
+        const isSelected = selectedIndex >= 0 && describeCard(card) === describedCard;
+        return (
+          <div key={card.id} className={`shrink-0 transition-all ${isSelected ? "" : "grayscale opacity-50"}`}>
+            <WalletCardFace card={card} selected={isSelected} />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // Carrusel centrado estilo Mercado Pago (ver referencia en video): la tarjeta elegida queda
 // nítida y centrada; el vecino inmediato de cada lado asoma por el borde del contenedor,
 // difuminado (blur) y un poco más chico/transparente — eso es lo que avisa que hay más para
