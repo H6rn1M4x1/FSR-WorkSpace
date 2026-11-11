@@ -20,6 +20,8 @@ import { ReverseGeocodedAddress } from "./ReverseGeocodedAddress";
 import { DetailModal as HomeDetailModal, DetailBlock, DetailBlockGrid } from "./DetailModal";
 import { PaymentIconGlyph } from "./PaymentIconGlyph";
 import { getEffectivePaymentIconId } from "../utils/paymentIcons";
+import { PaymentMethodCardGallery } from "./PaymentMethodPicker";
+import { buildPaymentFileName, guessExtFromDataUrl } from "../utils/paymentFileName";
 import { shareItemWith, unshareItem } from "../lib/itemSharingService";
 import {
   Calendar,
@@ -52,6 +54,7 @@ import {
   BookOpen,
   FileText,
   FileDown,
+  FileCheck,
   Receipt,
   CreditCard,
   Bell,
@@ -1589,6 +1592,23 @@ export default function HomeView({
     return fechaStr;
   };
 
+  // Misma leyenda de "faltan N días" / "venció hace N días" que ya usan los detalles de pago en
+  // Finanzas — acá también, para que la Agenda Central Integrada sea consistente con esas tablas.
+  const getDiasRestantesLabel = (fechaISO: string): string => {
+    if (!fechaISO) return "";
+    const clean = fechaISO.split("T")[0].split(" ")[0];
+    const parts = clean.split("-");
+    if (parts.length !== 3) return "";
+    const [fy, fm, fd] = parts.map(Number);
+    const todayParts = getLocalDateString().split("-").map(Number);
+    const today = new Date(todayParts[0], todayParts[1] - 1, todayParts[2]);
+    const target = new Date(fy, fm - 1, fd);
+    const diffDays = Math.round((target.getTime() - today.getTime()) / 86400000);
+    if (diffDays === 0) return "Vence hoy";
+    if (diffDays > 0) return `En ${diffDays} día${diffDays === 1 ? "" : "s"}`;
+    return `Venció hace ${Math.abs(diffDays)} día${Math.abs(diffDays) === 1 ? "" : "s"}`;
+  };
+
   // Extract hour from fecha string if present
   const getHoraFromFecha = (fecha: string) => {
     if (!fecha) return "";
@@ -2709,7 +2729,7 @@ export default function HomeView({
 
                           <HomeDetailModal isOpen={isExpanded} onClose={() => setExpandedHomeItemId(null)} title={inv.title} icon={Receipt}>
                                 <DetailBlockGrid>
-                                  <DetailBlock icon={DollarSign} label="Monto" tone="primary" emphasis span>
+                                  <DetailBlock icon={DollarSign} label="Monto" tone="primary" emphasis>
                                     ${inv.amount.toLocaleString("es-AR")} ARS
                                   </DetailBlock>
                                   <DetailBlock
@@ -2720,8 +2740,11 @@ export default function HomeView({
                                     {inv.paid ? "Pagado / Al día" : "Pendiente de pago"}
                                   </DetailBlock>
                                   {inv.dueDate && (
-                                    <DetailBlock icon={Calendar} label="Vencimiento">
-                                      {inv.dueDate}
+                                    <DetailBlock icon={Calendar} label="Vencimiento" span={!inv.category}>
+                                      <span className="block">{formatFechaDMY(inv.dueDate)}</span>
+                                      <span className="text-[10px] font-semibold text-zinc-400 dark:text-zinc-500 block mt-0.5">
+                                        {getDiasRestantesLabel(inv.dueDate)}
+                                      </span>
                                     </DetailBlock>
                                   )}
                                   {inv.category && (
@@ -2871,38 +2894,63 @@ export default function HomeView({
                             onEdit={onQuickEdit ? () => onQuickEdit("finanzas", dp.id) : undefined}
                           >
                                 <DetailBlockGrid>
-                                  <DetailBlock icon={DollarSign} label="Monto" tone="primary" emphasis span>
+                                  <DetailBlock icon={DollarSign} label="Monto" tone="primary" emphasis>
                                     ${dp.montoAPagar.toLocaleString("es-AR")} ARS
                                   </DetailBlock>
-                                  <DetailBlock icon={Receipt} label="Método de Pago" span>
-                                    {dp.metodoPago || "Efectivo/Debito"}
+                                  <DetailBlock icon={RefreshCw} label="Recurrencia">
+                                    {dp.pagoRecurrente ? "Pago Recurrente" : "Pago Único"}
                                   </DetailBlock>
-                                  {dp.dondePagar && (
-                                    <DetailBlock icon={MapPin} label="¿Dónde Pagar?">
-                                      {dp.dondePagar}
-                                    </DetailBlock>
-                                  )}
-                                  {dp.conQuePagar && (
-                                    <DetailBlock icon={CreditCard} label="¿Con Qué Pagar?">
-                                      {dp.conQuePagar}
-                                    </DetailBlock>
-                                  )}
-                                  <DetailBlock icon={RefreshCw} label="Recurrente">
-                                    {dp.pagoRecurrente ? "Sí" : "No"}
+                                  <DetailBlock icon={Calendar} label="Vencimiento" span={!dp.fechaCierre}>
+                                    <span className="block">{formatFechaDMY(dp.fechaVencimiento)}</span>
+                                    <span className="text-[10px] font-semibold text-zinc-400 dark:text-zinc-500 block mt-0.5">
+                                      {getDiasRestantesLabel(dp.fechaVencimiento)}
+                                    </span>
                                   </DetailBlock>
                                   {dp.fechaCierre && (
-                                    <DetailBlock icon={Calendar} label="Fecha de Cierre">
-                                      {dp.fechaCierre}
+                                    <DetailBlock icon={Calendar} label="Cierre">
+                                      {formatFechaDMY(dp.fechaCierre)}
                                     </DetailBlock>
                                   )}
-                                  {(dp.facturaEmitida || dp.comprobantePago) && (
-                                    <DetailBlock icon={FileText} label="Archivos" span>
-                                      {dp.facturaEmitida ? "Factura ✓" : "Sin factura"} • {dp.comprobantePago ? "Comprobante ✓" : "Sin comprobante"}
+                                  <DetailBlock icon={CreditCard} label="Método de Pago" span>
+                                    <div className="space-y-1.5">
+                                      <span className="block font-semibold">{dp.metodoPago || "Debito Automatico"}</span>
+                                      {dp.conQuePagar && (
+                                        <PaymentMethodCardGallery userId={homeUserId} describedCard={dp.conQuePagar} />
+                                      )}
+                                    </div>
+                                  </DetailBlock>
+                                  <DetailBlock icon={MapPin} label="Dónde / Medio de Pago" span>
+                                    {dp.dondePagar || "Homebanking / Entidad Bancaria"}
+                                  </DetailBlock>
+                                  {dp.facturaEmitida && (
+                                    <DetailBlock icon={FileText} label="Factura Emitida">
+                                      <button
+                                        type="button"
+                                        onClick={() => openStoredFile(dp.facturaEmitida!, buildPaymentFileName(dp.descripcion, dp.categoria, dp.fechaVencimiento, "facturaEmitida", guessExtFromDataUrl(dp.facturaEmitida!)))}
+                                        title={buildPaymentFileName(dp.descripcion, dp.categoria, dp.fechaVencimiento, "facturaEmitida", guessExtFromDataUrl(dp.facturaEmitida))}
+                                        className="group w-full flex flex-col items-center justify-center gap-1.5 py-3.5 px-2 rounded-xl bg-slate-200/70 dark:bg-zinc-800 hover:bg-slate-500 dark:hover:bg-zinc-600 text-slate-600 dark:text-zinc-300 hover:text-white dark:hover:text-white font-extrabold text-[10px] uppercase tracking-wide transition-all duration-300 active:scale-95 cursor-pointer"
+                                      >
+                                        <FileDown className="w-5 h-5 transition-transform duration-300 group-hover:-translate-y-1" />
+                                        <span>Descargar Factura</span>
+                                      </button>
+                                    </DetailBlock>
+                                  )}
+                                  {dp.comprobantePago && (
+                                    <DetailBlock icon={FileCheck} label="Comprobante de Pago">
+                                      <button
+                                        type="button"
+                                        onClick={() => openStoredFile(dp.comprobantePago!, buildPaymentFileName(dp.descripcion, dp.categoria, dp.fechaVencimiento, "comprobantePago", guessExtFromDataUrl(dp.comprobantePago!)))}
+                                        title={buildPaymentFileName(dp.descripcion, dp.categoria, dp.fechaVencimiento, "comprobantePago", guessExtFromDataUrl(dp.comprobantePago))}
+                                        className="group w-full flex flex-col items-center justify-center gap-1.5 py-3.5 px-2 rounded-xl bg-slate-200/70 dark:bg-zinc-800 hover:bg-slate-500 dark:hover:bg-zinc-600 text-slate-600 dark:text-zinc-300 hover:text-white dark:hover:text-white font-extrabold text-[10px] uppercase tracking-wide transition-all duration-300 active:scale-95 cursor-pointer"
+                                      >
+                                        <FileDown className="w-5 h-5 transition-transform duration-300 group-hover:-translate-y-1" />
+                                        <span>Descargar Comprobante</span>
+                                      </button>
                                     </DetailBlock>
                                   )}
                                   {dp.observaciones && (
                                     <DetailBlock icon={FileText} label="Observaciones" span>
-                                      <span className="italic">{dp.observaciones}</span>
+                                      <p className="italic font-normal">{dp.observaciones}</p>
                                     </DetailBlock>
                                   )}
                                 </DetailBlockGrid>

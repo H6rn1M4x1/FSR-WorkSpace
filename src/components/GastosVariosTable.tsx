@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { createPortal } from "react-dom";
 import { ConfirmationModal } from "./ConfirmationModal";
 import { DetailModal, DetailBlock, DetailBlockGrid } from "./DetailModal";
-import { PaymentMethodPicker } from "./PaymentMethodPicker";
+import { PaymentMethodPicker, PaymentMethodCardGallery } from "./PaymentMethodPicker";
 import { useToast } from "../context/ToastContext";
 import { GastoVario } from "../types";
 import { SmartDateTimePicker } from "./SmartDateTimePicker";
@@ -1362,17 +1362,25 @@ export default function GastosVariosTable({
           >
             {detailGasto && (
               <DetailBlockGrid>
+                <DetailBlock icon={DollarSign} label="Importe" tone="primary" emphasis>
+                  {formatCurrency(detailGasto.monto)}
+                </DetailBlock>
                 <DetailBlock icon={Calendar} label="Fecha">
                   {formatFechaDMY(detailGasto.fecha)}
                 </DetailBlock>
                 <DetailBlock icon={Tag} label="Categoría" tone="primary">
                   {detailGasto.categoria}
                 </DetailBlock>
-                <DetailBlock icon={CreditCard} label="Método">
-                  {detailGasto.metodo}
-                </DetailBlock>
-                <DetailBlock icon={DollarSign} label="Importe" tone="primary" emphasis>
-                  {formatCurrency(detailGasto.monto)}
+                <DetailBlock icon={CreditCard} label="Método de Pago" span>
+                  <div className="space-y-1.5">
+                    <span className="block font-semibold">{detailGasto.metodo || "—"}</span>
+                    {detailGasto.metodo && (
+                      <PaymentMethodCardGallery
+                        userId={userEmail || "hernanmaximiliano10@gmail.com"}
+                        describedCard={detailGasto.metodo}
+                      />
+                    )}
+                  </div>
                 </DetailBlock>
               </DetailBlockGrid>
             )}
