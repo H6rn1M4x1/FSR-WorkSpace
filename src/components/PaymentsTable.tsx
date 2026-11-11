@@ -1927,7 +1927,7 @@ export default function PaymentsTable({
                     </DetailBlock>
                   )}
 
-                  <DetailBlock icon={CreditCard} label="Método de Pago">
+                  <DetailBlock icon={CreditCard} label="Método de Pago" span>
                     <div className="space-y-1.5">
                       <span className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-200 block">
                         {detailPayment.metodoPago || "Debito Automatico"}
@@ -1942,7 +1942,7 @@ export default function PaymentsTable({
                   </DetailBlock>
 
                   {detailPayment.dondePagar && (
-                    <DetailBlock icon={MapPin} label="Dónde Pagar">
+                    <DetailBlock icon={MapPin} label="Dónde Pagar" span>
                       <div
                         className="prose dark:prose-invert prose-sm max-w-none [&_*]:!text-inherit"
                         dangerouslySetInnerHTML={{ __html: detailPayment.dondePagar }}
@@ -1956,9 +1956,9 @@ export default function PaymentsTable({
                         type="button"
                         onClick={() => openStoredFile(detailPayment.facturaEmitida!, buildPaymentFileName(detailPayment.descripcion, detailPayment.categoria, detailPayment.fechaVencimiento, "facturaEmitida", guessExtFromDataUrl(detailPayment.facturaEmitida!)))}
                         title={buildPaymentFileName(detailPayment.descripcion, detailPayment.categoria, detailPayment.fechaVencimiento, "facturaEmitida", guessExtFromDataUrl(detailPayment.facturaEmitida))}
-                        className="flex items-center gap-1.5 text-primary hover:underline cursor-pointer font-bold"
+                        className="group w-full flex flex-col items-center justify-center gap-1.5 py-3.5 px-2 rounded-xl bg-primary/10 hover:bg-primary text-primary hover:text-white font-extrabold text-[10px] uppercase tracking-wide transition-all duration-300 active:scale-95 cursor-pointer"
                       >
-                        <FileDown className="w-3 h-3 shrink-0" />
+                        <FileDown className="w-5 h-5 transition-transform duration-300 group-hover:-translate-y-1" />
                         <span>Descargar Factura</span>
                       </button>
                     </DetailBlock>
@@ -1969,9 +1969,9 @@ export default function PaymentsTable({
                         type="button"
                         onClick={() => openStoredFile(detailPayment.comprobantePago!, buildPaymentFileName(detailPayment.descripcion, detailPayment.categoria, detailPayment.fechaVencimiento, "comprobantePago", guessExtFromDataUrl(detailPayment.comprobantePago!)))}
                         title={buildPaymentFileName(detailPayment.descripcion, detailPayment.categoria, detailPayment.fechaVencimiento, "comprobantePago", guessExtFromDataUrl(detailPayment.comprobantePago))}
-                        className="flex items-center gap-1.5 text-primary hover:underline cursor-pointer font-bold"
+                        className="group w-full flex flex-col items-center justify-center gap-1.5 py-3.5 px-2 rounded-xl bg-primary/10 hover:bg-primary text-primary hover:text-white font-extrabold text-[10px] uppercase tracking-wide transition-all duration-300 active:scale-95 cursor-pointer"
                       >
-                        <FileDown className="w-3 h-3 shrink-0" />
+                        <FileDown className="w-5 h-5 transition-transform duration-300 group-hover:-translate-y-1" />
                         <span>Descargar Comprobante</span>
                       </button>
                     </DetailBlock>

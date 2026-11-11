@@ -2484,7 +2484,7 @@ export default function FinanceView({
                                         {formatFechaDMY(p.fechaCierre)}
                                       </DetailBlock>
                                     )}
-                                    <DetailBlock icon={CreditCard} label="Método de Pago">
+                                    <DetailBlock icon={CreditCard} label="Método de Pago" span>
                                       <div className="space-y-1.5">
                                         <span className="block font-semibold">
                                           {p.metodoPago || "Debito Automatico"}
@@ -2497,51 +2497,49 @@ export default function FinanceView({
                                         )}
                                       </div>
                                     </DetailBlock>
-                                    <DetailBlock icon={MapPin} label="Dónde / Medio de Pago">
+                                    <DetailBlock icon={MapPin} label="Dónde / Medio de Pago" span>
                                       {p.dondePagar || "Homebanking / Entidad Bancaria"}
                                     </DetailBlock>
                                     {p.facturaEmitida && (
                                       <DetailBlock icon={FileText} label="Factura Emitida">
-                                        <div className="flex items-center gap-1">
+                                        <div className="flex flex-col items-center gap-1.5">
                                           <button
                                             type="button"
                                             onClick={() => openStoredDetailedPaymentFile(p.facturaEmitida!, buildPaymentFileName(p.descripcion, p.categoria, p.fechaVencimiento, "facturaEmitida", guessExtFromDataUrl(p.facturaEmitida!)))}
                                             title={buildPaymentFileName(p.descripcion, p.categoria, p.fechaVencimiento, "facturaEmitida", guessExtFromDataUrl(p.facturaEmitida))}
-                                            className="flex items-center gap-1.5 px-2 py-1 bg-primary/10 text-primary rounded-lg text-[10px] font-extrabold hover:underline cursor-pointer"
+                                            className="group w-full flex flex-col items-center justify-center gap-1.5 py-3.5 px-2 rounded-xl bg-primary/10 hover:bg-primary text-primary hover:text-white font-extrabold text-[10px] uppercase tracking-wide transition-all duration-300 active:scale-95 cursor-pointer"
                                           >
-                                            <FileDown className="w-3 h-3 shrink-0" />
+                                            <FileDown className="w-5 h-5 transition-transform duration-300 group-hover:-translate-y-1" />
                                             <span>Descargar Factura</span>
                                           </button>
                                           <button
                                             type="button"
                                             onClick={() => handleUnlinkDetailedPaymentFile(p.id, "facturaEmitida")}
-                                            className="p-1 text-slate-400 hover:text-red-500 rounded-md hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer shrink-0"
-                                            title="Quitar factura"
+                                            className="text-[9px] font-semibold text-slate-400 hover:text-red-500 cursor-pointer transition-colors"
                                           >
-                                            <X className="w-3.5 h-3.5" />
+                                            Quitar
                                           </button>
                                         </div>
                                       </DetailBlock>
                                     )}
                                     {p.comprobantePago && (
                                       <DetailBlock icon={FileCheck} label="Comprobante de Pago">
-                                        <div className="flex items-center gap-1">
+                                        <div className="flex flex-col items-center gap-1.5">
                                           <button
                                             type="button"
                                             onClick={() => openStoredDetailedPaymentFile(p.comprobantePago!, buildPaymentFileName(p.descripcion, p.categoria, p.fechaVencimiento, "comprobantePago", guessExtFromDataUrl(p.comprobantePago!)))}
                                             title={buildPaymentFileName(p.descripcion, p.categoria, p.fechaVencimiento, "comprobantePago", guessExtFromDataUrl(p.comprobantePago))}
-                                            className="flex items-center gap-1.5 px-2 py-1 bg-primary/10 text-primary rounded-lg text-[10px] font-extrabold hover:underline cursor-pointer"
+                                            className="group w-full flex flex-col items-center justify-center gap-1.5 py-3.5 px-2 rounded-xl bg-primary/10 hover:bg-primary text-primary hover:text-white font-extrabold text-[10px] uppercase tracking-wide transition-all duration-300 active:scale-95 cursor-pointer"
                                           >
-                                            <FileDown className="w-3 h-3 shrink-0" />
+                                            <FileDown className="w-5 h-5 transition-transform duration-300 group-hover:-translate-y-1" />
                                             <span>Descargar Comprobante</span>
                                           </button>
                                           <button
                                             type="button"
                                             onClick={() => handleUnlinkDetailedPaymentFile(p.id, "comprobantePago")}
-                                            className="p-1 text-slate-400 hover:text-red-500 rounded-md hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer shrink-0"
-                                            title="Quitar comprobante"
+                                            className="text-[9px] font-semibold text-slate-400 hover:text-red-500 cursor-pointer transition-colors"
                                           >
-                                            <X className="w-3.5 h-3.5" />
+                                            Quitar
                                           </button>
                                         </div>
                                       </DetailBlock>
@@ -2742,7 +2740,7 @@ export default function FinanceView({
                                         {formatFechaDMY(p.fechaCierre)}
                                       </DetailBlock>
                                     )}
-                                    <DetailBlock icon={CreditCard} label="Método de Pago">
+                                    <DetailBlock icon={CreditCard} label="Método de Pago" span>
                                       <div className="space-y-1.5">
                                         <span className="block font-semibold">
                                           {p.metodoPago || "Debito Automatico"}
@@ -2755,51 +2753,49 @@ export default function FinanceView({
                                         )}
                                       </div>
                                     </DetailBlock>
-                                    <DetailBlock icon={MapPin} label="Dónde / Medio de Pago">
+                                    <DetailBlock icon={MapPin} label="Dónde / Medio de Pago" span>
                                       {p.dondePagar || "Homebanking / Entidad Bancaria"}
                                     </DetailBlock>
                                     {p.facturaEmitida && (
                                       <DetailBlock icon={FileText} label="Factura Emitida">
-                                        <div className="flex items-center gap-1">
+                                        <div className="flex flex-col items-center gap-1.5">
                                           <button
                                             type="button"
                                             onClick={() => openStoredDetailedPaymentFile(p.facturaEmitida!, buildPaymentFileName(p.descripcion, p.categoria, p.fechaVencimiento, "facturaEmitida", guessExtFromDataUrl(p.facturaEmitida!)))}
                                             title={buildPaymentFileName(p.descripcion, p.categoria, p.fechaVencimiento, "facturaEmitida", guessExtFromDataUrl(p.facturaEmitida))}
-                                            className="flex items-center gap-1.5 px-2 py-1 bg-primary/10 text-primary rounded-lg text-[10px] font-extrabold hover:underline cursor-pointer"
+                                            className="group w-full flex flex-col items-center justify-center gap-1.5 py-3.5 px-2 rounded-xl bg-primary/10 hover:bg-primary text-primary hover:text-white font-extrabold text-[10px] uppercase tracking-wide transition-all duration-300 active:scale-95 cursor-pointer"
                                           >
-                                            <FileDown className="w-3 h-3 shrink-0" />
+                                            <FileDown className="w-5 h-5 transition-transform duration-300 group-hover:-translate-y-1" />
                                             <span>Descargar Factura</span>
                                           </button>
                                           <button
                                             type="button"
                                             onClick={() => handleUnlinkDetailedPaymentFile(p.id, "facturaEmitida")}
-                                            className="p-1 text-slate-400 hover:text-red-500 rounded-md hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer shrink-0"
-                                            title="Quitar factura"
+                                            className="text-[9px] font-semibold text-slate-400 hover:text-red-500 cursor-pointer transition-colors"
                                           >
-                                            <X className="w-3.5 h-3.5" />
+                                            Quitar
                                           </button>
                                         </div>
                                       </DetailBlock>
                                     )}
                                     {p.comprobantePago && (
                                       <DetailBlock icon={FileCheck} label="Comprobante de Pago">
-                                        <div className="flex items-center gap-1">
+                                        <div className="flex flex-col items-center gap-1.5">
                                           <button
                                             type="button"
                                             onClick={() => openStoredDetailedPaymentFile(p.comprobantePago!, buildPaymentFileName(p.descripcion, p.categoria, p.fechaVencimiento, "comprobantePago", guessExtFromDataUrl(p.comprobantePago!)))}
                                             title={buildPaymentFileName(p.descripcion, p.categoria, p.fechaVencimiento, "comprobantePago", guessExtFromDataUrl(p.comprobantePago))}
-                                            className="flex items-center gap-1.5 px-2 py-1 bg-primary/10 text-primary rounded-lg text-[10px] font-extrabold hover:underline cursor-pointer"
+                                            className="group w-full flex flex-col items-center justify-center gap-1.5 py-3.5 px-2 rounded-xl bg-primary/10 hover:bg-primary text-primary hover:text-white font-extrabold text-[10px] uppercase tracking-wide transition-all duration-300 active:scale-95 cursor-pointer"
                                           >
-                                            <FileDown className="w-3 h-3 shrink-0" />
+                                            <FileDown className="w-5 h-5 transition-transform duration-300 group-hover:-translate-y-1" />
                                             <span>Descargar Comprobante</span>
                                           </button>
                                           <button
                                             type="button"
                                             onClick={() => handleUnlinkDetailedPaymentFile(p.id, "comprobantePago")}
-                                            className="p-1 text-slate-400 hover:text-red-500 rounded-md hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer shrink-0"
-                                            title="Quitar comprobante"
+                                            className="text-[9px] font-semibold text-slate-400 hover:text-red-500 cursor-pointer transition-colors"
                                           >
-                                            <X className="w-3.5 h-3.5" />
+                                            Quitar
                                           </button>
                                         </div>
                                       </DetailBlock>
