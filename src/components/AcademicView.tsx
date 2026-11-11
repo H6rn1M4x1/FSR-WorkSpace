@@ -6,6 +6,7 @@ import { useBriefLoading } from "../hooks/useBriefLoading";
 import { TableSkeleton } from "./TableSkeleton";
 import { AnimatedNumber } from "./AnimatedNumber";
 import { WeeklyScheduleGrid, WeeklyScheduleGridBatch } from "./WeeklyScheduleGrid";
+import { MonthlyExamScheduler } from "./MonthlyExamScheduler";
 import { AcademicRadarChart, AcademicGaugeChart } from "./AcademicCharts";
 import { CustomSelect, SelectPopoverPosition } from "./CustomSelect";
 import { generateUniqueId } from "../utils/id";
@@ -1743,6 +1744,30 @@ export default function AcademicView({
     );
   };
 
+  // Núcleo de guardado compartido entre el modal "Nuevo Examen/Trabajo" y el calendario mensual de
+  // arriba de la tabla — ambos caminos terminan creando/editando el mismo ExamenItem en la misma
+  // colección de Firestore, así que la tabla de "Parciales, Finales y Trabajos" siempre refleja lo
+  // que se cargue por cualquiera de los dos.
+  const saveExamenRecord = async (item: ExamenItem, isEdit: boolean): Promise<boolean> => {
+    setIsSaving(true);
+    try {
+      await saveItemToFirestore(activeUserId, "examenes", item);
+      setExamenes((prev) => {
+        const exists = prev.some((ex) => ex.id === item.id);
+        if (exists) return prev.map((ex) => (ex.id === item.id ? item : ex));
+        return [item, ...prev];
+      });
+      showToast(isEdit ? "Examen actualizado con éxito" : "Examen registrado con éxito", "success");
+      return true;
+    } catch (error) {
+      console.error("[AcademicView] Error saving Examen:", error);
+      showToast("Error al guardar el examen", "error");
+      return false;
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleAddOrEditExamen = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!exMateria || !exFecha || !exEstado) {
@@ -1750,30 +1775,17 @@ export default function AcademicView({
       return;
     }
 
-    setIsSaving(true);
-    console.log("[AcademicView] Saving examen. Editing ID:", editingExamenId);
+    const newItem: ExamenItem = {
+      id: editingExamenId || generateUniqueId("ex"),
+      materia: exMateria,
+      fecha: exFecha,
+      estado: exEstado,
+      instancia: exEstado !== "Examen Final" ? exInstancia : undefined,
+      aula: exAula,
+    };
 
-    try {
-      const newItem: ExamenItem = {
-        id: editingExamenId || generateUniqueId("ex"),
-        materia: exMateria,
-        fecha: exFecha,
-        estado: exEstado,
-        instancia: exEstado !== "Examen Final" ? exInstancia : undefined,
-        aula: exAula,
-      };
-
-      console.log("[AcademicView] Examen item constructed:", newItem);
-
-      await saveItemToFirestore(activeUserId, "examenes", newItem);
-      setExamenes((prev) => {
-        const exists = prev.some((ex) => ex.id === newItem.id);
-        if (exists) return prev.map((ex) => (ex.id === newItem.id ? newItem : ex));
-        return [newItem, ...prev];
-      });
-      console.log("[AcademicView] Examen saved successfully to Firestore.");
-      showToast(editingExamenId ? "Examen actualizado con éxito" : "Examen registrado con éxito", "success");
-
+    const ok = await saveExamenRecord(newItem, !!editingExamenId);
+    if (ok) {
       setEditingExamenId(null);
       setExMateria("");
       setExFecha("");
@@ -1781,12 +1793,30 @@ export default function AcademicView({
       setExInstancia("Primero");
       setExAula("");
       setShowExamenModal(false);
-    } catch (error) {
-      console.error("[AcademicView] Error saving Examen:", error);
-      showToast("Error al guardar el examen", "error");
-    } finally {
-      setIsSaving(false);
     }
+  };
+
+  // Calendario mensual de arriba de la tabla: mismo registro final (ExamenItem), solo que el id ya
+  // viene resuelto acá en vez de tomarlo de editingExamenId (ese estado es propio del modal).
+  const handleCalendarExamenCreate = (
+    fecha: string,
+    estado: string,
+    instancia: string | undefined,
+    materia: string,
+    aula: string,
+  ) => {
+    saveExamenRecord({ id: generateUniqueId("ex"), materia, fecha, estado, instancia, aula }, false);
+  };
+
+  const handleCalendarExamenEdit = (
+    id: string,
+    fecha: string,
+    estado: string,
+    instancia: string | undefined,
+    materia: string,
+    aula: string,
+  ) => {
+    saveExamenRecord({ id, materia, fecha, estado, instancia, aula }, true);
   };
 
   const handleDeleteExamen = (id: string) => {
@@ -4003,8 +4033,24 @@ export default function AcademicView({
             return matchesSearch && matchesEstado && matchesMateria;
           });
 
+          const examFinalMateriaOptions = materiasInfo
+            .filter((m) => getAcademicStatus(m).type === "puede_rendir")
+            .map((m) => m.materia)
+            .sort();
+          const examOtrosMateriaOptions = Array.from(new Set(horarios.map((h) => h.materia))).sort();
+
           return (
-            <div className={`p-6 rounded-3xl border scroll-reveal ${darkMode ? "bg-zinc-900 border-zinc-800 text-white shadow-lg" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"}`}>
+            <>
+              <MonthlyExamScheduler
+                examenes={examenes}
+                darkMode={darkMode}
+                materiaOptionsFinal={examFinalMateriaOptions}
+                materiaOptionsOtros={examOtrosMateriaOptions}
+                onDirectCreate={handleCalendarExamenCreate}
+                onConfirmEdit={handleCalendarExamenEdit}
+                onDeleteExamen={handleDeleteExamen}
+              />
+              <div className={`p-6 rounded-3xl border scroll-reveal ${darkMode ? "bg-zinc-900 border-zinc-800 text-white shadow-lg" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"}`}>
               {/* Header Controls */}
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
                 <div>
@@ -4296,6 +4342,7 @@ export default function AcademicView({
                 )}
               </div>
             </div>
+            </>
           );
         })()}
 

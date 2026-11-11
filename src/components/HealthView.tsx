@@ -1432,6 +1432,10 @@ export default function HealthView({
   const [editingAlimLog, setEditingAlimLog] = useState<AlimentacionLog | null>(
     null,
   );
+  // Detalle clickeable (mismo patrón que el resto de la app): tocar una nota de Alimentación o de
+  // Historial Diario abre el DetailModal en vez de desplegar la info en la misma tarjeta.
+  const [detailAlimLogId, setDetailAlimLogId] = useState<string | null>(null);
+  const [detailDiarioId, setDetailDiarioId] = useState<string | null>(null);
   const [alimFecha, setAlimFecha] = useState("");
   const [alimEstado, setAlimEstado] = useState<
     "Desayuno" | "Almuerzo" | "Merienda" | "Cena"
@@ -1676,6 +1680,91 @@ export default function HealthView({
         }
       },
     );
+  };
+
+  // Plato + macros (P/C/G) de un registro de Alimentación — compartido entre la tarjeta de la
+  // lista y su DetailModal, para no recalcular la lógica (y su try/catch) en dos lugares.
+  const getAlimLogDetails = (log: AlimentacionLog) => {
+    const platoInfo = platos?.find((p) => p.id === log.platoId);
+    const portions = log.cantidad || 1;
+    let p = 0,
+      c = 0,
+      g = 0;
+    const hasCustomValores =
+      log.valoresNutricionales &&
+      ((log.valoresNutricionales.proteinas || 0) > 0 ||
+        (log.valoresNutricionales.carbohidratos || 0) > 0 ||
+        (log.valoresNutricionales.grasas || 0) > 0);
+
+    if (hasCustomValores || platoInfo) {
+      try {
+        const vnBase =
+          log.valoresNutricionales ||
+          (platoInfo ? calcularNutricionPlato(platoInfo, alimentos || [], mercaderia || []) : null);
+        if (vnBase) {
+          const factor = log.valoresNutricionales ? 1 : portions;
+          p = Math.round((vnBase.proteinas || 0) * factor);
+          c = Math.round((vnBase.carbohidratos || 0) * factor);
+          g = Math.round((vnBase.grasas || 0) * factor);
+        }
+      } catch (e) {
+        console.error("[HealthView] Error calculating nutrition log:", e);
+      }
+    }
+    return { platoInfo, p, c, g };
+  };
+
+  // Mismo cálculo (BMR/TDEE, consumido vs. gastado, cumplimiento del objetivo) compartido entre
+  // la tarjeta de un día de Historial Diario y su DetailModal.
+  const getDiarioDayDetails = (diaStr: string) => {
+    const dateObj = new Date(diaStr + "T12:00:00");
+    const medidaDia = medidasHistory.find((m) => m.fecha === diaStr);
+    const pesoDia = medidaDia ? `${medidaDia.peso} kg` : "-";
+
+    const comidaDia = (alimentacionLogs || [])
+      .filter((l) => l.fecha === diaStr)
+      .reduce((acc, curr) => acc + (curr.calorias || 0), 0);
+
+    const deporteDia = (deportesActividades || [])
+      .filter((a) => a.fechaDesde.startsWith(diaStr))
+      .reduce((acc, curr) => acc + (curr.calorias || 0), 0);
+
+    const gymDia = (registrosEntrenamiento || [])
+      .filter((r) => r.fecha === diaStr)
+      .reduce((acc, curr) => acc + (curr.caloriasTotalesSesion || 0), 0);
+
+    const gastadasTotal = deporteDia + gymDia;
+    const balanceNeto = comidaDia - gastadasTotal;
+
+    const currentWeight = medidaDia?.peso || metabolicProfile.pesoActual;
+    const bmr =
+      metabolicProfile.genero === "Masculino"
+        ? 10 * currentWeight + 6.25 * metabolicProfile.altura - 5 * metabolicProfile.edad + 5
+        : 10 * currentWeight + 6.25 * metabolicProfile.altura - 5 * metabolicProfile.edad - 161;
+
+    const tdee = bmr * selectedActivityFactor;
+
+    let metaCalorias = tdee;
+    if (metabolicProfile.objetivo === "Bajar de Peso (Déficit)") {
+      metaCalorias -= 500;
+    } else if (metabolicProfile.objetivo === "Ganar Masa Muscular (Superávit)") {
+      metaCalorias += 400;
+    }
+
+    let cumplio = false;
+    if (comidaDia > 0) {
+      if (metabolicProfile.objetivo === "Bajar de Peso (Déficit)") {
+        cumplio = comidaDia <= metaCalorias + 100;
+      } else if (metabolicProfile.objetivo === "Ganar Masa Muscular (Superávit)") {
+        cumplio = comidaDia >= metaCalorias - 150;
+      } else {
+        cumplio = Math.abs(comidaDia - metaCalorias) <= 200;
+      }
+    }
+
+    const isToday = diaStr === new Date().toISOString().substring(0, 10);
+
+    return { dateObj, pesoDia, comidaDia, deporteDia, gymDia, gastadasTotal, balanceNeto, metaCalorias, cumplio, isToday };
   };
 
   const [showEstudioModal, setShowEstudioModal] = useState(false);
@@ -5287,151 +5376,113 @@ export default function HealthView({
                       );
                     }
 
-                    return filteredLogs.map((log) => {
-                          const platoInfo = platos?.find(
-                            (p) => p.id === log.platoId,
-                          );
-                          const portions = log.cantidad || 1;
-                          
-                          let p = 0, c = 0, g = 0;
-                          const hasCustomValores = log.valoresNutricionales && (
-                            (log.valoresNutricionales.proteinas || 0) > 0 ||
-                            (log.valoresNutricionales.carbohidratos || 0) > 0 ||
-                            (log.valoresNutricionales.grasas || 0) > 0
-                          );
-
-                          if (hasCustomValores || platoInfo) {
-                            try {
-                              const vnBase = log.valoresNutricionales || (platoInfo ? calcularNutricionPlato(platoInfo, alimentos || [], mercaderia || []) : null);
-                              if (vnBase) {
-                                const factor = log.valoresNutricionales ? 1 : portions;
-                                p = Math.round((vnBase.proteinas || 0) * factor);
-                                c = Math.round((vnBase.carbohidratos || 0) * factor);
-                                g = Math.round((vnBase.grasas || 0) * factor);
-                              }
-                            } catch (e) {
-                              console.error("[HealthView] Error calculating nutrition log:", e);
-                            }
-                          }
-                          
-                          let fechaDate = new Date(log.fecha + "T12:00:00");
+                    return filteredLogs.map((log, logIdx) => {
+                          const { platoInfo, p, c, g } = getAlimLogDetails(log);
+                          const fechaDate = new Date(log.fecha + "T12:00:00");
 
                           return (
-                            <div
+                            <motion.div
                               key={log.id}
-                              className={`p-5 rounded-3xl border transition-all ${darkMode ? "bg-zinc-950 border-zinc-800 text-zinc-100" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"} space-y-3`}
+                              initial={{ opacity: 0, y: 14 }}
+                              whileInView={{ opacity: 1, y: 0 }}
+                              viewport={{ once: true, margin: "0px 0px -60px 0px" }}
+                              transition={{ duration: 0.3, delay: Math.min(logIdx * 0.04, 0.15), ease: [0.22, 1, 0.36, 1] }}
+                              onClick={() => setDetailAlimLogId(log.id)}
+                              className="rounded-2xl border p-4 cursor-pointer active:scale-[0.98] transition-transform bg-white dark:bg-zinc-950 border-slate-100 dark:border-zinc-800/80"
                             >
-                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-200/50 dark:border-zinc-800/60 pb-3">
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                    <span className="text-[10px] font-bold text-slate-400 block uppercase">
-                                      {log.fecha ? fechaDate.toLocaleDateString("es-AR", { weekday: "long", year: "numeric", month: "long", day: "numeric" }) : "FECHA DESCONOCIDA"}
-                                    </span>
-                                    <span className="px-2 py-0.5 rounded-md text-[9px] font-extrabold uppercase bg-primary/10 text-primary border border-primary/20 flex items-center gap-1 shrink-0">
-                                      <Utensils className="w-2.5 h-2.5" /> COMIDAS
-                                    </span>
-                                  </div>
-                                  <h4 className="text-base font-extrabold">{log.estado} {platoInfo ? `- ${platoInfo.nombrePlato}` : ""}</h4>
-                                </div>
-                                
-                                <div className="flex items-center justify-between sm:justify-end gap-2 text-xs font-mono font-bold w-full sm:w-auto">
-                                  <div className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto scrollbar-none py-0.5 max-w-full">
-                                    <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full bg-primary/10 text-primary border border-primary/20 flex items-center gap-1 shrink-0 whitespace-nowrap text-[11px] sm:text-xs">
-                                      <Flame className="w-3.5 h-3.5 fill-current" /> {log.calorias} kcal
-                                    </span>
-                                    {(p > 0 || c > 0 || g > 0) && (
-                                      <>
-                                        <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full bg-primary/10 text-primary border border-primary/20 shrink-0 whitespace-nowrap text-[11px] sm:text-xs">
-                                          P: {p}g
-                                        </span>
-                                        <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full bg-primary/10 text-primary border border-primary/20 shrink-0 whitespace-nowrap text-[11px] sm:text-xs">
-                                          C: {c}g
-                                        </span>
-                                        <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full bg-primary/10 text-primary border border-primary/20 shrink-0 whitespace-nowrap text-[11px] sm:text-xs">
-                                          G: {g}g
-                                        </span>
-                                      </>
-                                    )}
-                                  </div>
-                                  
-                                  <div className="flex items-center gap-1 ml-1 sm:ml-2 border-l border-zinc-200/60 dark:border-zinc-800/80 pl-1.5 sm:pl-2 shrink-0">
-                                    <button
-                                      onClick={() => handleDeleteAlimLog(log.id)}
-                                      className="p-1.5 text-slate-500 hover:text-red-500 dark:text-zinc-400 dark:hover:text-red-500 hover:bg-slate-100 dark:hover:bg-zinc-800 rounded-xl transition-all cursor-pointer"
-                                      title="Eliminar"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
-                                </div>
+                              <div className="flex items-center justify-between gap-2 mb-2">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-primary/10 text-primary">
+                                  {log.estado}
+                                </span>
+                                <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-primary/10 text-primary">
+                                  {log.fecha ? fechaDate.toLocaleDateString("es-AR", { day: "numeric", month: "short" }) : "-"}
+                                </span>
                               </div>
-                              
-                              <div className="flex flex-wrap items-center gap-1.5">
-                                {log.ingredientesConsumidos && log.ingredientesConsumidos.length > 0 ? (
-                                  log.ingredientesConsumidos.map((ing, iIdx) => (
-                                    (() => {
-                                      const baseNutri = getIngredientNutriVal(ing.ingrediente, mercaderia || []);
-                                      const factor = ing.cantidad / 100;
-                                      const p = Math.round(baseNutri.proteinas * factor);
-                                      const c = Math.round(baseNutri.carbohidratos * factor);
-                                      const g = Math.round(baseNutri.grasas * factor);
-                                      
-                                      return (
-                                        <div key={iIdx} className={`py-1.5 px-3 rounded-xl border flex flex-col justify-center ${darkMode ? "bg-zinc-900/40 border-zinc-800/60" : "bg-zinc-50 border-zinc-200/60"}`}>
-                                          <div className="flex items-baseline gap-1.5">
-                                            <span className="text-sm font-bold text-slate-800 dark:text-zinc-200 whitespace-nowrap">{ing.ingrediente}</span>
-                                            <span className="text-[11px] font-mono text-slate-500 dark:text-zinc-400 whitespace-nowrap">{ing.cantidad} {ing.unidad}</span>
-                                          </div>
-                                          <div className="flex items-center gap-2 mt-0.5">
-                                            <span className="text-xs text-primary font-black flex items-center gap-1 whitespace-nowrap">
-                                              <Flame className="w-3.5 h-3.5 text-primary shrink-0 fill-primary/20" /> {Math.round(ing.calorias)} kcal
-                                            </span>
-                                            {(p > 0 || c > 0 || g > 0) && (
-                                              <>
-                                                <div className="h-3.5 w-px bg-slate-200 dark:bg-zinc-700/60"></div>
-                                                <div className="flex items-center gap-2 text-xs font-bold text-primary whitespace-nowrap">
-                                                    <span>P: {p}g</span>
-                                                    <span>C: {c}g</span>
-                                                    <span>G: {g}g</span>
-                                                </div>
-                                              </>
-                                            )}
-                                          </div>
-                                        </div>
-                                      );
-                                    })()
-                                  ))
-                                ) : platoInfo ? (
-                                  <div className={`py-1.5 px-3 rounded-xl border flex flex-col justify-center ${darkMode ? "bg-zinc-900/40 border-zinc-800/60" : "bg-zinc-50 border-zinc-200/60"}`}>
-                                    <div className="flex items-baseline gap-1.5">
-                                      <span className="text-sm font-bold text-slate-800 dark:text-zinc-200 whitespace-nowrap">{platoInfo.nombrePlato}</span>
-                                      <span className="text-[11px] font-mono text-slate-500 dark:text-zinc-400 whitespace-nowrap">{log.cantidad || 1} porción(es)</span>
-                                    </div>
-                                    <div className="flex items-center gap-2 mt-0.5">
-                                      <span className="text-xs text-primary font-black flex items-center gap-1 whitespace-nowrap">
-                                        <Flame className="w-3.5 h-3.5 text-primary shrink-0 fill-primary/20" /> {log.calorias} kcal
-                                      </span>
-                                      {(p > 0 || c > 0 || g > 0) && (
-                                          <>
-                                            <div className="h-3.5 w-px bg-slate-200 dark:bg-zinc-700/60"></div>
-                                            <div className="flex items-center gap-2 text-xs font-bold text-primary whitespace-nowrap">
-                                                <span>P: {p}g</span>
-                                                <span>C: {c}g</span>
-                                                <span>G: {g}g</span>
-                                            </div>
-                                          </>
-                                      )}
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <p className="text-xs text-slate-500 italic">Resumen general. No hay detalles de ingredientes.</p>
+
+                              <p className="font-extrabold text-sm mb-1.5 text-slate-900 dark:text-white break-words">
+                                {platoInfo ? platoInfo.nombrePlato : "Comida registrada"}
+                              </p>
+
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-medium text-slate-500 dark:text-zinc-400">
+                                <span className="flex items-center gap-1 text-primary font-semibold">
+                                  <Flame className="w-3 h-3 shrink-0 fill-current" />
+                                  {log.calorias} kcal
+                                </span>
+                                {(p > 0 || c > 0 || g > 0) && (
+                                  <span>P: {p}g · C: {c}g · G: {g}g</span>
                                 )}
                               </div>
-                            </div>
+
+                              <div
+                                className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-100 dark:border-zinc-800/60"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => handleEditAlimLog(log)}
+                                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold cursor-pointer active:scale-95 transition-all ${darkMode ? "bg-zinc-800 text-zinc-300" : "bg-slate-100 text-slate-600"}`}
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                  Editar
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteAlimLog(log.id)}
+                                  className="p-2.5 rounded-xl bg-red-500/10 text-red-500 cursor-pointer active:scale-95 transition-all"
+                                  title="Eliminar"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </motion.div>
                           );
                         });
                   })()}
                 </div>
+
+                {(() => {
+                  const detailAlimLog = detailAlimLogId
+                    ? (alimentacionLogs || []).find((l) => l.id === detailAlimLogId) || null
+                    : null;
+                  const details = detailAlimLog ? getAlimLogDetails(detailAlimLog) : null;
+                  const detailFechaDate = detailAlimLog ? new Date(detailAlimLog.fecha + "T12:00:00") : null;
+                  return (
+                    <DetailModal
+                      isOpen={!!detailAlimLog}
+                      onClose={() => setDetailAlimLogId(null)}
+                      title={details?.platoInfo ? details.platoInfo.nombrePlato : "Comida registrada"}
+                      subtitle={detailFechaDate ? detailFechaDate.toLocaleDateString("es-AR", { weekday: "long", year: "numeric", month: "long", day: "numeric" }) : undefined}
+                      badge={detailAlimLog?.estado}
+                      icon={Utensils}
+                      onEdit={detailAlimLog ? () => { setDetailAlimLogId(null); handleEditAlimLog(detailAlimLog); } : undefined}
+                      onDelete={detailAlimLog ? () => handleDeleteAlimLog(detailAlimLog.id) : undefined}
+                    >
+                      {detailAlimLog && details && (
+                        <DetailBlockGrid>
+                          <DetailBlock icon={Flame} label="Calorías" tone="primary" emphasis>
+                            {detailAlimLog.calorias} kcal
+                          </DetailBlock>
+                          {(details.p > 0 || details.c > 0 || details.g > 0) && (
+                            <DetailBlock icon={Activity} label="Macronutrientes">
+                              P: {details.p}g · C: {details.c}g · G: {details.g}g
+                            </DetailBlock>
+                          )}
+                          {detailAlimLog.ingredientesConsumidos && detailAlimLog.ingredientesConsumidos.length > 0 && (
+                            <DetailBlock icon={Utensils} label="Ingredientes" span>
+                              <div className="space-y-1">
+                                {detailAlimLog.ingredientesConsumidos.map((ing, iIdx) => (
+                                  <p key={iIdx} className="font-normal">
+                                    {ing.ingrediente} — {ing.cantidad} {ing.unidad} ({Math.round(ing.calorias)} kcal)
+                                  </p>
+                                ))}
+                              </div>
+                            </DetailBlock>
+                          )}
+                        </DetailBlockGrid>
+                      )}
+                    </DetailModal>
+                  );
+                })()}
               </motion.div>
             )}
 
@@ -5565,127 +5616,100 @@ export default function HealthView({
                           );
                         }
 
-                        return filteredDias.map((diaStr) => {
-                          const dateObj = new Date(diaStr + "T12:00:00");
-                          const medidaDia = medidasHistory.find(m => m.fecha === diaStr);
-                          const pesoDia = medidaDia ? `${medidaDia.peso} kg` : "-";
-
-                          const comidaDia = (alimentacionLogs || [])
-                            .filter(l => l.fecha === diaStr)
-                            .reduce((acc, curr) => acc + (curr.calorias || 0), 0);
-                            
-                          const deporteDia = (deportesActividades || [])
-                            .filter(a => a.fechaDesde.startsWith(diaStr))
-                            .reduce((acc, curr) => acc + (curr.calorias || 0), 0);
-                            
-                          const gymDia = (registrosEntrenamiento || [])
-                            .filter(r => r.fecha === diaStr)
-                            .reduce((acc, curr) => acc + (curr.caloriasTotalesSesion || 0), 0);
-                            
-                          const gastadasTotal = deporteDia + gymDia;
-                          const balanceNeto = comidaDia - gastadasTotal;
-
-                          const currentWeight = medidaDia?.peso || metabolicProfile.pesoActual;
-                          const bmr = metabolicProfile.genero === "Masculino"
-                            ? 10 * currentWeight + 6.25 * metabolicProfile.altura - 5 * metabolicProfile.edad + 5
-                            : 10 * currentWeight + 6.25 * metabolicProfile.altura - 5 * metabolicProfile.edad - 161;
-                            
-                          const factAct = selectedActivityFactor;
-                          const tdee = bmr * factAct;
-                          
-                          let metaCalorias = tdee;
-                          if (metabolicProfile.objetivo === "Bajar de Peso (Déficit)") {
-                            metaCalorias -= 500;
-                          } else if (metabolicProfile.objetivo === "Ganar Masa Muscular (Superávit)") {
-                            metaCalorias += 400;
-                          }
-                          
-                          let cumplio = false;
-                          if (comidaDia > 0) {
-                            if (metabolicProfile.objetivo === "Bajar de Peso (Déficit)") {
-                              cumplio = comidaDia <= metaCalorias + 100;
-                            } else if (metabolicProfile.objetivo === "Ganar Masa Muscular (Superávit)") {
-                              cumplio = comidaDia >= metaCalorias - 150;
-                            } else {
-                              cumplio = Math.abs(comidaDia - metaCalorias) <= 200;
-                            }
-                          }
-                          
-                          const isToday = diaStr === new Date().toISOString().substring(0, 10);
+                        return filteredDias.map((diaStr, diaIdx) => {
+                          const { dateObj, pesoDia, comidaDia, gastadasTotal, balanceNeto, cumplio, isToday } =
+                            getDiarioDayDetails(diaStr);
 
                           return (
-                            <div
+                            <motion.div
                               key={diaStr}
-                              className={`p-5 rounded-3xl border transition-all ${darkMode ? "bg-zinc-950 border-zinc-800 text-zinc-100" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"} space-y-3 ${isToday ? "ring-2 ring-primary/30" : ""}`}
+                              initial={{ opacity: 0, y: 14 }}
+                              whileInView={{ opacity: 1, y: 0 }}
+                              viewport={{ once: true, margin: "0px 0px -60px 0px" }}
+                              transition={{ duration: 0.3, delay: Math.min(diaIdx * 0.04, 0.15), ease: [0.22, 1, 0.36, 1] }}
+                              onClick={() => setDetailDiarioId(diaStr)}
+                              className={`rounded-2xl border p-4 cursor-pointer active:scale-[0.98] transition-transform bg-white dark:bg-zinc-950 border-slate-100 dark:border-zinc-800/80 ${isToday ? "ring-2 ring-primary/30" : ""}`}
                             >
-                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-200/50 dark:border-zinc-800/60 pb-3">
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                    <span className="text-[10px] font-bold text-slate-400 block uppercase">
-                                      {dateObj.toLocaleDateString("es-AR", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
-                                    </span>
-                                    <span className="px-2 py-0.5 rounded-md text-[9px] font-extrabold uppercase bg-primary/10 text-primary border border-primary/20 flex items-center gap-1 shrink-0">
-                                      <Activity className="w-2.5 h-2.5" /> RESUMEN DIARIO
-                                    </span>
-                                  </div>
-                                  <h4 className="text-base font-extrabold text-slate-800 dark:text-zinc-100">Balance Neto: <span className="text-primary">{balanceNeto > 0 ? `+${balanceNeto}` : balanceNeto} kcal</span></h4>
-                                </div>
-                                
-                                <div className="flex items-center gap-3 text-xs font-mono font-bold flex-wrap">
-                                  <div className="flex items-center gap-1.5 flex-wrap">
-                                    {comidaDia > 0 ? (
-                                      cumplio ? (
-                                        <span className="inline-flex items-center gap-1 text-xs font-bold text-primary bg-primary/10 px-2.5 py-1 rounded-full border border-primary/20">
-                                          <CheckCircle2 className="w-3.5 h-3.5" /> Objetivo Cumplido
-                                        </span>
-                                      ) : (
-                                        <span className="inline-flex items-center gap-1 text-xs font-bold text-primary bg-primary/10 px-2.5 py-1 rounded-full border border-primary/20">
-                                          <Info className="w-3.5 h-3.5" /> Fuera de Rango
-                                        </span>
-                                      )
+                              <div className="flex items-center justify-between gap-2 mb-2">
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-primary/10 text-primary">
+                                  {comidaDia > 0 ? (
+                                    cumplio ? (
+                                      <>
+                                        <CheckCircle2 className="w-3 h-3" /> Cumplido
+                                      </>
                                     ) : (
-                                      <span className="text-zinc-400 text-xs">Sin registros calóricos</span>
-                                    )}
-                                  </div>
-                                </div>
+                                      <>
+                                        <Info className="w-3 h-3" /> Fuera de Rango
+                                      </>
+                                    )
+                                  ) : (
+                                    "Sin Registros"
+                                  )}
+                                </span>
+                                <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-primary/10 text-primary">
+                                  {dateObj.toLocaleDateString("es-AR", { day: "numeric", month: "short" })}
+                                </span>
                               </div>
-                              
-                              <div className="flex flex-wrap items-center gap-1.5">
-                                <div className={`p-3 rounded-2xl border text-xs flex flex-col justify-between gap-1 ${darkMode ? "bg-zinc-900/40 border-zinc-800/60" : "bg-zinc-50 border-zinc-200/60"}`}>
-                                   <span className="font-bold block truncate text-slate-800 dark:text-zinc-200 flex items-center gap-1.5"><Utensils className="w-3.5 h-3.5 text-primary" /> Alimentación</span>
-                                   <div className="flex items-center justify-between mt-1">
-                                     <span className="text-[11px] font-mono text-slate-500 dark:text-zinc-400">Total Consumido</span>
-                                     <span className="text-xs text-primary font-black flex items-center gap-1">
-                                       {comidaDia} kcal
-                                     </span>
-                                   </div>
-                                </div>
-                                
-                                <div className={`p-3 rounded-2xl border text-xs flex flex-col justify-between gap-1 ${darkMode ? "bg-zinc-900/40 border-zinc-800/60" : "bg-zinc-50 border-zinc-200/60"}`}>
-                                   <span className="font-bold block truncate text-slate-800 dark:text-zinc-200 flex items-center gap-1.5"><Flame className="w-3.5 h-3.5 text-primary" /> Gasto Activo</span>
-                                   <div className="flex items-center justify-between mt-1">
-                                     <span className="text-[11px] font-mono text-slate-500 dark:text-zinc-400">Gym + Deporte</span>
-                                     <span className="text-xs text-primary font-black flex items-center gap-1">
-                                       {gastadasTotal} kcal
-                                     </span>
-                                   </div>
-                                </div>
-                                
-                                <div className={`p-3 rounded-2xl border text-xs flex flex-col justify-between gap-1 ${darkMode ? "bg-zinc-900/40 border-zinc-800/60" : "bg-zinc-50 border-zinc-200/60"}`}>
-                                   <span className="font-bold block truncate text-slate-800 dark:text-zinc-200 flex items-center gap-1.5"><Activity className="w-3.5 h-3.5 text-primary" /> Peso Corporal</span>
-                                   <div className="flex items-center justify-between mt-1">
-                                     <span className="text-[11px] font-mono text-slate-500 dark:text-zinc-400">Registrado / Actual</span>
-                                     <span className="text-xs text-primary font-black flex items-center gap-1">
-                                       {pesoDia}
-                                     </span>
-                                   </div>
-                                </div>
+
+                              <p className="font-extrabold text-sm mb-1.5 text-slate-900 dark:text-white">
+                                Balance Neto: <span className="text-primary">{balanceNeto > 0 ? `+${balanceNeto}` : balanceNeto} kcal</span>
+                              </p>
+
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-medium text-slate-500 dark:text-zinc-400">
+                                <span className="flex items-center gap-1">
+                                  <Utensils className="w-3 h-3 shrink-0 text-primary" />
+                                  {comidaDia} kcal
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <Flame className="w-3 h-3 shrink-0 text-primary" />
+                                  {gastadasTotal} kcal
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <Scale className="w-3 h-3 shrink-0 text-primary" />
+                                  {pesoDia}
+                                </span>
                               </div>
-                            </div>
+                            </motion.div>
                           );
                         });
                   })()}
                 </div>
+
+                {(() => {
+                  if (!detailDiarioId) return null;
+                  const d = getDiarioDayDetails(detailDiarioId);
+                  return (
+                    <DetailModal
+                      isOpen={!!detailDiarioId}
+                      onClose={() => setDetailDiarioId(null)}
+                      title={`Balance Neto: ${d.balanceNeto > 0 ? `+${d.balanceNeto}` : d.balanceNeto} kcal`}
+                      subtitle={d.dateObj.toLocaleDateString("es-AR", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+                      badge={d.comidaDia > 0 ? (d.cumplio ? "Objetivo Cumplido" : "Fuera de Rango") : "Sin Registros"}
+                      icon={Activity}
+                    >
+                      <DetailBlockGrid>
+                        <DetailBlock icon={Utensils} label="Consumido" tone="primary" emphasis>
+                          {d.comidaDia} kcal
+                        </DetailBlock>
+                        <DetailBlock icon={Flame} label="Gasto Activo" tone="primary" emphasis>
+                          {d.gastadasTotal} kcal
+                        </DetailBlock>
+                        <DetailBlock icon={Dumbbell} label="Gym">
+                          {d.gymDia} kcal
+                        </DetailBlock>
+                        <DetailBlock icon={Footprints} label="Deporte">
+                          {d.deporteDia} kcal
+                        </DetailBlock>
+                        <DetailBlock icon={Scale} label="Peso Registrado">
+                          {d.pesoDia}
+                        </DetailBlock>
+                        <DetailBlock icon={Target} label="Meta Calórica">
+                          {Math.round(d.metaCalorias)} kcal
+                        </DetailBlock>
+                      </DetailBlockGrid>
+                    </DetailModal>
+                  );
+                })()}
               </motion.div>
             )}
 </AnimatePresence>
