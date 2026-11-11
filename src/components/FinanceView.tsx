@@ -2507,7 +2507,7 @@ export default function FinanceView({
                                             type="button"
                                             onClick={() => openStoredDetailedPaymentFile(p.facturaEmitida!, buildPaymentFileName(p.descripcion, p.categoria, p.fechaVencimiento, "facturaEmitida", guessExtFromDataUrl(p.facturaEmitida!)))}
                                             title={buildPaymentFileName(p.descripcion, p.categoria, p.fechaVencimiento, "facturaEmitida", guessExtFromDataUrl(p.facturaEmitida))}
-                                            className="group w-full flex flex-col items-center justify-center gap-1.5 py-3.5 px-2 rounded-xl bg-primary/10 hover:bg-primary text-primary hover:text-white font-extrabold text-[10px] uppercase tracking-wide transition-all duration-300 active:scale-95 cursor-pointer"
+                                            className="group w-full flex flex-col items-center justify-center gap-1.5 py-3.5 px-2 rounded-xl bg-slate-200/70 dark:bg-zinc-800 hover:bg-slate-500 dark:hover:bg-zinc-600 text-slate-600 dark:text-zinc-300 hover:text-white dark:hover:text-white font-extrabold text-[10px] uppercase tracking-wide transition-all duration-300 active:scale-95 cursor-pointer"
                                           >
                                             <FileDown className="w-5 h-5 transition-transform duration-300 group-hover:-translate-y-1" />
                                             <span>Descargar Factura</span>
@@ -2529,7 +2529,7 @@ export default function FinanceView({
                                             type="button"
                                             onClick={() => openStoredDetailedPaymentFile(p.comprobantePago!, buildPaymentFileName(p.descripcion, p.categoria, p.fechaVencimiento, "comprobantePago", guessExtFromDataUrl(p.comprobantePago!)))}
                                             title={buildPaymentFileName(p.descripcion, p.categoria, p.fechaVencimiento, "comprobantePago", guessExtFromDataUrl(p.comprobantePago))}
-                                            className="group w-full flex flex-col items-center justify-center gap-1.5 py-3.5 px-2 rounded-xl bg-primary/10 hover:bg-primary text-primary hover:text-white font-extrabold text-[10px] uppercase tracking-wide transition-all duration-300 active:scale-95 cursor-pointer"
+                                            className="group w-full flex flex-col items-center justify-center gap-1.5 py-3.5 px-2 rounded-xl bg-slate-200/70 dark:bg-zinc-800 hover:bg-slate-500 dark:hover:bg-zinc-600 text-slate-600 dark:text-zinc-300 hover:text-white dark:hover:text-white font-extrabold text-[10px] uppercase tracking-wide transition-all duration-300 active:scale-95 cursor-pointer"
                                           >
                                             <FileDown className="w-5 h-5 transition-transform duration-300 group-hover:-translate-y-1" />
                                             <span>Descargar Comprobante</span>
@@ -2763,7 +2763,7 @@ export default function FinanceView({
                                             type="button"
                                             onClick={() => openStoredDetailedPaymentFile(p.facturaEmitida!, buildPaymentFileName(p.descripcion, p.categoria, p.fechaVencimiento, "facturaEmitida", guessExtFromDataUrl(p.facturaEmitida!)))}
                                             title={buildPaymentFileName(p.descripcion, p.categoria, p.fechaVencimiento, "facturaEmitida", guessExtFromDataUrl(p.facturaEmitida))}
-                                            className="group w-full flex flex-col items-center justify-center gap-1.5 py-3.5 px-2 rounded-xl bg-primary/10 hover:bg-primary text-primary hover:text-white font-extrabold text-[10px] uppercase tracking-wide transition-all duration-300 active:scale-95 cursor-pointer"
+                                            className="group w-full flex flex-col items-center justify-center gap-1.5 py-3.5 px-2 rounded-xl bg-slate-200/70 dark:bg-zinc-800 hover:bg-slate-500 dark:hover:bg-zinc-600 text-slate-600 dark:text-zinc-300 hover:text-white dark:hover:text-white font-extrabold text-[10px] uppercase tracking-wide transition-all duration-300 active:scale-95 cursor-pointer"
                                           >
                                             <FileDown className="w-5 h-5 transition-transform duration-300 group-hover:-translate-y-1" />
                                             <span>Descargar Factura</span>
@@ -2785,7 +2785,7 @@ export default function FinanceView({
                                             type="button"
                                             onClick={() => openStoredDetailedPaymentFile(p.comprobantePago!, buildPaymentFileName(p.descripcion, p.categoria, p.fechaVencimiento, "comprobantePago", guessExtFromDataUrl(p.comprobantePago!)))}
                                             title={buildPaymentFileName(p.descripcion, p.categoria, p.fechaVencimiento, "comprobantePago", guessExtFromDataUrl(p.comprobantePago))}
-                                            className="group w-full flex flex-col items-center justify-center gap-1.5 py-3.5 px-2 rounded-xl bg-primary/10 hover:bg-primary text-primary hover:text-white font-extrabold text-[10px] uppercase tracking-wide transition-all duration-300 active:scale-95 cursor-pointer"
+                                            className="group w-full flex flex-col items-center justify-center gap-1.5 py-3.5 px-2 rounded-xl bg-slate-200/70 dark:bg-zinc-800 hover:bg-slate-500 dark:hover:bg-zinc-600 text-slate-600 dark:text-zinc-300 hover:text-white dark:hover:text-white font-extrabold text-[10px] uppercase tracking-wide transition-all duration-300 active:scale-95 cursor-pointer"
                                           >
                                             <FileDown className="w-5 h-5 transition-transform duration-300 group-hover:-translate-y-1" />
                                             <span>Descargar Comprobante</span>
