@@ -248,10 +248,13 @@ export function PaymentMethodCardResolved({
   );
 }
 
-// Fila horizontal con TODAS las tarjetas de la billetera — la que se usó en este pago, primera
-// y a todo color; el resto, detrás y en gris, como si no estuvieran seleccionadas (mismo criterio
-// visual que el selector de "¿Con qué pagar?", pero de solo lectura, para el detalle de un pago
-// ya guardado).
+// Mismo carrusel centrado estilo Mercado Pago del selector "¿Con qué pagar?" (ver WalletCardStack
+// más abajo), pero de solo lectura: sin arrastrar para persistir una elección, sin editar/eliminar
+// ni tile de "agregar". Arranca centrado en la tarjeta que efectivamente se usó en este pago; se
+// puede pasear por el resto (tocando el pedacito que asoma, o los puntos de abajo) sin que eso
+// cambie cuál es "la usada" — esa sigue marcada con el tilde/anillo esté donde esté, aunque no
+// esté al frente.
+const CARD_WIDTH = 192; // w-48
 export function PaymentMethodCardGallery({
   userId,
   describedCard,
@@ -260,22 +263,117 @@ export function PaymentMethodCardGallery({
   describedCard: string;
 }) {
   const { cards } = usePaymentMethods(userId);
-  if (cards.length === 0) return null;
   const selectedIndex = describedCard ? cards.findIndex((c) => describeCard(c) === describedCard) : -1;
-  const ordered =
-    selectedIndex > 0
-      ? [cards[selectedIndex], ...cards.slice(0, selectedIndex), ...cards.slice(selectedIndex + 1)]
-      : cards;
+  const [frontIndex, setFrontIndex] = useState(selectedIndex >= 0 ? selectedIndex : 0);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(CARD_WIDTH + 64);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width;
+      if (w) setContainerWidth(w);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (selectedIndex >= 0) setFrontIndex(selectedIndex);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedIndex]);
+
+  if (cards.length === 0) return null;
+  const totalSlots = cards.length;
+
+  const bringToFront = (i: number) => {
+    setFrontIndex(i);
+    uiSounds.toggle();
+    if (navigator.vibrate) navigator.vibrate(8);
+  };
+  const cycle = (dir: 1 | -1) => {
+    if (totalSlots <= 1) return;
+    bringToFront((frontIndex + dir + totalSlots) % totalSlots);
+  };
+
+  const peek = Math.min(110, Math.max(20, (containerWidth - CARD_WIDTH) / 2));
+  const hasPrev = frontIndex > 0;
+  const hasNext = frontIndex < totalSlots - 1;
+  const edgePad = 12;
+  let centerShift = 0;
+  if (!hasPrev && hasNext) centerShift = -(containerWidth / 2 - CARD_WIDTH / 2 - edgePad);
+  else if (hasPrev && !hasNext) centerShift = containerWidth / 2 - CARD_WIDTH / 2 - edgePad;
+
   return (
-    <div className="flex items-center gap-2.5 overflow-x-auto pb-1 -mx-0.5 px-0.5">
-      {ordered.map((card) => {
-        const isSelected = selectedIndex >= 0 && describeCard(card) === describedCard;
-        return (
-          <div key={card.id} className={`shrink-0 transition-all ${isSelected ? "" : "grayscale opacity-50"}`}>
-            <WalletCardFace card={card} selected={isSelected} />
-          </div>
-        );
-      })}
+    <div className="w-full">
+      <div
+        ref={containerRef}
+        className="relative w-full h-32 overflow-hidden"
+        style={{
+          WebkitMaskImage: "linear-gradient(to right, transparent 0, black 24px, black calc(100% - 24px), transparent 100%)",
+          maskImage: "linear-gradient(to right, transparent 0, black 24px, black calc(100% - 24px), transparent 100%)",
+        }}
+      >
+        {cards.map((card, i) => {
+          const offset = i - frontIndex;
+          if (Math.abs(offset) > 1) return null;
+          const isActive = offset === 0;
+          const isTrueSelected = selectedIndex >= 0 && i === selectedIndex;
+          const canDrag = isActive && totalSlots > 1;
+          return (
+            <motion.div
+              key={card.id}
+              drag={canDrag ? "x" : false}
+              dragElastic={0.5}
+              dragConstraints={{ left: 0, right: 0 }}
+              dragSnapToOrigin
+              onDragEnd={(_, info) => {
+                if (info.offset.x < -60) cycle(1);
+                else if (info.offset.x > 60) cycle(-1);
+              }}
+              onTap={() => {
+                if (!isActive) bringToFront(i);
+              }}
+              animate={{
+                x: offset * (CARD_WIDTH / 2 + peek) + centerShift,
+                scale: isActive ? 1 : 0.92,
+                opacity: isActive ? 1 : 0.55,
+                filter: isActive ? "blur(0px)" : "blur(3px)",
+              }}
+              transition={{ type: "spring", stiffness: 380, damping: 32 }}
+              className={`absolute top-2 left-1/2 -ml-24 w-48 ${canDrag ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"}`}
+              style={{ zIndex: isActive ? 10 : 5, touchAction: "pan-y" }}
+            >
+              <WalletCardFace card={card} selected={isTrueSelected} />
+            </motion.div>
+          );
+        })}
+      </div>
+
+      {totalSlots > 1 && (
+        <div className="flex items-center justify-center gap-1.5 mt-2.5">
+          {cards.map((card, i) => {
+            const dist = Math.abs(i - frontIndex);
+            const isActive = i === frontIndex;
+            return (
+              <button
+                key={card.id}
+                type="button"
+                onClick={() => bringToFront(i)}
+                title={card.banco}
+                className={`rounded-full shrink-0 transition-all duration-200 cursor-pointer ${
+                  isActive
+                    ? "w-5 h-1.5 bg-primary"
+                    : dist === 1
+                      ? "w-1.5 h-1.5 bg-slate-300 dark:bg-zinc-600"
+                      : "w-1 h-1 bg-slate-300 dark:bg-zinc-700"
+                }`}
+              />
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -289,7 +387,6 @@ export function PaymentMethodCardGallery({
 // para agregar una nueva (tocarlo la abre). Los bordes del contenedor no cortan en seco: una
 // máscara los difumina a transparente. Abajo, puntitos de paginación — el de la tarjeta activa es
 // una píldora, los demás son círculos que se achican cuanto más lejos están.
-const CARD_WIDTH = 192; // w-48
 function WalletCardStack({
   cards,
   selectedId,
