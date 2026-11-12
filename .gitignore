@@ -13,6 +13,7 @@ release/
 # versionado, pero no lo que genera cada build ni archivos locales de la máquina de cada uno.
 android/local.properties
 android/.gradle/
+android/.kotlin/
 android/build/
 android/app/build/
 android/capacitor-cordova-android-plugins/build/
