@@ -1,7 +1,8 @@
 import React, { useState } from "react";
-import { Calendar, ChevronLeft, ChevronRight, Check, Pencil, Trash2 } from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight, Check, Pencil, Trash2, BookOpen, Clock, MapPin } from "lucide-react";
 import { ExamenItem } from "../types";
 import { CustomSelect } from "./CustomSelect";
+import { DetailModal, DetailBlock, DetailBlockGrid } from "./DetailModal";
 
 const ESTADOS = ["Parcial", "Recuperatorio", "Extraordinario", "Examen Final"];
 const INSTANCIAS = ["Primero", "Segundo", "Tercero", "Primero/Segundo", "Trabajo Practico"];
@@ -67,6 +68,7 @@ export function MonthlyExamScheduler({
 }: MonthlyExamSchedulerProps) {
   const [currentMonth, setCurrentMonth] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [detailDayId, setDetailDayId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [estado, setEstado] = useState("Parcial");
   const [instancia, setInstancia] = useState("Primero");
@@ -93,6 +95,9 @@ export function MonthlyExamScheduler({
   const selectDay = (dateStr: string) => {
     resetDraft();
     setSelectedDate((prev) => (prev === dateStr ? null : dateStr));
+    // Si el día ya tiene algo cargado, además de dejarlo como destino del panel (para poder
+    // agregar otro registro ese mismo día), se abre el menú con toda la información del día.
+    if (examsForDate(dateStr).length > 0) setDetailDayId(dateStr);
   };
 
   const startEditing = (ex: ExamenItem) => {
@@ -335,29 +340,38 @@ export function MonthlyExamScheduler({
             {days.map((day, idx) => {
               if (day === null) return <div key={`pad-${idx}`} />;
               const dateStr = toDateStr(currentMonth.getFullYear(), currentMonth.getMonth(), day);
-              const count = examsForDate(dateStr).length;
+              const dayExams = examsForDate(dateStr);
               const isSelected = selectedDate === dateStr;
               const isToday = dateStr === todayStr;
               return (
                 <button
                   key={dateStr}
                   type="button"
+                  data-sound="selectDate"
                   onClick={() => selectDay(dateStr)}
-                  className={`relative aspect-square rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center ${
+                  className={`relative min-h-[64px] sm:min-h-[76px] rounded-xl text-xs font-bold transition-all active:scale-95 cursor-pointer flex flex-col items-center justify-start gap-1 pt-1.5 pb-1.5 px-0.5 ${
                     isSelected
-                      ? "border-2 border-primary text-primary bg-primary/10 scale-105 shadow-sm"
+                      ? "border-2 border-primary text-primary bg-primary/10 scale-[1.02] shadow-sm"
                       : isToday
                         ? "bg-primary text-white dark:text-blue-950 shadow-md"
                         : "hover:bg-primary/10 text-slate-700 dark:text-zinc-300"
                   }`}
                 >
-                  {day}
-                  {count > 0 && (
+                  <span>{day}</span>
+                  {dayExams.length > 0 && (
                     <span
-                      className={`absolute bottom-1 w-1 h-1 rounded-full animate-pulse ${
-                        isSelected || isToday ? "bg-current" : "bg-primary"
+                      className={`w-[92%] px-1 py-0.5 rounded-md text-[8px] sm:text-[9px] font-extrabold truncate leading-tight ${
+                        isSelected || isToday ? "bg-white/20 text-current" : "bg-primary/15 text-primary"
                       }`}
-                    />
+                      title={dayExams[0].materia}
+                    >
+                      {dayExams[0].materia}
+                    </span>
+                  )}
+                  {dayExams.length > 1 && (
+                    <span className={`text-[7px] sm:text-[8px] font-bold ${isSelected || isToday ? "text-current opacity-80" : "text-primary/70"}`}>
+                      +{dayExams.length - 1} más
+                    </span>
                   )}
                 </button>
               );
@@ -365,6 +379,74 @@ export function MonthlyExamScheduler({
           </div>
         </div>
       </div>
+
+      {(() => {
+        if (!detailDayId) return null;
+        const items = examsForDate(detailDayId);
+        const dateObj = new Date(`${detailDayId}T12:00:00`);
+        return (
+          <DetailModal
+            isOpen={!!detailDayId}
+            onClose={() => setDetailDayId(null)}
+            title={dateObj.toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" })}
+            subtitle={`${items.length} ${items.length === 1 ? "registro" : "registros"}`}
+            icon={Calendar}
+          >
+            <DetailBlockGrid>
+              {items.map((ex) => {
+                const horaTxt = ex.fecha.includes("T") ? ex.fecha.split("T")[1].slice(0, 5) : "";
+                return (
+                  <DetailBlock
+                    key={ex.id}
+                    icon={BookOpen}
+                    label={ex.instancia ? `${ex.estado} · ${ex.instancia}` : ex.estado}
+                    tone="primary"
+                    span
+                  >
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-extrabold text-sm text-slate-900 dark:text-white truncate">{ex.materia}</span>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => { setDetailDayId(null); startEditing(ex); }}
+                            className="p-1.5 rounded-lg text-zinc-400 hover:text-primary hover:bg-primary/10 cursor-pointer transition-colors"
+                            title="Editar"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onDeleteExamen(ex.id)}
+                            className="p-1.5 rounded-lg text-red-500 hover:bg-red-500/10 cursor-pointer transition-colors"
+                            title="Eliminar"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
+                        {horaTxt && (
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-3 h-3 shrink-0" />
+                            {horaTxt}
+                          </span>
+                        )}
+                        {ex.aula && (
+                          <span className="flex items-center gap-1">
+                            <MapPin className="w-3 h-3 shrink-0" />
+                            {ex.aula}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </DetailBlock>
+                );
+              })}
+            </DetailBlockGrid>
+          </DetailModal>
+        );
+      })()}
     </div>
   );
 }

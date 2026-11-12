@@ -794,79 +794,6 @@ export default function HealthView({
     return days;
   }, []);
 
-  const alimWeekData = useMemo(() => {
-    const daysShort = ["LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB", "DOM"];
-    return weekDaysCurrent.map((day, idx) => {
-      let calories = 0;
-      let hasActivity = false;
-      
-      const targetStr = day.getFullYear() + "-" + String(day.getMonth() + 1).padStart(2, "0") + "-" + String(day.getDate()).padStart(2, "0");
-
-      alimentacionLogs.forEach((log) => {
-        if (!log.fecha) return;
-        if (log.fecha === targetStr) {
-          hasActivity = true;
-          calories += Number(log.calorias) || 0;
-        }
-      });
-      
-      return {
-        dateObj: day,
-        dayLabel: daysShort[idx],
-        dayNumber: day.getDate(),
-        calories,
-        hasActivity
-      };
-    });
-  }, [weekDaysCurrent, alimentacionLogs]);
-
-  const diarioWeekData = useMemo(() => {
-    const daysShort = ["LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB", "DOM"];
-    return weekDaysCurrent.map((day, idx) => {
-      let balanceNeto = 0;
-      let hasActivity = false;
-      const diaStr = day.getFullYear() + "-" + String(day.getMonth() + 1).padStart(2, "0") + "-" + String(day.getDate()).padStart(2, "0");
-
-      const medidaDia = medidasHistory.find(m => m.fecha === diaStr);
-      let consumo = 0;
-      let gasto = 0;
-
-      alimentacionLogs.forEach((l) => {
-        if (l.fecha === diaStr) consumo += Number(l.calorias) || 0;
-      });
-
-      const deporteDia = (deportesActividades || [])
-        .filter(a => a.fechaDesde.startsWith(diaStr))
-        .reduce((acc, curr) => acc + (curr.calorias || 0), 0);
-        
-      const gymDia = (registrosEntrenamiento || [])
-        .filter(r => r.fecha === diaStr)
-        .reduce((acc, curr) => acc + (curr.caloriasTotalesSesion || 0), 0);
-        
-      let bmr = 0;
-      const currentWeight = medidaDia?.peso || metabolicProfile.pesoActual;
-      if (currentWeight > 0) {
-        bmr = metabolicProfile.genero === "Masculino"
-          ? 10 * currentWeight + 6.25 * metabolicProfile.altura - 5 * metabolicProfile.edad + 5
-          : 10 * currentWeight + 6.25 * metabolicProfile.altura - 5 * metabolicProfile.edad - 161;
-      }
-      
-      const tdee = bmr * selectedActivityFactor;
-      gasto = tdee + deporteDia + gymDia;
-
-      balanceNeto = consumo - gasto;
-      if (consumo > 0 || deporteDia > 0 || gymDia > 0) hasActivity = true;
-
-      return {
-        dateObj: day,
-        dayLabel: daysShort[idx],
-        dayNumber: day.getDate(),
-        balance: balanceNeto,
-        hasActivity
-      };
-    });
-  }, [weekDaysCurrent, alimentacionLogs, medidasHistory, metabolicProfile, selectedActivityFactor, deportesActividades, registrosEntrenamiento]);
-
   // Estado y datos semanales para Registro de Hidratación
   const [selectedHydrationDate, setSelectedHydrationDate] = useState<string>(getLocalDateString(new Date()));
 
@@ -1428,7 +1355,6 @@ export default function HealthView({
   };
 
   // Alimentacion States
-  const [showAlimModal, setShowAlimModal] = useState(false);
   const [editingAlimLog, setEditingAlimLog] = useState<AlimentacionLog | null>(
     null,
   );
@@ -1436,6 +1362,23 @@ export default function HealthView({
   // Historial Diario abre el DetailModal en vez de desplegar la info en la misma tarjeta.
   const [detailAlimLogId, setDetailAlimLogId] = useState<string | null>(null);
   const [detailDiarioId, setDetailDiarioId] = useState<string | null>(null);
+  // Calendario mensual de Alimentación (reemplaza el selector semanal): mes que se está mirando +
+  // día cuyo detalle (con todas las comidas de ese día, foto incluida) está abierto en grande.
+  const [alimCalendarMonth, setAlimCalendarMonth] = useState(() => new Date());
+  const [detailAlimDayId, setDetailAlimDayId] = useState<string | null>(null);
+  // Calendario mensual de Historial Diario (mismo apartado visual): el panel izquierdo siempre
+  // muestra el resumen de un día puntual — "hoy" por defecto, el que se toque en el calendario
+  // después.
+  const [diarioCalendarMonth, setDiarioCalendarMonth] = useState(() => new Date());
+  const todayDiarioStr = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  })();
+  const [diarioSelectedDay, setDiarioSelectedDay] = useState<string>(todayDiarioStr);
+  const selectDiarioCalendarDay = (dateStr: string) => {
+    setDiarioSelectedDay(dateStr);
+    setSelectedDiarioDate(new Date(`${dateStr}T12:00:00`));
+  };
   const [alimFecha, setAlimFecha] = useState("");
   const [alimEstado, setAlimEstado] = useState<
     "Desayuno" | "Almuerzo" | "Merienda" | "Cena"
@@ -1519,13 +1462,30 @@ export default function HealthView({
     }
   }, [alimFecha, alimEstado, organizacionSemanal, alimentacionLogs]);
 
-  const handleOpenAlimModal = () => {
+  // Limpia el panel de "nuevo registro" sin tocar qué día está elegido en el calendario — se usa
+  // al tocar un día (para no arrastrar una edición vieja) y desde el botón "Cancelar" del panel.
+  const resetAlimDraft = () => {
     setEditingAlimLog(null);
-    setAlimFecha(new Date().toISOString().substring(0, 10));
     setAlimEstado("Desayuno");
     setAlimPlatoId("");
     setAlimCantidades({});
-    setShowAlimModal(true);
+  };
+
+  // Tocar un día del calendario de Alimentación: lo deja como destino del panel (para cargar una
+  // comida nueva ese día) y, si ya hay algo cargado, abre el detalle con todas las comidas de ese
+  // día (con foto incluida).
+  const selectAlimDay = (dateStr: string) => {
+    resetAlimDraft();
+    setAlimFecha(dateStr);
+    setSelectedAlimDate(new Date(`${dateStr}T12:00:00`));
+    const dayLogs = (alimentacionLogs || []).filter((l) => l.fecha === dateStr);
+    if (dayLogs.length > 0) setDetailAlimDayId(dateStr);
+  };
+
+  const handleCancelAlimDraft = () => {
+    resetAlimDraft();
+    setAlimFecha("");
+    setSelectedAlimDate(null);
   };
 
   const handleEditAlimLog = (log: AlimentacionLog) => {
@@ -1543,7 +1503,6 @@ export default function HealthView({
       setAlimCantidades({});
     }
     setAlimCalorias(log.calorias);
-    setShowAlimModal(true);
   };
 
   const handleSaveAlimLog = async () => {
@@ -1650,7 +1609,7 @@ export default function HealthView({
         return [newLog, ...prev];
       });
       showToast("Alimentación guardada", "success");
-      setShowAlimModal(false);
+      handleCancelAlimDraft();
     } catch (error: any) {
       console.error('3. ERROR CRÍTICO AL GUARDAR:', error);
       alert("Error de Firebase: " + (error?.message || error));
@@ -2426,7 +2385,6 @@ export default function HealthView({
         showAddMed ||
         showAddBp ||
         showAddDoc ||
-        showAlimModal ||
         showEstudioModal ||
         showDocModal ||
         showBpTableModal ||
@@ -5269,64 +5227,415 @@ export default function HealthView({
                       Lleva un control de tus comidas y calorías.
                     </p>
                   </div>
-                  <motion.button
-                    whileHover={{ scale: 1.04 }}
-                    whileTap={{ scale: 0.94 }}
-                    onClick={handleOpenAlimModal}
-                    className="px-4 py-2.5 bg-primary hover:bg-primary-hover text-white dark:text-blue-950 text-xs font-bold rounded-full flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-md shadow-primary/10"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Añadir Registro</span>
-                  </motion.button>
                 </div>
 
-                {/* Mini Calendario Semanal - Alimentación */}
-                <div className={`p-4 sm:p-6 rounded-3xl border ${darkMode ? "bg-zinc-950 border-zinc-800 text-zinc-100" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"} space-y-3`}>
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <span className="text-xs font-extrabold text-slate-400 dark:text-zinc-500 uppercase tracking-wider">
-                      Resumen de Alimentación Semanal
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-7 gap-2">
-                    {alimWeekData.map((day, dIdx) => {
-                      const isToday = new Date().toDateString() === day.dateObj.toDateString();
-                      const isSelected = selectedAlimDate && selectedAlimDate.toDateString() === day.dateObj.toDateString();
-                      return (
-                        <div
-                          key={dIdx}
-                          onClick={() => {
-                            if (isSelected) {
-                              setSelectedAlimDate(null);
-                            } else {
-                              setSelectedAlimDate(day.dateObj);
-                            }
-                          }}
-                          className={`p-3 rounded-2xl flex flex-col items-center justify-center text-center transition-all duration-300 cursor-pointer hover:scale-105 active:scale-95 ${
-                            isSelected
-                              ? "bg-primary text-white shadow-md ring-2 ring-primary ring-offset-2 dark:ring-offset-zinc-950 border-transparent"
-                              : day.hasActivity
-                              ? darkMode
-                                ? "bg-zinc-900/50 border border-primary/50 text-zinc-100 shadow-xs hover:bg-zinc-800/80"
-                                : "bg-primary/5 border border-primary/30 text-slate-800 shadow-xs hover:bg-primary/10"
-                              : darkMode
-                              ? "bg-zinc-900 border border-zinc-800 text-zinc-500 hover:bg-zinc-800"
-                              : "bg-slate-50 border border-slate-200 text-slate-400 hover:bg-slate-100"
-                          } ${isToday && !isSelected ? "ring-2 ring-primary/60 dark:ring-primary/40" : ""}`}
-                        >
-                          <span className={`text-[9px] font-extrabold tracking-wider ${isSelected ? "text-white/80" : isToday ? "text-primary dark:text-primary-light" : "text-slate-400 dark:text-zinc-500"}`}>
-                            {day.dayLabel}
-                          </span>
-                          <span className="text-sm font-extrabold mt-0.5">
-                            {day.dayNumber}
-                          </span>
-                          <span className={`text-[8px] font-mono font-bold mt-1.5 ${isSelected ? "text-white/90" : day.calories > 0 ? "text-primary dark:text-primary-light" : "text-slate-400 dark:text-zinc-600"}`}>
-                            {Math.round(day.calories)} kcal
-                          </span>
+                {/* Panel de registro + calendario mensual de Alimentación — mismo apartado visual
+                    y funciones que el Calendario de Exámenes y Trabajos: a la izquierda se arma la
+                    comida (Estado/Plato/Ingredientes, con desglose de calorías y macros al elegir
+                    un plato) y a la derecha se elige el día tocándolo. */}
+                <div className="lg:flex lg:gap-6 lg:items-start">
+                  <div
+                    className={`w-full lg:w-[320px] shrink-0 mb-6 lg:mb-0 rounded-2xl border p-4 space-y-3.5 ${
+                      darkMode ? "bg-zinc-950/40 border-zinc-800" : "bg-slate-50 border-slate-200"
+                    }`}
+                  >
+                    <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-zinc-400 flex items-center gap-1.5">
+                      <Pencil className="w-3.5 h-3.5 text-primary" />
+                      {editingAlimLog ? "Editando Registro" : "Nuevo Registro"}
+                    </h4>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
+                        Comida
+                      </label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {["Desayuno", "Almuerzo", "Merienda", "Cena"].map((es) => {
+                          const isActive = alimEstado === es;
+                          return (
+                            <button
+                              key={es}
+                              type="button"
+                              onClick={() => setAlimEstado(es as any)}
+                              className={`px-2.5 py-1.5 rounded-full text-[11px] font-bold border-2 transition-all cursor-pointer ${
+                                isActive
+                                  ? "bg-primary border-primary text-white dark:text-blue-950 shadow-sm"
+                                  : "bg-transparent border-slate-200 dark:border-zinc-700 text-slate-500 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800/60"
+                              }`}
+                            >
+                              {es}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
+                        Plato
+                      </label>
+                      <CustomSelect
+                        value={alimPlatoId}
+                        onChange={(val: string) => setAlimPlatoId(val)}
+                        searchable={true}
+                        options={(platos || []).map((p) => ({
+                          value: p.id,
+                          label: p.nombrePlato,
+                        }))}
+                        placeholder="Seleccionar Plato"
+                        size="sm"
+                      />
+                    </div>
+
+                    {alimPlatoId && (
+                      <div className="space-y-3 pt-2">
+                        <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
+                          Ingredientes y Cantidades
+                        </label>
+                        <div className="grid gap-2 max-h-48 overflow-y-auto pr-1">
+                          {(() => {
+                            const plato = platos?.find((p) => p.id === alimPlatoId);
+                            if (!plato) return null;
+                            const ingList: {
+                              nombre: string;
+                              defaultUnidad: string;
+                            }[] = [];
+                            const extract = (aId?: string) => {
+                              if (!aId) return;
+                              const ali = alimentos?.find((a) => a.id === aId);
+                              if (!ali) return;
+                              if (ali.ingrediente1)
+                                ingList.push({
+                                  nombre: ali.ingrediente1,
+                                  defaultUnidad: ali.unidad1 || "",
+                                });
+                              if (ali.ingrediente2)
+                                ingList.push({
+                                  nombre: ali.ingrediente2,
+                                  defaultUnidad: ali.unidad2 || "",
+                                });
+                              if (ali.ingrediente3)
+                                ingList.push({
+                                  nombre: ali.ingrediente3,
+                                  defaultUnidad: ali.unidad3 || "",
+                                });
+                            };
+                            extract(plato.alimentoId1);
+                            extract(plato.alimentoId2);
+                            extract(plato.alimentoId3);
+
+                            if (ingList.length === 0)
+                              return (
+                                <div className="text-xs text-zinc-500">
+                                  Sin ingredientes asociados.
+                                </div>
+                              );
+
+                            return ingList.map((ing, idx) => (
+                              <div
+                                key={idx}
+                                className="flex items-center justify-between gap-3 bg-white dark:bg-black/50 p-2.5 rounded-xl border border-slate-200 dark:border-zinc-800"
+                              >
+                                <div className="flex-1 min-w-0">
+                                  <span
+                                    className="text-xs font-semibold block truncate text-slate-900 dark:text-white"
+                                    title={ing.nombre}
+                                  >
+                                    {ing.nombre}
+                                  </span>
+                                  {(() => {
+                                    const grams = alimCantidades[ing.nombre] || 0;
+                                    const item = mercaderia?.find(m => m.ingredientes === ing.nombre);
+                                    const baseCal = item ? (item.calorias !== undefined && item.calorias !== null ? item.calorias : getCalorieDensity(item.ingredientes, item.categoria, item.sector)) : 0;
+                                    const cal = Math.round((grams / 100) * baseCal);
+
+                                    const baseNutri = getIngredientNutriVal(ing.nombre, mercaderia || []);
+                                    const p = Math.round((grams / 100) * (baseNutri.proteinas || 0) * 10) / 10;
+                                    const c = Math.round((grams / 100) * (baseNutri.carbohidratos || 0) * 10) / 10;
+                                    const g = Math.round((grams / 100) * (baseNutri.grasas || 0) * 10) / 10;
+
+                                    return (
+                                      <span className="text-[10px] text-zinc-400 dark:text-zinc-500 block mt-0.5">
+                                        {cal} kcal | P: {p}g | C: {c}g | G: {g}g
+                                      </span>
+                                    );
+                                  })()}
+                                </div>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="1"
+                                    value={alimCantidades[ing.nombre] !== undefined ? alimCantidades[ing.nombre] : ""}
+                                    onChange={(e) => {
+                                      const val = e.target.value === "" ? 0 : Number(e.target.value);
+                                      setAlimCantidades((prev) => ({
+                                        ...prev,
+                                        [ing.nombre]: val,
+                                      }));
+                                    }}
+                                    className="w-16 px-2 py-1.5 rounded-lg text-xs font-mono bg-white dark:bg-black/85 backdrop-blur-md border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/20 text-right"
+                                    placeholder="Gramos"
+                                  />
+                                  <span className="text-[10px] text-zinc-500 font-mono w-4 text-left shrink-0">
+                                    g
+                                  </span>
+                                </div>
+                              </div>
+                            ));
+                          })()}
                         </div>
-                      );
-                    })}
+                      </div>
+                    )}
+
+                    {alimPlatoId && (
+                      <div className="pt-2 space-y-2">
+                        <span className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest">
+                          Total del Registro
+                        </span>
+                        {(() => {
+                          const totalNutri = {
+                            proteinas: 0,
+                            carbohidratos: 0,
+                            grasas: 0,
+                            azucares: 0,
+                            fibra: 0,
+                            sodio: 0,
+                          };
+
+                          Object.entries(alimCantidades).forEach(([ingrediente, grams]) => {
+                            const baseNutri = getIngredientNutriVal(ingrediente, mercaderia || []);
+                            const factor = grams / 100;
+                            totalNutri.proteinas += (baseNutri.proteinas || 0) * factor;
+                            totalNutri.carbohidratos += (baseNutri.carbohidratos || 0) * factor;
+                            totalNutri.grasas += (baseNutri.grasas || 0) * factor;
+                            totalNutri.azucares += (baseNutri.azucares || 0) * factor;
+                            totalNutri.fibra += (baseNutri.fibra || 0) * factor;
+                            totalNutri.sodio += (baseNutri.sodio || 0) * factor;
+                          });
+
+                          const p = Math.round(totalNutri.proteinas * 10) / 10;
+                          const c = Math.round(totalNutri.carbohidratos * 10) / 10;
+                          const g = Math.round(totalNutri.grasas * 10) / 10;
+                          const az = Math.round(totalNutri.azucares * 10) / 10;
+                          const fb = Math.round(totalNutri.fibra * 10) / 10;
+                          const sd = Math.round(totalNutri.sodio);
+
+                          return (
+                            <div className="bg-white dark:bg-black p-3 rounded-2xl border border-slate-200 dark:border-zinc-800 space-y-2">
+                              <div className="flex items-center justify-between text-slate-900 dark:text-white">
+                                <span className="text-xs font-bold">Calorías Totales:</span>
+                                <span className="font-mono text-sm font-bold text-primary">
+                                  {alimCalorias} kcal
+                                </span>
+                              </div>
+                              <div className="pt-2 border-t border-slate-200/50 dark:border-zinc-800/50 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-zinc-500 dark:text-zinc-400">
+                                <span><strong>P:</strong> {p}g</span>
+                                <span>|</span>
+                                <span><strong>C:</strong> {c}g <span className="text-zinc-400 dark:text-zinc-500">(Az: {az}g)</span></span>
+                                <span>|</span>
+                                <span><strong>G:</strong> {g}g</span>
+                                <span>|</span>
+                                <span><strong>Fibra:</strong> {fb}g</span>
+                                <span>|</span>
+                                <span><strong>Sodio:</strong> {sd}mg</span>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-2">
+                      {(alimFecha || editingAlimLog) && (
+                        <button
+                          type="button"
+                          disabled={isSaving}
+                          onClick={handleCancelAlimDraft}
+                          className="shrink-0 px-3 py-2.5 rounded-xl text-xs font-bold text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white transition-all cursor-pointer disabled:opacity-50"
+                        >
+                          Cancelar
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={handleSaveAlimLog}
+                        disabled={isSaving || !alimFecha || !alimEstado || !alimPlatoId}
+                        className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-white dark:text-blue-950 text-xs font-extrabold shadow-sm transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        {isSaving ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>Guardando...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Check className="w-3.5 h-3.5" />
+                            <span>{editingAlimLog ? "Guardar Cambios" : "Agregar"}</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    {!alimFecha && (
+                      <p className="text-[10px] text-amber-500 font-semibold">
+                        Elegí un día en el calendario para agendar.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Columna derecha: calendario mensual de Alimentación. */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-5">
+                      <div className="min-w-0">
+                        <h3 className="font-extrabold text-sm flex items-center gap-2">
+                          <Calendar className="w-4 h-4 text-primary" />
+                          <span>Calendario de Alimentación</span>
+                        </h3>
+                        <p className="text-xs text-zinc-500 mt-0.5">
+                          Completá el menú y tocá un día del mes para agendarlo.
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setAlimCalendarMonth((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1))}
+                          className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-500 dark:text-zinc-400 cursor-pointer transition-colors"
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        <span className="text-xs font-extrabold uppercase tracking-wide min-w-[110px] text-center">
+                          {MONTHS_ES[alimCalendarMonth.getMonth()]} {alimCalendarMonth.getFullYear()}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setAlimCalendarMonth((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1))}
+                          className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-500 dark:text-zinc-400 cursor-pointer transition-colors"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-7 gap-1 mb-1">
+                      {WEEKDAYS_ES.map((d) => (
+                        <div key={d} className="text-center text-[10px] font-bold text-zinc-500 uppercase tracking-widest py-1">
+                          {d}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="grid grid-cols-7 gap-1">
+                      {getDaysInMonth(alimCalendarMonth).map((day, idx) => {
+                        if (day === null) return <div key={`pad-${idx}`} />;
+                        const dateStr = `${alimCalendarMonth.getFullYear()}-${String(alimCalendarMonth.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+                        const dayLogs = (alimentacionLogs || []).filter((l) => l.fecha === dateStr);
+                        const kcalTotal = dayLogs.reduce((acc, curr) => acc + (curr.calorias || 0), 0);
+                        const isSelected = alimFecha === dateStr;
+                        const isToday = dateStr === todayDiarioStr;
+                        return (
+                          <button
+                            key={dateStr}
+                            type="button"
+                            data-sound="selectDate"
+                            onClick={() => selectAlimDay(dateStr)}
+                            className={`relative min-h-[64px] sm:min-h-[76px] rounded-xl text-xs font-bold transition-all active:scale-95 cursor-pointer flex flex-col items-center justify-start gap-1 pt-1.5 pb-1.5 px-0.5 ${
+                              isSelected
+                                ? "border-2 border-primary text-primary bg-primary/10 scale-[1.02] shadow-sm"
+                                : isToday
+                                  ? "bg-primary text-white dark:text-blue-950 shadow-md"
+                                  : "hover:bg-primary/10 text-slate-700 dark:text-zinc-300"
+                            }`}
+                          >
+                            <span>{day}</span>
+                            {dayLogs.length > 0 && (
+                              <span
+                                className={`w-[92%] px-1 py-0.5 rounded-md text-[8px] sm:text-[9px] font-extrabold truncate leading-tight ${
+                                  isSelected || isToday ? "bg-white/20 text-current" : "bg-primary/15 text-primary"
+                                }`}
+                              >
+                                {Math.round(kcalTotal)} kcal
+                              </span>
+                            )}
+                            {dayLogs.length > 1 && (
+                              <span className={`text-[7px] sm:text-[8px] font-bold ${isSelected || isToday ? "text-current opacity-80" : "text-primary/70"}`}>
+                                {dayLogs.length} comidas
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
+
+                {(() => {
+                  if (!detailAlimDayId) return null;
+                  const items = (alimentacionLogs || []).filter((l) => l.fecha === detailAlimDayId);
+                  const dateObj = new Date(`${detailAlimDayId}T12:00:00`);
+                  return (
+                    <DetailModal
+                      isOpen={!!detailAlimDayId}
+                      onClose={() => setDetailAlimDayId(null)}
+                      title={dateObj.toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" })}
+                      subtitle={`${items.length} ${items.length === 1 ? "comida" : "comidas"}`}
+                      icon={Calendar}
+                    >
+                      <DetailBlockGrid>
+                        {items.map((log) => {
+                          const { platoInfo, p, c, g } = getAlimLogDetails(log);
+                          return (
+                            <DetailBlock key={log.id} icon={Utensils} label={log.estado} tone="primary" span>
+                              <div className="space-y-2">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    {platoInfo?.imagen && (
+                                      <img
+                                        src={platoInfo.imagen}
+                                        alt={platoInfo.nombrePlato}
+                                        className="w-12 h-12 rounded-xl object-cover shrink-0 border border-slate-200 dark:border-zinc-800"
+                                      />
+                                    )}
+                                    <span className="font-extrabold text-sm text-slate-900 dark:text-white truncate">
+                                      {platoInfo ? platoInfo.nombrePlato : "Comida registrada"}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <button
+                                      type="button"
+                                      onClick={() => { setDetailAlimDayId(null); handleEditAlimLog(log); }}
+                                      className="p-1.5 rounded-lg text-zinc-400 hover:text-primary hover:bg-primary/10 cursor-pointer transition-colors"
+                                      title="Editar"
+                                    >
+                                      <Pencil className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteAlimLog(log.id)}
+                                      className="p-1.5 rounded-lg text-red-500 hover:bg-red-500/10 cursor-pointer transition-colors"
+                                      title="Eliminar"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
+                                  <span className="flex items-center gap-1 text-primary font-bold">
+                                    <Flame className="w-3 h-3 shrink-0 fill-current" />
+                                    {log.calorias} kcal
+                                  </span>
+                                  {(p > 0 || c > 0 || g > 0) && (
+                                    <span>P: {p}g · C: {c}g · G: {g}g</span>
+                                  )}
+                                </div>
+                              </div>
+                            </DetailBlock>
+                          );
+                        })}
+                      </DetailBlockGrid>
+                    </DetailModal>
+                  );
+                })()}
 
                 {/* Filter Status */}
                 {selectedAlimDate && (
@@ -5515,52 +5824,144 @@ export default function HealthView({
                   </div>
                 </div>
 
-                {/* Resumen Semanal Mini Calendario */}
-                <div className={`p-4 sm:p-6 rounded-3xl border ${darkMode ? "bg-zinc-950 border-zinc-800 text-zinc-100" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"}`}>
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-[11px] font-bold text-slate-500 dark:text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
-                      <Calendar className="w-3.5 h-3.5 text-primary" />
-                      Resumen Semanal de Actividad
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-7 gap-2">
-                    {diarioWeekData.map((day, dIdx) => {
-                      const isToday = new Date().toDateString() === day.dateObj.toDateString();
-                      const isSelected = selectedDiarioDate && selectedDiarioDate.toDateString() === day.dateObj.toDateString();
+                {/* Panel de resumen + calendario mensual de Historial Diario — mismo apartado
+                    visual que el Calendario de Exámenes y Trabajos: a la izquierda se ve, de solo
+                    lectura, el resumen del día elegido (hoy por defecto) y a la derecha se elige
+                    el día tocándolo. */}
+                <div className="lg:flex lg:gap-6 lg:items-start">
+                  <div
+                    className={`w-full lg:w-[320px] shrink-0 mb-6 lg:mb-0 rounded-2xl border p-4 space-y-3 ${
+                      darkMode ? "bg-zinc-950/40 border-zinc-800" : "bg-slate-50 border-slate-200"
+                    }`}
+                  >
+                    {(() => {
+                      const d = getDiarioDayDetails(diarioSelectedDay);
                       return (
-                        <div
-                          key={dIdx}
-                          onClick={() => {
-                            if (isSelected) {
-                              setSelectedDiarioDate(null);
-                            } else {
-                              setSelectedDiarioDate(day.dateObj);
-                            }
-                          }}
-                          className={`p-3 rounded-2xl flex flex-col items-center justify-center text-center transition-all duration-300 cursor-pointer hover:scale-105 active:scale-95 ${
-                            isSelected
-                              ? "bg-primary text-white shadow-md ring-2 ring-primary ring-offset-2 dark:ring-offset-zinc-950 border-transparent"
-                              : day.hasActivity
-                              ? darkMode
-                                ? "bg-zinc-900/50 border border-primary/50 text-zinc-100 shadow-xs hover:bg-zinc-800/80"
-                                : "bg-primary/5 border border-primary/30 text-slate-800 shadow-xs hover:bg-primary/10"
-                              : darkMode
-                              ? "bg-zinc-900 border border-zinc-800 text-zinc-500 hover:bg-zinc-800"
-                              : "bg-slate-50 border border-slate-200 text-slate-400 hover:bg-slate-100"
-                          } ${isToday && !isSelected ? "ring-2 ring-primary/60 dark:ring-primary/40" : ""}`}
-                        >
-                          <span className={`text-[9px] font-extrabold tracking-wider ${isSelected ? "text-white/80" : isToday ? "text-primary dark:text-primary-light" : "text-slate-400 dark:text-zinc-500"}`}>
-                            {day.dayLabel}
+                        <>
+                          <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-zinc-400 flex items-center gap-1.5">
+                            <Activity className="w-3.5 h-3.5 text-primary" />
+                            {d.isToday ? "Hoy" : d.dateObj.toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" })}
+                          </h4>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-primary/10 text-primary">
+                            {d.comidaDia > 0 ? (
+                              d.cumplio ? (
+                                <>
+                                  <CheckCircle2 className="w-3 h-3" /> Cumplido
+                                </>
+                              ) : (
+                                <>
+                                  <Info className="w-3 h-3" /> Fuera de Rango
+                                </>
+                              )
+                            ) : (
+                              "Sin Registros"
+                            )}
                           </span>
-                          <span className="text-sm font-extrabold mt-0.5">
-                            {day.dayNumber}
-                          </span>
-                          <span className={`text-[8px] font-mono font-bold mt-1.5 ${isSelected ? "text-white/90" : day.balance !== 0 || day.hasActivity ? "text-primary font-black" : "text-slate-400 dark:text-zinc-600"}`}>
-                            {Math.round(day.balance)} kcal
-                          </span>
-                        </div>
+                          <p className="font-extrabold text-sm text-slate-900 dark:text-white">
+                            Balance Neto: <span className="text-primary">{d.balanceNeto > 0 ? `+${d.balanceNeto}` : d.balanceNeto} kcal</span>
+                          </p>
+                          <DetailBlockGrid>
+                            <DetailBlock icon={Utensils} label="Consumido" tone="primary" emphasis>
+                              {d.comidaDia} kcal
+                            </DetailBlock>
+                            <DetailBlock icon={Flame} label="Gasto Activo" tone="primary" emphasis>
+                              {d.gastadasTotal} kcal
+                            </DetailBlock>
+                            <DetailBlock icon={Dumbbell} label="Gym">
+                              {d.gymDia} kcal
+                            </DetailBlock>
+                            <DetailBlock icon={Footprints} label="Deporte">
+                              {d.deporteDia} kcal
+                            </DetailBlock>
+                            <DetailBlock icon={Scale} label="Peso Registrado">
+                              {d.pesoDia}
+                            </DetailBlock>
+                            <DetailBlock icon={Target} label="Meta Calórica">
+                              {Math.round(d.metaCalorias)} kcal
+                            </DetailBlock>
+                          </DetailBlockGrid>
+                        </>
                       );
-                    })}
+                    })()}
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-5">
+                      <div className="min-w-0">
+                        <h3 className="font-extrabold text-sm flex items-center gap-2">
+                          <Calendar className="w-4 h-4 text-primary" />
+                          <span>Calendario de Actividad</span>
+                        </h3>
+                        <p className="text-xs text-zinc-500 mt-0.5">
+                          Tocá un día del mes para ver su resumen.
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setDiarioCalendarMonth((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1))}
+                          className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-500 dark:text-zinc-400 cursor-pointer transition-colors"
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        <span className="text-xs font-extrabold uppercase tracking-wide min-w-[110px] text-center">
+                          {MONTHS_ES[diarioCalendarMonth.getMonth()]} {diarioCalendarMonth.getFullYear()}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setDiarioCalendarMonth((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1))}
+                          className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-500 dark:text-zinc-400 cursor-pointer transition-colors"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-7 gap-1 mb-1">
+                      {WEEKDAYS_ES.map((wd) => (
+                        <div key={wd} className="text-center text-[10px] font-bold text-zinc-500 uppercase tracking-widest py-1">
+                          {wd}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="grid grid-cols-7 gap-1">
+                      {getDaysInMonth(diarioCalendarMonth).map((day, idx) => {
+                        if (day === null) return <div key={`pad-${idx}`} />;
+                        const dateStr = `${diarioCalendarMonth.getFullYear()}-${String(diarioCalendarMonth.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+                        const { balanceNeto, comidaDia } = getDiarioDayDetails(dateStr);
+                        const hasActivity = comidaDia > 0 || balanceNeto !== 0;
+                        const isSelected = diarioSelectedDay === dateStr;
+                        const isToday = dateStr === todayDiarioStr;
+                        return (
+                          <button
+                            key={dateStr}
+                            type="button"
+                            data-sound="selectDate"
+                            onClick={() => selectDiarioCalendarDay(dateStr)}
+                            className={`relative min-h-[64px] sm:min-h-[76px] rounded-xl text-xs font-bold transition-all active:scale-95 cursor-pointer flex flex-col items-center justify-start gap-1 pt-1.5 pb-1.5 px-0.5 ${
+                              isSelected
+                                ? "border-2 border-primary text-primary bg-primary/10 scale-[1.02] shadow-sm"
+                                : isToday
+                                  ? "bg-primary text-white dark:text-blue-950 shadow-md"
+                                  : "hover:bg-primary/10 text-slate-700 dark:text-zinc-300"
+                            }`}
+                          >
+                            <span>{day}</span>
+                            {hasActivity && (
+                              <span
+                                className={`w-[92%] px-1 py-0.5 rounded-md text-[8px] sm:text-[9px] font-extrabold truncate leading-tight ${
+                                  isSelected || isToday ? "bg-white/20 text-current" : "bg-primary/15 text-primary"
+                                }`}
+                              >
+                                {Math.round(balanceNeto)} kcal
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
 
@@ -5570,7 +5971,7 @@ export default function HealthView({
                   </span>
                   {selectedDiarioDate && (
                     <button
-                      onClick={() => setSelectedDiarioDate(null)}
+                      onClick={() => { setSelectedDiarioDate(null); setDiarioSelectedDay(todayDiarioStr); }}
                       className="text-[10px] font-bold text-primary hover:underline uppercase tracking-wider"
                     >
                       Limpiar filtro
@@ -8123,284 +8524,6 @@ export default function HealthView({
                     </button>
                   </div>
                 </form>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>,
-      document.body,
-    )}
-
-      {/* Alimentacion Modal */}
-      {createPortal(
-        <AnimatePresence>
-          {showAlimModal && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm cursor-pointer"
-              onClick={() => setShowAlimModal(false)}
-            >
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 15 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 15 }}
-                transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-                onClick={(e) => e.stopPropagation()}
-                className="w-full max-w-lg max-h-[85vh] flex flex-col bg-white dark:bg-black/85 backdrop-blur-md rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
-              >
-              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-zinc-800/40 bg-white dark:bg-black/85 backdrop-blur-md">
-                <h3 className="text-lg font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-                  <Activity className="w-5 h-5 text-primary" />
-                  {editingAlimLog ? "Editar Registro" : "Añadir Registro"}
-                </h3>
-                <button
-                  onClick={() => setShowAlimModal(false)}
-                  className="p-2 rounded-full bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-zinc-200 dark:scrollbar-thumb-zinc-800">
-                <div className="space-y-4 pb-1">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
-                        Fecha
-                      </label>
-                      <SmartDateTimePicker
-                        value={alimFecha}
-                        onChange={(val) => setAlimFecha(val)}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
-                        Estado
-                      </label>
-                      <CustomSelect
-                        value={alimEstado}
-                        onChange={(val: string) => setAlimEstado(val as any)}
-                        options={[
-                          { value: "Desayuno", label: "Desayuno" },
-                          { value: "Almuerzo", label: "Almuerzo" },
-                          { value: "Merienda", label: "Merienda" },
-                          { value: "Cena", label: "Cena" },
-                        ]}
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
-                      Plato
-                    </label>
-                    <CustomSelect
-                      value={alimPlatoId}
-                      onChange={(val: string) => setAlimPlatoId(val)}
-                      searchable={true}
-                      options={(platos || []).map((p) => ({
-                        value: p.id,
-                        label: p.nombrePlato,
-                      }))}
-                    />
-                  </div>
-
-                  {alimPlatoId && (
-                    <div className="space-y-3 pt-2">
-                      <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
-                        Ingredientes y Cantidades
-                      </label>
-                      <div className="grid gap-2 max-h-48 overflow-y-auto pr-1">
-                        {(() => {
-                          const plato = platos?.find((p) => p.id === alimPlatoId);
-                          if (!plato) return null;
-                          const ingList: {
-                            nombre: string;
-                            defaultUnidad: string;
-                          }[] = [];
-                          const extract = (aId?: string) => {
-                            if (!aId) return;
-                            const ali = alimentos?.find((a) => a.id === aId);
-                            if (!ali) return;
-                            if (ali.ingrediente1)
-                              ingList.push({
-                                nombre: ali.ingrediente1,
-                                defaultUnidad: ali.unidad1 || "",
-                              });
-                            if (ali.ingrediente2)
-                              ingList.push({
-                                nombre: ali.ingrediente2,
-                                defaultUnidad: ali.unidad2 || "",
-                              });
-                            if (ali.ingrediente3)
-                              ingList.push({
-                                nombre: ali.ingrediente3,
-                                defaultUnidad: ali.unidad3 || "",
-                              });
-                          };
-                          extract(plato.alimentoId1);
-                          extract(plato.alimentoId2);
-                          extract(plato.alimentoId3);
-
-                          if (ingList.length === 0)
-                            return (
-                              <div className="text-xs text-zinc-500">
-                                Sin ingredientes asociados.
-                              </div>
-                            );
-
-                          return ingList.map((ing, idx) => (
-                            <div
-                              key={idx}
-                              className="flex items-center justify-between gap-3 bg-slate-50 dark:bg-black/50 p-2.5 rounded-xl border border-slate-200 dark:border-zinc-800"
-                            >
-                              <div className="flex-1 min-w-0">
-                                <span
-                                  className="text-xs font-semibold block truncate text-slate-900 dark:text-white"
-                                  title={ing.nombre}
-                                >
-                                  {ing.nombre}
-                                </span>
-                                {(() => {
-                                  const grams = alimCantidades[ing.nombre] || 0;
-                                  const item = mercaderia?.find(m => m.ingredientes === ing.nombre);
-                                  const baseCal = item ? (item.calorias !== undefined && item.calorias !== null ? item.calorias : getCalorieDensity(item.ingredientes, item.categoria, item.sector)) : 0;
-                                  const cal = Math.round((grams / 100) * baseCal);
-
-                                  const baseNutri = getIngredientNutriVal(ing.nombre, mercaderia || []);
-                                  const p = Math.round((grams / 100) * (baseNutri.proteinas || 0) * 10) / 10;
-                                  const c = Math.round((grams / 100) * (baseNutri.carbohidratos || 0) * 10) / 10;
-                                  const g = Math.round((grams / 100) * (baseNutri.grasas || 0) * 10) / 10;
-
-                                  return (
-                                    <span className="text-[10px] text-zinc-400 dark:text-zinc-500 block mt-0.5">
-                                      {cal} kcal | P: {p}g | C: {c}g | G: {g}g
-                                    </span>
-                                  );
-                                })()}
-                              </div>
-                              <div className="flex items-center gap-1.5 shrink-0">
-                                <input
-                                  type="number"
-                                  min="0"
-                                  step="1"
-                                  value={alimCantidades[ing.nombre] !== undefined ? alimCantidades[ing.nombre] : ""}
-                                  onChange={(e) => {
-                                    const val = e.target.value === "" ? 0 : Number(e.target.value);
-                                    setAlimCantidades((prev) => ({
-                                      ...prev,
-                                      [ing.nombre]: val,
-                                    }));
-                                  }}
-                                  className="w-20 px-2 py-1.5 rounded-lg text-xs font-mono bg-white dark:bg-black/85 backdrop-blur-md border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/20 text-right"
-                                  placeholder="Gramos"
-                                />
-                                <span className="text-[10px] text-zinc-500 font-mono w-6 text-left shrink-0">
-                                  g
-                                </span>
-                              </div>
-                            </div>
-                          ));
-                        })()}
-                      </div>
-                    </div>
-                  )}
-
-                  {alimPlatoId && (
-                    <div className="pt-2 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest">
-                          Total del Registro
-                        </span>
-                        <span className="text-[10px] text-zinc-400 dark:text-zinc-500 font-sans">
-                          Val. Nutri. (Total)
-                        </span>
-                      </div>
-                      
-                      {(() => {
-                        const totalNutri = {
-                          proteinas: 0,
-                          carbohidratos: 0,
-                          grasas: 0,
-                          azucares: 0,
-                          fibra: 0,
-                          sodio: 0,
-                        };
-
-                        Object.entries(alimCantidades).forEach(([ingrediente, grams]) => {
-                          const baseNutri = getIngredientNutriVal(ingrediente, mercaderia || []);
-                          const factor = grams / 100;
-                          totalNutri.proteinas += (baseNutri.proteinas || 0) * factor;
-                          totalNutri.carbohidratos += (baseNutri.carbohidratos || 0) * factor;
-                          totalNutri.grasas += (baseNutri.grasas || 0) * factor;
-                          totalNutri.azucares += (baseNutri.azucares || 0) * factor;
-                          totalNutri.fibra += (baseNutri.fibra || 0) * factor;
-                          totalNutri.sodio += (baseNutri.sodio || 0) * factor;
-                        });
-
-                        const p = Math.round(totalNutri.proteinas * 10) / 10;
-                        const c = Math.round(totalNutri.carbohidratos * 10) / 10;
-                        const g = Math.round(totalNutri.grasas * 10) / 10;
-                        const az = Math.round(totalNutri.azucares * 10) / 10;
-                        const fb = Math.round(totalNutri.fibra * 10) / 10;
-                        const sd = Math.round(totalNutri.sodio);
-
-                        return (
-                          <div className="bg-slate-50 dark:bg-black p-3 rounded-2xl border border-slate-200 dark:border-zinc-800 space-y-2">
-                            <div className="flex items-center justify-between text-slate-900 dark:text-white">
-                              <span className="text-xs font-bold">Calorías Totales:</span>
-                              <span className="font-mono text-sm font-bold text-primary">
-                                {alimCalorias} kcal
-                              </span>
-                            </div>
-                            <div className="pt-2 border-t border-slate-200/50 dark:border-zinc-800/50 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-zinc-500 dark:text-zinc-400">
-                              <span><strong>P:</strong> {p}g</span>
-                              <span>|</span>
-                              <span><strong>C:</strong> {c}g <span className="text-zinc-400 dark:text-zinc-500">(Az: {az}g)</span></span>
-                              <span>|</span>
-                              <span><strong>G:</strong> {g}g</span>
-                              <span>|</span>
-                              <span><strong>Fibra:</strong> {fb}g</span>
-                              <span>|</span>
-                              <span><strong>Sodio:</strong> {sd}mg</span>
-                            </div>
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  )}
-                  
-                  <div className="pt-4 flex items-center justify-center sm:justify-end gap-3 border-t border-slate-100 dark:border-zinc-800/40">
-                    <button
-                      type="button"
-                      disabled={isSaving}
-                      onClick={() => { if (!isSaving) setShowAlimModal(false); }}
-                      className="px-4 py-2 rounded-xl text-xs font-bold text-zinc-400 hover:text-slate-900 dark:hover:text-white cursor-pointer disabled:opacity-50"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleSaveAlimLog}
-                      disabled={isSaving || !alimFecha || !alimEstado || !alimPlatoId}
-                      className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-white dark:text-blue-950 text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {isSaving ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          <span>Guardando...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Check className="w-4 h-4" />
-                          <span>Guardar Registro</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
               </div>
             </motion.div>
           </motion.div>
