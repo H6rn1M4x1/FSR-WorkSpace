@@ -731,7 +731,6 @@ export default function HealthView({
 
   // --- NUEVOS ESTADOS PARA SALUD METABÓLICA ---
   const [selectedActivityFactor, setSelectedActivityFactor] = useState<number>(1.2);
-  const [selectedDiarioDate, setSelectedDiarioDate] = useState<Date | null>(null);
 
   
 
@@ -1375,7 +1374,6 @@ export default function HealthView({
   const [diarioSelectedDay, setDiarioSelectedDay] = useState<string>(todayDiarioStr);
   const selectDiarioCalendarDay = (dateStr: string) => {
     setDiarioSelectedDay(dateStr);
-    setSelectedDiarioDate(new Date(`${dateStr}T12:00:00`));
   };
 
   // Doble click sobre un día del calendario de Historial Diario abre el mismo DetailModal rico
@@ -1460,28 +1458,26 @@ export default function HealthView({
   }, [alimCantidades, mercaderia]);
 
   // Internaciones, Consultas y Estudios States
-  // Auto-fill plato del dia
+  // Auto-fill plato del dia — solo SUGIERE un plato cuando todavía no hay ninguno elegido; nunca
+  // borra uno que el usuario ya haya puesto (esa limpieza queda solo para Cancelar/Guardar), para
+  // que completar el panel y elegir el día funcione en cualquier orden sin perder nada.
   useEffect(() => {
-    if (alimFecha && organizacionSemanal) {
-      const todayPlatoId = organizacionSemanal.find(
-        (o) => o.fecha === alimFecha.split("T")[0],
-      )?.platoId;
-      if (todayPlatoId) {
-        if (alimEstado === "Almuerzo" || alimEstado === "Cena") {
-          setAlimPlatoId(todayPlatoId);
-        } else {
-          const alreadyLoaded = alimentacionLogs?.find(
-            (l) => l.fecha === alimFecha && l.platoId === todayPlatoId,
-          );
-          if (!alreadyLoaded) {
-            setAlimPlatoId(todayPlatoId);
-          }
-        }
-      } else {
-        setAlimPlatoId("");
+    if (!alimFecha || !organizacionSemanal || alimPlatoId) return;
+    const todayPlatoId = organizacionSemanal.find(
+      (o) => o.fecha === alimFecha.split("T")[0],
+    )?.platoId;
+    if (!todayPlatoId) return;
+    if (alimEstado === "Almuerzo" || alimEstado === "Cena") {
+      setAlimPlatoId(todayPlatoId);
+    } else {
+      const alreadyLoaded = alimentacionLogs?.find(
+        (l) => l.fecha === alimFecha && l.platoId === todayPlatoId,
+      );
+      if (!alreadyLoaded) {
+        setAlimPlatoId(todayPlatoId);
       }
     }
-  }, [alimFecha, alimEstado, organizacionSemanal, alimentacionLogs]);
+  }, [alimFecha, alimEstado, organizacionSemanal, alimentacionLogs, alimPlatoId]);
 
   // Limpia el panel de "nuevo registro" sin tocar qué día está elegido en el calendario — se usa
   // al tocar un día (para no arrastrar una edición vieja) y desde el botón "Cancelar" del panel.
@@ -5256,22 +5252,6 @@ export default function HealthView({
                     : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
                 } space-y-6`}
               >
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <div className="p-1.5 bg-primary/10 rounded-lg">
-                        <Activity className="w-5 h-5 text-primary" />
-                      </div>
-                      <h2 className="text-xl font-extrabold tracking-tight">
-                        Registro de Alimentación
-                      </h2>
-                    </div>
-                    <p className="text-sm font-medium text-slate-500 dark:text-zinc-400">
-                      Lleva un control de tus comidas y calorías.
-                    </p>
-                  </div>
-                </div>
-
                 {/* Panel de registro + calendario mensual de Alimentación — mismo apartado visual
                     y funciones que el Calendario de Exámenes y Trabajos: a la izquierda se arma la
                     comida (Estado/Plato/Ingredientes, con desglose de calorías y macros al elegir
@@ -5525,6 +5505,49 @@ export default function HealthView({
                         Elegí un día en el calendario para agendar.
                       </p>
                     )}
+
+                    {(() => {
+                      if (!alimFecha) return null;
+                      const dayLogs = (alimentacionLogs || []).filter((l) => l.fecha === alimFecha);
+                      if (dayLogs.length === 0) return null;
+                      return (
+                        <div className="pt-2 border-t border-slate-200 dark:border-zinc-800 space-y-1.5">
+                          <span className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest">
+                            Ya agendado este día
+                          </span>
+                          {dayLogs.map((log) => {
+                            const platoInfo = platos?.find((p) => p.id === log.platoId);
+                            return (
+                              <div
+                                key={log.id}
+                                className={`flex items-center justify-between gap-2 px-2.5 py-2 rounded-xl text-[11px] font-semibold transition-colors ${
+                                  editingAlimLog?.id === log.id
+                                    ? "bg-primary/10 border border-primary/30"
+                                    : "bg-white dark:bg-black/40 border border-slate-200 dark:border-zinc-800"
+                                }`}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => handleEditAlimLog(log)}
+                                  className="flex-1 min-w-0 text-left truncate cursor-pointer"
+                                  title="Editar"
+                                >
+                                  {platoInfo ? platoInfo.nombrePlato : "Comida registrada"} · {log.estado}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteAlimLog(log.id)}
+                                  className="shrink-0 p-1 rounded-lg text-red-500 hover:bg-red-500/10 cursor-pointer"
+                                  title="Eliminar"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* Columna derecha: calendario mensual de Alimentación. */}
@@ -5634,49 +5657,55 @@ export default function HealthView({
                       <DetailBlockGrid>
                         {items.map((log) => {
                           const { platoInfo, p, c, g } = getAlimLogDetails(log);
+                          const ingredientesRef = (log.ingredientesConsumidos || []).map((i) => i.ingrediente).join(", ");
                           return (
                             <DetailBlock key={log.id} icon={Utensils} label={log.estado} tone="primary" span>
-                              <div className="space-y-2">
-                                <div className="flex items-start justify-between gap-2">
-                                  <div className="flex items-center gap-2.5 min-w-0">
-                                    {platoInfo?.imagen && (
-                                      <img
-                                        src={platoInfo.imagen}
-                                        alt={platoInfo.nombrePlato}
-                                        className="w-12 h-12 rounded-xl object-cover shrink-0 border border-slate-200 dark:border-zinc-800"
-                                      />
-                                    )}
+                              <div className="flex gap-3">
+                                {platoInfo?.imagen && (
+                                  <img
+                                    src={platoInfo.imagen}
+                                    alt={platoInfo.nombrePlato}
+                                    className="w-16 h-16 rounded-xl object-cover shrink-0 border border-slate-200 dark:border-zinc-800"
+                                  />
+                                )}
+                                <div className="flex-1 min-w-0 space-y-1.5">
+                                  <div className="flex items-start justify-between gap-2">
                                     <span className="font-extrabold text-sm text-slate-900 dark:text-white truncate">
                                       {platoInfo ? platoInfo.nombrePlato : "Comida registrada"}
                                     </span>
+                                    <div className="flex items-center gap-1 shrink-0">
+                                      <button
+                                        type="button"
+                                        onClick={() => { setDetailAlimDayId(null); handleEditAlimLog(log); }}
+                                        className="p-1.5 rounded-lg text-zinc-400 hover:text-primary hover:bg-primary/10 cursor-pointer transition-colors"
+                                        title="Editar"
+                                      >
+                                        <Pencil className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteAlimLog(log.id)}
+                                        className="p-1.5 rounded-lg text-red-500 hover:bg-red-500/10 cursor-pointer transition-colors"
+                                        title="Eliminar"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
                                   </div>
-                                  <div className="flex items-center gap-1 shrink-0">
-                                    <button
-                                      type="button"
-                                      onClick={() => { setDetailAlimDayId(null); handleEditAlimLog(log); }}
-                                      className="p-1.5 rounded-lg text-zinc-400 hover:text-primary hover:bg-primary/10 cursor-pointer transition-colors"
-                                      title="Editar"
-                                    >
-                                      <Pencil className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDeleteAlimLog(log.id)}
-                                      className="p-1.5 rounded-lg text-red-500 hover:bg-red-500/10 cursor-pointer transition-colors"
-                                      title="Eliminar"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
-                                </div>
-                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
-                                  <span className="flex items-center gap-1 text-primary font-bold">
-                                    <Flame className="w-3 h-3 shrink-0 fill-current" />
-                                    {log.calorias} kcal
-                                  </span>
-                                  {(p > 0 || c > 0 || g > 0) && (
-                                    <span>P: {p}g · C: {c}g · G: {g}g</span>
+                                  {ingredientesRef && (
+                                    <p className="text-[10px] text-zinc-400 dark:text-zinc-500 truncate">
+                                      {ingredientesRef}
+                                    </p>
                                   )}
+                                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-mono font-bold text-primary">
+                                    <span className="flex items-center gap-1">
+                                      <Flame className="w-3 h-3 shrink-0 fill-current" />
+                                      {log.calorias} kcal
+                                    </span>
+                                    {(p > 0 || c > 0 || g > 0) && (
+                                      <span className="text-zinc-500 dark:text-zinc-400">P: {p}g · C: {c}g · G: {g}g</span>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                             </DetailBlock>
@@ -5703,22 +5732,6 @@ export default function HealthView({
                     : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
                 } space-y-6`}
               >
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <div className="p-1.5 bg-primary/10 rounded-lg">
-                        <Activity className="w-4 h-4 text-primary" />
-                      </div>
-                      <h3 className="text-lg font-black text-slate-800 dark:text-zinc-100">
-                        Historial Diario
-                      </h3>
-                    </div>
-                    <p className="text-xs text-slate-500 dark:text-zinc-400 font-medium">
-                      Resumen metabólico día a día.
-                    </p>
-                  </div>
-                </div>
-
                 {/* Panel de resumen + calendario mensual de Historial Diario — mismo apartado
                     visual que el Calendario de Exámenes y Trabajos: a la izquierda se ve, de solo
                     lectura, el resumen del día elegido (hoy por defecto) y a la derecha se elige
@@ -5755,6 +5768,18 @@ export default function HealthView({
                           <p className="font-extrabold text-sm text-slate-900 dark:text-white">
                             Balance Neto: <span className="text-primary">{d.balanceNeto > 0 ? `+${d.balanceNeto}` : d.balanceNeto} kcal</span>
                           </p>
+                          {d.comidaDia > 0 && d.metaCalorias > 0 && (() => {
+                            const pct = Math.round(((d.comidaDia - d.metaCalorias) / d.metaCalorias) * 100);
+                            return (
+                              <p className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
+                                {pct === 0
+                                  ? "En el objetivo calórico"
+                                  : pct > 0
+                                    ? `${pct}% por encima del objetivo calórico`
+                                    : `${Math.abs(pct)}% por debajo del objetivo calórico`}
+                              </p>
+                            );
+                          })()}
                           <DetailBlockGrid>
                             <DetailBlock icon={Utensils} label="Consumido" tone="primary" emphasis>
                               {d.comidaDia} kcal
@@ -5864,117 +5889,6 @@ export default function HealthView({
                     </div>
                     </div>
                   </div>
-                </div>
-
-                <div className="flex items-center justify-between px-2">
-                  <span className="text-xs font-medium text-slate-500 dark:text-zinc-400">
-                    Últimos 14 días
-                  </span>
-                  {selectedDiarioDate && (
-                    <button
-                      onClick={() => { setSelectedDiarioDate(null); setDiarioSelectedDay(todayDiarioStr); }}
-                      className="text-[10px] font-bold text-primary hover:underline uppercase tracking-wider"
-                    >
-                      Limpiar filtro
-                    </button>
-                  )}
-                </div>
-
-                {/* List Table */}
-                <div className="space-y-3">
-                  {(() => {
-                        const dias = [];
-                        const hoy = new Date();
-                        for (let i = 0; i < 14; i++) {
-                          const d = new Date(hoy.getTime() - i * 24 * 60 * 60 * 1000);
-                          const fechaStr = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
-                          dias.push(fechaStr);
-                        }
-                        
-                        let filteredDias = dias.filter(diaStr => {
-                          if (selectedDiarioDate) {
-                              const [y, m, d] = diaStr.split('-').map(Number);
-                              const dateObj = new Date(y, m - 1, d);
-                              return dateObj.toDateString() === selectedDiarioDate.toDateString();
-                          }
-                          
-                          const comidaDia = (alimentacionLogs || []).filter(l => l.fecha === diaStr).reduce((acc, curr) => acc + (curr.calorias || 0), 0);
-                          const deporteDia = (deportesActividades || []).filter(a => a.fechaDesde.startsWith(diaStr)).reduce((acc, curr) => acc + (curr.calorias || 0), 0);
-                          const gymDia = (registrosEntrenamiento || []).filter(r => r.fecha === diaStr).reduce((acc, curr) => acc + (curr.caloriasTotalesSesion || 0), 0);
-                          
-                          return comidaDia > 0 || deporteDia > 0 || gymDia > 0;
-                        });
-                        
-                        if (!selectedDiarioDate) {
-                            filteredDias = filteredDias.slice(0, 5);
-                        }
-
-                        if (filteredDias.length === 0) {
-                          return (
-                            <div className="p-8 rounded-3xl border border-dashed border-slate-200 dark:border-zinc-800 text-center flex flex-col items-center justify-center">
-                              <Activity className="w-8 h-8 text-slate-300 dark:text-zinc-600 mb-3" />
-                              <p className="text-sm font-bold text-slate-400 dark:text-zinc-500">No hay historial registrado para este día.</p>
-                            </div>
-                          );
-                        }
-
-                        return filteredDias.map((diaStr, diaIdx) => {
-                          const { dateObj, pesoDia, comidaDia, gastadasTotal, balanceNeto, cumplio, isToday } =
-                            getDiarioDayDetails(diaStr);
-
-                          return (
-                            <motion.div
-                              key={diaStr}
-                              initial={{ opacity: 0, y: 14 }}
-                              whileInView={{ opacity: 1, y: 0 }}
-                              viewport={{ once: true, margin: "0px 0px -60px 0px" }}
-                              transition={{ duration: 0.3, delay: Math.min(diaIdx * 0.04, 0.15), ease: [0.22, 1, 0.36, 1] }}
-                              onClick={() => setDetailDiarioId(diaStr)}
-                              className={`rounded-2xl border p-4 cursor-pointer active:scale-[0.98] transition-transform bg-white dark:bg-zinc-950 border-slate-100 dark:border-zinc-800/80 ${isToday ? "ring-2 ring-primary/30" : ""}`}
-                            >
-                              <div className="flex items-center justify-between gap-2 mb-2">
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-primary/10 text-primary">
-                                  {comidaDia > 0 ? (
-                                    cumplio ? (
-                                      <>
-                                        <CheckCircle2 className="w-3 h-3" /> Cumplido
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Info className="w-3 h-3" /> Fuera de Rango
-                                      </>
-                                    )
-                                  ) : (
-                                    "Sin Registros"
-                                  )}
-                                </span>
-                                <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide bg-primary/10 text-primary">
-                                  {dateObj.toLocaleDateString("es-AR", { day: "numeric", month: "short" })}
-                                </span>
-                              </div>
-
-                              <p className="font-extrabold text-sm mb-1.5 text-slate-900 dark:text-white">
-                                Balance Neto: <span className="text-primary">{balanceNeto > 0 ? `+${balanceNeto}` : balanceNeto} kcal</span>
-                              </p>
-
-                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-medium text-slate-500 dark:text-zinc-400">
-                                <span className="flex items-center gap-1">
-                                  <Utensils className="w-3 h-3 shrink-0 text-primary" />
-                                  {comidaDia} kcal
-                                </span>
-                                <span className="flex items-center gap-1">
-                                  <Flame className="w-3 h-3 shrink-0 text-primary" />
-                                  {gastadasTotal} kcal
-                                </span>
-                                <span className="flex items-center gap-1">
-                                  <Scale className="w-3 h-3 shrink-0 text-primary" />
-                                  {pesoDia}
-                                </span>
-                              </div>
-                            </motion.div>
-                          );
-                        });
-                  })()}
                 </div>
 
                 {(() => {
