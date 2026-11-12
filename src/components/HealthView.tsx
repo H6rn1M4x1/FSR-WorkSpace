@@ -5769,27 +5769,24 @@ export default function HealthView({
                               "Sin Registros"
                             )}
                           </span>
-                          {d.comidaDia > 0 && d.metaCalorias > 0 && (() => {
-                            const pct = Math.round(((d.comidaDia - d.metaCalorias) / d.metaCalorias) * 100);
-                            const isOver = pct > 0;
-                            return (
-                              <p className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
-                                {pct === 0 ? (
-                                  "En el objetivo calórico"
-                                ) : (
-                                  <>
-                                    <span className={`font-extrabold ${isOver ? "text-red-500" : "text-emerald-500"}`}>
-                                      {Math.abs(pct)}%
-                                    </span>{" "}
-                                    {isOver ? "por encima del objetivo calórico" : "por debajo del objetivo calórico"}
-                                  </>
-                                )}
-                              </p>
-                            );
-                          })()}
-                          <p className="font-extrabold text-sm text-slate-900 dark:text-white">
-                            Balance Neto: <span className="text-primary">{d.balanceNeto > 0 ? `+${d.balanceNeto}` : d.balanceNeto} kcal</span>
-                          </p>
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="font-extrabold text-sm text-slate-900 dark:text-white">
+                              Balance Neto: <span className="text-primary">{d.balanceNeto > 0 ? `+${d.balanceNeto}` : d.balanceNeto} kcal</span>
+                            </p>
+                            {d.comidaDia > 0 && d.metaCalorias > 0 && (() => {
+                              const pct = Math.round(((d.comidaDia - d.metaCalorias) / d.metaCalorias) * 100);
+                              if (pct === 0) return null;
+                              const isOver = pct > 0;
+                              return (
+                                <span
+                                  className={`shrink-0 text-[10px] font-mono font-extrabold ${isOver ? "text-red-500" : "text-emerald-500"}`}
+                                  title={isOver ? "Por encima del objetivo calórico" : "Por debajo del objetivo calórico"}
+                                >
+                                  {Math.abs(pct)}%
+                                </span>
+                              );
+                            })()}
+                          </div>
                           <DetailBlockGrid>
                             <DetailBlock icon={Utensils} label="Consumido" tone="primary" emphasis>
                               {d.comidaDia} kcal
