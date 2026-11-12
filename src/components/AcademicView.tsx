@@ -80,6 +80,9 @@ import { ExamsBlock } from "./ExamsBlock";
 // todo desde WeeklyScheduleGrid (la rejilla "a pinceladas"), que reusa el mismo estado/modal de
 // edición. Se deja como constante (no se borra el bloque) por si hace falta reactivarla.
 const SHOW_LEGACY_HORARIO_LIST = false;
+// Igual que arriba, pero para "Parciales, Finales y Trabajos": con el calendario mensual de
+// MonthlyExamScheduler arriba ya se ve/edita/borra todo, la tabla de abajo queda oculta.
+const SHOW_LEGACY_EXAMENES_LIST = false;
 
 interface TimeInput24hProps {
   value: string;
@@ -4050,6 +4053,7 @@ export default function AcademicView({
                 onConfirmEdit={handleCalendarExamenEdit}
                 onDeleteExamen={handleDeleteExamen}
               />
+              {SHOW_LEGACY_EXAMENES_LIST && (
               <div className={`p-6 rounded-3xl border scroll-reveal ${darkMode ? "bg-zinc-900 border-zinc-800 text-white shadow-lg" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"}`}>
               {/* Header Controls */}
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
@@ -4342,6 +4346,7 @@ export default function AcademicView({
                 )}
               </div>
             </div>
+              )}
             </>
           );
         })()}
