@@ -5661,12 +5661,16 @@ export default function HealthView({
                           return (
                             <DetailBlock key={log.id} icon={Utensils} label={log.estado} tone="primary" span>
                               <div className="flex gap-3">
-                                {platoInfo?.imagen && (
+                                {platoInfo?.imagen ? (
                                   <img
                                     src={platoInfo.imagen}
                                     alt={platoInfo.nombrePlato}
                                     className="w-16 h-16 rounded-xl object-cover shrink-0 border border-slate-200 dark:border-zinc-800"
                                   />
+                                ) : (
+                                  <div className="w-16 h-16 rounded-xl shrink-0 border border-dashed border-slate-200 dark:border-zinc-800 flex items-center justify-center text-slate-300 dark:text-zinc-700 bg-slate-50 dark:bg-black/40">
+                                    <Utensils className="w-6 h-6" />
+                                  </div>
                                 )}
                                 <div className="flex-1 min-w-0 space-y-1.5">
                                   <div className="flex items-start justify-between gap-2">
@@ -5765,21 +5769,27 @@ export default function HealthView({
                               "Sin Registros"
                             )}
                           </span>
-                          <p className="font-extrabold text-sm text-slate-900 dark:text-white">
-                            Balance Neto: <span className="text-primary">{d.balanceNeto > 0 ? `+${d.balanceNeto}` : d.balanceNeto} kcal</span>
-                          </p>
                           {d.comidaDia > 0 && d.metaCalorias > 0 && (() => {
                             const pct = Math.round(((d.comidaDia - d.metaCalorias) / d.metaCalorias) * 100);
+                            const isOver = pct > 0;
                             return (
                               <p className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
-                                {pct === 0
-                                  ? "En el objetivo calórico"
-                                  : pct > 0
-                                    ? `${pct}% por encima del objetivo calórico`
-                                    : `${Math.abs(pct)}% por debajo del objetivo calórico`}
+                                {pct === 0 ? (
+                                  "En el objetivo calórico"
+                                ) : (
+                                  <>
+                                    <span className={`font-extrabold ${isOver ? "text-red-500" : "text-emerald-500"}`}>
+                                      {Math.abs(pct)}%
+                                    </span>{" "}
+                                    {isOver ? "por encima del objetivo calórico" : "por debajo del objetivo calórico"}
+                                  </>
+                                )}
                               </p>
                             );
                           })()}
+                          <p className="font-extrabold text-sm text-slate-900 dark:text-white">
+                            Balance Neto: <span className="text-primary">{d.balanceNeto > 0 ? `+${d.balanceNeto}` : d.balanceNeto} kcal</span>
+                          </p>
                           <DetailBlockGrid>
                             <DetailBlock icon={Utensils} label="Consumido" tone="primary" emphasis>
                               {d.comidaDia} kcal

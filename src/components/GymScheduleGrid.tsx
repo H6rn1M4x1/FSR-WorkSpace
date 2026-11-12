@@ -502,7 +502,7 @@ export function GymScheduleGrid({
         {/* Panel izquierdo */}
         <div
           className={`w-full lg:w-[280px] shrink-0 mb-6 lg:mb-0 rounded-2xl border p-4 space-y-3.5 ${
-            darkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-slate-200"
+            darkMode ? "bg-zinc-950/40 border-zinc-800" : "bg-slate-50 border-slate-200"
           }`}
         >
           <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-zinc-400 flex items-center gap-1.5">
@@ -764,7 +764,7 @@ export function GymScheduleGrid({
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
+          <div className="rounded-2xl border border-slate-100 dark:border-zinc-800/80 bg-slate-50/50 dark:bg-black/40">
             <div className="overflow-x-auto">
               <div className="flex min-w-[620px]">
                 <div className="shrink-0 w-12 pt-8 relative" style={{ height: totalHeight + 32 }}>
@@ -786,7 +786,7 @@ export function GymScheduleGrid({
 
                   return (
                     <div key={dayIdx} className="flex-1 min-w-[80px] pt-0">
-                      <div className="h-8 flex items-center justify-center gap-1 sticky top-0 z-20 bg-white dark:bg-zinc-900">
+                      <div className="h-8 flex items-center justify-center gap-1 sticky top-0 z-20 bg-slate-50/50 dark:bg-black/40">
                         <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
                           {diaCorto} {weekDates[dayIdx].getDate()}
                         </span>
