@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Calendar, ChevronLeft, ChevronRight, Check, Pencil, Trash2, BookOpen, Clock, MapPin } from "lucide-react";
 import { ExamenItem } from "../types";
 import { CustomSelect } from "./CustomSelect";
@@ -92,12 +92,38 @@ export function MonthlyExamScheduler({
     setAula("");
   };
 
+  // Un solo click deja el día como destino del panel (para cargar o editar), sin tocar los datos
+  // que ya se hayan cargado — así arma el registro en cualquier orden (elegir día y después
+  // completar datos, o completar datos y después elegir día) sin perder nada en el camino. Doble
+  // click abre el menú con toda la información del día.
   const selectDay = (dateStr: string) => {
-    resetDraft();
     setSelectedDate((prev) => (prev === dateStr ? null : dateStr));
-    // Si el día ya tiene algo cargado, además de dejarlo como destino del panel (para poder
-    // agregar otro registro ese mismo día), se abre el menú con toda la información del día.
+  };
+
+  const openDayDetail = (dateStr: string) => {
     if (examsForDate(dateStr).length > 0) setDetailDayId(dateStr);
+  };
+
+  // Distingue un click de un doble click a mano (en vez de onClick + onDoubleClick nativos, que
+  // con un botón disparan dos clicks de por medio y terminarían des-seleccionando el día en cada
+  // doble click): si el segundo click llega dentro de la ventana, es doble click.
+  const dayClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (dayClickTimer.current) clearTimeout(dayClickTimer.current);
+    };
+  }, []);
+  const handleDayClick = (dateStr: string) => {
+    if (dayClickTimer.current) {
+      clearTimeout(dayClickTimer.current);
+      dayClickTimer.current = null;
+      openDayDetail(dateStr);
+      return;
+    }
+    dayClickTimer.current = setTimeout(() => {
+      selectDay(dateStr);
+      dayClickTimer.current = null;
+    }, 250);
   };
 
   const startEditing = (ex: ExamenItem) => {
@@ -143,7 +169,7 @@ export function MonthlyExamScheduler({
             queda pegado al día que se toque en el calendario de la derecha. */}
         <div
           className={`w-full lg:w-[280px] shrink-0 mb-6 lg:mb-0 rounded-2xl border p-4 space-y-3.5 ${
-            darkMode ? "bg-zinc-950/40 border-zinc-800" : "bg-slate-50 border-slate-200"
+            darkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-slate-200"
           }`}
         >
           <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-zinc-400 flex items-center gap-1.5">
@@ -303,7 +329,7 @@ export function MonthlyExamScheduler({
                 <span>Calendario de Exámenes y Trabajos</span>
               </h3>
               <p className="text-xs text-zinc-500 mt-0.5">
-                Completá los datos del panel y tocá un día del mes para agendarlo.
+                Completá los datos del panel y tocá un día para agendarlo. Doble click para ver el detalle.
               </p>
             </div>
 
@@ -328,6 +354,11 @@ export function MonthlyExamScheduler({
             </div>
           </div>
 
+          <div
+            className={`rounded-2xl border p-3 sm:p-4 ${
+              darkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-slate-200"
+            }`}
+          >
           <div className="grid grid-cols-7 gap-1 mb-1">
             {DIAS_SEMANA.map((d) => (
               <div key={d} className="text-center text-[10px] font-bold text-zinc-500 uppercase tracking-widest py-1">
@@ -348,7 +379,7 @@ export function MonthlyExamScheduler({
                   key={dateStr}
                   type="button"
                   data-sound="selectDate"
-                  onClick={() => selectDay(dateStr)}
+                  onClick={() => handleDayClick(dateStr)}
                   className={`relative min-h-[64px] sm:min-h-[76px] rounded-xl text-xs font-bold transition-all active:scale-95 cursor-pointer flex flex-col items-center justify-start gap-1 pt-1.5 pb-1.5 px-0.5 ${
                     isSelected
                       ? "border-2 border-primary text-primary bg-primary/10 scale-[1.02] shadow-sm"
@@ -376,6 +407,7 @@ export function MonthlyExamScheduler({
                 </button>
               );
             })}
+          </div>
           </div>
         </div>
       </div>
