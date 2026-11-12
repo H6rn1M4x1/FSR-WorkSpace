@@ -1529,7 +1529,6 @@ export default function HealthView({
   const handleCancelAlimDraft = () => {
     resetAlimDraft();
     setAlimFecha("");
-    setSelectedAlimDate(null);
   };
 
   const handleEditAlimLog = (log: AlimentacionLog) => {
