@@ -1912,17 +1912,24 @@ export default function MealsView({
     );
   };
 
-  const toggleShopping = (id: string) => {
+  const toggleShopping = async (id: string) => {
     const targetItem = shoppingList.find((s) => s.id === id);
-    if (targetItem) {
-      const updated = { ...targetItem, checked: !targetItem.checked };
-      saveItemToFirestore(userId, "shopping", updated);
-    }
     setShoppingList((prev) =>
       prev.map((s) =>
         s.id === id ? { ...s, checked: !s.checked } : s,
       ),
     );
+    if (!targetItem) return;
+    const updated = { ...targetItem, checked: !targetItem.checked };
+    try {
+      await saveItemToFirestore(userId, "shopping", updated);
+    } catch (error) {
+      console.error("[MealsView] Error toggling shopping item:", error);
+      showToast("No se pudo sincronizar el cambio, probá de nuevo", "error");
+      setShoppingList((prev) =>
+        prev.map((s) => (s.id === id ? targetItem : s)),
+      );
+    }
   };
 
   const deleteShopping = (id: string) => {
