@@ -2068,12 +2068,19 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
           Métricas — ahora integrado en el navbar (useSubPanelRows en HealthView) */}
 
       {/* 2. CONTENEDOR PRINCIPAL DEL CUERPO (TARJETA INDEPENDIENTE) */}
+      {/* En "historial" GymScheduleGrid ya trae su propia tarjeta completa (mismo fondo semi
+          transparente que Historial Diario) — si este contenedor también pintara fondo/borde
+          quedarían dos fondos transparentes anidados, por eso acá se lo deja sin estilo de tarjeta. */}
       <div
-        className={`p-4 sm:p-6 rounded-3xl border backdrop-blur-xl shadow-2xl space-y-6 scroll-reveal ${
-          darkMode
-            ? "bg-zinc-900/60 border-zinc-800/80 text-white"
-            : "bg-white/80 border-slate-200/80 text-slate-800"
-        }`}
+        className={
+          activeTab === "historial"
+            ? "space-y-6"
+            : `p-4 sm:p-6 rounded-3xl border backdrop-blur-xl shadow-2xl space-y-6 scroll-reveal ${
+                darkMode
+                  ? "bg-zinc-900/60 border-zinc-800/80 text-white"
+                  : "bg-white/80 border-slate-200/80 text-slate-800"
+              }`
+        }
       >
 
       {/* 2. SECCIÓN MEDIA: HEADER DE BIENVENIDA Y RESUMEN DE MÉTRICAS */}
