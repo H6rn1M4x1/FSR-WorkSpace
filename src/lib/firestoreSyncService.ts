@@ -10,13 +10,21 @@ import {
   Unsubscribe
 } from "firebase/firestore";
 import { setStoredDataSilent, addDeletedId, getDeletedIds } from "./storage";
-import {
-  SUPABASE_MIGRATED_CATEGORIES,
-  saveItemToSupabase,
-  deleteItemFromSupabase,
-  subscribeToCategorySupabase,
-  refetchCategorySupabase,
-} from "./supabaseTurnosSync";
+import * as supabaseTurnosSync from "./supabaseTurnosSync";
+import * as supabaseFinanzasSync from "./supabaseFinanzasSync";
+import { CategorySyncModule } from "./supabaseCategorySync";
+
+// Secciones ya migradas a Supabase (ver cada módulo): se agrega una entrada acá por cada nueva
+// sección migrada, y firestoreSyncService delega las categorías correspondientes sin que el
+// resto del código (App.tsx, cada *View.tsx) necesite cambiar su forma de llamar.
+const SUPABASE_MODULES: CategorySyncModule[] = [supabaseTurnosSync, supabaseFinanzasSync];
+
+function findSupabaseModule(category: string): CategorySyncModule | null {
+  for (const mod of SUPABASE_MODULES) {
+    if (mod.SUPABASE_MIGRATED_CATEGORIES.has(category)) return mod;
+  }
+  return null;
+}
 
 /**
  * The native Firestore `setDoc`/`deleteDoc` promise only resolves once the write reaches
@@ -241,8 +249,9 @@ export function initGlobalSyncListener(userId: string): void {
  */
 export async function refetchCategory(userId: string, category: string, forceServer: boolean = false): Promise<any[]> {
   const effectiveUserId = getEffectiveUserId(userId);
-  if (SUPABASE_MIGRATED_CATEGORIES.has(category)) {
-    return refetchCategorySupabase(effectiveUserId, category);
+  const supabaseModRefetch = findSupabaseModule(category);
+  if (supabaseModRefetch) {
+    return supabaseModRefetch.refetchCategorySupabase(effectiveUserId, category);
   }
   const subKey = `${effectiveUserId}_${category}`;
   const group = activeSubscriptions[subKey];
@@ -311,8 +320,9 @@ export async function saveItemToFirestore(
   if (!effectiveUserId) {
     throw new Error("Usuario no identificado para guardar en Firestore.");
   }
-  if (SUPABASE_MIGRATED_CATEGORIES.has(category)) {
-    return saveItemToSupabase(effectiveUserId, category, item);
+  const supabaseModSave = findSupabaseModule(category);
+  if (supabaseModSave) {
+    return supabaseModSave.saveItemToSupabase(effectiveUserId, category, item);
   }
 
   const docId = String(item.id);
@@ -410,8 +420,9 @@ export async function deleteItemFromFirestore(
   }
   const effectiveUserId = getEffectiveUserId(userId);
   if (!effectiveUserId) return false;
-  if (SUPABASE_MIGRATED_CATEGORIES.has(category)) {
-    return deleteItemFromSupabase(effectiveUserId, category, itemId);
+  const supabaseModDelete = findSupabaseModule(category);
+  if (supabaseModDelete) {
+    return supabaseModDelete.deleteItemFromSupabase(effectiveUserId, category, itemId);
   }
 
   const docId = String(itemId);
@@ -524,8 +535,9 @@ export function subscribeToCategory(
   onUpdate: CategoryCallback
 ): Unsubscribe {
   const effectiveUserId = getEffectiveUserId(userId);
-  if (SUPABASE_MIGRATED_CATEGORIES.has(category)) {
-    return subscribeToCategorySupabase(effectiveUserId, category, onUpdate);
+  const supabaseModSubscribe = findSupabaseModule(category);
+  if (supabaseModSubscribe) {
+    return supabaseModSubscribe.subscribeToCategorySupabase(effectiveUserId, category, onUpdate);
   }
   const subKey = `${effectiveUserId}_${category}`;
 

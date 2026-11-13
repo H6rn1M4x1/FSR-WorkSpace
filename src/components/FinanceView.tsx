@@ -75,6 +75,8 @@ import {
   InvestmentSnapshot,
 } from "../types";
 import { SmartDateTimePicker } from "./SmartDateTimePicker";
+import { MigrationBanner } from "./MigrationBanner";
+import { bulkImportFromFirestore as bulkImportFinanzas, SUPABASE_MIGRATED_CATEGORIES as FINANZAS_CATEGORIES } from "../lib/supabaseFinanzasSync";
 import PaymentsTable from "./PaymentsTable";
 import GastosVariosTable from "./GastosVariosTable";
 import InversionesTable from "./InversionesTable";
@@ -2119,6 +2121,14 @@ export default function FinanceView({
 
   return (
     <div className="space-y-6 animate-fade-in px-3 sm:px-6 pt-1 sm:pt-1.5 pb-6">
+      <MigrationBanner
+        darkMode={darkMode}
+        userId={userEmail || "hernanmaximiliano10@gmail.com"}
+        title="Migración piloto a Supabase (Finanzas)"
+        categories={Array.from(FINANZAS_CATEGORIES)}
+        bulkImport={bulkImportFinanzas}
+        dismissKey="finanzas_migration_dismissed"
+      />
       {!propActiveSubTab && (
         <SubNav
           activeTab={activeTab}
