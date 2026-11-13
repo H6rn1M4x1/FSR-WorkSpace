@@ -1367,42 +1367,37 @@ export default function MealsView({
     return `${dayOfWeek} ${dayNum} de ${monthName} de ${yearNum}`;
   };
 
-  // Lista de compras custom state
-  const [manualShoppingItems, setManualShoppingItems] = useState<
-    { id: string; mercaderiaId: string; cantidad: number }[]
-  >(() => {
+  // Lista de compras custom state. manualShoppingItems/deletedAutoIngredients/
+  // notesCheckedItems viven solo en localStorage de este dispositivo (nunca se
+  // sincronizaron entre dispositivos, ni con Firestore ni con Supabase) — safeParseArray
+  // evita que un valor corrupto guardado antes (p.ej. "null") deje alguna de estas en
+  // un estado no-array: un spread tipo [...null, item] tira una excepción silenciosa
+  // que impide agregar el ítem, incluso en el mismo dispositivo donde pasó.
+  const safeParseArray = <T,>(json: string | null): T[] => {
     try {
-      const saved = localStorage.getItem("meals_manual_shopping");
-      return saved ? JSON.parse(saved) : [];
+      const parsed = json ? JSON.parse(json) : [];
+      return Array.isArray(parsed) ? parsed : [];
     } catch {
       return [];
     }
-  });
+  };
+
+  const [manualShoppingItems, setManualShoppingItems] = useState<
+    { id: string; mercaderiaId: string; cantidad: number }[]
+  >(() => safeParseArray(localStorage.getItem("meals_manual_shopping")));
 
   const [deletedAutoIngredients, setDeletedAutoIngredients] = useState<
     string[]
-  >(() => {
-    try {
-      const saved = localStorage.getItem("meals_deleted_auto_ingredients");
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
+  >(() => safeParseArray(localStorage.getItem("meals_deleted_auto_ingredients")));
 
   const [showAddManualShop, setShowAddManualShop] = useState(false);
   const [manualShopMercaderiaId, setManualShopMercaderiaId] = useState("");
   const [manualShopQty, setManualShopQty] = useState<number | "">("");
   const [shopSearchQuery, setShopSearchQuery] = useState("");
 
-  const [notesCheckedItems, setNotesCheckedItems] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem("meals_notes_checked_items");
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [notesCheckedItems, setNotesCheckedItems] = useState<string[]>(() =>
+    safeParseArray(localStorage.getItem("meals_notes_checked_items")),
+  );
 
   const [notesGroupBy, setNotesGroupBy] = useState<
     "categoria" | "comercio" | "sector"
@@ -1434,14 +1429,9 @@ export default function MealsView({
 
   React.useEffect(() => {
     const handleStorageSync = () => {
-      try {
-        const savedManual = localStorage.getItem("meals_manual_shopping");
-        if (savedManual) setManualShoppingItems(JSON.parse(savedManual));
-        const savedDeleted = localStorage.getItem("meals_deleted_auto_ingredients");
-        if (savedDeleted) setDeletedAutoIngredients(JSON.parse(savedDeleted));
-        const savedNotes = localStorage.getItem("meals_notes_checked_items");
-        if (savedNotes) setNotesCheckedItems(JSON.parse(savedNotes));
-      } catch {}
+      setManualShoppingItems(safeParseArray(localStorage.getItem("meals_manual_shopping")));
+      setDeletedAutoIngredients(safeParseArray(localStorage.getItem("meals_deleted_auto_ingredients")));
+      setNotesCheckedItems(safeParseArray(localStorage.getItem("meals_notes_checked_items")));
     };
     window.addEventListener("storage", handleStorageSync);
     return () => window.removeEventListener("storage", handleStorageSync);
