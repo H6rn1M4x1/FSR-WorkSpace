@@ -14,12 +14,19 @@ import * as supabaseTurnosSync from "./supabaseTurnosSync";
 import * as supabaseFinanzasSync from "./supabaseFinanzasSync";
 import * as supabaseUniversidadSync from "./supabaseUniversidadSync";
 import * as supabaseSaludSync from "./supabaseSaludSync";
+import * as supabaseComidasSync from "./supabaseComidasSync";
 import { CategorySyncModule } from "./supabaseCategorySync";
 
 // Secciones ya migradas a Supabase (ver cada módulo): se agrega una entrada acá por cada nueva
 // sección migrada, y firestoreSyncService delega las categorías correspondientes sin que el
 // resto del código (App.tsx, cada *View.tsx) necesite cambiar su forma de llamar.
-const SUPABASE_MODULES: CategorySyncModule[] = [supabaseTurnosSync, supabaseFinanzasSync, supabaseUniversidadSync, supabaseSaludSync];
+const SUPABASE_MODULES: CategorySyncModule[] = [
+  supabaseTurnosSync,
+  supabaseFinanzasSync,
+  supabaseUniversidadSync,
+  supabaseSaludSync,
+  supabaseComidasSync,
+];
 
 function findSupabaseModule(category: string): CategorySyncModule | null {
   for (const mod of SUPABASE_MODULES) {

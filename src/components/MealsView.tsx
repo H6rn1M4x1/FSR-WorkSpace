@@ -9,6 +9,8 @@ import { generateUniqueId } from "../utils/id";
 import { getLocalDateString } from "../utils/date";
 import React, { useState, useEffect } from "react";
 import { saveItemToFirestore, deleteItemFromFirestore } from "../lib/firestoreSyncService";
+import { MigrationBanner } from "./MigrationBanner";
+import { bulkImportFromFirestore as bulkImportComidas, SUPABASE_MIGRATED_CATEGORIES as COMIDAS_CATEGORIES } from "../lib/supabaseComidasSync";
 import { motion, AnimatePresence } from "motion/react";
 import { createPortal } from "react-dom";
 import { useToast } from "../context/ToastContext";
@@ -2297,6 +2299,14 @@ export default function MealsView({
 
   return (
     <div className="space-y-6 animate-fade-in px-3 sm:px-6 pt-1 sm:pt-1.5 pb-6">
+      <MigrationBanner
+        darkMode={darkMode}
+        userId={userId}
+        title="Migración piloto a Supabase (Comidas)"
+        categories={Array.from(COMIDAS_CATEGORIES)}
+        bulkImport={bulkImportComidas}
+        dismissKey="comidas_migration_dismissed"
+      />
       {partnerInfo.isLinked && (
         <div className="flex flex-wrap items-center justify-between gap-2 p-3 px-4 rounded-2xl bg-primary/10 border border-primary/20 text-xs font-bold text-primary dark:text-blue-200 shadow-xs">
           <div className="flex items-center gap-2">
