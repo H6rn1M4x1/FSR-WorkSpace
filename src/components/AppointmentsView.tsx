@@ -12,11 +12,10 @@ import { FilePreviewModal } from "./FilePreviewModal";
 import { getMatchTeamLogos } from "../lib/matchScheduler";
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import L from "leaflet";
-import { collection, query, getDocs } from "firebase/firestore";
-import { subscribeToCategory, deleteItemFromFirestore, saveItemToFirestore, sanitizeForFirestore, getEffectiveUserId } from "../lib/firestoreSyncService";
+import { subscribeToCategory, deleteItemFromFirestore, saveItemToFirestore, sanitizeForFirestore, getEffectiveUserId, refetchCategory } from "../lib/firestoreSyncService";
 import { auth } from "../lib/supabase";
 import { netlifyFn } from "../lib/apiBase";
-import { db } from "../lib/firebase"; // TODO Fase 2: migrar a Supabase
+import { MigrateTurnosBanner } from "./MigrateTurnosBanner";
 import { LocationPickerMap } from "./LocationPickerMap";
 import { ReverseGeocodedAddress } from "./ReverseGeocodedAddress";
 import { useToast } from "../context/ToastContext";
@@ -1383,57 +1382,35 @@ export default function AppointmentsView({
     showToast("Categoría eliminada", "success");
   };
 
-  // One-time static getDocs fetch for Turnos, Compromisos, Appointments, and Routines (runs ONCE on mount)
+  // One-time static fetch for Turnos, Compromisos, Appointments, and Routines (runs ONCE on
+  // mount). Estas 3 categorías viven en Supabase (ver supabaseTurnosSync.ts) — refetchCategory
+  // ya sabe dispatchear para allá, así que esto no toca Firestore directamente.
   useEffect(() => {
     const effectiveUserId = getEffectiveUserId(userEmail || auth.currentUser?.email || auth.currentUser?.uid);
     if (!effectiveUserId) return;
 
-    // 1. Static fetch for turnos_compromisos
-    getDocs(query(collection(db, "users", effectiveUserId, "turnos_compromisos")))
-      .then((snapshot) => {
-        const data = snapshot.docs.map((docSnap) => {
-          const d = docSnap.data();
-          return {
-            ...d,
-            id: d.id || docSnap.id,
-          };
-        }) as TurnoCompromiso[];
-        if (setTurnosCompromisos) setTurnosCompromisos(data);
+    refetchCategory(effectiveUserId, "turnos_compromisos")
+      .then((data) => {
+        if (setTurnosCompromisos) setTurnosCompromisos(data as TurnoCompromiso[]);
       })
       .catch((error) => {
-        console.warn("[AppointmentsView] Static getDocs error (turnos_compromisos):", error);
+        console.warn("[AppointmentsView] Static fetch error (turnos_compromisos):", error);
       });
 
-    // 2. Static fetch for appointments
-    getDocs(query(collection(db, "users", effectiveUserId, "appointments")))
-      .then((snapshot) => {
-        const data = snapshot.docs.map((docSnap) => {
-          const d = docSnap.data();
-          return {
-            ...d,
-            id: d.id || docSnap.id,
-          };
-        }) as Appointment[];
-        if (setAppointments) setAppointments(data);
+    refetchCategory(effectiveUserId, "appointments")
+      .then((data) => {
+        if (setAppointments) setAppointments(data as Appointment[]);
       })
       .catch((error) => {
-        console.warn("[AppointmentsView] Static getDocs error (appointments):", error);
+        console.warn("[AppointmentsView] Static fetch error (appointments):", error);
       });
 
-    // 3. Static fetch for routines
-    getDocs(query(collection(db, "users", effectiveUserId, "routines")))
-      .then((snapshot) => {
-        const data = snapshot.docs.map((docSnap) => {
-          const d = docSnap.data();
-          return {
-            ...d,
-            id: d.id || docSnap.id,
-          };
-        }) as RoutineLog[];
-        if (setRoutines) setRoutines(data);
+    refetchCategory(effectiveUserId, "routines")
+      .then((data) => {
+        if (setRoutines) setRoutines(data as RoutineLog[]);
       })
       .catch((error) => {
-        console.warn("[AppointmentsView] Static getDocs error (routines):", error);
+        console.warn("[AppointmentsView] Static fetch error (routines):", error);
       });
   }, []);
 
@@ -2840,6 +2817,7 @@ export default function AppointmentsView({
 
   return (
     <div className="space-y-6 animate-fade-in px-3 sm:px-6 pt-1 sm:pt-1.5 pb-6">
+      <MigrateTurnosBanner darkMode={darkMode} userId={activeUserId} />
       {!propActiveSubTab && (
         <SubNav
           activeTab={activeTab}
