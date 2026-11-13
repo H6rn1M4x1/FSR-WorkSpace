@@ -10,6 +10,13 @@ import {
   Unsubscribe
 } from "firebase/firestore";
 import { setStoredDataSilent, addDeletedId, getDeletedIds } from "./storage";
+import {
+  SUPABASE_MIGRATED_CATEGORIES,
+  saveItemToSupabase,
+  deleteItemFromSupabase,
+  subscribeToCategorySupabase,
+  refetchCategorySupabase,
+} from "./supabaseTurnosSync";
 
 /**
  * The native Firestore `setDoc`/`deleteDoc` promise only resolves once the write reaches
@@ -234,6 +241,9 @@ export function initGlobalSyncListener(userId: string): void {
  */
 export async function refetchCategory(userId: string, category: string, forceServer: boolean = false): Promise<any[]> {
   const effectiveUserId = getEffectiveUserId(userId);
+  if (SUPABASE_MIGRATED_CATEGORIES.has(category)) {
+    return refetchCategorySupabase(effectiveUserId, category);
+  }
   const subKey = `${effectiveUserId}_${category}`;
   const group = activeSubscriptions[subKey];
   const versionAtStart = group?.version ?? 0;
@@ -300,6 +310,9 @@ export async function saveItemToFirestore(
   const effectiveUserId = getEffectiveUserId(userId);
   if (!effectiveUserId) {
     throw new Error("Usuario no identificado para guardar en Firestore.");
+  }
+  if (SUPABASE_MIGRATED_CATEGORIES.has(category)) {
+    return saveItemToSupabase(effectiveUserId, category, item);
   }
 
   const docId = String(item.id);
@@ -397,6 +410,9 @@ export async function deleteItemFromFirestore(
   }
   const effectiveUserId = getEffectiveUserId(userId);
   if (!effectiveUserId) return false;
+  if (SUPABASE_MIGRATED_CATEGORIES.has(category)) {
+    return deleteItemFromSupabase(effectiveUserId, category, itemId);
+  }
 
   const docId = String(itemId);
   const docPath = `users/${effectiveUserId}/${category}/${docId}`;
@@ -508,6 +524,9 @@ export function subscribeToCategory(
   onUpdate: CategoryCallback
 ): Unsubscribe {
   const effectiveUserId = getEffectiveUserId(userId);
+  if (SUPABASE_MIGRATED_CATEGORIES.has(category)) {
+    return subscribeToCategorySupabase(effectiveUserId, category, onUpdate);
+  }
   const subKey = `${effectiveUserId}_${category}`;
 
   // Ensure global single-document listener is active for this user
