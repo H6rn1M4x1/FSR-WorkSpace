@@ -12,6 +12,8 @@ import { CustomSelect, SelectPopoverPosition } from "./CustomSelect";
 import { generateUniqueId } from "../utils/id";
 import React, { useState, useEffect } from "react";
 import { saveItemToFirestore, deleteItemFromFirestore } from "../lib/firestoreSyncService";
+import { MigrationBanner } from "./MigrationBanner";
+import { bulkImportFromFirestore as bulkImportUniversidad, SUPABASE_MIGRATED_CATEGORIES as UNIVERSIDAD_CATEGORIES } from "../lib/supabaseUniversidadSync";
 import { PillFilterBar } from "./PillFilterBar";
 import { motion, AnimatePresence } from "motion/react";
 import { createPortal } from "react-dom";
@@ -1876,6 +1878,14 @@ export default function AcademicView({
 
   return (
     <div className="space-y-6 animate-fade-in px-3 sm:px-6 pt-1 sm:pt-1.5 pb-6">
+      <MigrationBanner
+        darkMode={darkMode}
+        userId={activeUserId}
+        title="Migración piloto a Supabase (Universidad)"
+        categories={Array.from(UNIVERSIDAD_CATEGORIES)}
+        bulkImport={bulkImportUniversidad}
+        dismissKey="universidad_migration_dismissed"
+      />
       {/* Submenu Tabs Selector with Navigation Arrows */}
       {!propActiveSubTab && (
         <SubNav
