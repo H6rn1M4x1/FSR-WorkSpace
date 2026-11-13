@@ -1614,6 +1614,10 @@ export default function MealsView({
       setManualShopMercaderiaId("");
       setManualShopQty("");
       setShowAddManualShop(false);
+      showToast("Ítem agregado a la lista de compras", "success");
+    } catch (err: any) {
+      console.error("[MealsView] Error adding manual shopping item:", err);
+      showToast(`No se pudo agregar el ítem: ${err?.message || err}`, "error");
     } finally {
       setIsSaving(false);
     }
@@ -1629,15 +1633,13 @@ export default function MealsView({
       () => {
         // Exclude from auto if it's there
         if (!deletedAutoIngredients.includes(itemName)) {
-          setDeletedAutoIngredients([...deletedAutoIngredients, itemName]);
+          setDeletedAutoIngredients((prev) => [...prev, itemName]);
         }
 
         // Remove from manual
         if (mercaderiaId) {
-          setManualShoppingItems(
-            manualShoppingItems.filter(
-              (item) => item.mercaderiaId !== mercaderiaId,
-            ),
+          setManualShoppingItems((prev) =>
+            prev.filter((item) => item.mercaderiaId !== mercaderiaId),
           );
         } else {
           // Find mercaderia item by name and remove
@@ -1645,10 +1647,8 @@ export default function MealsView({
             (m) => m.ingredientes.toLowerCase() === itemName.toLowerCase(),
           );
           if (matchedMer) {
-            setManualShoppingItems(
-              manualShoppingItems.filter(
-                (item) => item.mercaderiaId !== matchedMer.id,
-              ),
+            setManualShoppingItems((prev) =>
+              prev.filter((item) => item.mercaderiaId !== matchedMer.id),
             );
           }
         }
@@ -1663,11 +1663,19 @@ export default function MealsView({
       () => {
         setDeletedAutoIngredients([]);
         setManualShoppingItems([]);
+        showToast("Lista de compras restablecida", "success");
       },
     );
   };
 
-  const combinedShoppingList = getCombinedShoppingList();
+  let combinedShoppingList: ReturnType<typeof getCombinedShoppingList> = [];
+  let shoppingListComputeError: string | null = null;
+  try {
+    combinedShoppingList = getCombinedShoppingList();
+  } catch (err: any) {
+    console.error("[MealsView] Error computing Lista de Compras:", err);
+    shoppingListComputeError = err?.message || String(err);
+  }
   const filteredShoppingList = combinedShoppingList
     .filter((item) => {
       const q = shopSearchQuery.toLowerCase();
@@ -4495,6 +4503,7 @@ export default function MealsView({
                   )}
                 </tbody>
               </table>
+            </div>
 
             <div className="md:hidden p-3 space-y-2.5">
               {shoppingListTableLoading ? (
@@ -4583,7 +4592,6 @@ export default function MealsView({
                 cualquier ingrediente
               </span>
             </div>
-          </div>
         </div>
       )}
         </motion.div>
