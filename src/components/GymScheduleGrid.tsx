@@ -495,7 +495,9 @@ export function GymScheduleGrid({
   return (
     <div
       className={`p-6 rounded-3xl border scroll-reveal ${
-        darkMode ? "border-zinc-800 text-white" : "border-zinc-200 text-zinc-800"
+        darkMode
+          ? "bg-black/85 backdrop-blur-md border-zinc-800 text-white shadow-lg"
+          : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
       }`}
     >
       <div className="lg:flex lg:gap-6 lg:items-start">
