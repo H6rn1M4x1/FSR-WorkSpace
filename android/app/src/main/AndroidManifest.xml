@@ -34,6 +34,19 @@
 
         </activity>
 
+        <!-- Detección automática de pagos (Gastos Varios): servicio que recibe notificaciones
+             de las apps de bancos/billeteras/exchanges que el usuario elija monitorear, solo
+             mientras tenga la detección activada desde la app. Requiere que el usuario otorgue
+             manualmente el permiso especial "Acceso a notificaciones" desde Ajustes. -->
+        <service
+            android:name=".PaymentListenerService"
+            android:exported="false"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

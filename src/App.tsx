@@ -38,6 +38,7 @@ import type { UserProfileData } from "./components/UserSettingsModal";
 import { TwoFactorLoginModal } from "./components/TwoFactorLoginModal";
 import { ConfirmationModal } from "./components/ConfirmationModal";
 import { useScrollReveal } from "./hooks/useScrollReveal";
+import { usePaymentAutoLogger } from "./hooks/usePaymentAutoLogger";
 import { DriveBackupService } from "./lib/driveBackupService";
 import { syncMonthlyMatches } from "./lib/matchScheduler";
 import Dither from "./components/Dither";
@@ -985,6 +986,8 @@ export default function App() {
   const currentAccountEmail = user?.email || userProfile?.email || "hernanmaximiliano10@gmail.com";
   const effectiveComidasUserId = getEffectiveSectionUserId(currentAccountEmail, "comidas", activeSectionLinks);
   const effectiveControlClinicoUserId = getEffectiveSectionUserId(currentAccountEmail, "control_clinico", activeSectionLinks);
+
+  usePaymentAutoLogger(user?.email ? currentAccountEmail : null);
 
   useEffect(() => {
     const currentUserId = user?.email || userProfile?.email || "hernanmaximiliano10@gmail.com";
