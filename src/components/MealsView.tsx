@@ -8,7 +8,7 @@ import { AnimatedNumber } from "./AnimatedNumber";
 import { generateUniqueId } from "../utils/id";
 import { getLocalDateString } from "../utils/date";
 import React, { useState, useEffect } from "react";
-import { saveItemToFirestore, deleteItemFromFirestore } from "../lib/firestoreSyncService";
+import { saveItemToFirestore, deleteItemFromFirestore, subscribeToCategory } from "../lib/firestoreSyncService";
 import { MigrationBanner } from "./MigrationBanner";
 import { bulkImportFromFirestore as bulkImportComidas, SUPABASE_MIGRATED_CATEGORIES as COMIDAS_CATEGORIES } from "../lib/supabaseComidasSync";
 import { motion, AnimatePresence } from "motion/react";
@@ -1368,74 +1368,120 @@ export default function MealsView({
   };
 
   // Lista de compras custom state. manualShoppingItems/deletedAutoIngredients/
-  // notesCheckedItems viven solo en localStorage de este dispositivo (nunca se
-  // sincronizaron entre dispositivos, ni con Firestore ni con Supabase) — safeParseArray
-  // evita que un valor corrupto guardado antes (p.ej. "null") deje alguna de estas en
-  // un estado no-array: un spread tipo [...null, item] tira una excepción silenciosa
-  // que impide agregar el ítem, incluso en el mismo dispositivo donde pasó.
-  const safeParseArray = <T,>(json: string | null): T[] => {
-    try {
-      const parsed = json ? JSON.parse(json) : [];
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  };
-
+  // notesCheckedItems vivían antes solo en localStorage de cada dispositivo (nunca se
+  // sincronizaban entre dispositivos) — ahora están en Supabase (shopping_manual_items,
+  // shopping_deleted_ingredients, shopping_checked_items) igual que el resto de Comidas.
   const [manualShoppingItems, setManualShoppingItems] = useState<
     { id: string; mercaderiaId: string; cantidad: number }[]
-  >(() => safeParseArray(localStorage.getItem("meals_manual_shopping")));
-
-  const [deletedAutoIngredients, setDeletedAutoIngredients] = useState<
-    string[]
-  >(() => safeParseArray(localStorage.getItem("meals_deleted_auto_ingredients")));
+  >([]);
+  const [deletedIngredientRows, setDeletedIngredientRows] = useState<
+    { id: string; name: string }[]
+  >([]);
+  const [checkedItemRows, setCheckedItemRows] = useState<
+    { id: string; name: string }[]
+  >([]);
+  // Derivados como string[] para no tocar los ~10 lugares que ya usan
+  // deletedAutoIngredients/notesCheckedItems como listas planas de nombres.
+  const deletedAutoIngredients = deletedIngredientRows.map((r) => r.name);
+  const notesCheckedItems = checkedItemRows.map((r) => r.name);
 
   const [showAddManualShop, setShowAddManualShop] = useState(false);
   const [manualShopMercaderiaId, setManualShopMercaderiaId] = useState("");
   const [manualShopQty, setManualShopQty] = useState<number | "">("");
   const [shopSearchQuery, setShopSearchQuery] = useState("");
 
-  const [notesCheckedItems, setNotesCheckedItems] = useState<string[]>(() =>
-    safeParseArray(localStorage.getItem("meals_notes_checked_items")),
-  );
-
   const [notesGroupBy, setNotesGroupBy] = useState<
     "categoria" | "comercio" | "sector"
   >("categoria");
 
-  React.useEffect(() => {
-    localStorage.setItem(
-      "meals_manual_shopping",
-      JSON.stringify(manualShoppingItems),
-    );
-    window.dispatchEvent(new Event("storage"));
-  }, [manualShoppingItems]);
+  useEffect(() => {
+    const unsubs = [
+      subscribeToCategory(userId, "shopping_manual_items", (items) => {
+        if (Array.isArray(items)) setManualShoppingItems(items);
+      }),
+      subscribeToCategory(userId, "shopping_deleted_ingredients", (items) => {
+        if (Array.isArray(items)) setDeletedIngredientRows(items);
+      }),
+      subscribeToCategory(userId, "shopping_checked_items", (items) => {
+        if (Array.isArray(items)) setCheckedItemRows(items);
+      }),
+    ];
+    return () => unsubs.forEach((unsub) => { try { unsub(); } catch (_) {} });
+  }, [userId]);
 
-  React.useEffect(() => {
-    localStorage.setItem(
-      "meals_deleted_auto_ingredients",
-      JSON.stringify(deletedAutoIngredients),
-    );
-    window.dispatchEvent(new Event("storage"));
-  }, [deletedAutoIngredients]);
+  // Normaliza un nombre de ingrediente a un id de documento válido (sin espacios ni
+  // mayúsculas), para que agregar el mismo ingrediente dos veces haga upsert en vez de
+  // duplicar, igual que el resto de las categorías sincronizadas.
+  const ingredientDocId = (name: string) =>
+    name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-");
 
-  React.useEffect(() => {
-    localStorage.setItem(
-      "meals_notes_checked_items",
-      JSON.stringify(notesCheckedItems),
-    );
-    window.dispatchEvent(new Event("storage"));
-  }, [notesCheckedItems]);
+  // Migración única de lo que haya quedado guardado en localStorage de este dispositivo
+  // de ANTES de que estas 3 listas pasaran a sincronizarse por Supabase — se corre una
+  // sola vez (borra las claves viejas al terminar, así no se repite en el próximo mount).
+  useEffect(() => {
+    if (!userId) return;
+    try {
+      const oldManual = localStorage.getItem("meals_manual_shopping");
+      const oldDeleted = localStorage.getItem("meals_deleted_auto_ingredients");
+      const oldChecked = localStorage.getItem("meals_notes_checked_items");
+      if (!oldManual && !oldDeleted && !oldChecked) return;
 
-  React.useEffect(() => {
-    const handleStorageSync = () => {
-      setManualShoppingItems(safeParseArray(localStorage.getItem("meals_manual_shopping")));
-      setDeletedAutoIngredients(safeParseArray(localStorage.getItem("meals_deleted_auto_ingredients")));
-      setNotesCheckedItems(safeParseArray(localStorage.getItem("meals_notes_checked_items")));
-    };
-    window.addEventListener("storage", handleStorageSync);
-    return () => window.removeEventListener("storage", handleStorageSync);
-  }, []);
+      const parseArr = (json: string | null): any[] => {
+        try {
+          const parsed = json ? JSON.parse(json) : [];
+          return Array.isArray(parsed) ? parsed : [];
+        } catch {
+          return [];
+        }
+      };
+
+      Promise.all([
+        ...parseArr(oldManual).map((item) =>
+          saveItemToFirestore(userId, "shopping_manual_items", item).catch(() => {}),
+        ),
+        ...parseArr(oldDeleted).map((name: string) =>
+          saveItemToFirestore(userId, "shopping_deleted_ingredients", { id: ingredientDocId(name), name }).catch(() => {}),
+        ),
+        ...parseArr(oldChecked).map((name: string) =>
+          saveItemToFirestore(userId, "shopping_checked_items", { id: ingredientDocId(name), name }).catch(() => {}),
+        ),
+      ]).then(() => {
+        localStorage.removeItem("meals_manual_shopping");
+        localStorage.removeItem("meals_deleted_auto_ingredients");
+        localStorage.removeItem("meals_notes_checked_items");
+      });
+    } catch (_) {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
+
+  const addDeletedIngredient = (name: string) => {
+    const id = ingredientDocId(name);
+    saveItemToFirestore(userId, "shopping_deleted_ingredients", { id, name: name.toLowerCase() }).catch((err) => {
+      console.error("[MealsView] Error excluding ingredient:", err);
+      showToast("No se pudo excluir el ingrediente", "error");
+    });
+  };
+
+  const removeAllDeletedIngredients = async () => {
+    await Promise.all(
+      deletedIngredientRows.map((row) => deleteItemFromFirestore(userId, "shopping_deleted_ingredients", row.id)),
+    );
+  };
+
+  const toggleCheckedItem = (lowerName: string) => {
+    const existing = checkedItemRows.find((r) => r.name === lowerName);
+    if (existing) {
+      deleteItemFromFirestore(userId, "shopping_checked_items", existing.id).catch((err) => {
+        console.error("[MealsView] Error un-checking item:", err);
+      });
+    } else {
+      const id = ingredientDocId(lowerName);
+      saveItemToFirestore(userId, "shopping_checked_items", { id, name: lowerName }).catch((err) => {
+        console.error("[MealsView] Error checking item:", err);
+        showToast("No se pudo marcar el ítem", "error");
+      });
+    }
+  };
 
   // Combined Shopping List calculation
   const getCombinedShoppingList = () => {
@@ -1593,22 +1639,20 @@ export default function MealsView({
     setIsSaving(true);
     try {
       // Check if item is already in manual list
-      const existingIndex = manualShoppingItems.findIndex(
+      const existing = manualShoppingItems.find(
         (item) => item.mercaderiaId === manualShopMercaderiaId,
       );
-      if (existingIndex !== -1) {
-        const updated = [...manualShoppingItems];
-        updated[existingIndex].cantidad += Number(manualShopQty);
-        setManualShoppingItems(updated);
+      if (existing) {
+        await saveItemToFirestore(userId, "shopping_manual_items", {
+          ...existing,
+          cantidad: existing.cantidad + Number(manualShopQty),
+        });
       } else {
-        setManualShoppingItems([
-          ...manualShoppingItems,
-          {
-            id: generateUniqueId("manual-shop"),
-            mercaderiaId: manualShopMercaderiaId,
-            cantidad: Number(manualShopQty),
-          },
-        ]);
+        await saveItemToFirestore(userId, "shopping_manual_items", {
+          id: generateUniqueId("manual-shop"),
+          mercaderiaId: manualShopMercaderiaId,
+          cantidad: Number(manualShopQty),
+        });
       }
 
       setManualShopMercaderiaId("");
@@ -1633,23 +1677,21 @@ export default function MealsView({
       () => {
         // Exclude from auto if it's there
         if (!deletedAutoIngredients.includes(itemName)) {
-          setDeletedAutoIngredients((prev) => [...prev, itemName]);
+          addDeletedIngredient(itemName);
         }
 
         // Remove from manual
         if (mercaderiaId) {
-          setManualShoppingItems((prev) =>
-            prev.filter((item) => item.mercaderiaId !== mercaderiaId),
-          );
+          const toRemove = manualShoppingItems.find((item) => item.mercaderiaId === mercaderiaId);
+          if (toRemove) deleteItemFromFirestore(userId, "shopping_manual_items", toRemove.id).catch(() => {});
         } else {
           // Find mercaderia item by name and remove
           const matchedMer = mercaderia.find(
             (m) => m.ingredientes.toLowerCase() === itemName.toLowerCase(),
           );
           if (matchedMer) {
-            setManualShoppingItems((prev) =>
-              prev.filter((item) => item.mercaderiaId !== matchedMer.id),
-            );
+            const toRemove = manualShoppingItems.find((item) => item.mercaderiaId === matchedMer.id);
+            if (toRemove) deleteItemFromFirestore(userId, "shopping_manual_items", toRemove.id).catch(() => {});
           }
         }
       },
@@ -1660,9 +1702,11 @@ export default function MealsView({
     askConfirmation(
       "Confirmar Restablecimiento",
       "¿Estás seguro de que deseas restablecer la lista de compras? Se eliminarán los agregados manuales y se recuperarán los ingredientes calculados eliminados.",
-      () => {
-        setDeletedAutoIngredients([]);
-        setManualShoppingItems([]);
+      async () => {
+        await Promise.all([
+          removeAllDeletedIngredients(),
+          ...manualShoppingItems.map((item) => deleteItemFromFirestore(userId, "shopping_manual_items", item.id)),
+        ]);
         showToast("Lista de compras restablecida", "success");
       },
     );
@@ -2835,24 +2879,7 @@ export default function MealsView({
                                         type="checkbox"
                                         checked={isCompleted}
                                         onChange={() => {
-                                          const lowerName =
-                                            item.name.toLowerCase();
-                                          if (
-                                            notesCheckedItems.includes(
-                                              lowerName,
-                                            )
-                                          ) {
-                                            setNotesCheckedItems(
-                                              notesCheckedItems.filter(
-                                                (n) => n !== lowerName,
-                                              ),
-                                            );
-                                          } else {
-                                            setNotesCheckedItems([
-                                              ...notesCheckedItems,
-                                              lowerName,
-                                            ]);
-                                          }
+                                          toggleCheckedItem(item.name.toLowerCase());
                                         }}
                                         className="mt-0.5 rounded border-slate-300 dark:border-zinc-700 text-primary focus:ring-primary h-3 w-3 cursor-pointer accent-primary"
                                       />
@@ -4409,19 +4436,7 @@ export default function MealsView({
                               type="checkbox"
                               checked={isCompleted}
                               onChange={() => {
-                                const lowerName = item.name.toLowerCase();
-                                if (notesCheckedItems.includes(lowerName)) {
-                                  setNotesCheckedItems(
-                                    notesCheckedItems.filter(
-                                      (i) => i !== lowerName,
-                                    ),
-                                  );
-                                } else {
-                                  setNotesCheckedItems([
-                                    ...notesCheckedItems,
-                                    lowerName,
-                                  ]);
-                                }
+                                toggleCheckedItem(item.name.toLowerCase());
                               }}
                               className="rounded border-slate-300 text-primary focus:ring-primary"
                             />
@@ -4520,12 +4535,7 @@ export default function MealsView({
                 filteredShoppingList.map((item, idx) => {
                   const isCompleted = notesCheckedItems.includes(item.name.toLowerCase());
                   const toggleCompleted = () => {
-                    const lowerName = item.name.toLowerCase();
-                    if (notesCheckedItems.includes(lowerName)) {
-                      setNotesCheckedItems(notesCheckedItems.filter((i) => i !== lowerName));
-                    } else {
-                      setNotesCheckedItems([...notesCheckedItems, lowerName]);
-                    }
+                    toggleCheckedItem(item.name.toLowerCase());
                   };
                   return (
                     <motion.div
@@ -6258,14 +6268,7 @@ export default function MealsView({
             icon={ShoppingBag}
             onToggleComplete={
               detailShopping
-                ? () => {
-                    const lowerName = detailShopping.name.toLowerCase();
-                    setNotesCheckedItems(
-                      notesCheckedItems.includes(lowerName)
-                        ? notesCheckedItems.filter((i) => i !== lowerName)
-                        : [...notesCheckedItems, lowerName],
-                    );
-                  }
+                ? () => toggleCheckedItem(detailShopping.name.toLowerCase())
                 : undefined
             }
             isComplete={detailShoppingCompleted}

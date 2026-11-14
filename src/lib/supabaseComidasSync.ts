@@ -157,6 +157,46 @@ const TABLES: Record<string, TableConfig> = {
       platoId: row.plato_id ?? "",
     }),
   },
+  // Personalizaciones de la Lista de Compras (antes solo en localStorage de cada
+  // dispositivo, nunca sincronizadas — ver MealsView.tsx).
+  shopping_manual_items: {
+    table: "shopping_manual_items",
+    toRow: (item, userId) => ({
+      id: String(item.id),
+      user_id: userId,
+      mercaderia_id: item.mercaderiaId ?? null,
+      cantidad: item.cantidad ?? null,
+    }),
+    fromRow: (row) => ({
+      id: row.id,
+      mercaderiaId: row.mercaderia_id ?? "",
+      cantidad: row.cantidad ?? 0,
+    }),
+  },
+  shopping_deleted_ingredients: {
+    table: "shopping_deleted_ingredients",
+    toRow: (item, userId) => ({
+      id: String(item.id),
+      user_id: userId,
+      name: item.name ?? null,
+    }),
+    fromRow: (row) => ({
+      id: row.id,
+      name: row.name ?? "",
+    }),
+  },
+  shopping_checked_items: {
+    table: "shopping_checked_items",
+    toRow: (item, userId) => ({
+      id: String(item.id),
+      user_id: userId,
+      name: item.name ?? null,
+    }),
+    fromRow: (row) => ({
+      id: row.id,
+      name: row.name ?? "",
+    }),
+  },
 };
 
 const sync = createCategorySync(TABLES);
