@@ -15,8 +15,6 @@ import L from "leaflet";
 import { subscribeToCategory, deleteItemFromFirestore, saveItemToFirestore, sanitizeForFirestore, getEffectiveUserId, refetchCategory } from "../lib/firestoreSyncService";
 import { auth } from "../lib/supabase";
 import { netlifyFn } from "../lib/apiBase";
-import { MigrationBanner } from "./MigrationBanner";
-import { bulkImportFromFirestore as bulkImportTurnos, SUPABASE_MIGRATED_CATEGORIES as TURNOS_CATEGORIES } from "../lib/supabaseTurnosSync";
 import { LocationPickerMap } from "./LocationPickerMap";
 import { ReverseGeocodedAddress } from "./ReverseGeocodedAddress";
 import { useToast } from "../context/ToastContext";
@@ -2818,14 +2816,6 @@ export default function AppointmentsView({
 
   return (
     <div className="space-y-6 animate-fade-in px-3 sm:px-6 pt-1 sm:pt-1.5 pb-6">
-      <MigrationBanner
-        darkMode={darkMode}
-        userId={activeUserId}
-        title="Migración piloto a Supabase (Turnos)"
-        categories={Array.from(TURNOS_CATEGORIES)}
-        bulkImport={bulkImportTurnos}
-        dismissKey="turnos_migration_dismissed"
-      />
       {!propActiveSubTab && (
         <SubNav
           activeTab={activeTab}
