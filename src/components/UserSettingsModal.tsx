@@ -92,6 +92,8 @@ import {
 import { SharedSectionsManager } from "./SharedSectionsManager";
 import { AgendaSharingManager } from "./AgendaSharingManager";
 import { AgendaShare } from "../types";
+import { MigrationBanner } from "./MigrationBanner";
+import { bulkImportFromFirestore as bulkImportUserProfile, SUPABASE_MIGRATED_CATEGORIES as USER_PROFILE_CATEGORIES } from "../lib/supabaseUserProfileSync";
 
 function detectCurrentDevice() {
   if (typeof window === "undefined" || !navigator) {
@@ -1428,6 +1430,14 @@ export function UserSettingsModal({
           {/* TAB 1: PROFILE & PERSONAL DATA */}
           {activeTab === "profile" && (
             <form onSubmit={handleSaveProfile} className="space-y-6">
+              <MigrationBanner
+                darkMode={darkMode}
+                userId={authenticatedEmail}
+                title="Migración piloto a Supabase (Ajustes de Usuario)"
+                categories={Array.from(USER_PROFILE_CATEGORIES)}
+                bulkImport={bulkImportUserProfile}
+                dismissKey="user_profile_migration_dismissed"
+              />
               {/* Profile Card Summary Banner */}
               <div className="p-4 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 flex items-center gap-4">
                 <div className="w-16 h-16 rounded-full bg-zinc-200 dark:bg-zinc-800 border-2 border-primary/20 flex items-center justify-center overflow-hidden shrink-0 shadow-inner">
