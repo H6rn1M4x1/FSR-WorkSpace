@@ -663,6 +663,10 @@ export default function App() {
   // Guards against overwriting the remote (other-device) profile with this device's local
   // defaults before we've had a chance to hear back from Firestore at least once.
   const hasHeardFromFirestoreRef = useRef(false);
+  // Cuándo pusheamos nosotros mismos por última vez — ver uso más abajo, junto al chequeo de
+  // comparableProfileJson en el listener de abajo.
+  const lastLocalPushAtRef = useRef(0);
+  const LOCAL_ECHO_WINDOW_MS = 4000;
 
   // Confirmado en vivo (35K escrituras a Firestore en una hora, agotando la cuota diaria
   // gratuita): "id" y "updatedAt" nunca deben entrar en la comparación de eco. El push le
@@ -671,10 +675,17 @@ export default function App() {
   // volvía de Firestore (con esos dos campos de más) nunca coincidía con el JSON que se había
   // guardado antes de pushear, y cada sync de perfil terminaba reescribiendo una vuelta extra
   // sobre sí mismo. Se comparan solo los campos reales del perfil, sin "id" ni "updatedAt".
+  //
+  // Las claves se ordenan antes de stringify-ar: ahora que "user_profile" vive en Supabase, el
+  // eco optimista que vuelve lo arma supabaseUserProfileSync.ts (fromRow) reconstruyendo el
+  // objeto en un orden FIJO de campos, distinto al orden "orgánico" que tiene el estado local en
+  // memoria — con JSON.stringify plano, el mismo contenido en otro orden se veía como "cambió
+  // de verdad", y el perfil recién editado quedaba pisado por su propio eco al instante. Con las
+  // claves ordenadas, el orden deja de importar.
   const comparableProfileJson = (data: any): string => {
     if (!data) return "";
     const { id: _id, updatedAt: _updatedAt, ...rest } = data;
-    return JSON.stringify(rest);
+    return JSON.stringify(rest, Object.keys(rest).sort());
   };
 
   useEffect(() => {
@@ -686,6 +697,11 @@ export default function App() {
       if (!remote) return;
       const remoteJson = comparableProfileJson(remote);
       if (remoteJson === lastSyncedProfileJsonRef.current) return; // echo of our own last push
+      // Dentro de la ventana que sigue a un push nuestro, un campo numérico (edad, peso, altura)
+      // puede volver como texto en el eco optimista (Supabase los guarda como columnas de
+      // texto) aunque el contenido sea el mismo — el estado local ya es el correcto, pisarlo
+      // con esta versión reconstruida solo reintroduciría el mismo problema con otra forma.
+      if (Date.now() - lastLocalPushAtRef.current < LOCAL_ECHO_WINDOW_MS) return;
       lastSyncedProfileJsonRef.current = remoteJson;
       setUserProfile((prev) => ({ ...(prev || {}), ...remote } as UserProfileData));
       try {
@@ -712,6 +728,7 @@ export default function App() {
     if (profileJson === lastSyncedProfileJsonRef.current) return; // avoid re-pushing what we just received
     lastSyncedProfileJsonRef.current = profileJson;
     const timeoutId = setTimeout(() => {
+      lastLocalPushAtRef.current = Date.now();
       saveItemToFirestore(currentUserId, "user_profile", { id: currentUserId, ...userProfile }).catch((err) => {
         console.error("Error sincronizando perfil entre dispositivos:", err);
       });
