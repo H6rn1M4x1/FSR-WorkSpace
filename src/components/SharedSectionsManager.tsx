@@ -30,6 +30,7 @@ import {
   rejectSectionInvitation,
   unlinkSection
 } from "../lib/sectionSharingService";
+import { SharingMigrationBanner } from "./SharingMigrationBanner";
 
 interface SharedSectionsManagerProps {
   userEmail: string;
@@ -161,6 +162,8 @@ export function SharedSectionsManager({ userEmail, darkMode = false }: SharedSec
 
   return (
     <div className="space-y-6 pt-2">
+      <SharingMigrationBanner darkMode={darkMode} userId={userEmail} />
+
       {/* Header Banner */}
       <div className="p-5 rounded-2xl border border-primary/20 bg-primary/5 dark:bg-primary/10 relative overflow-hidden">
         <div className="flex items-start gap-4">

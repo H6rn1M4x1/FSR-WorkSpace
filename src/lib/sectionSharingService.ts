@@ -1,18 +1,13 @@
-import {
-  collection,
-  doc,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  query,
-  where,
-  onSnapshot,
-  getDocs,
-  setDoc,
-  Unsubscribe
-} from "firebase/firestore";
-import { db } from "./firebase";
-import { touchSyncStatus, sanitizeForFirestore, getEffectiveUserId } from "./firestoreSyncService";
+import { supabase } from "./supabase";
+import { refetchCategory, saveItemToFirestore } from "./firestoreSyncService";
+
+/**
+ * Compartir secciones enteras ("Uso Compartido" en Ajustes), migrado a Supabase (antes vivía en
+ * la colección Firestore "section_links"). Dos usuarios vinculan una sección completa (Comidas o
+ * Control Clínico) y pasan a compartir la misma base de datos para esa sección — ver
+ * getEffectiveSectionUserId, usado en App.tsx para resolver de quién son los datos que hay que
+ * leer/escribir en cada categoría de esa sección.
+ */
 
 export type SharedSectionType = "comidas" | "control_clinico";
 
@@ -57,7 +52,26 @@ export const SECTION_DESCRIPTIONS: Record<SharedSectionType, string> = {
   control_clinico: "Doctores, Presión Arterial, Estudios e Informes Médicos, Medicamentos y Stock."
 };
 
-const LINKS_COLLECTION = "section_links";
+const LINKS_TABLE = "section_links";
+
+export type Unsubscribe = () => void;
+
+function rowToLink(row: any): SectionLink {
+  return {
+    id: row.id,
+    fromEmail: row.from_email,
+    toEmail: row.to_email,
+    section: row.section,
+    status: row.status,
+    sharedDbUserId: row.shared_db_user_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function linkId(fromEmail: string, toEmail: string, section: string): string {
+  return `${fromEmail}__${toEmail}__${section}`.replace(/[^a-zA-Z0-9_@.-]/g, "_");
+}
 
 /**
  * Subscribes in real-time to incoming and outgoing section links for a user
@@ -74,6 +88,7 @@ export function subscribeToSectionLinks(
 
   let incomingList: SectionLink[] = [];
   let outgoingList: SectionLink[] = [];
+  let cancelled = false;
 
   const recalculateAndNotify = () => {
     const allLinks = [...incomingList, ...outgoingList];
@@ -92,47 +107,48 @@ export function subscribeToSectionLinks(
     });
   };
 
-  const qIncoming = query(
-    collection(db, LINKS_COLLECTION),
-    where("toEmail", "==", normalizedEmail)
-  );
-
-  const qOutgoing = query(
-    collection(db, LINKS_COLLECTION),
-    where("fromEmail", "==", normalizedEmail)
-  );
-
-  const unsubIncoming = onSnapshot(
-    qIncoming,
-    (snapshot) => {
-      incomingList = snapshot.docs.map((d) => ({
-        id: d.id,
-        ...d.data()
-      })) as SectionLink[];
-      recalculateAndNotify();
-    },
-    (err) => {
-      console.warn("[SectionSharing] Error in incoming links snapshot:", err);
+  const fetchIncoming = async () => {
+    const { data, error } = await supabase.from(LINKS_TABLE).select("*").eq("to_email", normalizedEmail);
+    if (cancelled) return;
+    if (error) {
+      console.warn("[SectionSharing] Error fetching incoming links:", error.message);
+      return;
     }
-  );
+    incomingList = (data || []).map(rowToLink);
+    recalculateAndNotify();
+  };
 
-  const unsubOutgoing = onSnapshot(
-    qOutgoing,
-    (snapshot) => {
-      outgoingList = snapshot.docs.map((d) => ({
-        id: d.id,
-        ...d.data()
-      })) as SectionLink[];
-      recalculateAndNotify();
-    },
-    (err) => {
-      console.warn("[SectionSharing] Error in outgoing links snapshot:", err);
+  const fetchOutgoing = async () => {
+    const { data, error } = await supabase.from(LINKS_TABLE).select("*").eq("from_email", normalizedEmail);
+    if (cancelled) return;
+    if (error) {
+      console.warn("[SectionSharing] Error fetching outgoing links:", error.message);
+      return;
     }
-  );
+    outgoingList = (data || []).map(rowToLink);
+    recalculateAndNotify();
+  };
+
+  fetchIncoming();
+  fetchOutgoing();
+
+  const channel = supabase
+    .channel(`section-links-${normalizedEmail}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: LINKS_TABLE, filter: `to_email=eq.${normalizedEmail}` },
+      fetchIncoming
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: LINKS_TABLE, filter: `from_email=eq.${normalizedEmail}` },
+      fetchOutgoing
+    )
+    .subscribe();
 
   return () => {
-    try { unsubIncoming(); } catch (_) {}
-    try { unsubOutgoing(); } catch (_) {}
+    cancelled = true;
+    supabase.removeChannel(channel);
   };
 }
 
@@ -161,36 +177,27 @@ export async function sendSectionInvitation(
 
   try {
     const now = new Date().toISOString();
-    for (const sec of sections) {
-      // Check if an existing link or pending invitation already exists
-      const existingQuery = query(
-        collection(db, LINKS_COLLECTION),
-        where("fromEmail", "==", normFrom),
-        where("toEmail", "==", normTo),
-        where("section", "==", sec)
-      );
-      const snap = await getDocs(existingQuery);
-      if (!snap.empty) {
-        // Update existing link to pending
-        const existingDoc = snap.docs[0];
-        await updateDoc(doc(db, LINKS_COLLECTION, existingDoc.id), {
-          status: "pending",
-          sharedDbUserId: normFrom,
-          updatedAt: now
-        });
-      } else {
-        // Create new link
-        await addDoc(collection(db, LINKS_COLLECTION), {
-          fromEmail: normFrom,
-          toEmail: normTo,
-          section: sec,
-          status: "pending",
-          sharedDbUserId: normFrom,
-          createdAt: now,
-          updatedAt: now
-        });
-      }
-    }
+    const rows = sections.map((sec) => ({
+      id: linkId(normFrom, normTo, sec),
+      from_email: normFrom,
+      to_email: normTo,
+      section: sec,
+      status: "pending",
+      shared_db_user_id: normFrom,
+      updated_at: now,
+    }));
+    // created_at solo se manda en la primera vez — un upsert con onConflict no debe pisarlo en
+    // un reenvío, así que se completa aparte únicamente para las filas que todavía no existen.
+    const { data: existing } = await supabase
+      .from(LINKS_TABLE)
+      .select("id")
+      .in("id", rows.map((r) => r.id));
+    const existingIds = new Set((existing || []).map((r: any) => r.id));
+    const rowsWithCreatedAt = rows.map((r) => (existingIds.has(r.id) ? r : { ...r, created_at: now }));
+
+    const { error } = await supabase.from(LINKS_TABLE).upsert(rowsWithCreatedAt, { onConflict: "id" });
+    if (error) throw error;
+
     return { success: true, message: `Invitación enviada con éxito a ${normTo}.` };
   } catch (error: any) {
     console.error("[SectionSharing] Error sending invitation:", error);
@@ -209,38 +216,31 @@ export async function acceptSectionInvitation(
 
   try {
     const now = new Date().toISOString();
-    await updateDoc(doc(db, LINKS_COLLECTION, link.id), {
-      status: "accepted",
-      updatedAt: now
-    });
+    const { error } = await supabase
+      .from(LINKS_TABLE)
+      .update({ status: "accepted", updated_at: now })
+      .eq("id", link.id);
+    if (error) throw error;
 
-    // Optionally merge data from acceptor's local DB into the shared DB
+    // Optionally merge data from acceptor's local DB into the shared DB — vía el mismo
+    // despachador Supabase/Firestore que usa el resto de la app (refetchCategory/
+    // saveItemToFirestore), así lee y escribe en el backend real de cada categoría, no en un
+    // Firestore que para estas categorías ya nadie mira.
     if (copyLocalDataToShared && link.toEmail && link.sharedDbUserId && link.toEmail !== link.sharedDbUserId) {
       const categories = SECTION_CATEGORIES[link.section] || [];
       for (const cat of categories) {
         try {
-          const localSnap = await getDocs(collection(db, "users", link.toEmail.toLowerCase(), cat));
-          if (!localSnap.empty) {
-            for (const docItem of localSnap.docs) {
-              const itemData = docItem.data();
-              if (itemData) {
-                const targetRef = doc(db, "users", link.sharedDbUserId.toLowerCase(), cat, docItem.id);
-                await setDoc(targetRef, sanitizeForFirestore(itemData), { merge: true });
-              }
+          const items = await refetchCategory(link.toEmail.toLowerCase(), cat);
+          for (const item of items) {
+            if (item) {
+              await saveItemToFirestore(link.sharedDbUserId.toLowerCase(), cat, item);
             }
-            touchSyncStatus(link.sharedDbUserId, cat);
           }
         } catch (e) {
           console.warn(`[SectionSharing] Warning copying ${cat} data:`, e);
         }
       }
     }
-
-    // Touch sync status on both sides so all subscribers refresh
-    const categories = SECTION_CATEGORIES[link.section] || [];
-    categories.forEach((cat) => {
-      touchSyncStatus(link.sharedDbUserId, cat);
-    });
 
     return { success: true, message: "¡Sección vinculada exitosamente! Ahora ambos comparten la misma base de datos." };
   } catch (error: any) {
@@ -254,7 +254,8 @@ export async function acceptSectionInvitation(
  */
 export async function rejectSectionInvitation(linkId: string): Promise<{ success: boolean; message: string }> {
   try {
-    await deleteDoc(doc(db, LINKS_COLLECTION, linkId));
+    const { error } = await supabase.from(LINKS_TABLE).delete().eq("id", linkId);
+    if (error) throw error;
     return { success: true, message: "Invitación rechazada." };
   } catch (error: any) {
     console.error("[SectionSharing] Error rejecting invitation:", error);
@@ -269,7 +270,8 @@ export async function unlinkSection(link: SectionLink): Promise<{ success: boole
   if (!link.id) return { success: false, message: "ID de vínculo no válido." };
 
   try {
-    await deleteDoc(doc(db, LINKS_COLLECTION, link.id));
+    const { error } = await supabase.from(LINKS_TABLE).delete().eq("id", link.id);
+    if (error) throw error;
     return { success: true, message: "Sección desvinculada. Cada usuario volverá a utilizar su base de datos independiente." };
   } catch (error: any) {
     console.error("[SectionSharing] Error unlinking section:", error);
