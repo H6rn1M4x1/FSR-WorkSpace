@@ -554,7 +554,7 @@ export function WeeklyScheduleGrid({
           </div>
 
           {!selectedMateria && (
-            <p className="text-[10px] text-amber-500 font-semibold">
+            <p className="text-[10px] text-slate-400 dark:text-zinc-500 font-semibold">
               Elegí una materia para poder agregar o pintar horarios.
             </p>
           )}
@@ -628,7 +628,7 @@ export function WeeklyScheduleGrid({
       </div>
 
       {mode === "pintar" && !selectedMateria && materiaOptions.length > 0 && (
-        <p className="text-[11px] text-amber-500 font-semibold mb-3">
+        <p className="text-[11px] text-slate-400 dark:text-zinc-500 font-semibold mb-3">
           Elegí una materia en el panel de la izquierda para empezar a pintar.
         </p>
       )}

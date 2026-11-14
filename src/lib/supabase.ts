@@ -87,13 +87,37 @@ export const initNativeGoogleAuthListener = () => {
   CapacitorApp.addListener("appUrlOpen", async ({ url }) => {
     if (!url.startsWith(NATIVE_GOOGLE_REDIRECT_URL)) return;
     try {
-      const fragment = url.split("#")[1] ?? "";
-      const params = new URLSearchParams(fragment);
-      const access_token = params.get("access_token");
-      const refresh_token = params.get("refresh_token");
+      const [beforeFragment, fragment = ""] = url.split("#");
+      const queryString = beforeFragment.includes("?") ? beforeFragment.split("?")[1] : "";
+      const fragmentParams = new URLSearchParams(fragment);
+      const queryParams = new URLSearchParams(queryString);
+
+      // Un refresco silencioso (prompt=none) que Google no puede resolver sin interacción real
+      // vuelve con un error acá en vez de tokens — sin detectarlo, triggerSilentReauth lo
+      // reintentaría cada 2 minutos en loop, abriendo y cerrando el navegador in-app sin parar.
+      const oauthError = fragmentParams.get("error") || queryParams.get("error");
+      if (oauthError) {
+        try {
+          localStorage.setItem(REAUTH_BLOCKED_KEY, "1");
+          localStorage.setItem(REAUTH_NOTICE_PENDING_KEY, "1");
+          sessionStorage.removeItem(REDIRECT_PENDING_KEY);
+        } catch (_) {}
+        return;
+      }
+
+      const access_token = fragmentParams.get("access_token");
+      const refresh_token = fragmentParams.get("refresh_token");
       if (access_token && refresh_token) {
         await supabase.auth.setSession({ access_token, refresh_token });
       }
+      // setSession() arma la sesión de Supabase a mano a partir de access_token/refresh_token,
+      // pero NO acepta provider_token como parámetro, así que el valor que onAuthStateChange
+      // emite después nunca lo trae (ver GoTrueClient: provider_token solo se emite en el
+      // flujo de detección automática por URL, no al reconstruir una sesión con setSession).
+      // Sin esto, en nativo el token de Google (Drive/Calendar/Facultad) nunca se cacheaba —
+      // ni al conectar por primera vez ni al reconectar — y todo lo que depende de él fallaba
+      // siempre, no solo cuando vencía.
+      cacheProviderToken(fragmentParams.get("provider_token"));
     } finally {
       await Browser.close().catch(() => {});
     }
@@ -173,11 +197,33 @@ export const getAccessTokenSync = (): string | null => {
 // has an active Google session it comes back with a fresh token without showing any
 // consent screen — no need to manually log out and back in.
 export const silentGoogleReauth = async (): Promise<void> => {
-  // Pendiente para la app empaquetada: acá habría que abrir el mismo Browser.open() que usa
-  // googleSignIn, pero disparado en silencio cada ~50 min sería una experiencia rara (un
-  // navegador que aparece y desaparece solo). Por ahora el token de Drive/Gmail simplemente
-  // expira en el celu/PC y el usuario tiene que volver a conectarse a mano desde Ajustes.
-  if (Capacitor.isNativePlatform()) return;
+  // En nativo esto SOLO lo dispara el camino reactivo (un 401 real de Drive detectado mientras
+  // el usuario está mirando esa pantalla — ver triggerSilentReauth en workspace.ts/
+  // DriveFolderVisualizer.tsx/AppointmentsView.tsx), nunca el refresco proactivo en segundo
+  // plano de ensureBackgroundTokenRefresh (ese sigue siendo solo para web). Por eso el
+  // navegador in-app que se abre acá es aceptable: el usuario ya está esperando a que cargue
+  // algo que necesita este token, así que un flash breve (con prompt=none, Google ni muestra
+  // la pantalla de consentimiento si la sesión sigue activa) es mejor que fallar y mandarlo a
+  // reconectar a mano desde Ajustes.
+  if (Capacitor.isNativePlatform()) {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        scopes: GOOGLE_SCOPES,
+        queryParams: {
+          access_type: "offline",
+          prompt: "none",
+        },
+        redirectTo: NATIVE_GOOGLE_REDIRECT_URL,
+        skipBrowserRedirect: true,
+      },
+    });
+    if (error) throw error;
+    if (data.url) {
+      await Browser.open({ url: data.url });
+    }
+    return;
+  }
   await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
