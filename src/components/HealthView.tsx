@@ -10,8 +10,6 @@ import { generateUniqueId } from "../utils/id";
 import { getLocalDateString } from "../utils/date";
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import { subscribeToCategory, saveItemToFirestore, deleteItemFromFirestore } from "../lib/firestoreSyncService";
-import { MigrationBanner } from "./MigrationBanner";
-import { bulkImportFromFirestore as bulkImportSalud, SUPABASE_MIGRATED_CATEGORIES as SALUD_CATEGORIES } from "../lib/supabaseSaludSync";
 import { addDeletedId, getDeletedIds } from "../lib/storage";
 import { auth } from "../lib/supabase";
 import { motion, AnimatePresence } from "motion/react";
@@ -3168,14 +3166,6 @@ export default function HealthView({
 
   return (
     <div className="space-y-6 animate-fade-in px-3 sm:px-6 pt-1 sm:pt-1.5 pb-6 font-sans">
-      <MigrationBanner
-        darkMode={darkMode}
-        userId={userId}
-        title="Migración piloto a Supabase (Salud)"
-        categories={Array.from(SALUD_CATEGORIES)}
-        bulkImport={bulkImportSalud}
-        dismissKey="salud_migration_dismissed"
-      />
       {/* Submenu Navigation */}
       {!propActiveSubTab && (
         <SubNav
