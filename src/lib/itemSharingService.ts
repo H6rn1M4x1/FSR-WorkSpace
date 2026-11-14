@@ -1,56 +1,19 @@
-import { db } from "./firebase";
-import {
-  collection,
-  doc,
-  setDoc,
-  deleteDoc,
-  onSnapshot,
-  query,
-  where,
-  Unsubscribe,
-} from "firebase/firestore";
-import { generateUniqueId } from "../utils/id";
+import { supabase } from "./supabase";
 import { subscribeToCategory } from "./firestoreSyncService";
 
 /**
- * The native Firestore write promise only resolves once the backend acknowledges it, so a
- * flaky connection (mobile network hiccup, a stalled long-polling channel, an
- * ad-blocker/proxy interfering) can leave it pending far longer than feels reasonable —
- * that's what showed up as sharing "hanging" with no error and no result. Racing it
- * against a short timeout means we never block the UI on it: if it's still pending after
- * a few seconds we let the caller move on (the write keeps retrying in the background and
- * will still land once the connection recovers), instead of pretending it failed.
+ * Item-level sharing, v2 — migrado a Supabase (antes vivía en la colección Firestore
+ * "shared_items"). Mismo diseño de siempre: solo se guarda una REFERENCIA ("item X, de la
+ * categoría Y, de A, compartido con B"), nunca una copia del dato — así:
+ *   - cualquiera de los dos lados que lo edite, edita el mismo registro real
+ *   - no hay nada duplicado que mantener sincronizado
+ *   - dejar de compartir es solo borrar la referencia; el dato nunca se pierde
+ *
+ * Las referencias viven en la tabla public.shared_items, con RLS que solo deja ver/tocar una
+ * fila al dueño o al destinatario (ver migración sharing_pilot_schema).
  */
-const WRITE_TIMEOUT_MS = 8_000;
-const TIMEOUT_MARKER = Symbol("firestore-write-still-pending");
 
-function withWriteTimeout<T>(promise: Promise<T>, label: string): Promise<T | typeof TIMEOUT_MARKER> {
-  return Promise.race([
-    promise,
-    new Promise<typeof TIMEOUT_MARKER>((resolve) => {
-      setTimeout(() => {
-        console.warn(`[Sharing v2] ${label} is taking longer than expected; continuing in the background.`);
-        resolve(TIMEOUT_MARKER);
-      }, WRITE_TIMEOUT_MS);
-    })
-  ]);
-}
-
-/**
- * Item-level sharing, v2.
- *
- * Unlike the previous system (which COPIED a snapshot of the shared data into the share
- * document — so edits on either side drifted apart), this stores only a REFERENCE:
- * "item X, of category Y, owned by A, is shared with B".
- *
- * The recipient's app then reads the item straight from the owner's own collection, which
- * means:
- *   - either side editing it edits the same underlying record
- *   - no duplicated data, nothing to keep in sync
- *   - unsharing is just deleting the reference; no data is lost
- *
- * Shares live in a single top-level collection: shared_items/{shareId}
- */
+export type Unsubscribe = () => void;
 
 export interface SharedItemRef {
   id: string;
@@ -62,10 +25,20 @@ export interface SharedItemRef {
   createdAt: number;
 }
 
-const SHARED_ITEMS = "shared_items";
-
 function norm(email: string): string {
   return (email || "").trim().toLowerCase();
+}
+
+function rowToRef(row: any): SharedItemRef {
+  return {
+    id: row.id,
+    ownerEmail: row.owner_email,
+    sharedWithEmail: row.shared_with_email,
+    category: row.category,
+    itemId: row.item_id,
+    itemLabel: row.item_label || "",
+    createdAt: row.created_at ?? 0,
+  };
 }
 
 /** Shares one item with another user. Safe to call repeatedly (same id = idempotent). */
@@ -81,31 +54,23 @@ export async function shareItemWith(
   if (!owner || !target) throw new Error("Faltan los correos para compartir.");
   if (owner === target) throw new Error("No podés compartir algo con vos mismo.");
 
-  // Deterministic id so re-sharing the same item to the same person doesn't duplicate.
+  // Id determinístico: re-compartir el mismo ítem con la misma persona no duplica la fila.
   const shareId = `${owner}__${target}__${category}__${itemId}`.replace(/[^a-zA-Z0-9_@.-]/g, "_");
 
-  const payload: SharedItemRef = {
+  const row = {
     id: shareId,
-    ownerEmail: owner,
-    sharedWithEmail: target,
+    owner_email: owner,
+    shared_with_email: target,
     category,
-    itemId,
-    itemLabel: itemLabel || "",
-    createdAt: Date.now(),
+    item_id: itemId,
+    item_label: itemLabel || "",
+    created_at: Date.now(),
   };
 
-  try {
-    const writePromise = setDoc(doc(db, SHARED_ITEMS, shareId), payload, { merge: true });
-    const result = await withWriteTimeout(writePromise, "shareItemWith");
-    if (result === TIMEOUT_MARKER) {
-      writePromise
-        .then(() => console.log("[Sharing v2] shareItemWith: delayed write succeeded", shareId))
-        .catch((err) => console.error("[Sharing v2] shareItemWith: delayed write FAILED", shareId, err));
-      return;
-    }
-  } catch (err) {
-    console.error("[Sharing v2] shareItemWith: write FAILED", shareId, err);
-    throw err;
+  const { error } = await supabase.from("shared_items").upsert(row, { onConflict: "id" });
+  if (error) {
+    console.error("[Sharing v2] shareItemWith: write FAILED", shareId, error);
+    throw error;
   }
 }
 
@@ -119,18 +84,11 @@ export async function unshareItem(
   const owner = norm(ownerEmail);
   const target = norm(sharedWithEmail);
   const shareId = `${owner}__${target}__${category}__${itemId}`.replace(/[^a-zA-Z0-9_@.-]/g, "_");
-  try {
-    const deletePromise = deleteDoc(doc(db, SHARED_ITEMS, shareId));
-    const result = await withWriteTimeout(deletePromise, "unshareItem");
-    if (result === TIMEOUT_MARKER) {
-      deletePromise
-        .then(() => console.log("[Sharing v2] unshareItem: delayed delete succeeded", shareId))
-        .catch((err) => console.error("[Sharing v2] unshareItem: delayed delete FAILED", shareId, err));
-      return;
-    }
-  } catch (err) {
-    console.error("[Sharing v2] unshareItem: delete FAILED", shareId, err);
-    throw err;
+
+  const { error } = await supabase.from("shared_items").delete().eq("id", shareId);
+  if (error) {
+    console.error("[Sharing v2] unshareItem: delete FAILED", shareId, error);
+    throw error;
   }
 }
 
@@ -142,17 +100,32 @@ export function subscribeToItemsSharedWithMe(
   const me = norm(myEmail);
   if (!me) return () => {};
 
-  const q = query(collection(db, SHARED_ITEMS), where("sharedWithEmail", "==", me));
-  return onSnapshot(
-    q,
-    (snap) => {
-      onUpdate(snap.docs.map((d) => d.data() as SharedItemRef));
-    },
-    (err) => {
-      console.error("[Sharing v2] Error listening to items shared with me:", err);
+  let cancelled = false;
+  const fetchAndEmit = async () => {
+    const { data, error } = await supabase.from("shared_items").select("*").eq("shared_with_email", me);
+    if (cancelled) return;
+    if (error) {
+      console.error("[Sharing v2] Error listening to items shared with me:", error.message);
       onUpdate([]);
+      return;
     }
-  );
+    onUpdate((data || []).map(rowToRef));
+  };
+  fetchAndEmit();
+
+  const channel = supabase
+    .channel(`shared-items-with-me-${me}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "shared_items", filter: `shared_with_email=eq.${me}` },
+      fetchAndEmit
+    )
+    .subscribe();
+
+  return () => {
+    cancelled = true;
+    supabase.removeChannel(channel);
+  };
 }
 
 /** Live list of everything I have shared out to others. */
@@ -163,17 +136,32 @@ export function subscribeToItemsIShared(
   const me = norm(myEmail);
   if (!me) return () => {};
 
-  const q = query(collection(db, SHARED_ITEMS), where("ownerEmail", "==", me));
-  return onSnapshot(
-    q,
-    (snap) => {
-      onUpdate(snap.docs.map((d) => d.data() as SharedItemRef));
-    },
-    (err) => {
-      console.error("[Sharing v2] Error listening to items I shared:", err);
+  let cancelled = false;
+  const fetchAndEmit = async () => {
+    const { data, error } = await supabase.from("shared_items").select("*").eq("owner_email", me);
+    if (cancelled) return;
+    if (error) {
+      console.error("[Sharing v2] Error listening to items I shared:", error.message);
       onUpdate([]);
+      return;
     }
-  );
+    onUpdate((data || []).map(rowToRef));
+  };
+  fetchAndEmit();
+
+  const channel = supabase
+    .channel(`shared-items-by-me-${me}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "shared_items", filter: `owner_email=eq.${me}` },
+      fetchAndEmit
+    )
+    .subscribe();
+
+  return () => {
+    cancelled = true;
+    supabase.removeChannel(channel);
+  };
 }
 
 /**
@@ -207,32 +195,22 @@ export function subscribeToSharedItemData(
     onUpdate(result);
   };
 
-  // Resolve each distinct owner's display name once. user_profile never migrated to
-  // Supabase, so this stays a direct Firestore read.
+  // Resolve each distinct owner's display name una vez — user_profile ya migró a Supabase, así
+  // que esto pasa por el mismo despachador que todo lo demás (subscribeToCategory).
   const distinctOwners = Array.from(new Set(refs.map((r) => r.ownerEmail)));
   for (const ownerEmail of distinctOwners) {
-    const profileRef = doc(db, "users", ownerEmail, "user_profile", ownerEmail);
-    const unsubProfile = onSnapshot(
-      profileRef,
-      (snap) => {
-        const data = snap.data() as any;
-        if (data?.displayName) {
-          ownerNames[ownerEmail] = data.displayName;
-          emit();
-        }
-      },
-      () => {
-        // No profile access/doc — the email fallback is fine.
+    const unsubProfile = subscribeToCategory(ownerEmail, "user_profile", (items) => {
+      const profile = Array.isArray(items) ? items[0] : null;
+      if (profile?.displayName) {
+        ownerNames[ownerEmail] = profile.displayName;
+        emit();
       }
-    );
+    });
     unsubs.push(unsubProfile);
   }
 
-  // Group refs by owner+category: one live subscription per pair, through the same
-  // Supabase/Firestore dispatch every other reader uses (subscribeToCategory). Reading the
-  // owner's item straight from Firestore (the old approach) went stale the moment that
-  // category's real data moved to Supabase — sharing kept pointing at a doc nobody writes
-  // to anymore.
+  // Group refs by owner+category: one live subscription por par, a través del mismo
+  // despachador Supabase/Firestore que usa todo el resto de la app (subscribeToCategory).
   const groups = new Map<string, { ownerEmail: string; category: string; itemIds: Set<string> }>();
   for (const ref of refs) {
     const key = `${ref.ownerEmail}__${ref.category}`;
