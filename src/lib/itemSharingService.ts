@@ -10,6 +10,7 @@ import {
   Unsubscribe,
 } from "firebase/firestore";
 import { generateUniqueId } from "../utils/id";
+import { subscribeToCategory } from "./firestoreSyncService";
 
 /**
  * The native Firestore write promise only resolves once the backend acknowledges it, so a
@@ -93,8 +94,6 @@ export async function shareItemWith(
     createdAt: Date.now(),
   };
 
-  // TEMP diagnostic logging — remove once the sharing propagation bug is confirmed fixed.
-  console.log("[Sharing v2] shareItemWith: writing", { shareId, payload });
   try {
     const writePromise = setDoc(doc(db, SHARED_ITEMS, shareId), payload, { merge: true });
     const result = await withWriteTimeout(writePromise, "shareItemWith");
@@ -104,7 +103,6 @@ export async function shareItemWith(
         .catch((err) => console.error("[Sharing v2] shareItemWith: delayed write FAILED", shareId, err));
       return;
     }
-    console.log("[Sharing v2] shareItemWith: write succeeded", shareId);
   } catch (err) {
     console.error("[Sharing v2] shareItemWith: write FAILED", shareId, err);
     throw err;
@@ -121,7 +119,6 @@ export async function unshareItem(
   const owner = norm(ownerEmail);
   const target = norm(sharedWithEmail);
   const shareId = `${owner}__${target}__${category}__${itemId}`.replace(/[^a-zA-Z0-9_@.-]/g, "_");
-  console.log("[Sharing v2] unshareItem: deleting", shareId);
   try {
     const deletePromise = deleteDoc(doc(db, SHARED_ITEMS, shareId));
     const result = await withWriteTimeout(deletePromise, "unshareItem");
@@ -131,7 +128,6 @@ export async function unshareItem(
         .catch((err) => console.error("[Sharing v2] unshareItem: delayed delete FAILED", shareId, err));
       return;
     }
-    console.log("[Sharing v2] unshareItem: delete succeeded", shareId);
   } catch (err) {
     console.error("[Sharing v2] unshareItem: delete FAILED", shareId, err);
     throw err;
@@ -150,10 +146,7 @@ export function subscribeToItemsSharedWithMe(
   return onSnapshot(
     q,
     (snap) => {
-      const refs = snap.docs.map((d) => d.data() as SharedItemRef);
-      // TEMP diagnostic logging — remove once the sharing propagation bug is confirmed fixed.
-      console.log(`[Sharing v2] subscribeToItemsSharedWithMe(${me}): ${refs.length} ref(s)`, refs);
-      onUpdate(refs);
+      onUpdate(snap.docs.map((d) => d.data() as SharedItemRef));
     },
     (err) => {
       console.error("[Sharing v2] Error listening to items shared with me:", err);
@@ -214,7 +207,8 @@ export function subscribeToSharedItemData(
     onUpdate(result);
   };
 
-  // Resolve each distinct owner's display name once.
+  // Resolve each distinct owner's display name once. user_profile never migrated to
+  // Supabase, so this stays a direct Firestore read.
   const distinctOwners = Array.from(new Set(refs.map((r) => r.ownerEmail)));
   for (const ownerEmail of distinctOwners) {
     const profileRef = doc(db, "users", ownerEmail, "user_profile", ownerEmail);
@@ -234,30 +228,44 @@ export function subscribeToSharedItemData(
     unsubs.push(unsubProfile);
   }
 
+  // Group refs by owner+category: one live subscription per pair, through the same
+  // Supabase/Firestore dispatch every other reader uses (subscribeToCategory). Reading the
+  // owner's item straight from Firestore (the old approach) went stale the moment that
+  // category's real data moved to Supabase — sharing kept pointing at a doc nobody writes
+  // to anymore.
+  const groups = new Map<string, { ownerEmail: string; category: string; itemIds: Set<string> }>();
   for (const ref of refs) {
-    const path = `users/${ref.ownerEmail}/${ref.category}/${ref.itemId}`;
-    const itemDoc = doc(db, "users", ref.ownerEmail, ref.category, ref.itemId);
-    const unsub = onSnapshot(
-      itemDoc,
-      (snap) => {
-        if (!store[ref.category]) store[ref.category] = {};
-        // TEMP diagnostic logging — remove once the sharing propagation bug is confirmed fixed.
-        console.log(`[Sharing v2] subscribeToSharedItemData: read ${path} -> exists=${snap.exists()}`, snap.data());
-        if (snap.exists()) {
-          store[ref.category][ref.itemId] = {
-            ...snap.data(),
-            id: ref.itemId,
-            __sharedByEmail: ref.ownerEmail, // marks it as shared-in, for the badge + write-back
-          };
-        } else {
-          delete store[ref.category][ref.itemId];
+    const key = `${ref.ownerEmail}__${ref.category}`;
+    if (!groups.has(key)) {
+      groups.set(key, { ownerEmail: ref.ownerEmail, category: ref.category, itemIds: new Set() });
+    }
+    groups.get(key)!.itemIds.add(ref.itemId);
+  }
+
+  for (const { ownerEmail, category, itemIds } of groups.values()) {
+    let previousIds = new Set<string>();
+    const unsub = subscribeToCategory(ownerEmail, category, (items) => {
+      if (!store[category]) store[category] = {};
+      const currentIds = new Set<string>();
+      if (Array.isArray(items)) {
+        for (const item of items) {
+          const id = item && item.id ? String(item.id) : "";
+          if (id && itemIds.has(id)) {
+            store[category][id] = { ...item, id, __sharedByEmail: ownerEmail };
+            currentIds.add(id);
+          }
         }
-        emit();
-      },
-      (err) => {
-        console.error(`[Sharing v2] Error reading shared item at ${path}:`, err);
       }
-    );
+      // Drop ids this group tracked before but that disappeared from the owner's
+      // category (e.g. the owner deleted the item).
+      for (const id of previousIds) {
+        if (!currentIds.has(id) && store[category][id]?.__sharedByEmail === ownerEmail) {
+          delete store[category][id];
+        }
+      }
+      previousIds = currentIds;
+      emit();
+    });
     unsubs.push(unsub);
   }
 
