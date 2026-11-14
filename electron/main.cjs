@@ -22,6 +22,30 @@ let tray;
 // (o quitAndInstall de una actualización) debe cerrar todo de verdad.
 app.isQuitting = false;
 
+// Sin esto, dos lanzamientos casi simultáneos (típico al reiniciar Windows: el arranque
+// automático via setLoginItemSettings puede solaparse con un doble-click manual, un acceso
+// directo viejo, o el propio Windows disparando el inicio dos veces) terminan siendo DOS
+// procesos completos, cada uno con su PROPIO cliente de Supabase apuntando al mismo
+// localStorage — ambos arrancan intentando refrescar el mismo refresh token guardado al mismo
+// tiempo, y como Supabase rota el refresh token (de un solo uso), el segundo en llegar pisa al
+// primero con un error de "token ya usado", invalidando la sesión de verdad. Esto es la MISMA
+// carrera que ya se había identificado y resuelto a nivel de ventanas (el dock no tiene su
+// propio cliente, ver src/main.tsx) pero a nivel de PROCESO seguía abierta, porque nada impedía
+// que arrancara una segunda instancia completa. Quedarse con el lock de instancia única la cierra
+// del todo: la segunda instancia se aborta antes de tocar Supabase o crear ninguna ventana.
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.show();
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  });
+}
+
 // Busca actualizaciones contra el "generic" feed de package.json#build.publish (los archivos
 // latest.yml + instalador que sube cada build a public/downloads/win/, servidos por Netlify) —
 // ver electron:build:win en package.json. No instala sola: descarga y avisa, y el usuario decide
