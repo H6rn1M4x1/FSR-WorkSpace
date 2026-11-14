@@ -1,5 +1,6 @@
 import { supabase } from "./supabase";
 import { subscribeToCategory } from "./firestoreSyncService";
+import { generateUniqueId } from "../utils/id";
 
 /**
  * Item-level sharing, v2 — migrado a Supabase (antes vivía en la colección Firestore
@@ -113,8 +114,13 @@ export function subscribeToItemsSharedWithMe(
   };
   fetchAndEmit();
 
+  // El nombre del canal lleva un sufijo único: supabase.channel(topic) devuelve el MISMO
+  // objeto si ya existe uno con ese topic — y removeChannel() es async (espera el unsubscribe
+  // de red antes de desengancharlo), así que un remount rápido (entrar/salir de la pantalla)
+  // podía encontrar el canal viejo todavía "unido" y tirar una excepción real al llamar
+  // .on() sobre él ("cannot add callbacks... after subscribe()"), rompiendo toda la app.
   const channel = supabase
-    .channel(`shared-items-with-me-${me}`)
+    .channel(`shared-items-with-me-${me}-${generateUniqueId()}`)
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: "shared_items", filter: `shared_with_email=eq.${me}` },
@@ -150,7 +156,7 @@ export function subscribeToItemsIShared(
   fetchAndEmit();
 
   const channel = supabase
-    .channel(`shared-items-by-me-${me}`)
+    .channel(`shared-items-by-me-${me}-${generateUniqueId()}`)
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: "shared_items", filter: `owner_email=eq.${me}` },

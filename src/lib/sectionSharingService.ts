@@ -1,5 +1,6 @@
 import { supabase } from "./supabase";
 import { refetchCategory, saveItemToFirestore } from "./firestoreSyncService";
+import { generateUniqueId } from "../utils/id";
 
 /**
  * Compartir secciones enteras ("Uso Compartido" en Ajustes), migrado a Supabase (antes vivía en
@@ -132,8 +133,13 @@ export function subscribeToSectionLinks(
   fetchIncoming();
   fetchOutgoing();
 
+  // El nombre del canal lleva un sufijo único: supabase.channel(topic) devuelve el MISMO
+  // objeto si ya existe uno con ese topic — y removeChannel() es async (espera el unsubscribe
+  // de red antes de desengancharlo), así que un remount rápido (entrar/salir de esta pantalla)
+  // podía encontrar el canal viejo todavía "unido" y tirar una excepción real al llamar .on()
+  // sobre él ("cannot add callbacks... after subscribe()"), rompiendo toda la app.
   const channel = supabase
-    .channel(`section-links-${normalizedEmail}`)
+    .channel(`section-links-${normalizedEmail}-${generateUniqueId()}`)
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: LINKS_TABLE, filter: `to_email=eq.${normalizedEmail}` },

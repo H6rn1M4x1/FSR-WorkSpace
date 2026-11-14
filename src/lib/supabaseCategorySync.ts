@@ -191,9 +191,22 @@ export function createCategorySync(tables: Record<string, TableConfig>): Categor
       const group = activeSubscriptions[subKey];
       if (!group) return;
       group.callbacks.delete(onUpdate);
-      if (group.callbacks.size === 0) {
-        if (group.channel) supabase.removeChannel(group.channel);
-        delete activeSubscriptions[subKey];
+      if (group.callbacks.size === 0 && group.channel) {
+        const channelToRemove = group.channel;
+        // supabase.removeChannel() es async (espera el unsubscribe de red antes de
+        // desenganchar el canal) — si acá se borrara activeSubscriptions[subKey] de
+        // entrada, un remount rápido (p. ej. salir y volver a entrar a una pantalla)
+        // encontraría el mapa vacío, llamaría supabase.channel(MISMO topic) de nuevo, y
+        // recibiría ese mismo canal todavía "unido" del lado de Supabase — agregarle un
+        // .on() nuevo ahí tira una excepción real que rompe toda la app. Por eso la
+        // entrada se borra recién cuando el removeChannel confirma que terminó, y solo
+        // si nadie se volvió a suscribir mientras tanto (si no, ya hay un grupo nuevo con
+        // su propio canal, y borrar acá lo tiraría a la basura).
+        supabase.removeChannel(channelToRemove).then(() => {
+          if (activeSubscriptions[subKey] === group && group.callbacks.size === 0) {
+            delete activeSubscriptions[subKey];
+          }
+        });
       }
     };
   }
