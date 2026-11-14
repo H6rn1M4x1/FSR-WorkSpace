@@ -94,6 +94,8 @@ const TABLES: Record<string, TableConfig> = {
       fecha: item.fecha ?? null,
       metodo: item.metodo ?? null,
       monto: item.monto ?? null,
+      auto_detectado: item.autoDetectado ?? null,
+      nota_origen: item.notaOrigen ?? null,
     }),
     fromRow: (row) => {
       const out: Row = { id: row.id };
@@ -102,6 +104,8 @@ const TABLES: Record<string, TableConfig> = {
       put(out, "fecha", row.fecha);
       put(out, "metodo", row.metodo);
       put(out, "monto", row.monto);
+      put(out, "autoDetectado", row.auto_detectado);
+      put(out, "notaOrigen", row.nota_origen);
       return out;
     },
   },

@@ -77,6 +77,7 @@ import {
 import { SmartDateTimePicker } from "./SmartDateTimePicker";
 import PaymentsTable from "./PaymentsTable";
 import GastosVariosTable from "./GastosVariosTable";
+import { PaymentAutoDetectSettings } from "./PaymentAutoDetectSettings";
 import InversionesTable from "./InversionesTable";
 import CotizacionesAccionesTable from "./CotizacionesAccionesTable";
 import CotizacionesCriptoTable from "./CotizacionesCriptoTable";
@@ -4128,13 +4129,16 @@ export default function FinanceView({
                     exit={{ opacity: 0, y: -15 }}
                     transition={{ duration: 0.15 }}
                   >
-                    <GastosVariosTable
-                      gastosVarios={gastosVarios}
-                      setGastosVarios={setGastosVarios}
-                      darkMode={darkMode}
-                      token={token}
-                      userEmail={userEmail}
-                    />
+                    <div className="space-y-4">
+                      <PaymentAutoDetectSettings darkMode={darkMode} />
+                      <GastosVariosTable
+                        gastosVarios={gastosVarios}
+                        setGastosVarios={setGastosVarios}
+                        darkMode={darkMode}
+                        token={token}
+                        userEmail={userEmail}
+                      />
+                    </div>
                   </motion.div>
                 )}
               </AnimatePresence>

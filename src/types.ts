@@ -101,6 +101,8 @@ export interface GastoVario {
   fecha: string; // YYYY-MM-DD
   metodo: string; // Texto, tarjeta o método del que proviene el gasto
   monto: number; // Número
+  autoDetectado?: boolean; // true si lo creó el listener de notificaciones de pago (Android)
+  notaOrigen?: string; // texto crudo de la notificación que lo generó, para poder auditarlo
 }
 
 export interface Invoice {
