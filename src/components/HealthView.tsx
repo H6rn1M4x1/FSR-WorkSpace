@@ -5501,7 +5501,7 @@ export default function HealthView({
                     </div>
 
                     {!alimFecha && (
-                      <p className="text-[10px] text-amber-500 font-semibold">
+                      <p className="text-[10px] text-slate-400 dark:text-zinc-500 font-semibold">
                         Elegí un día en el calendario para agendar.
                       </p>
                     )}
