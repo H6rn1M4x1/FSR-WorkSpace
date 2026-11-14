@@ -16,6 +16,7 @@ import * as supabaseUniversidadSync from "./supabaseUniversidadSync";
 import * as supabaseSaludSync from "./supabaseSaludSync";
 import * as supabaseComidasSync from "./supabaseComidasSync";
 import * as supabaseNotasSync from "./supabaseNotasSync";
+import * as supabaseVaultSync from "./supabaseVaultSync";
 import { CategorySyncModule } from "./supabaseCategorySync";
 
 // Secciones ya migradas a Supabase (ver cada módulo): se agrega una entrada acá por cada nueva
@@ -28,6 +29,7 @@ const SUPABASE_MODULES: CategorySyncModule[] = [
   supabaseSaludSync,
   supabaseComidasSync,
   supabaseNotasSync,
+  supabaseVaultSync,
 ];
 
 function findSupabaseModule(category: string): CategorySyncModule | null {

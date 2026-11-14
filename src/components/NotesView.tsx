@@ -37,6 +37,7 @@ import { SharedBadge } from "./SharedBadge";
 import { SubNav } from "./SubNav";
 import { MigrationBanner } from "./MigrationBanner";
 import { bulkImportFromFirestore as bulkImportNotas, SUPABASE_MIGRATED_CATEGORIES as NOTAS_CATEGORIES } from "../lib/supabaseNotasSync";
+import { bulkImportFromFirestore as bulkImportVault, SUPABASE_MIGRATED_CATEGORIES as VAULT_CATEGORIES } from "../lib/supabaseVaultSync";
 import { PasswordVaultPanel } from "./PasswordVaultPanel";
 import { auth } from "../lib/firebase";
 import { getAccentColorHex, hexToRgb, rgbToHex, mixHex } from "./WeeklyScheduleGrid";
@@ -1058,12 +1059,22 @@ export function NotesView({
           className="space-y-6"
         >
           {activeSubTab === "vault" ? (
-            <PasswordVaultPanel
-              userId={userId || auth.currentUser?.email || ""}
-              darkMode={darkMode}
-              twoFactorEnabled={twoFactor.enabled}
-              twoFactorSecret={twoFactor.secret}
-            />
+            <>
+              <MigrationBanner
+                darkMode={darkMode}
+                userId={userId || auth.currentUser?.email || ""}
+                title="Migración piloto a Supabase (Caja Fuerte)"
+                categories={Array.from(VAULT_CATEGORIES)}
+                bulkImport={bulkImportVault}
+                dismissKey="vault_migration_dismissed"
+              />
+              <PasswordVaultPanel
+                userId={userId || auth.currentUser?.email || ""}
+                darkMode={darkMode}
+                twoFactorEnabled={twoFactor.enabled}
+                twoFactorSecret={twoFactor.secret}
+              />
+            </>
           ) : (
       <div
         className={`rounded-3xl border p-4 sm:p-6 space-y-6 scroll-reveal ${
