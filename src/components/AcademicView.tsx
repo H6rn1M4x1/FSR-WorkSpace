@@ -1,6 +1,6 @@
 import { SubNav } from "./SubNav";
 import { SectionTransition } from "./SectionTransition";
-import { AsciiCalendarGrid, AsciiListRows, AsciiCardsGrid, AsciiStatsPlusTable, AsciiTableRows } from "./asciiSkeletonBlocks";
+import { AsciiCalendarGrid, AsciiListRows, AsciiCardsGrid, AsciiStatsPlusTable, AsciiTableRows, AsciiWeeklyTimetable, Block } from "./asciiSkeletonBlocks";
 import { useSubPanelRows } from "../lib/navPanelContext";
 import { SharedBadge, makeSharedOutHelpers } from "./SharedBadge";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
@@ -1916,22 +1916,49 @@ export default function AcademicView({
         >
           <SectionTransition
             transitionKey={normalizedParentTab}
-            skeleton={
-              normalizedParentTab === "resumen" ? (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  <AsciiCalendarGrid cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />
-                  <div className="lg:col-span-2">
-                    <AsciiListRows count={5} />
+            skeleton={(() => {
+              const cb = darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90";
+              if (normalizedParentTab === "resumen") {
+                // "Mis Estudios": calendario 5 + agenda 7, tarjeta "Desempeño Académico" (3
+                // columnas), fila de 2 columnas (pomodoro + materias por rendir).
+                return (
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                      <div className="lg:col-span-5"><AsciiCalendarGrid cardBg={cb} /></div>
+                      <div className="lg:col-span-7"><AsciiListRows count={4} /></div>
+                    </div>
+                    <div className={`p-6 rounded-2xl border ${cb} space-y-4`}>
+                      <Block h="1.125rem" w="12rem" rows={1} />
+                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                        <Block h="8rem" w="100%" rows={10} />
+                        <Block h="8rem" w="100%" rows={10} />
+                        <Block h="8rem" w="100%" rows={10} />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <div className={`p-6 rounded-2xl border ${cb} space-y-3`}>
+                        <Block h="1.125rem" w="8rem" rows={1} />
+                        <Block h="5rem" w="100%" rows={6} />
+                      </div>
+                      <div className={`p-6 rounded-2xl border ${cb} space-y-3`}>
+                        <Block h="1.125rem" w="10rem" rows={1} />
+                        <Block h="5rem" w="100%" rows={6} />
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ) : normalizedParentTab === "facultad" ? (
-                <AsciiCardsGrid count={8} cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />
-              ) : normalizedParentTab === "horario" ? (
-                <AsciiCalendarGrid cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />
-              ) : (
-                <AsciiStatsPlusTable cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} tableRows={6} />
-              )
-            }
+                );
+              }
+              if (normalizedParentTab === "facultad") {
+                return <AsciiCardsGrid count={12} cols="sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6" cardBg={cb} />;
+              }
+              if (normalizedParentTab === "horario") {
+                // "Horario" (landing por defecto de este tab) es una grilla semanal, no un
+                // calendario mensual — ver AsciiWeeklyTimetable.
+                return <AsciiWeeklyTimetable days={6} cardBg={cb} />;
+              }
+              // "informacion_materias" (Plan de Estudio): tabla sin fila de stats.
+              return <AsciiTableRows rows={7} cols={11} cardBg={cb} />;
+            })()}
           >
           {activeSubTab === "resumen" && (() => {
             const selectedEvents = getAcademicEventsForDate(resumenSelectedDateStr);
@@ -2918,7 +2945,7 @@ export default function AcademicView({
 
       {/* Informacion de Materias Submenu Tab */}
       {normalizedParentTab === "informacion_materias" && planEstudioSubTab === "plan_estudio" && (
-        <SectionTransition transitionKey={planEstudioSubTab} skeleton={<AsciiTableRows rows={6} cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />}>
+        <SectionTransition transitionKey={planEstudioSubTab} skeleton={<AsciiTableRows rows={7} cols={11} cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />}>
         <div className={`p-6 rounded-3xl border scroll-reveal ${darkMode ? "bg-zinc-900 border-zinc-800 text-white shadow-lg" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"}`}>
           {/* Header Controls */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
@@ -3349,7 +3376,7 @@ export default function AcademicView({
           });
 
           return (
-            <SectionTransition transitionKey={planEstudioSubTab} skeleton={<AsciiStatsPlusTable statCount={3} tableRows={6} cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />}>
+            <SectionTransition transitionKey={planEstudioSubTab} skeleton={<AsciiStatsPlusTable statCount={3} statCols="grid-cols-1 md:grid-cols-3" tableRows={6} tableCols={9} cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />}>
             <div className={`p-6 rounded-3xl border scroll-reveal ${darkMode ? "bg-zinc-900 border-zinc-800 text-white shadow-lg" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"}`}>
               {/* Header Controls */}
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
@@ -3717,7 +3744,7 @@ export default function AcademicView({
           });
 
           return (
-            <SectionTransition transitionKey={horarioSubTab} skeleton={<AsciiCalendarGrid cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />}>
+            <SectionTransition transitionKey={horarioSubTab} skeleton={<AsciiWeeklyTimetable days={6} cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />}>
             <div className="space-y-6">
               <WeeklyScheduleGrid
                 horarios={horarios}

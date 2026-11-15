@@ -1,6 +1,6 @@
 import { SubNav } from "./SubNav";
 import { SectionTransition } from "./SectionTransition";
-import { AsciiCalendarGrid, AsciiStatCardsRow, AsciiChartBlock, AsciiStatsPlusTable } from "./asciiSkeletonBlocks";
+import { AsciiCalendarGrid, AsciiStatCardsRow, AsciiChartBlock, AsciiStatsPlusTable, AsciiCardWithList, AsciiTableRows, Block } from "./asciiSkeletonBlocks";
 import { useSubPanelRows } from "../lib/navPanelContext";
 import { SharedBadge, makeSharedOutHelpers } from "./SharedBadge";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
@@ -2157,21 +2157,47 @@ export default function FinanceView({
         >
           <SectionTransition
             transitionKey={activeTab}
-            skeleton={
-              activeTab === "resumen" ? (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <AsciiCalendarGrid cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />
-                    <div className="lg:col-span-2">
-                      <AsciiStatCardsRow count={4} cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />
+            skeleton={(() => {
+              const cb = darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90";
+              if (activeTab === "resumen") {
+                // 3 tarjetas iguales (Calendario de Pagos / Facturas y Vencimientos / Historial de
+                // Pagos) + tarjeta "Resumen del Mes" (stats + donut/gráficos).
+                return (
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                      <div className="lg:col-span-4"><AsciiCalendarGrid cardBg={cb} /></div>
+                      <div className="lg:col-span-4"><AsciiCardWithList count={3} cardBg={cb} /></div>
+                      <div className="lg:col-span-4"><AsciiCardWithList count={3} cardBg={cb} /></div>
+                    </div>
+                    <div className={`p-6 rounded-2xl border ${cb} space-y-5`}>
+                      <AsciiStatCardsRow count={3} cols="grid-cols-1 lg:grid-cols-4" cardBg={cb} />
+                      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+                        <div className="lg:col-span-2"><AsciiChartBlock h="14rem" cardBg={cb} /></div>
+                        <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <Block h="6.5rem" w="100%" rows={8} />
+                          <Block h="6.5rem" w="100%" rows={8} />
+                          <Block h="6.5rem" w="100%" rows={8} />
+                          <Block h="6.5rem" w="100%" rows={8} />
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <AsciiChartBlock cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />
-                </div>
-              ) : (
-                <AsciiStatsPlusTable cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} tableRows={6} />
-              )
-            }
+                );
+              }
+              if (activeTab === "pagos_mensuales") {
+                // Gastos Mensuales (PaymentsTable): sin fila de stats, solo tabla ancha (13 cols).
+                // Gastos Varios (GastosVariosTable): 3 stats + tabla (6 cols) — pero el tab
+                // recién entra en "todos_pagos" por defecto, así que el esqueleto de nivel
+                // superior usa esa forma; el cambio interno entre ambos ya tiene su propio
+                // SectionTransition más abajo.
+                return <AsciiTableRows rows={7} cols={10} cardBg={cb} />;
+              }
+              if (activeTab === "inversiones") {
+                return <AsciiStatsPlusTable statCount={4} statCols="grid-cols-2 lg:grid-cols-4" tableRows={6} tableCols={8} cardBg={cb} />;
+              }
+              // cotizaciones
+              return <AsciiStatsPlusTable statCount={4} statCols="grid-cols-1 sm:grid-cols-2 md:grid-cols-4" tableRows={6} tableCols={7} cardBg={cb} />;
+            })()}
           >
           {activeTab === "resumen" ? (
             <div className="space-y-6">
@@ -4129,7 +4155,7 @@ export default function FinanceView({
                   >
                     <SectionTransition
                       transitionKey={pagosSubTab}
-                      skeleton={<AsciiStatsPlusTable cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} tableRows={6} />}
+                      skeleton={<AsciiStatsPlusTable statCount={0} tableRows={7} tableCols={10} cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />}
                     >
                     <PaymentsTable
                       payments={detailedPayments}
@@ -4156,7 +4182,7 @@ export default function FinanceView({
                   >
                     <SectionTransition
                       transitionKey={pagosSubTab}
-                      skeleton={<AsciiStatsPlusTable cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} tableRows={6} />}
+                      skeleton={<AsciiStatsPlusTable statCount={3} statCols="grid-cols-1 sm:grid-cols-3" tableRows={6} tableCols={6} cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />}
                     >
                     <div className="space-y-4">
                       <PaymentAutoDetectSettings darkMode={darkMode} />
@@ -4176,7 +4202,7 @@ export default function FinanceView({
           ) : activeTab === "inversiones" ? (
             <SectionTransition
               transitionKey={inversionesActiveTable}
-              skeleton={<AsciiStatsPlusTable cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} tableRows={6} />}
+              skeleton={<AsciiStatsPlusTable statCount={4} statCols="grid-cols-2 lg:grid-cols-4" tableRows={6} tableCols={8} cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />}
             >
             <InversionesTable
               inversiones={inversiones}
@@ -4204,7 +4230,7 @@ export default function FinanceView({
                   >
                     <SectionTransition
                       transitionKey={cotizacionesSubTab}
-                      skeleton={<AsciiStatsPlusTable cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} tableRows={6} />}
+                      skeleton={<AsciiStatsPlusTable statCount={4} statCols="grid-cols-1 sm:grid-cols-2 md:grid-cols-4" tableRows={6} tableCols={7} cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />}
                     >
                     <CotizacionesAccionesTable
                       cotizaciones={cotizacionesAcciones}
@@ -4224,7 +4250,7 @@ export default function FinanceView({
                   >
                     <SectionTransition
                       transitionKey={cotizacionesSubTab}
-                      skeleton={<AsciiStatsPlusTable cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} tableRows={6} />}
+                      skeleton={<AsciiStatsPlusTable statCount={4} statCols="grid-cols-1 sm:grid-cols-2 md:grid-cols-4" tableRows={6} tableCols={7} cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />}
                     >
                     <CotizacionesCriptoTable
                       cotizaciones={cotizacionesCripto}
