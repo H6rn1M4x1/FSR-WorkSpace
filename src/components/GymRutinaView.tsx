@@ -2102,7 +2102,7 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
             </div>
           }
         >
-        <>
+        <div className="space-y-6">
         <div className="p-0 space-y-5 bg-transparent border-none text-slate-800 dark:text-white">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-200/40 dark:border-zinc-800/50 pb-4">
             <div className="flex items-center gap-3">
@@ -2277,7 +2277,7 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
             </div>
           )}
         </div>
-        </>
+        </div>
         </SectionTransition>
       )}
 
