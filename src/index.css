@@ -72,9 +72,13 @@ html.dock-mode body {
 
 /* Tema de ascii-reveal (efecto de carga "decode" en App.tsx) atado al color de acento elegido
    por el usuario, en vez de un color fijo propio. Sin filter/backdrop-filter: ver la nota sobre
-   el bug del fondo WebGL en App.tsx. */
+   el bug del fondo WebGL en App.tsx. --ascii-glyph y --ascii-skeleton hay que fijarlos también:
+   si no, la librería cae a currentColor (el color de texto normal, blanco/casi blanco en modo
+   oscuro) para el decode y el shimmer del esqueleto en vez de usar el acento. */
 :root {
   --ascii-accent: var(--color-primary);
+  --ascii-glyph: var(--color-primary);
+  --ascii-skeleton: var(--color-primary);
 }
 
 /* Base resets & theme enhancements */
