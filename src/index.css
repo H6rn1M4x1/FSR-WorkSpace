@@ -70,6 +70,13 @@ html.dock-mode body {
   }
 }
 
+/* Tema de ascii-reveal (efecto de carga "decode" en App.tsx) atado al color de acento elegido
+   por el usuario, en vez de un color fijo propio. Sin filter/backdrop-filter: ver la nota sobre
+   el bug del fondo WebGL en App.tsx. */
+:root {
+  --ascii-accent: var(--color-primary);
+}
+
 /* Base resets & theme enhancements */
 html, body {
   font-family: var(--font-sans);
