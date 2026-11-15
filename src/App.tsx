@@ -31,6 +31,7 @@ const HealthView = lazy(() => import("./components/HealthView"));
 import { NotesView } from "./components/NotesView";
 import { EventsView } from "./components/EventsView";
 import PageSkeleton from "./components/PageSkeleton";
+import { AsciiReveal } from "ascii-reveal";
 const UserSettingsModal = lazy(() =>
   import("./components/UserSettingsModal").then((m) => ({ default: m.UserSettingsModal }))
 );
@@ -2629,7 +2630,11 @@ export default function App() {
                 transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
               >
             <Suspense fallback={<PageSkeleton tab={currentTab} darkMode={darkMode} />}>
-            <>
+            {/* Cada bloque de cada sección (data-ascii="surface") "decodifica" al entrar, en vez
+                de aparecer de golpe. Esta librería no usa filter/backdrop-filter (ver nota más
+                arriba sobre el bug del fondo WebGL) y remonta solo porque el motion.div padre ya
+                cambia de key en cada cambio de pestaña — no hace falta un key propio acá. */}
+            <AsciiReveal preset="decode" duration="fast">
               {currentTab === "home" && (
                 <HomeView
                   darkMode={darkMode}
@@ -2881,7 +2886,7 @@ export default function App() {
                   autoSelectNote={quickNoteEditTarget}
                 />
               )}
-            </>
+            </AsciiReveal>
             </Suspense>
               </motion.div>
             </AnimatePresence>
