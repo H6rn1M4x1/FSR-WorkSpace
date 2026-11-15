@@ -31,6 +31,7 @@ const HealthView = lazy(() => import("./components/HealthView"));
 import { NotesView } from "./components/NotesView";
 import { EventsView } from "./components/EventsView";
 import PageSkeleton from "./components/PageSkeleton";
+import { AsciiSectionSkeleton } from "./components/AsciiSectionSkeleton";
 import { AsciiReveal } from "ascii-reveal";
 const UserSettingsModal = lazy(() =>
   import("./components/UserSettingsModal").then((m) => ({ default: m.UserSettingsModal }))
@@ -138,6 +139,26 @@ export default function App() {
   useEffect(() => {
     if (mainScrollRef.current) mainScrollRef.current.scrollTop = 0;
   }, [currentTab, activeSubTab]);
+
+  // Dispara el esqueleto ascii (AsciiSectionSkeleton) en cada cambio de sección, de forma
+  // explícita: no depende de que AsciiReveal se vuelva a montar solo (eso dependía del timing del
+  // remonte por "key" del motion.div y no se notaba al cambiar de pestaña, solo al recargar la
+  // página entera). El cambio de sectionLoading a true se hace DURANTE el render (comparando con
+  // un ref) en vez de en un useEffect, para que ya esté en true en el primer render de la pestaña
+  // nueva — si se hiciera en un efecto, el primer pintado mostraría el contenido real un instante
+  // antes de recién ahí esconderlo, en vez de arrancar directo con el esqueleto.
+  const [sectionLoading, setSectionLoading] = useState(true);
+  const sectionTransitionKey = currentTab === "notes" ? `notes-${activeSubTab}` : currentTab;
+  const prevSectionTransitionKeyRef = useRef(sectionTransitionKey);
+  if (prevSectionTransitionKeyRef.current !== sectionTransitionKey) {
+    prevSectionTransitionKeyRef.current = sectionTransitionKey;
+    if (!sectionLoading) setSectionLoading(true);
+  }
+  useEffect(() => {
+    if (!sectionLoading) return;
+    const t = setTimeout(() => setSectionLoading(false), 450);
+    return () => clearTimeout(t);
+  }, [sectionLoading, sectionTransitionKey]);
   // Botón "Agendar" de Inicio: navega a la pestaña real de la categoría elegida y le avisa a esa
   // vista (via el prop autoOpenQuickAdd, que cada una consume con su propio useEffect) que abra
   // directo su formulario real de "nuevo" — en vez de reconstruir 5 formularios aparte solo para
@@ -2630,11 +2651,19 @@ export default function App() {
                 transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
               >
             <Suspense fallback={<PageSkeleton tab={currentTab} darkMode={darkMode} />}>
-            {/* Cada bloque de cada sección (data-ascii="surface") "decodifica" al entrar, en vez
-                de aparecer de golpe. Esta librería no usa filter/backdrop-filter (ver nota más
-                arriba sobre el bug del fondo WebGL) y remonta solo porque el motion.div padre ya
-                cambia de key en cada cambio de pestaña — no hace falta un key propio acá. */}
-            <AsciiReveal preset="decode" duration="fast">
+            {/* Esqueleto ascii por bloque al cambiar de sección. sectionLoading se controla a mano
+                (ver el useEffect cerca de activeSubTab) en vez de confiar en que este componente
+                vuelva a montarse solo: el remonte por "key" del motion.div de arriba no siempre
+                se notaba (duration "fast" se mezclaba con el fade del propio motion.div), así que
+                el prop loading de AsciiReveal dispara el decode de forma explícita y segura. Esta
+                librería no usa filter/backdrop-filter (ver nota más arriba sobre el bug del fondo
+                WebGL), y AsciiSectionSkeleton reproduce el tamaño real de cada bloque de la
+                sección (mismos grids/paddings que PageSkeleton) pero con textura ascii. */}
+            <AsciiReveal preset="decode" duration="fast" loading={sectionLoading}>
+              {sectionLoading ? (
+                <AsciiSectionSkeleton tab={currentTab} darkMode={darkMode} />
+              ) : (
+              <>
               {currentTab === "home" && (
                 <HomeView
                   darkMode={darkMode}
@@ -2885,6 +2914,8 @@ export default function App() {
                   autoOpenCompose={quickNoteComposeNonce}
                   autoSelectNote={quickNoteEditTarget}
                 />
+              )}
+              </>
               )}
             </AsciiReveal>
             </Suspense>
