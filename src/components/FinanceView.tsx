@@ -1,4 +1,6 @@
 import { SubNav } from "./SubNav";
+import { SectionTransition } from "./SectionTransition";
+import { AsciiCalendarGrid, AsciiStatCardsRow, AsciiChartBlock, AsciiStatsPlusTable } from "./asciiSkeletonBlocks";
 import { useSubPanelRows } from "../lib/navPanelContext";
 import { SharedBadge, makeSharedOutHelpers } from "./SharedBadge";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
@@ -2153,6 +2155,24 @@ export default function FinanceView({
           transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
           className="space-y-6"
         >
+          <SectionTransition
+            transitionKey={activeTab}
+            skeleton={
+              activeTab === "resumen" ? (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <AsciiCalendarGrid cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />
+                    <div className="lg:col-span-2">
+                      <AsciiStatCardsRow count={4} cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />
+                    </div>
+                  </div>
+                  <AsciiChartBlock cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />
+                </div>
+              ) : (
+                <AsciiStatsPlusTable cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} tableRows={6} />
+              )
+            }
+          >
           {activeTab === "resumen" ? (
             <div className="space-y-6">
               {/* Grid: Invoices deadlines & Payments Table */}
@@ -4107,6 +4127,10 @@ export default function FinanceView({
                     transition={{ duration: 0.15 }}
                     className="space-y-4"
                   >
+                    <SectionTransition
+                      transitionKey={pagosSubTab}
+                      skeleton={<AsciiStatsPlusTable cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} tableRows={6} />}
+                    >
                     <PaymentsTable
                       payments={detailedPayments}
                       setPayments={setDetailedPayments}
@@ -4120,6 +4144,7 @@ export default function FinanceView({
                       autoOpenEditNonce={mergedEditPaymentNonce}
                       onQuickEditHandled={onQuickEditHandled}
                     />
+                    </SectionTransition>
                   </motion.div>
                 ) : (
                   <motion.div
@@ -4129,6 +4154,10 @@ export default function FinanceView({
                     exit={{ opacity: 0, y: -15 }}
                     transition={{ duration: 0.15 }}
                   >
+                    <SectionTransition
+                      transitionKey={pagosSubTab}
+                      skeleton={<AsciiStatsPlusTable cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} tableRows={6} />}
+                    >
                     <div className="space-y-4">
                       <PaymentAutoDetectSettings darkMode={darkMode} />
                       <GastosVariosTable
@@ -4139,11 +4168,16 @@ export default function FinanceView({
                         userEmail={userEmail}
                       />
                     </div>
+                    </SectionTransition>
                   </motion.div>
                 )}
               </AnimatePresence>
             </div>
           ) : activeTab === "inversiones" ? (
+            <SectionTransition
+              transitionKey={inversionesActiveTable}
+              skeleton={<AsciiStatsPlusTable cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} tableRows={6} />}
+            >
             <InversionesTable
               inversiones={inversiones}
               setInversiones={setInversiones}
@@ -4154,6 +4188,7 @@ export default function FinanceView({
               userEmail={userEmail}
               activeTable={inversionesActiveTable}
             />
+            </SectionTransition>
           ) : activeTab === "cotizaciones" ? (
             <div className="space-y-6">
               {/* Selector de Pestañas — ahora integrado en el navbar (useSubPanelRows arriba) */}
@@ -4167,12 +4202,17 @@ export default function FinanceView({
                     exit={{ opacity: 0, y: -15 }}
                     transition={{ duration: 0.15 }}
                   >
+                    <SectionTransition
+                      transitionKey={cotizacionesSubTab}
+                      skeleton={<AsciiStatsPlusTable cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} tableRows={6} />}
+                    >
                     <CotizacionesAccionesTable
                       cotizaciones={cotizacionesAcciones}
                       setCotizaciones={setCotizacionesAcciones}
                       darkMode={darkMode}
                       onExportSheets={onExportSheets}
                     />
+                    </SectionTransition>
                   </motion.div>
                 ) : (
                   <motion.div
@@ -4182,17 +4222,23 @@ export default function FinanceView({
                     exit={{ opacity: 0, y: -15 }}
                     transition={{ duration: 0.15 }}
                   >
+                    <SectionTransition
+                      transitionKey={cotizacionesSubTab}
+                      skeleton={<AsciiStatsPlusTable cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} tableRows={6} />}
+                    >
                     <CotizacionesCriptoTable
                       cotizaciones={cotizacionesCripto}
                       setCotizaciones={setCotizacionesCripto}
                       darkMode={darkMode}
                       onExportSheets={onExportSheets}
                     />
+                    </SectionTransition>
                   </motion.div>
                 )}
               </AnimatePresence>
             </div>
           ) : null}
+          </SectionTransition>
         </motion.div>
       </AnimatePresence>
 

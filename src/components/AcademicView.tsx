@@ -1,4 +1,6 @@
 import { SubNav } from "./SubNav";
+import { SectionTransition } from "./SectionTransition";
+import { AsciiCalendarGrid, AsciiListRows, AsciiCardsGrid, AsciiStatsPlusTable, AsciiTableRows } from "./asciiSkeletonBlocks";
 import { useSubPanelRows } from "../lib/navPanelContext";
 import { SharedBadge, makeSharedOutHelpers } from "./SharedBadge";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
@@ -1912,6 +1914,25 @@ export default function AcademicView({
           transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
           className="space-y-6"
         >
+          <SectionTransition
+            transitionKey={normalizedParentTab}
+            skeleton={
+              normalizedParentTab === "resumen" ? (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  <AsciiCalendarGrid cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />
+                  <div className="lg:col-span-2">
+                    <AsciiListRows count={5} />
+                  </div>
+                </div>
+              ) : normalizedParentTab === "facultad" ? (
+                <AsciiCardsGrid count={8} cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />
+              ) : normalizedParentTab === "horario" ? (
+                <AsciiCalendarGrid cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />
+              ) : (
+                <AsciiStatsPlusTable cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} tableRows={6} />
+              )
+            }
+          >
           {activeSubTab === "resumen" && (() => {
             const selectedEvents = getAcademicEventsForDate(resumenSelectedDateStr);
             type UnifiedAcademicAgendaItem = {
@@ -2897,6 +2918,7 @@ export default function AcademicView({
 
       {/* Informacion de Materias Submenu Tab */}
       {normalizedParentTab === "informacion_materias" && planEstudioSubTab === "plan_estudio" && (
+        <SectionTransition transitionKey={planEstudioSubTab} skeleton={<AsciiTableRows rows={6} cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />}>
         <div className={`p-6 rounded-3xl border scroll-reveal ${darkMode ? "bg-zinc-900 border-zinc-800 text-white shadow-lg" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"}`}>
           {/* Header Controls */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
@@ -3233,6 +3255,7 @@ export default function AcademicView({
             <span>Sincronizado localmente</span>
           </div>
         </div>
+        </SectionTransition>
       )}
 
       {/* Plan de Estudio Submenu Tab */}
@@ -3326,6 +3349,7 @@ export default function AcademicView({
           });
 
           return (
+            <SectionTransition transitionKey={planEstudioSubTab} skeleton={<AsciiStatsPlusTable statCount={3} tableRows={6} cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />}>
             <div className={`p-6 rounded-3xl border scroll-reveal ${darkMode ? "bg-zinc-900 border-zinc-800 text-white shadow-lg" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"}`}>
               {/* Header Controls */}
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
@@ -3673,6 +3697,7 @@ export default function AcademicView({
                   <span>Estilo unificado con módulo Comidas</span>
                 </div>
               </div>
+            </SectionTransition>
           );
         })()}
 
@@ -3692,6 +3717,7 @@ export default function AcademicView({
           });
 
           return (
+            <SectionTransition transitionKey={horarioSubTab} skeleton={<AsciiCalendarGrid cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />}>
             <div className="space-y-6">
               <WeeklyScheduleGrid
                 horarios={horarios}
@@ -4019,6 +4045,7 @@ export default function AcademicView({
             </div>
             )}
             </div>
+            </SectionTransition>
           );
         })()}
 
@@ -4043,6 +4070,7 @@ export default function AcademicView({
           const examOtrosMateriaOptions = Array.from(new Set(horarios.map((h) => h.materia))).sort();
 
           return (
+            <SectionTransition transitionKey={horarioSubTab} skeleton={<AsciiCalendarGrid cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />}>
             <>
               <MonthlyExamScheduler
                 examenes={examenes}
@@ -4348,6 +4376,7 @@ export default function AcademicView({
             </div>
               )}
             </>
+            </SectionTransition>
           );
         })()}
 
@@ -4364,6 +4393,7 @@ export default function AcademicView({
               onJumpHandled={() => setJumpToFolder(null)}
             />
           )}
+          </SectionTransition>
         </motion.div>
       </AnimatePresence>
 

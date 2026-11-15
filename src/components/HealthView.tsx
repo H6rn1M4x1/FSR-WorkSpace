@@ -1,4 +1,6 @@
 import { SubNav } from "./SubNav";
+import { SectionTransition } from "./SectionTransition";
+import { AsciiCalendarGrid, AsciiCardsGrid, AsciiChartBlock, AsciiStatsPlusTable, AsciiListRows } from "./asciiSkeletonBlocks";
 import { useSubPanelRows } from "../lib/navPanelContext";
 import { SharedBadge, makeSharedOutHelpers } from "./SharedBadge";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
@@ -3190,6 +3192,22 @@ export default function HealthView({
           className="space-y-6"
         >
           {activeSubTab === "resumen" && (
+            <SectionTransition
+              transitionKey="resumen"
+              skeleton={
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    <div className="lg:col-span-5">
+                      <AsciiCalendarGrid cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />
+                    </div>
+                    <div className="lg:col-span-7">
+                      <AsciiListRows count={4} />
+                    </div>
+                  </div>
+                  <AsciiChartBlock cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />
+                </div>
+              }
+            >
             <>
           {/* Top Grid: Calendario Médico & Control de Medicamentos (mismas proporciones 5/7 que Calendario Unificado y Agenda Central Integrada en Inicio) */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -5199,6 +5217,7 @@ export default function HealthView({
             </div>
           </div>
         </>
+            </SectionTransition>
       )}
 
 
@@ -5216,6 +5235,10 @@ export default function HealthView({
                 exit={{ opacity: 0, y: -15 }}
                 transition={{ duration: 0.2 }}
               >
+                <SectionTransition
+                  transitionKey={deporteAlimActiveTab}
+                  skeleton={<AsciiCardsGrid count={6} cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />}
+                >
                 <GymRutinaView
                   darkMode={darkMode}
                   userEmail={userEmail}
@@ -5236,6 +5259,7 @@ export default function HealthView({
                   currentWeightKg={currentWeight}
                   weightHistory={medidasHistory}
                 />
+                </SectionTransition>
               </motion.div>
             )}
 
@@ -5252,6 +5276,10 @@ export default function HealthView({
                     : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
                 } space-y-6`}
               >
+                <SectionTransition
+                  transitionKey={deporteAlimActiveTab}
+                  skeleton={<AsciiCalendarGrid cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />}
+                >
                 {/* Panel de registro + calendario mensual de Alimentación — mismo apartado visual
                     y funciones que el Calendario de Exámenes y Trabajos: a la izquierda se arma la
                     comida (Estado/Plato/Ingredientes, con desglose de calorías y macros al elegir
@@ -5720,6 +5748,7 @@ export default function HealthView({
                   );
                 })()}
 
+                </SectionTransition>
               </motion.div>
             )}
 
@@ -5736,6 +5765,10 @@ export default function HealthView({
                     : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
                 } space-y-6`}
               >
+                <SectionTransition
+                  transitionKey={deporteAlimActiveTab}
+                  skeleton={<AsciiCalendarGrid cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />}
+                >
                 {/* Panel de resumen + calendario mensual de Historial Diario — mismo apartado
                     visual que el Calendario de Exámenes y Trabajos: a la izquierda se ve, de solo
                     lectura, el resumen del día elegido (hoy por defecto) y a la derecha se elige
@@ -5931,6 +5964,7 @@ export default function HealthView({
                     </DetailModal>
                   );
                 })()}
+                </SectionTransition>
               </motion.div>
             )}
 </AnimatePresence>
@@ -5965,6 +5999,10 @@ export default function HealthView({
               transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
               className="space-y-6"
             >
+              <SectionTransition
+                transitionKey={clinicoActiveTab}
+                skeleton={<AsciiStatsPlusTable cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} tableRows={6} />}
+              >
               {clinicoActiveTab === "doctores" && (
                 <div
                   className={`p-6 rounded-3xl border scroll-reveal ${
@@ -6258,6 +6296,10 @@ export default function HealthView({
                         transition={{ duration: 0.2 }}
                         className="space-y-6"
                       >
+                        <SectionTransition
+                          transitionKey={medsActiveTab}
+                          skeleton={<AsciiStatsPlusTable cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} tableRows={5} />}
+                        >
                         {/* Filters Bar */}
                         <div className="flex flex-col sm:flex-row gap-3 mb-6 items-stretch sm:items-center w-full">
                     {/* Search query */}
@@ -6571,6 +6613,7 @@ export default function HealthView({
                         <div className="mt-4 flex items-center justify-between text-[11px] text-slate-400 dark:text-zinc-500">
                           <span>Total de registros: {filteredMeds.length}</span>
                         </div>
+                        </SectionTransition>
                       </motion.div>
                     ) : (
                       <motion.div
@@ -6581,6 +6624,10 @@ export default function HealthView({
                         transition={{ duration: 0.2 }}
                         className="space-y-6"
                       >
+                        <SectionTransition
+                          transitionKey={medsActiveTab}
+                          skeleton={<AsciiStatsPlusTable cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} tableRows={5} />}
+                        >
                         {/* Filters Row */}
                   <div className="flex flex-col sm:flex-row gap-3 mb-6 items-stretch sm:items-center w-full">
                     <div className="relative flex-1 w-full">
@@ -6895,6 +6942,7 @@ export default function HealthView({
                         <div className="mt-4 flex items-center justify-between text-[11px] text-slate-400 dark:text-zinc-500">
                           <span>Total de registros: {filteredDisp.length}</span>
                         </div>
+                        </SectionTransition>
                       </motion.div>
                     )}
                   </AnimatePresence>
@@ -7596,6 +7644,7 @@ export default function HealthView({
                   </div>
                 </div>
               )}
+              </SectionTransition>
             </motion.div>
           </AnimatePresence>
         </div>

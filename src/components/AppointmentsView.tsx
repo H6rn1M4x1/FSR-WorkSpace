@@ -1,4 +1,6 @@
 import { SubNav } from "./SubNav";
+import { SectionTransition } from "./SectionTransition";
+import { AsciiCalendarGrid, AsciiListRows, AsciiStatsPlusTable } from "./asciiSkeletonBlocks";
 import { SharedBadge, makeSharedOutHelpers } from "./SharedBadge";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import { useBriefLoading } from "../hooks/useBriefLoading";
@@ -2841,6 +2843,25 @@ export default function AppointmentsView({
           transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
           className="space-y-6"
         >
+          <SectionTransition
+            transitionKey={activeTab}
+            skeleton={
+              activeTab === "agenda" ? (
+                <div className="space-y-6 w-full">
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    <div className="lg:col-span-5">
+                      <AsciiCalendarGrid cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />
+                    </div>
+                    <div className="lg:col-span-7">
+                      <AsciiListRows count={5} />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <AsciiStatsPlusTable cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} tableRows={6} />
+              )
+            }
+          >
           {activeTab === "agenda" ? (
         <div className="space-y-6 w-full">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -4130,6 +4151,7 @@ export default function AppointmentsView({
           </div>
         </div>
       )}
+          </SectionTransition>
         </motion.div>
       </AnimatePresence>
 

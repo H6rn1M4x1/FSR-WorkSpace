@@ -1,4 +1,6 @@
 import { SubNav } from "./SubNav";
+import { SectionTransition } from "./SectionTransition";
+import { AsciiCalendarGrid, AsciiListRows, AsciiStatsPlusTable, AsciiTableRows } from "./asciiSkeletonBlocks";
 import { useSubPanelRows } from "../lib/navPanelContext";
 import { SharedBadge, makeSharedOutHelpers } from "./SharedBadge";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
@@ -2396,6 +2398,21 @@ export default function MealsView({
           transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
           className="space-y-6"
         >
+          <SectionTransition
+            transitionKey={activeSubTab}
+            skeleton={
+              activeSubTab === "planificador" ? (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  <AsciiCalendarGrid cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />
+                  <div className="lg:col-span-2">
+                    <AsciiListRows count={5} />
+                  </div>
+                </div>
+              ) : (
+                <AsciiStatsPlusTable cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} tableRows={6} />
+              )
+            }
+          >
           {/* RENDER PLANIFICADOR TAB */}
           {activeSubTab === "planificador" &&
             (() => {
@@ -2934,6 +2951,7 @@ export default function MealsView({
                     : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
                 }`}
               >
+          <SectionTransition transitionKey={creacionComidasActiveTab} skeleton={<AsciiTableRows rows={6} cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />}>
           {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
             <div>
@@ -3261,6 +3279,7 @@ export default function MealsView({
               </div>
             </div>
           )}
+          </SectionTransition>
               </motion.div>
             )}
 
@@ -3277,6 +3296,7 @@ export default function MealsView({
                     : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
                 }`}
               >
+          <SectionTransition transitionKey={creacionComidasActiveTab} skeleton={<AsciiTableRows rows={6} cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />}>
           {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
             <div>
@@ -3672,6 +3692,7 @@ export default function MealsView({
               <span>Unidades vinculadas directamente de Mercadería</span>
             </div>
           )}
+          </SectionTransition>
               </motion.div>
             )}
 
@@ -3688,6 +3709,7 @@ export default function MealsView({
                     : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
                 }`}
               >
+          <SectionTransition transitionKey={creacionComidasActiveTab} skeleton={<AsciiTableRows rows={6} cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />}>
           {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
             <div>
@@ -4046,6 +4068,7 @@ export default function MealsView({
               <span>Unidades y cantidades calculadas automáticamente</span>
             </div>
           )}
+          </SectionTransition>
               </motion.div>
             )}
           </AnimatePresence>
@@ -4594,6 +4617,7 @@ export default function MealsView({
             </div>
         </div>
       )}
+          </SectionTransition>
         </motion.div>
       </AnimatePresence>
 
