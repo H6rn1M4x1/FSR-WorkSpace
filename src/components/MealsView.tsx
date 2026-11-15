@@ -1,6 +1,6 @@
 import { SubNav } from "./SubNav";
 import { SectionTransition } from "./SectionTransition";
-import { AsciiCalendarGrid, AsciiListRows, AsciiStatsPlusTable, AsciiTableRows } from "./asciiSkeletonBlocks";
+import { AsciiCalendarGrid, AsciiCardWithList, AsciiTableRows } from "./asciiSkeletonBlocks";
 import { useSubPanelRows } from "../lib/navPanelContext";
 import { SharedBadge, makeSharedOutHelpers } from "./SharedBadge";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
@@ -2400,18 +2400,29 @@ export default function MealsView({
         >
           <SectionTransition
             transitionKey={activeSubTab}
-            skeleton={
-              activeSubTab === "planificador" ? (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  <AsciiCalendarGrid cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />
-                  <div className="lg:col-span-2">
-                    <AsciiListRows count={5} />
+            skeleton={(() => {
+              const cb = darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90";
+              if (activeSubTab === "planificador") {
+                // 3 columnas IGUALES (lg:col-span-4 de 12): calendario, Organización Semanal,
+                // Checklist de Compras.
+                return (
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    <div className="lg:col-span-4"><AsciiCalendarGrid cardBg={cb} /></div>
+                    <div className="lg:col-span-4"><AsciiCardWithList count={4} cardBg={cb} /></div>
+                    <div className="lg:col-span-4"><AsciiCardWithList count={4} cardBg={cb} /></div>
                   </div>
-                </div>
-              ) : (
-                <AsciiStatsPlusTable cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} tableRows={6} />
-              )
-            }
+                );
+              }
+              if (activeSubTab === "organizacion_semanal") {
+                return <AsciiTableRows rows={7} cols={5} cardBg={cb} />;
+              }
+              if (activeSubTab === "lista_compras") {
+                return <AsciiTableRows rows={7} cols={8} cardBg={cb} />;
+              }
+              // creacion_comidas: su propio SectionTransition interno ya cubre
+              // mercadería/alimentos/platos — esto solo se ve en el instante de entrar al tab.
+              return <AsciiTableRows rows={7} cols={9} cardBg={cb} />;
+            })()}
           >
           {/* RENDER PLANIFICADOR TAB */}
           {activeSubTab === "planificador" &&
@@ -2951,7 +2962,7 @@ export default function MealsView({
                     : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
                 }`}
               >
-          <SectionTransition transitionKey={creacionComidasActiveTab} skeleton={<AsciiTableRows rows={6} cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />}>
+          <SectionTransition transitionKey={creacionComidasActiveTab} skeleton={<AsciiTableRows rows={7} cols={9} cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />}>
           {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
             <div>
@@ -3296,7 +3307,7 @@ export default function MealsView({
                     : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
                 }`}
               >
-          <SectionTransition transitionKey={creacionComidasActiveTab} skeleton={<AsciiTableRows rows={6} cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />}>
+          <SectionTransition transitionKey={creacionComidasActiveTab} skeleton={<AsciiTableRows rows={7} cols={13} cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />}>
           {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
             <div>
@@ -3709,7 +3720,7 @@ export default function MealsView({
                     : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
                 }`}
               >
-          <SectionTransition transitionKey={creacionComidasActiveTab} skeleton={<AsciiTableRows rows={6} cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />}>
+          <SectionTransition transitionKey={creacionComidasActiveTab} skeleton={<AsciiTableRows rows={7} cols={11} cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />}>
           {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
             <div>

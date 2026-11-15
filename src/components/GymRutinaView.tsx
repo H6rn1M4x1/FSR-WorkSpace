@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { SectionTransition } from "./SectionTransition";
-import { AsciiCalendarGrid, AsciiCardsGrid, AsciiChartBlock } from "./asciiSkeletonBlocks";
+import { AsciiCardsGrid, AsciiChartBlock, AsciiWeeklyTimetable, Block } from "./asciiSkeletonBlocks";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import { createPortal } from "react-dom";
 import {
@@ -2149,7 +2149,7 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
 
       {/* --- VISTA 1: MIS RUTINAS --- */}
       {activeTab === "rutinas" && (
-        <SectionTransition transitionKey={activeTab} skeleton={<AsciiCardsGrid count={6} cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />}>
+        <SectionTransition transitionKey={activeTab} skeleton={<AsciiCardsGrid count={6} cols="md:grid-cols-2 lg:grid-cols-3" cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />}>
         <div className="space-y-4 scroll-reveal">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {listRutinas.map(rutina => {
@@ -2269,7 +2269,7 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
 
       {/* --- VISTA 2: BIBLIOTECA DE EJERCICIOS Y TÉCNICA (CON GIFS ANIMADOS INTERACTIVOS) --- */}
       {activeTab === "tecnica" && (
-        <SectionTransition transitionKey={activeTab} skeleton={<AsciiCardsGrid count={6} cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />}>
+        <SectionTransition transitionKey={activeTab} skeleton={<AsciiCardsGrid count={6} cols="md:grid-cols-2 lg:grid-cols-3" cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />}>
         <div className="space-y-4 scroll-reveal">
           {/* BARRA INTEGRADA DE FILTROS POR GRUPO MUSCULAR Y BÚSQUEDA */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pb-3 border-b border-zinc-200/40 dark:border-zinc-800/60 w-full">
@@ -2739,7 +2739,20 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
 
       {/* --- VISTA 4: GRÁFICO DE PROGRESO Y MÉTRICAS POR EJERCICIO (RECHARTS) --- */}
       {activeTab === "progreso" && (
-        <SectionTransition transitionKey={activeTab} skeleton={<AsciiChartBlock cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />}>
+        <SectionTransition
+          transitionKey={activeTab}
+          skeleton={
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+              <div className={`p-5 rounded-2xl border ${darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} space-y-3`}>
+                <Block h="1.125rem" w="10rem" rows={1} />
+                <Block h="0.875rem" w="100%" rows={1} />
+                <Block h="0.875rem" w="90%" rows={1} />
+                <Block h="0.875rem" w="70%" rows={1} />
+              </div>
+              <AsciiChartBlock cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />
+            </div>
+          }
+        >
         <div className="text-slate-800 dark:text-zinc-100 scroll-reveal">
           {/* Dos columnas independientes a partir de xl: el entrenador IA a la izquierda, el
               gráfico de progreso por ejercicio a la derecha — antes vivían apilados en una sola
@@ -2969,7 +2982,7 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
 
       {/* --- VISTA 5: HISTORIAL DE SESIONES --- */}
       {activeTab === "historial" && (
-        <SectionTransition transitionKey={activeTab} skeleton={<AsciiCalendarGrid cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />}>
+        <SectionTransition transitionKey={activeTab} skeleton={<AsciiWeeklyTimetable days={7} cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />}>
         <GymScheduleGrid
           darkMode={darkMode}
           actividades={deportesActividades || []}

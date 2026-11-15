@@ -1,6 +1,6 @@
 import { SubNav } from "./SubNav";
 import { SectionTransition } from "./SectionTransition";
-import { AsciiCalendarGrid, AsciiCardsGrid, AsciiChartBlock, AsciiStatsPlusTable, AsciiListRows } from "./asciiSkeletonBlocks";
+import { AsciiCalendarGrid, AsciiCardsGrid, AsciiChartBlock, AsciiStatsPlusTable, AsciiCardWithList, AsciiStatCardsRow, AsciiSidebarPlusCalendar } from "./asciiSkeletonBlocks";
 import { useSubPanelRows } from "../lib/navPanelContext";
 import { SharedBadge, makeSharedOutHelpers } from "./SharedBadge";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
@@ -3201,10 +3201,14 @@ export default function HealthView({
                       <AsciiCalendarGrid cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />
                     </div>
                     <div className="lg:col-span-7">
-                      <AsciiListRows count={4} />
+                      <AsciiCardWithList count={3} cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />
                     </div>
                   </div>
-                  <AsciiChartBlock cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />
+                  <AsciiStatCardsRow count={4} cols="grid-cols-2 sm:grid-cols-4" cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <AsciiChartBlock cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />
+                    <AsciiChartBlock cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />
+                  </div>
                 </div>
               }
             >
@@ -5278,7 +5282,7 @@ export default function HealthView({
               >
                 <SectionTransition
                   transitionKey={deporteAlimActiveTab}
-                  skeleton={<AsciiCalendarGrid cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />}
+                  skeleton={<AsciiSidebarPlusCalendar cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />}
                 >
                 {/* Panel de registro + calendario mensual de Alimentación — mismo apartado visual
                     y funciones que el Calendario de Exámenes y Trabajos: a la izquierda se arma la
@@ -5767,7 +5771,7 @@ export default function HealthView({
               >
                 <SectionTransition
                   transitionKey={deporteAlimActiveTab}
-                  skeleton={<AsciiCalendarGrid cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />}
+                  skeleton={<AsciiSidebarPlusCalendar cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />}
                 >
                 {/* Panel de resumen + calendario mensual de Historial Diario — mismo apartado
                     visual que el Calendario de Exámenes y Trabajos: a la izquierda se ve, de solo
@@ -6001,7 +6005,7 @@ export default function HealthView({
             >
               <SectionTransition
                 transitionKey={clinicoActiveTab}
-                skeleton={<AsciiStatsPlusTable cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} tableRows={6} />}
+                skeleton={<AsciiStatsPlusTable statCount={0} tableRows={6} tableCols={8} cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />}
               >
               {clinicoActiveTab === "doctores" && (
                 <div
@@ -6298,7 +6302,7 @@ export default function HealthView({
                       >
                         <SectionTransition
                           transitionKey={medsActiveTab}
-                          skeleton={<AsciiStatsPlusTable cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} tableRows={5} />}
+                          skeleton={<AsciiStatsPlusTable statCount={0} tableRows={5} tableCols={10} cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />}
                         >
                         {/* Filters Bar */}
                         <div className="flex flex-col sm:flex-row gap-3 mb-6 items-stretch sm:items-center w-full">
@@ -6626,7 +6630,7 @@ export default function HealthView({
                       >
                         <SectionTransition
                           transitionKey={medsActiveTab}
-                          skeleton={<AsciiStatsPlusTable cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} tableRows={5} />}
+                          skeleton={<AsciiStatsPlusTable statCount={0} tableRows={5} tableCols={10} cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />}
                         >
                         {/* Filters Row */}
                   <div className="flex flex-col sm:flex-row gap-3 mb-6 items-stretch sm:items-center w-full">

@@ -2858,7 +2858,7 @@ export default function AppointmentsView({
                   </div>
                 </div>
               ) : (
-                <AsciiStatsPlusTable cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} tableRows={6} />
+                <AsciiStatsPlusTable statCount={0} tableRows={7} tableCols={10} cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />
               )
             }
           >
