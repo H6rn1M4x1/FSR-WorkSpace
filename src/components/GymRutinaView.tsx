@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { SectionTransition } from "./SectionTransition";
-import { AsciiCardsGrid, AsciiChartBlock, AsciiWeeklyTimetable, Block } from "./asciiSkeletonBlocks";
+import { AsciiCardsGrid, AsciiChartBlock, AsciiWeeklyTimetable, AsciiStatCardsRow, Block } from "./asciiSkeletonBlocks";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import { createPortal } from "react-dom";
 import {
@@ -2087,6 +2087,22 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
 
       {/* 2. SECCIÓN MEDIA: HEADER DE BIENVENIDA Y RESUMEN DE MÉTRICAS */}
       {activeTab === "rutinas" && (
+        <SectionTransition
+          transitionKey={activeTab}
+          skeleton={
+            <div className="space-y-5">
+              <div className={`p-5 rounded-2xl border ${darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} space-y-4`}>
+                <div className="flex items-center justify-between gap-4">
+                  <Block h="1.25rem" w="16rem" rows={1} />
+                  <Block h="2.25rem" w="9rem" rows={1} />
+                </div>
+                <AsciiStatCardsRow count={4} cols="grid-cols-2 sm:grid-cols-4" cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />
+              </div>
+              <AsciiCardsGrid count={6} cols="md:grid-cols-2 lg:grid-cols-3" cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />
+            </div>
+          }
+        >
+        <>
         <div className="p-0 space-y-5 bg-transparent border-none text-slate-800 dark:text-white">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-200/40 dark:border-zinc-800/50 pb-4">
             <div className="flex items-center gap-3">
@@ -2145,11 +2161,8 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
             </div>
           </div>
         </div>
-      )}
 
-      {/* --- VISTA 1: MIS RUTINAS --- */}
-      {activeTab === "rutinas" && (
-        <SectionTransition transitionKey={activeTab} skeleton={<AsciiCardsGrid count={6} cols="md:grid-cols-2 lg:grid-cols-3" cardBg={darkMode ? "bg-zinc-900/40 border-zinc-800/80" : "bg-white border-zinc-200/90"} />}>
+        {/* --- VISTA 1: MIS RUTINAS --- */}
         <div className="space-y-4 scroll-reveal">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {listRutinas.map(rutina => {
@@ -2264,6 +2277,7 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
             </div>
           )}
         </div>
+        </>
         </SectionTransition>
       )}
 
