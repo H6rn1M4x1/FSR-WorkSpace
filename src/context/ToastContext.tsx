@@ -56,7 +56,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     <ToastContext.Provider value={{ showToast }}>
       {children}
       <div
-        className="fixed bottom-5 left-4 right-4 sm:left-auto sm:right-5 sm:w-full sm:max-w-sm z-[99999] pointer-events-none"
+        className="fixed bottom-24 md:bottom-5 left-4 right-4 sm:left-auto sm:right-5 sm:w-full sm:max-w-sm z-[99999] pointer-events-none"
         onMouseEnter={() => toasts.length > 1 && setExpanded(true)}
         onMouseLeave={() => setExpanded(false)}
       >

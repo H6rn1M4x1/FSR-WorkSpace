@@ -570,7 +570,7 @@ export default function TopNavbar({
     <header
       ref={notificationsRef}
       data-no-global-sound
-      className="sticky top-0 sm:top-3 z-50 w-full max-w-7xl mx-auto px-2 sm:px-4"
+      className="fixed bottom-0 inset-x-0 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:sticky md:bottom-auto md:top-3 md:inset-x-auto md:pb-0 z-50 w-full max-w-7xl mx-auto px-2 sm:px-4"
     >
       {/* Outer Glass Container with Animated Height/Layout Expansion */}
       <motion.div
@@ -585,8 +585,11 @@ export default function TopNavbar({
             : "bg-white/80 border-slate-200/80 text-zinc-800 shadow-slate-200/50"
         }`}
       >
-        {/* TOP ROW: Main Header Bar */}
-        <div className="flex items-center justify-between gap-2 w-full">
+        {/* TOP ROW: Main Header Bar — en mobile queda al final (order-2) para que sea la fila
+            pegada al borde inferior de la pantalla (la más fácil de alcanzar con el pulgar); el
+            resto del contenido de la cápsula (sub-pestañas, notificaciones, chat) crece hacia
+            arriba, por encima de esta fila, en vez de taparla. */}
+        <div className="order-2 md:order-none flex items-center justify-between gap-2 w-full">
           {/* Brand / Logo */}
           <div
             onClick={() => {
@@ -594,13 +597,16 @@ export default function TopNavbar({
               setShowNotifications(false);
               setShowChat(false);
             }}
-            className="flex items-center shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
+            className="hidden md:flex items-center shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
           >
             <Logo darkMode={darkMode} size="sm" className="shrink-0" />
           </div>
 
-          {/* Desktop Horizontal Navigation Pills */}
-          <nav className="hidden md:flex items-center gap-1 bg-zinc-500/5 dark:bg-white/5 p-1 rounded-full border border-zinc-200/40 dark:border-white/5 relative">
+          {/* Navegación principal — visible siempre (antes solo en desktop, oculta en mobile
+              detrás del botón de hamburguesa). En mobile se ve solo el ícono (sin la etiqueta) y
+              la fila desplaza horizontalmente si no entran todas, para que quepan sin achicar los
+              botones de la derecha. */}
+          <nav className="flex items-center gap-1 bg-zinc-500/5 dark:bg-white/5 p-1 rounded-full border border-zinc-200/40 dark:border-white/5 relative flex-1 min-w-0 overflow-x-auto no-scrollbar md:flex-initial md:min-w-fit md:overflow-visible">
             {menuItems.map((item) => {
               const Icon = item.icon;
               const isActive = currentTab === item.id;
@@ -616,7 +622,7 @@ export default function TopNavbar({
                     // sobre la nueva página.
                     if (isSettingsOpen && onOpenSettings) onOpenSettings();
                   }}
-                  className={`relative flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors duration-300 cursor-pointer whitespace-nowrap z-10 ${
+                  className={`relative flex items-center gap-2 px-2.5 md:px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors duration-300 cursor-pointer whitespace-nowrap z-10 shrink-0 ${
                     isActive
                       ? `text-white dark:text-zinc-950 font-bold ${!darkMode ? "active-nav-pill-light" : ""}`
                       : darkMode
@@ -632,14 +638,14 @@ export default function TopNavbar({
                     />
                   )}
                   <Icon className={`w-3.5 h-3.5 ${isActive ? "stroke-[2.5]" : "stroke-[1.8]"} ${isActive ? `text-white dark:text-zinc-950 ${!darkMode ? "active-nav-pill-light" : ""}` : darkMode ? "text-zinc-300" : "text-black"}`} />
-                  <span className={isActive && !darkMode ? "active-nav-pill-light" : ""}>{item.label}</span>
+                  <span className={`hidden md:inline ${isActive && !darkMode ? "active-nav-pill-light" : ""}`}>{item.label}</span>
                 </button>
               );
             })}
           </nav>
 
           {/* Right Actions Header */}
-          <div className="flex items-center gap-1.5 sm:gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {/* Chat Button */}
             <div>
               <motion.button
@@ -783,16 +789,20 @@ export default function TopNavbar({
           </div>
         </div>
 
-        {/* BOTTOM ROW: Integrated Sub-Menu Row (Inside Same Capsule) */}
+        {/* FILA DE SUB-PESTAÑAS (dentro de la misma cápsula). En mobile la fila principal de
+            arriba (order-2) queda pegada abajo de todo, así que esta fila visualmente pasa a
+            estar ARRIBA de ella — por eso el borde divisor se invierte (border-b en vez de
+            border-t) y el margen anima en los dos lados a la vez, para que separe de la fila de
+            arriba sin importar de qué lado quede. */}
         <AnimatePresence mode="wait">
           {currentSubMenu && currentSubMenu.length > 0 && (
             <motion.div
               key={currentTab}
-              initial={{ opacity: 0, height: 0, marginTop: 0 }}
-              animate={{ opacity: 1, height: "auto", marginTop: 8 }}
-              exit={{ opacity: 0, height: 0, marginTop: 0 }}
+              initial={{ opacity: 0, height: 0, marginTop: 0, marginBottom: 0 }}
+              animate={{ opacity: 1, height: "auto", marginTop: 8, marginBottom: 8 }}
+              exit={{ opacity: 0, height: 0, marginTop: 0, marginBottom: 0 }}
               transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-              className="w-full overflow-hidden relative flex items-center gap-1.5 pt-2.5 border-t border-zinc-200/50 dark:border-white/10"
+              className="w-full overflow-hidden relative flex items-center gap-1.5 pb-2.5 md:pb-0 md:pt-2.5 border-b md:border-b-0 md:border-t border-zinc-200/50 dark:border-white/10"
             >
               {/* Left Scroll Button */}
               {showLeftArrow && (
@@ -904,46 +914,21 @@ export default function TopNavbar({
             {mobileMenuOpen && (
               <motion.div
                 key="mobile-popup-menu-card"
-                initial={{ scale: 0.8, opacity: 0, y: -20 }}
+                initial={{ scale: 0.8, opacity: 0, y: 20 }}
                 animate={{ scale: 1, opacity: 1, y: 0 }}
-                exit={{ scale: 0.8, opacity: 0, y: -20, transition: { duration: 0.35, ease: [0.16, 1, 0.3, 1] } }}
+                exit={{ scale: 0.8, opacity: 0, y: 20, transition: { duration: 0.35, ease: [0.16, 1, 0.3, 1] } }}
                 transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-                className={`fixed top-[76px] left-1/2 -translate-x-1/2 w-[92%] max-w-lg p-4 rounded-3xl border shadow-2xl backdrop-blur-2xl transition-colors duration-200 z-50 md:hidden ${
+                className={`fixed bottom-[88px] left-1/2 -translate-x-1/2 w-[92%] max-w-lg p-4 rounded-3xl border shadow-2xl backdrop-blur-2xl transition-colors duration-200 z-50 md:hidden ${
                   darkMode
                     ? "bg-zinc-950/95 border-white/10 text-zinc-100"
                     : "bg-white/95 border-slate-200 text-zinc-800"
                 }`}
               >
-                {/* Navigation Items Grid */}
-                <div className="grid grid-cols-2 gap-2 mb-4">
-                  {menuItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = currentTab === item.id;
-                    return (
-                      <button
-                        key={item.id}
-                        onClick={() => {
-                          setCurrentTab(item.id);
-                          setMobileMenuOpen(false);
-                          setShowNotifications(false);
-                        }}
-                        className={`flex items-center gap-2.5 p-3 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${
-                          isActive
-                            ? `bg-primary text-white dark:text-zinc-950 shadow-md font-bold ${!darkMode ? "active-nav-pill-light" : ""}`
-                            : darkMode
-                            ? "bg-zinc-900/60 text-zinc-300 hover:bg-zinc-800"
-                            : "bg-zinc-100/70 text-black hover:bg-zinc-200"
-                        }`}
-                      >
-                        <Icon className={`w-4 h-4 ${isActive ? `text-white dark:text-zinc-950 ${!darkMode ? "active-nav-pill-light" : ""}` : darkMode ? "text-zinc-400" : "text-black"}`} />
-                        <span className={isActive && !darkMode ? "active-nav-pill-light" : ""}>{item.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* User Profile & Logout Mobile Row */}
-                <div className="pt-3 border-t border-zinc-200/50 dark:border-white/10 flex items-center justify-between">
+                {/* User Profile & Logout Mobile Row — el grid de secciones que antes vivía acá
+                    arriba se sacó: ahora se navega directo desde los íconos de la fila principal
+                    (pegada abajo de todo en mobile), así que este menú quedó solo para
+                    perfil/cerrar sesión. */}
+                <div className="flex items-center justify-between">
                   <div
                     onClick={() => {
                       if (onOpenSettings) onOpenSettings();

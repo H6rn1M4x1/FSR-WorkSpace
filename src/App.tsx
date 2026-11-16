@@ -2610,7 +2610,7 @@ export default function App() {
           </div>
         )}
 
-        <main ref={mainScrollRef} className="flex-1 overflow-y-auto">
+        <main ref={mainScrollRef} className="flex-1 overflow-y-auto pb-28 md:pb-0">
           {driveLoading || !isInitialLoadDone ? (
             <AsciiSectionSkeleton tab={currentTab} darkMode={darkMode} />
           ) : (
