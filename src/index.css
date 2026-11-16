@@ -188,6 +188,19 @@ html.dark, .dark {
   animation: fadeIn 0.25s cubic-bezier(0.2, 0, 0, 1) forwards;
 }
 
+/* Animación de entrada para el panel (no el fondo) de los menús de agregar/editar contenido,
+   reutilizada en toda la app para que se sientan como una "hoja" que sube desde abajo en mobile
+   (donde el contenedor los ancla con items-end en vez de items-center) — mismos valores de
+   traslado/escala que ya usa DetailModal con framer-motion, acá como keyframe CSS porque estos
+   menús no usan motion.div. */
+@keyframes sheetIn {
+  from { opacity: 0; transform: translateY(24px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.animate-sheet-in {
+  animation: sheetIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
 /* Beautiful custom checkboxes with rounded corners */
 input[type="checkbox"] {
   appearance: none;

@@ -207,7 +207,7 @@ export const TurnoCategoryManagerModal: React.FC<TurnoCategoryManagerModalProps>
       {createPortal(
     <AnimatePresence mode="wait">
       {isOpen && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-4">
           <motion.div
             key="cat-mgr-backdrop"
             initial={{ opacity: 0 }}
@@ -225,7 +225,7 @@ export const TurnoCategoryManagerModal: React.FC<TurnoCategoryManagerModalProps>
             exit={{ opacity: 0, scale: 0.96, y: 8 }}
             transition={{ type: "spring", stiffness: 420, damping: 32, mass: 0.7 }}
             onClick={(e) => e.stopPropagation()}
-            className={`relative w-full max-w-md max-h-[85vh] flex flex-col rounded-3xl border shadow-2xl z-10 overflow-hidden ${
+            className={`relative w-full max-w-md max-h-[85vh] flex flex-col rounded-t-3xl sm:rounded-3xl border shadow-2xl z-10 overflow-hidden ${
               darkMode
                 ? "bg-zinc-950 border-zinc-800 text-white"
                 : "bg-white border-zinc-200 text-zinc-800"

@@ -3061,12 +3061,12 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
       {showAddExerciseModal &&
         createPortal(
           <div
-            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm cursor-pointer"
+            className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm cursor-pointer"
             onClick={() => setShowAddExerciseModal(false)}
           >
             <div
               onClick={(e) => e.stopPropagation()}
-              className={`w-full max-w-md p-6 rounded-3xl border shadow-2xl space-y-4 cursor-default ${darkMode ? "bg-zinc-900 border-zinc-800 text-white" : "bg-white border-slate-200 text-slate-800"}`}
+              className={`animate-sheet-in w-full max-w-md max-h-[92vh] sm:max-h-[85vh] overflow-y-auto p-6 rounded-t-3xl sm:rounded-3xl border shadow-2xl space-y-4 cursor-default ${darkMode ? "bg-zinc-900 border-zinc-800 text-white" : "bg-white border-slate-200 text-slate-800"}`}
             >
               <div className="flex items-center justify-between border-b border-zinc-200/60 dark:border-zinc-800/60 pb-2">
                 <h4 className="text-sm font-extrabold">Seleccionar o Crear Ejercicio</h4>
@@ -3343,12 +3343,12 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
       {editingSession &&
         createPortal(
           <div
-            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md overflow-y-auto cursor-pointer"
+            className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-md overflow-y-auto cursor-pointer"
             onClick={() => setEditingSession(null)}
           >
             <div
               onClick={(e) => e.stopPropagation()}
-              className={`w-full max-w-2xl p-6 rounded-3xl border shadow-2xl space-y-4 my-8 cursor-default max-h-[90vh] overflow-y-auto ${
+              className={`w-full max-w-2xl p-6 rounded-t-3xl sm:rounded-3xl border shadow-2xl space-y-4 my-0 sm:my-8 cursor-default max-h-[92vh] sm:max-h-[90vh] overflow-y-auto ${
                 darkMode ? "bg-zinc-900 border-zinc-800 text-white" : "bg-white border-slate-200 text-slate-800"
               }`}
             >

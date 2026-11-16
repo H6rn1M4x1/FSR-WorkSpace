@@ -4160,11 +4160,11 @@ export default function AppointmentsView({
         createPortal(
           <div
             onClick={() => { if (!isSaving) setShowAddApp(false); }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in cursor-pointer"
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4 animate-fade-in cursor-pointer"
           >
             <div
               onClick={(e) => e.stopPropagation()}
-              className={`w-full max-w-md p-6 rounded-3xl border shadow-2xl space-y-4 cursor-default ${
+              className={`w-full max-w-md p-6 rounded-t-3xl sm:rounded-3xl border shadow-2xl space-y-4 cursor-default animate-sheet-in ${
                 darkMode ? "bg-black/85 backdrop-blur-md border-zinc-800 text-white"
                   : "bg-white border-zinc-200 text-zinc-800"
               }`}
@@ -4292,11 +4292,11 @@ export default function AppointmentsView({
         createPortal(
           <div
             onClick={() => { if (!isSaving) setShowAddRout(false); }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in cursor-pointer"
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4 animate-fade-in cursor-pointer"
           >
             <div
               onClick={(e) => e.stopPropagation()}
-              className={`w-full max-w-md p-6 rounded-3xl border shadow-2xl space-y-4 cursor-default ${
+              className={`w-full max-w-md p-6 rounded-t-3xl sm:rounded-3xl border shadow-2xl space-y-4 cursor-default animate-sheet-in ${
                 darkMode ? "bg-black/85 backdrop-blur-md border-zinc-800 text-white"
                   : "bg-white border-zinc-200 text-zinc-800"
               }`}
@@ -4370,7 +4370,7 @@ export default function AppointmentsView({
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
               onClick={() => { if (!isSaving) handleCloseTurnoCompModal(); }}
-              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm cursor-pointer"
+              className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm cursor-pointer"
             >
               <motion.div
                 initial={{ opacity: 0, scale: 0.95, y: 15 }}
@@ -4378,7 +4378,7 @@ export default function AppointmentsView({
                 exit={{ opacity: 0, scale: 0.95, y: 15 }}
                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
                 onClick={(e) => e.stopPropagation()}
-                className="w-full max-w-lg lg:max-w-6xl max-h-[85vh] flex flex-col bg-white dark:bg-black/85 backdrop-blur-md rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
+                className="w-full max-w-lg lg:max-w-6xl max-h-[92vh] sm:max-h-[85vh] flex flex-col bg-white dark:bg-black/85 backdrop-blur-md rounded-t-3xl sm:rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
               >
               {/* Header */}
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-zinc-800/40 bg-white dark:bg-black/85 backdrop-blur-md">

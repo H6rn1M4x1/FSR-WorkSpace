@@ -1270,9 +1270,9 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
           guardan al apretar "Guardar" (o se descartan con "Cancelar"), cada uno con su propio
           cartel de notificación. */}
       {sportsModalOpen && draftPrefs && createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6">
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-6">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={cancelSportsModal} />
-          <div className={`relative w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-3xl border p-4 sm:p-6 space-y-4 force-solid-bg ${darkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-slate-200"}`}>
+          <div className={`relative w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl border p-4 sm:p-6 space-y-4 force-solid-bg animate-sheet-in ${darkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-slate-200"}`}>
             <div className="flex items-center justify-between gap-2">
               <h3 className="font-extrabold text-sm flex items-center gap-2">
                 <Trophy className="w-4 h-4 text-primary" /> Deportes que seguís

@@ -744,12 +744,12 @@ export const WorkoutBuilderModal: React.FC<WorkoutBuilderModalProps> = ({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-md overflow-hidden cursor-pointer"
+      className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md overflow-hidden cursor-pointer"
       onClick={onClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className={`w-full max-w-7xl h-[94vh] rounded-3xl border shadow-2xl flex flex-col overflow-hidden cursor-default ${
+        className={`animate-sheet-in w-full max-w-7xl h-[94vh] rounded-t-3xl sm:rounded-3xl border shadow-2xl flex flex-col overflow-hidden cursor-default ${
           darkMode ? "bg-zinc-900 border-zinc-800 text-white" : "bg-white border-slate-200 text-slate-900"
         }`}
       >

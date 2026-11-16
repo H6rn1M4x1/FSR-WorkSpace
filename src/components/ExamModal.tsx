@@ -330,7 +330,7 @@ export function ExamModal({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4"
       onClick={onClose}
     >
       <motion.div
@@ -339,7 +339,7 @@ export function ExamModal({
         exit={{ opacity: 0, scale: 0.94, y: 10 }}
         transition={{ type: "spring", stiffness: 420, damping: 32, mass: 0.7 }}
         onClick={(e) => e.stopPropagation()}
-        className={`w-full max-w-3xl h-[85vh] rounded-3xl border shadow-2xl flex flex-col overflow-hidden ${
+        className={`w-full max-w-3xl h-[85vh] rounded-t-3xl sm:rounded-3xl border shadow-2xl flex flex-col overflow-hidden ${
             darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-white border-zinc-200 text-zinc-800"
           }`}
         >

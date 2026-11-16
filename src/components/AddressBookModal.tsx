@@ -496,7 +496,7 @@ export const AddressBookModal: React.FC<AddressBookModalProps> = ({
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2 }}
           onClick={onClose}
-          className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm cursor-pointer"
+          className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm cursor-pointer"
         >
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 8 }}
@@ -504,7 +504,7 @@ export const AddressBookModal: React.FC<AddressBookModalProps> = ({
             exit={{ opacity: 0, scale: 0.95, y: 8 }}
             transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-lg bg-white dark:bg-zinc-900 rounded-3xl border border-primary/30 dark:border-zinc-800 shadow-2xl overflow-hidden flex flex-col max-h-[85vh] cursor-default ring-1 ring-primary/20"
+            className="w-full max-w-lg bg-white dark:bg-zinc-900 rounded-t-3xl sm:rounded-3xl border border-primary/30 dark:border-zinc-800 shadow-2xl overflow-hidden flex flex-col max-h-[85vh] cursor-default ring-1 ring-primary/20"
           >
             {/* Header */}
             <div className="px-6 py-4 bg-primary/10 dark:bg-primary/15 border-b border-primary/20 flex items-center justify-between">
