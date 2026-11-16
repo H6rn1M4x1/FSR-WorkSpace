@@ -16,7 +16,6 @@ import {
   LogOut,
   Bell,
   RefreshCw,
-  Menu,
   X,
   User,
   Stethoscope,
@@ -51,6 +50,8 @@ import {
   KeyRound,
   MapPin,
   MessageCircle,
+  LayoutGrid,
+  Plus,
 } from "lucide-react";
 import {
   AppNotification,
@@ -211,6 +212,13 @@ interface TopNavbarProps {
   doctors?: DoctorCard[];
   medicalRecords?: MedicalRecord[];
   subPanelRows?: NavPanelRow[] | null;
+  /** Mismo mecanismo que el botón "Agendar" de Inicio (ver App.tsx/handleQuickAdd): navega a la
+   *  sección real y le pide que abra directo su formulario de "nuevo". Lo usa el botón "+" de la
+   *  barra compacta en mobile. */
+  onQuickAdd?: (
+    category: "turno" | "finanzas" | "universidad" | "salud" | "comidas",
+    date?: string,
+  ) => void;
 }
 
 // Fila de sub-pestañas anidadas (ej. Doctores/Presión Arterial/Estudios/Medicamentos) dibujada
@@ -405,8 +413,21 @@ export default function TopNavbar({
   medicamentosDetallados = [],
   doctors = [],
   medicalRecords = [],
+  onQuickAdd,
 }: TopNavbarProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [quickAddMenuOpen, setQuickAddMenuOpen] = useState(false);
+  const quickAddMenuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!quickAddMenuOpen) return;
+    const close = (e: MouseEvent) => {
+      if (quickAddMenuRef.current && !quickAddMenuRef.current.contains(e.target as Node)) {
+        setQuickAddMenuOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", close);
+    return () => window.removeEventListener("mousedown", close);
+  }, [quickAddMenuOpen]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [selectedNotifId, setSelectedNotifId] = useState<string | null>(null);
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
@@ -602,14 +623,16 @@ export default function TopNavbar({
             <Logo darkMode={darkMode} size="sm" className="shrink-0" />
           </div>
 
-          {/* Navegación principal — visible siempre (antes solo en desktop, oculta en mobile
-              detrás del botón de hamburguesa). En mobile se ve solo el ícono (sin la etiqueta) y
-              la fila desplaza horizontalmente si no entran todas, para que quepan sin achicar los
-              botones de la derecha. */}
+          {/* Navegación principal. En desktop se ven las 7 secciones con etiqueta, como siempre.
+              En mobile solo quedan Inicio/Turnos/Finanzas (ícono más grande, ya que ahora sobra
+              espacio) — Universidad/Salud/Comidas/Notas se sacaron de acá y solo se llega a ellas
+              desde el botón de grilla de al lado (ver "más secciones" más abajo), que ocupa el
+              lugar justo después de Finanzas. */}
           <nav className="flex items-center gap-1 bg-zinc-500/5 dark:bg-white/5 p-1 rounded-full border border-zinc-200/40 dark:border-white/5 relative flex-1 min-w-0 overflow-x-auto no-scrollbar md:flex-initial md:min-w-fit md:overflow-visible">
             {menuItems.map((item) => {
               const Icon = item.icon;
               const isActive = currentTab === item.id;
+              const onlyDesktop = ["academic", "health", "meals", "notes"].includes(item.id);
               return (
                 <button
                   key={item.id}
@@ -622,7 +645,7 @@ export default function TopNavbar({
                     // sobre la nueva página.
                     if (isSettingsOpen && onOpenSettings) onOpenSettings();
                   }}
-                  className={`relative flex items-center gap-2 px-2.5 md:px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors duration-300 cursor-pointer whitespace-nowrap z-10 shrink-0 ${
+                  className={`${onlyDesktop ? "hidden md:flex" : "flex"} relative items-center gap-2 p-3 md:px-3.5 md:py-1.5 rounded-full text-xs font-semibold transition-colors duration-300 cursor-pointer whitespace-nowrap z-10 shrink-0 ${
                     isActive
                       ? `text-white dark:text-zinc-950 font-bold ${!darkMode ? "active-nav-pill-light" : ""}`
                       : darkMode
@@ -637,11 +660,38 @@ export default function TopNavbar({
                       transition={{ type: "spring", stiffness: 220, damping: 26 }}
                     />
                   )}
-                  <Icon className={`w-3.5 h-3.5 ${isActive ? "stroke-[2.5]" : "stroke-[1.8]"} ${isActive ? `text-white dark:text-zinc-950 ${!darkMode ? "active-nav-pill-light" : ""}` : darkMode ? "text-zinc-300" : "text-black"}`} />
+                  <Icon className={`w-5 h-5 md:w-3.5 md:h-3.5 ${isActive ? "stroke-[2.5]" : "stroke-[1.8]"} ${isActive ? `text-white dark:text-zinc-950 ${!darkMode ? "active-nav-pill-light" : ""}` : darkMode ? "text-zinc-300" : "text-black"}`} />
                   <span className={`hidden md:inline ${isActive && !darkMode ? "active-nav-pill-light" : ""}`}>{item.label}</span>
                 </button>
               );
             })}
+
+            {/* Botón "más secciones" (grilla de 4 cuadrados) — solo mobile. Reemplaza al botón de
+                hamburguesa que antes vivía en la punta derecha de todo: despliega el mismo menú
+                de siempre (Universidad/Salud/Comidas/Notas en grande + chat/avisos/ajustes/
+                perfil), ahora desde acá, al lado de Finanzas. */}
+            <button
+              type="button"
+              onClick={() => {
+                const nextOpening = !mobileMenuOpen;
+                setMobileMenuOpen(nextOpening);
+                setShowNotifications(false);
+                setQuickAddMenuOpen(false);
+                if (nextOpening && isSettingsOpen && onOpenSettings) {
+                  onOpenSettings();
+                }
+              }}
+              className={`md:hidden flex items-center justify-center p-3 rounded-full transition-colors duration-300 cursor-pointer shrink-0 ${
+                mobileMenuOpen
+                  ? `bg-primary shadow-md text-white dark:text-zinc-950 font-bold ${!darkMode ? "active-nav-pill-light" : ""}`
+                  : darkMode
+                  ? "text-zinc-300 hover:text-white hover:bg-white/10"
+                  : "text-black hover:text-black hover:bg-zinc-200/50"
+              }`}
+              title="Más secciones"
+            >
+              {mobileMenuOpen ? <X className="w-5 h-5" /> : <LayoutGrid className="w-5 h-5" />}
+            </button>
           </nav>
 
           {/* Right Actions Header — chat/notificaciones/ajustes solo de md en adelante: en mobile
@@ -772,22 +822,66 @@ export default function TopNavbar({
               </button>
             </div>
 
-            {/* Mobile Menu Hamburger Toggle */}
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.92 }}
-              onClick={() => {
-                const nextOpening = !mobileMenuOpen;
-                setMobileMenuOpen(nextOpening);
-                setShowNotifications(false);
-                if (nextOpening && isSettingsOpen && onOpenSettings) {
-                  onOpenSettings();
-                }
-              }}
-              className="md:hidden p-2 rounded-xl bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 border border-zinc-200/60 dark:border-white/10 cursor-pointer"
-            >
-              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-            </motion.button>
+            {/* Botón "+": acceso directo a agendar un turno/pago/examen/medicamento/comida —
+                mismas opciones que el botón "Agendar" de Inicio (ver App.tsx/handleQuickAdd),
+                solo que acá el menú abre hacia ARRIBA porque esta fila está pegada al borde
+                inferior de la pantalla. Ocupa el lugar donde antes vivía la hamburguesa (esa
+                función se mudó al botón de grilla, al lado de Finanzas). */}
+            {onQuickAdd && (
+              <div className="relative md:hidden" ref={quickAddMenuRef}>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.92 }}
+                  onClick={() => {
+                    setQuickAddMenuOpen((v) => !v);
+                    setMobileMenuOpen(false);
+                    setShowNotifications(false);
+                  }}
+                  className={`p-3 rounded-full transition-all cursor-pointer shadow-xs ${
+                    quickAddMenuOpen ? "bg-primary-hover text-white dark:text-zinc-950" : "bg-primary hover:bg-primary-hover text-white dark:text-zinc-950"
+                  }`}
+                  title="Agendar un turno, pago, examen, medicamento o comida planificada"
+                >
+                  <Plus className="w-5 h-5" />
+                </motion.button>
+                <AnimatePresence>
+                  {quickAddMenuOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 6, scale: 0.96 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 6, scale: 0.96 }}
+                      transition={{ duration: 0.15 }}
+                      className={`force-solid-bg absolute right-0 bottom-full mb-2 z-30 w-60 rounded-xl border shadow-lg overflow-hidden ${
+                        darkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-zinc-200"
+                      }`}
+                    >
+                      {(
+                        [
+                          { id: "turno", label: "Turno / Compromiso", icon: Calendar },
+                          { id: "finanzas", label: "Pago (Finanzas)", icon: DollarSign },
+                          { id: "universidad", label: "Examen / Trabajo", icon: BookOpen },
+                          { id: "salud", label: "Medicamento", icon: Pill },
+                          { id: "comidas", label: "Comida Planificada", icon: UtensilsCrossed },
+                        ] as const
+                      ).map((opt) => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => {
+                            setQuickAddMenuOpen(false);
+                            onQuickAdd(opt.id);
+                          }}
+                          className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-bold text-left hover:bg-primary/10 text-zinc-700 dark:text-zinc-200 cursor-pointer transition-colors"
+                        >
+                          <opt.icon className="w-3.5 h-3.5 text-primary shrink-0" />
+                          <span>{opt.label}</span>
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
           </div>
         </div>
 
@@ -804,12 +898,14 @@ export default function TopNavbar({
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-              className="w-full overflow-hidden md:hidden"
+              className="w-full overflow-y-hidden md:hidden"
             >
               <div className="pb-3 pt-1 space-y-2.5">
-                {/* Secciones principales, en grande y con nombre */}
+                {/* Solo las secciones que se sacaron de la fila compacta (Inicio/Turnos/
+                    Finanzas ya están siempre a la vista ahí abajo, no hace falta repetirlas
+                    acá) — en grande y con nombre. */}
                 <div className="grid grid-cols-2 gap-2">
-                  {menuItems.map((item) => {
+                  {menuItems.filter((item) => ["academic", "health", "meals", "notes"].includes(item.id)).map((item) => {
                     const Icon = item.icon;
                     const isActive = currentTab === item.id;
                     return (

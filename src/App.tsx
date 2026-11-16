@@ -2537,6 +2537,7 @@ export default function App() {
           medicamentosDetallados={medicamentosDetallados}
           doctors={doctors}
           medicalRecords={medicalRecords}
+          onQuickAdd={handleQuickAdd}
         />
       )}
 
