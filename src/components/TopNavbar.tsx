@@ -1,7 +1,7 @@
 import { createPortal } from "react-dom";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import React, { useState, useRef, useEffect } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence, useDragControls } from "motion/react";
 import type { NavPanelRow } from "../lib/navPanelContext";
 import {
   Home,
@@ -417,6 +417,9 @@ export default function TopNavbar({
 }: TopNavbarProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [quickAddMenuOpen, setQuickAddMenuOpen] = useState(false);
+  // Arrastrar hacia abajo para cerrar el menú expandido (grilla o "+") — mismo patrón que
+  // DetailModal.tsx y ChatPanel.tsx.
+  const expandedMenuDragControls = useDragControls();
   const [showNotifications, setShowNotifications] = useState(false);
   const [selectedNotifId, setSelectedNotifId] = useState<string | null>(null);
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
@@ -627,7 +630,7 @@ export default function TopNavbar({
               espacio) — Universidad/Salud/Comidas/Notas se sacaron de acá y solo se llega a ellas
               desde el botón de grilla de al lado (ver "más secciones" más abajo), que ocupa el
               lugar justo después de Finanzas. */}
-          <nav className="flex items-center gap-1 bg-zinc-500/5 dark:bg-white/5 p-1 rounded-xl md:rounded-full border border-zinc-200/40 dark:border-white/5 relative flex-1 min-w-0 overflow-x-auto no-scrollbar md:flex-initial md:min-w-fit md:overflow-visible">
+          <nav className="flex items-center gap-1 bg-zinc-500/5 dark:bg-white/5 p-1 rounded-full border border-zinc-200/40 dark:border-white/5 relative flex-1 min-w-0 overflow-x-auto no-scrollbar md:flex-initial md:min-w-fit md:overflow-visible">
             {menuItems.map((item) => {
               const Icon = item.icon;
               const isActive = currentTab === item.id;
@@ -639,12 +642,14 @@ export default function TopNavbar({
                     setCurrentTab(item.id);
                     setShowNotifications(false);
                     setShowChat(false);
+                    setMobileMenuOpen(false);
+                    setQuickAddMenuOpen(false);
                     // Si Ajustes & Configuración está abierto y el usuario navega a otra sección
                     // desde el nav principal, el modal se cierra solo en vez de quedar flotando
                     // sobre la nueva página.
                     if (isSettingsOpen && onOpenSettings) onOpenSettings();
                   }}
-                  className={`${onlyDesktop ? "hidden md:flex" : "flex"} flex-1 md:flex-none md:shrink-0 relative items-center justify-center md:justify-start gap-2 p-3 md:px-3.5 md:py-1.5 rounded-xl md:rounded-full text-xs font-semibold transition-colors duration-300 cursor-pointer whitespace-nowrap z-10 ${
+                  className={`${onlyDesktop ? "hidden md:flex" : "flex"} flex-1 md:flex-none md:shrink-0 relative items-center justify-center md:justify-start gap-2 p-3 md:px-3.5 md:py-1.5 rounded-full text-xs font-semibold transition-colors duration-300 cursor-pointer whitespace-nowrap z-10 ${
                     isActive
                       ? `text-white dark:text-zinc-950 font-bold ${!darkMode ? "active-nav-pill-light" : ""}`
                       : darkMode
@@ -655,7 +660,7 @@ export default function TopNavbar({
                   {isActive && (
                     <motion.div
                       layoutId="activeMainNavPill"
-                      className="absolute inset-0 rounded-xl md:rounded-full bg-primary shadow-md -z-10"
+                      className="absolute inset-0 rounded-full bg-primary shadow-md -z-10"
                       transition={{ type: "spring", stiffness: 220, damping: 26 }}
                     />
                   )}
@@ -680,7 +685,7 @@ export default function TopNavbar({
                   onOpenSettings();
                 }
               }}
-              className={`md:hidden flex-1 flex items-center justify-center p-3 rounded-xl transition-colors duration-300 cursor-pointer ${
+              className={`md:hidden flex-1 flex items-center justify-center p-3 rounded-full transition-colors duration-300 cursor-pointer ${
                 mobileMenuOpen
                   ? `bg-primary shadow-md text-white dark:text-zinc-950 font-bold ${!darkMode ? "active-nav-pill-light" : ""}`
                   : darkMode
@@ -863,8 +868,30 @@ export default function TopNavbar({
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+              drag="y"
+              dragControls={expandedMenuDragControls}
+              dragListener={false}
+              dragConstraints={{ top: 0, bottom: 0 }}
+              dragElastic={{ top: 0, bottom: 0.65 }}
+              onDragEnd={(_e, info) => {
+                if (info.offset.y > 80 || info.velocity.y > 500) {
+                  setMobileMenuOpen(false);
+                  setQuickAddMenuOpen(false);
+                }
+              }}
               className="w-full overflow-y-hidden md:hidden"
             >
+              {/* Agarre para cerrar deslizando hacia abajo. */}
+              <div
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  expandedMenuDragControls.start(e);
+                }}
+                className="w-full h-6 flex items-center justify-center cursor-grab active:cursor-grabbing touch-none"
+              >
+                <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+              </div>
+
               {mobileMenuOpen ? (
               <div className="pb-3 pt-1 space-y-2.5">
                 {/* Solo las secciones que se sacaron de la fila compacta (Inicio/Turnos/
@@ -873,27 +900,32 @@ export default function TopNavbar({
                 <div className="grid grid-cols-2 gap-2">
                   {menuItems.filter((item) => ["academic", "health", "meals", "notes"].includes(item.id)).map((item) => {
                     const Icon = item.icon;
-                    const isActive = currentTab === item.id;
+                    // Estas 4 secciones ya NO se resaltan con el color de acento aunque sea la
+                    // sección en la que estás parado ahora mismo (currentTab === item.id) — a
+                    // pedido explícito: dentro de esta grilla siempre se ven igual, sin importar
+                    // cuál esté activa.
                     return (
-                      <button
+                      <motion.button
                         key={item.id}
+                        whileHover={{ scale: 1.03 }}
+                        whileTap={{ scale: 0.96 }}
                         onClick={() => {
+                          try { navigator.vibrate?.(10); } catch (_) {}
+                          uiSounds.navigate();
                           setCurrentTab(item.id);
                           setMobileMenuOpen(false);
                           setShowNotifications(false);
                           setShowChat(false);
                         }}
-                        className={`flex items-center justify-center gap-2.5 p-3 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${
-                          isActive
-                            ? `bg-primary text-white dark:text-zinc-950 shadow-md font-bold ${!darkMode ? "active-nav-pill-light" : ""}`
-                            : darkMode
+                        className={`flex flex-col items-center justify-center gap-2 py-5 px-3 rounded-2xl text-xs font-semibold transition-all cursor-pointer shadow-sm active:shadow-inner ${
+                          darkMode
                             ? "bg-zinc-900/60 text-zinc-300 hover:bg-zinc-800"
                             : "bg-zinc-100/70 text-black hover:bg-zinc-200"
                         }`}
                       >
-                        <Icon className={`w-4 h-4 ${isActive ? `text-white dark:text-zinc-950 ${!darkMode ? "active-nav-pill-light" : ""}` : darkMode ? "text-zinc-400" : "text-black"}`} />
-                        <span className={isActive && !darkMode ? "active-nav-pill-light" : ""}>{item.label}</span>
-                      </button>
+                        <Icon className={`w-5 h-5 ${darkMode ? "text-zinc-400" : "text-black"}`} />
+                        <span>{item.label}</span>
+                      </motion.button>
                     );
                   })}
                 </div>
