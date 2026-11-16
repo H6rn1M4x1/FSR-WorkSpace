@@ -633,7 +633,13 @@ export default function TopNavbar({
           <nav className="flex items-center gap-1 bg-zinc-500/5 dark:bg-white/5 p-1 rounded-full border border-zinc-200/40 dark:border-white/5 relative flex-1 min-w-0 overflow-x-auto no-scrollbar md:flex-initial md:min-w-fit md:overflow-visible">
             {menuItems.map((item) => {
               const Icon = item.icon;
-              const isActive = currentTab === item.id;
+              // Con el menú de "más secciones" abierto, el botón de grilla ya muestra su propio
+              // estado activo (fondo de acento + X) — la pestaña principal que estaba
+              // seleccionada antes de abrirlo (ej. Turnos) se "destilda" visualmente mientras
+              // tanto, para no tener dos botones resaltados a la vez. mobileMenuOpen solo se
+              // puede activar desde el botón de grilla (md:hidden), así que esto no afecta a
+              // desktop, donde siempre vale false.
+              const isActive = currentTab === item.id && !mobileMenuOpen;
               const onlyDesktop = ["academic", "health", "meals", "notes"].includes(item.id);
               return (
                 <button
@@ -720,7 +726,7 @@ export default function TopNavbar({
                   setMobileMenuOpen(false);
                   setShowNotifications(false);
                 }}
-                className={`md:hidden shrink-0 flex items-center justify-center p-3 rounded-xl shadow-md transition-colors cursor-pointer text-white dark:text-zinc-950 ${
+                className={`md:hidden shrink-0 flex items-center justify-center p-3 rounded-full shadow-md transition-colors cursor-pointer text-white dark:text-zinc-950 ${
                   quickAddMenuOpen ? "bg-primary-hover" : "bg-primary hover:bg-primary-hover"
                 }`}
                 title="Agendar un turno, pago, examen, medicamento o comida planificada"
@@ -917,13 +923,13 @@ export default function TopNavbar({
                           setShowNotifications(false);
                           setShowChat(false);
                         }}
-                        className={`flex flex-col items-center justify-center gap-2 py-5 px-3 rounded-2xl text-xs font-semibold transition-all cursor-pointer shadow-sm active:shadow-inner ${
+                        className={`flex items-center justify-center gap-2.5 p-3 rounded-2xl text-xs font-semibold transition-all cursor-pointer shadow-sm active:shadow-inner ${
                           darkMode
                             ? "bg-zinc-900/60 text-zinc-300 hover:bg-zinc-800"
                             : "bg-zinc-100/70 text-black hover:bg-zinc-200"
                         }`}
                       >
-                        <Icon className={`w-5 h-5 ${darkMode ? "text-zinc-400" : "text-black"}`} />
+                        <Icon className={`w-4 h-4 ${darkMode ? "text-zinc-400" : "text-black"}`} />
                         <span>{item.label}</span>
                       </motion.button>
                     );
