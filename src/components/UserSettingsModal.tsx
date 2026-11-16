@@ -1217,7 +1217,7 @@ export function UserSettingsModal({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2 }}
-          className="fixed inset-0 z-[100] flex items-start justify-center p-3 md:p-6 pt-16 md:pt-24 pb-10 bg-black/60 backdrop-blur-md"
+          className="fixed inset-0 z-[100] flex items-start justify-center p-3 md:p-6 pt-16 md:pt-24 pb-24 md:pb-10 bg-black/60 backdrop-blur-md"
           onClick={onClose}
         >
           <motion.div
@@ -1235,16 +1235,19 @@ export function UserSettingsModal({
             }}
             onClick={(e) => e.stopPropagation()}
             // max-h se calcula contra el espacio REAL disponible (viewport menos el padding fijo
-            // de arriba/abajo del backdrop: pt-16/24 + pb-10), no contra el viewport completo
-            // (max-h-[92vh] anterior) — "vh" es siempre relativo al viewport entero, así que con
-            // ese padding fijo el modal terminaba siendo más alto que el hueco que le quedaba. El
-            // backdrop no scrollea (nunca tuvo overflow-y-auto en sí mismo) a propósito: si
-            // llegara a scrollear, el header del modal (con el título) se desplaza hacia arriba
-            // JUNTO con el resto y puede terminar por detrás del navbar superior, que tiene mayor
-            // z-index — este cálculo exacto evita que eso haga falta, el modal siempre entra
-            // entero en el espacio disponible y solo su contenido interno (flex-1 min-h-0
-            // overflow-y-auto) scrollea.
-            className={`w-full max-w-4xl rounded-3xl border shadow-2xl overflow-hidden flex flex-col max-h-[calc(100vh-6.5rem)] md:max-h-[calc(100vh-8.5rem)] ${
+            // de arriba/abajo del backdrop: pt-16 + pb-24 en mobile, pt-24 + pb-10 en desktop), no
+            // contra el viewport completo (max-h-[92vh] anterior) — "vh" es siempre relativo al
+            // viewport entero, así que con ese padding fijo el modal terminaba siendo más alto que
+            // el hueco que le quedaba. El backdrop no scrollea (nunca tuvo overflow-y-auto en sí
+            // mismo) a propósito: si llegara a scrollear, el header del modal (con el título) se
+            // desplaza hacia arriba JUNTO con el resto y puede terminar por detrás del navbar
+            // superior, que tiene mayor z-index — este cálculo exacto evita que eso haga falta, el
+            // modal siempre entra entero en el espacio disponible y solo su contenido interno
+            // (flex-1 min-h-0 overflow-y-auto) scrollea. El pb-24 en mobile (en vez de pb-10,
+            // igual que desktop) le deja al backdrop el aire suficiente para no terminar nunca
+            // físicamente por detrás de la barra de navegación inferior, que creció de alto en
+            // rondas recientes de esta misma sesión.
+            className={`w-full max-w-4xl rounded-3xl border shadow-2xl overflow-hidden flex flex-col max-h-[calc(100vh-10rem)] md:max-h-[calc(100vh-8.5rem)] ${
               darkMode
                 ? "bg-zinc-950 border-zinc-800 text-zinc-100"
                 : "bg-white border-zinc-200 text-zinc-900"
