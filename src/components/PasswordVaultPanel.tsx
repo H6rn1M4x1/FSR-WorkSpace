@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { motion, useDragControls } from "motion/react";
 import {
   KeyRound,
   Lock,
@@ -163,6 +164,9 @@ export function PasswordVaultPanel({
   const [localError, setLocalError] = useState<string | null>(null);
 
   const [editingItem, setEditingItem] = useState<Partial<VaultItemDecrypted> | null>(null);
+  // Arrastre hacia abajo para cerrar (solo mobile, solo desde el agarre gris de arriba) — mismo
+  // patrón que DetailModal.tsx.
+  const dragControls = useDragControls();
   const [showPasswordInForm, setShowPasswordInForm] = useState(false);
   const [revealedIds, setRevealedIds] = useState<Set<string>>(new Set());
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -845,11 +849,31 @@ export function PasswordVaultPanel({
             whatever animated (transformed) ancestor happens to wrap this panel. */}
         {editingItem && createPortal(
           <div className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-sm">
-            <div
-              className={`animate-sheet-in w-full max-w-md rounded-t-2xl sm:rounded-2xl border p-5 space-y-3 ${
+            <motion.div
+              initial={{ opacity: 0, scale: 0.97, y: 24 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              transition={{ type: "spring", stiffness: 380, damping: 32, mass: 0.8 }}
+              drag="y"
+              dragControls={dragControls}
+              dragListener={false}
+              dragConstraints={{ top: 0, bottom: 0 }}
+              dragElastic={{ top: 0, bottom: 0.65 }}
+              onDragEnd={(_e, info) => {
+                if (info.offset.y > 120 || info.velocity.y > 500) setEditingItem(null);
+              }}
+              className={`w-full max-w-md rounded-t-2xl sm:rounded-2xl border p-5 space-y-3 ${
                 darkMode ? "bg-zinc-950 border-zinc-800" : "bg-white border-zinc-200"
               }`}
             >
+              <div
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  dragControls.start(e);
+                }}
+                className="w-full h-10 flex items-center justify-center sm:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none"
+              >
+                <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+              </div>
               <div className="flex items-center justify-between">
                 <h4 className="font-extrabold text-sm">
                   {editingItem.id ? "Editar contraseña" : "Nueva contraseña"}
@@ -926,7 +950,7 @@ export function PasswordVaultPanel({
                   Cancelar
                 </button>
               </div>
-            </div>
+            </motion.div>
           </div>,
           document.body
         )}

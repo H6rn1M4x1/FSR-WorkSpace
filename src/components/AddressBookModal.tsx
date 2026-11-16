@@ -5,7 +5,7 @@ import { auth } from "../lib/supabase";
 import { saveItemToFirestore, deleteItemFromFirestore, subscribeToCategory, refetchCategory } from "../lib/firestoreSyncService";
 import { useToast } from "../context/ToastContext";
 import { createPortal } from "react-dom";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence, useDragControls } from "motion/react";
 import { ConfirmationModal } from "./ConfirmationModal";
 import {
   BookMarked,
@@ -288,6 +288,9 @@ export const AddressBookModal: React.FC<AddressBookModalProps> = ({
   currentSelected,
 }) => {
   useLockBodyScroll(isOpen);
+  // Arrastre hacia abajo para cerrar (solo mobile, solo desde el agarre gris de arriba) — mismo
+  // patrón que DetailModal.tsx.
+  const dragControls = useDragControls();
   const { showToast } = useToast();
   const [entries, setEntries] = useState<AddressEntry[]>([]);
   // Derivado (no un segundo estado) para que reordenar sea un solo cambio de estado — con un
@@ -503,9 +506,27 @@ export const AddressBookModal: React.FC<AddressBookModalProps> = ({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 8 }}
             transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+            drag="y"
+            dragControls={dragControls}
+            dragListener={false}
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0, bottom: 0.65 }}
+            onDragEnd={(_e, info) => {
+              if (info.offset.y > 120 || info.velocity.y > 500) onClose();
+            }}
             onClick={(e) => e.stopPropagation()}
             className="w-full max-w-lg bg-white dark:bg-zinc-900 rounded-t-3xl sm:rounded-3xl border border-primary/30 dark:border-zinc-800 shadow-2xl overflow-hidden flex flex-col max-h-[85vh] cursor-default ring-1 ring-primary/20"
           >
+            <div
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                dragControls.start(e);
+              }}
+              className="w-full h-10 flex items-center justify-center sm:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none"
+            >
+              <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+            </div>
+
             {/* Header */}
             <div className="px-6 py-4 bg-primary/10 dark:bg-primary/15 border-b border-primary/20 flex items-center justify-between">
               <div className="flex items-center gap-2.5">

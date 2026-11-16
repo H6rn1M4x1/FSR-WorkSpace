@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import { createPortal } from "react-dom";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence, useDragControls } from "motion/react";
 import {
   Dumbbell,
   X,
@@ -459,6 +459,10 @@ export const WorkoutBuilderModal: React.FC<WorkoutBuilderModalProps> = ({
   );
   const [isSaving, setIsSaving] = useState(false);
 
+  // Arrastre hacia abajo para cerrar (solo mobile, solo desde el agarre gris de arriba) — mismo
+  // patrón que DetailModal.tsx.
+  const dragControls = useDragControls();
+
   // Lista de ejercicios agregados al canvas de la rutina
   const [selectedExercises, setSelectedExercises] = useState<
     Array<EjercicioRutina & { setsList?: Array<{ reps: number; weight: number }> }>
@@ -747,12 +751,33 @@ export const WorkoutBuilderModal: React.FC<WorkoutBuilderModalProps> = ({
       className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md overflow-hidden cursor-pointer"
       onClick={onClose}
     >
-      <div
+      <motion.div
+        initial={{ opacity: 0, scale: 0.97, y: 24 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ type: "spring", stiffness: 380, damping: 32, mass: 0.8 }}
+        drag="y"
+        dragControls={dragControls}
+        dragListener={false}
+        dragConstraints={{ top: 0, bottom: 0 }}
+        dragElastic={{ top: 0, bottom: 0.65 }}
+        onDragEnd={(_e, info) => {
+          if (info.offset.y > 120 || info.velocity.y > 500) onClose();
+        }}
         onClick={(e) => e.stopPropagation()}
-        className={`animate-sheet-in w-full max-w-7xl h-[94vh] rounded-t-3xl sm:rounded-3xl border shadow-2xl flex flex-col overflow-hidden cursor-default ${
+        className={`w-full max-w-7xl h-[94vh] rounded-t-3xl sm:rounded-3xl border shadow-2xl flex flex-col overflow-hidden cursor-default ${
           darkMode ? "bg-zinc-900 border-zinc-800 text-white" : "bg-white border-slate-200 text-slate-900"
         }`}
       >
+        <div
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            dragControls.start(e);
+          }}
+          className="w-full h-10 flex items-center justify-center sm:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none"
+        >
+          <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+        </div>
+
         {/* --- HEADER PRINCIPAL MUSCLEWIKI STYLE --- */}
         <div className="px-5 py-3.5 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between gap-3 shrink-0 bg-slate-50/50 dark:bg-zinc-950/50">
           <div className="flex items-center gap-3">
@@ -1426,7 +1451,7 @@ export const WorkoutBuilderModal: React.FC<WorkoutBuilderModalProps> = ({
             </div>
           </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* ========================================================= */}
       {/* MODAL DE DEMOSTRACIÓN TÉCNICA EN VÍDEO / GIF ANIMADO     */}

@@ -5,7 +5,7 @@ import { TableSkeleton } from "./TableSkeleton";
 import { saveItemToFirestore, deleteItemFromFirestore } from "../lib/firestoreSyncService";
 import { generateUniqueId } from "../utils/id";
 import { useToast } from "../context/ToastContext";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence, useDragControls } from "motion/react";
 import { createPortal } from "react-dom";
 import { ConfirmationModal } from "./ConfirmationModal";
 import { DetailModal, DetailBlock, DetailBlockGrid } from "./DetailModal";
@@ -428,6 +428,8 @@ export default function PaymentsTable({
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showAddPayment, setShowAddPayment] = useState(false);
+  // Arrastrar para cerrar (mobile), iniciado solo desde el agarre del modal.
+  const addPaymentDragControls = useDragControls();
   const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
   // Tocar el nombre en "Detalle" (tabla de escritorio) abre esto — toda la info del pago, con
   // Editar (vía el lápiz del propio DetailModal) y Eliminar, sin tener que scrollear hasta la
@@ -1815,9 +1817,26 @@ export default function PaymentsTable({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 15 }}
                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                drag="y"
+                dragControls={addPaymentDragControls}
+                dragListener={false}
+                dragConstraints={{ top: 0, bottom: 0 }}
+                dragElastic={{ top: 0, bottom: 0.65 }}
+                onDragEnd={(_e, info) => {
+                  if (info.offset.y > 120 || info.velocity.y > 500) {
+                    if (!isSaving) resetForm();
+                  }
+                }}
                 onClick={(e) => e.stopPropagation()}
                 className="w-full sm:max-w-4xl max-h-[92vh] sm:max-h-[85vh] flex flex-col bg-white dark:bg-zinc-900 rounded-t-3xl sm:rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
               >
+              <div
+                onPointerDown={(e) => { e.stopPropagation(); addPaymentDragControls.start(e); }}
+                className="w-full h-10 flex items-center justify-center sm:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none"
+              >
+                <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+              </div>
+
               {/* Header: Fixed and Non-Scrollable */}
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-zinc-800/40 bg-white dark:bg-zinc-900 z-10">
                 <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">

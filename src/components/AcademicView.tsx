@@ -15,7 +15,7 @@ import { generateUniqueId } from "../utils/id";
 import React, { useState, useEffect } from "react";
 import { saveItemToFirestore, deleteItemFromFirestore } from "../lib/firestoreSyncService";
 import { PillFilterBar } from "./PillFilterBar";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence, useDragControls } from "motion/react";
 import { createPortal } from "react-dom";
 import { useToast } from "../context/ToastContext";
 import {
@@ -664,6 +664,14 @@ export default function AcademicView({
   // live props from App.tsx's single central subscription, so it was removed.
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Controles de arrastre para cerrar (gesto "deslizar hacia abajo") de los menús de
+  // agregar/editar de esta vista — uno por modal, igual que DetailModal.
+  const dragControlsAddSubject = useDragControls();
+  const dragControlsSubject = useDragControls();
+  const dragControlsTask = useDragControls();
+  const dragControlsHorario = useDragControls();
+  const dragControlsExamenes = useDragControls();
 
   // Add Subject Form
   const [localActiveSubTab, setLocalActiveSubTab] = useState<
@@ -2701,14 +2709,31 @@ export default function AcademicView({
                 onClick={() => { if (!isSaving) setShowAddSubject(false); }}
                 className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4 cursor-pointer"
               >
-                <div
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.97, y: 24 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  transition={{ type: "spring", stiffness: 380, damping: 32, mass: 0.8 }}
+                  drag="y"
+                  dragControls={dragControlsAddSubject}
+                  dragListener={false}
+                  dragConstraints={{ top: 0, bottom: 0 }}
+                  dragElastic={{ top: 0, bottom: 0.65 }}
+                  onDragEnd={(_e, info) => {
+                    if (info.offset.y > 120 || info.velocity.y > 500) setShowAddSubject(false);
+                  }}
                   onClick={(e) => e.stopPropagation()}
-                  className={`animate-sheet-in w-full max-w-md p-6 rounded-t-3xl sm:rounded-3xl border shadow-2xl space-y-4 cursor-default ${
+                  className={`w-full max-w-md p-6 rounded-t-3xl sm:rounded-3xl border shadow-2xl space-y-4 cursor-default ${
                     darkMode
                       ? "bg-zinc-900 border-zinc-800 text-white"
                       : "bg-white border-zinc-200 text-zinc-800"
                   }`}
                 >
+                  <div
+                    onPointerDown={(e) => { e.stopPropagation(); dragControlsAddSubject.start(e); }}
+                    className="w-full h-10 flex items-center justify-center sm:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none -mt-6 -mx-6 mb-0"
+                  >
+                    <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+                  </div>
                   <h3 className="font-extrabold text-lg">Agregar Materia</h3>
                   <form onSubmit={handleAddSubject} className="space-y-3.5">
                     <div>
@@ -2819,7 +2844,7 @@ export default function AcademicView({
                       </button>
                     </div>
                   </form>
-                </div>
+                </motion.div>
               </div>,
               document.body,
             )}
@@ -4445,9 +4470,28 @@ export default function AcademicView({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 15 }}
                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                drag="y"
+                dragControls={dragControlsSubject}
+                dragListener={false}
+                dragConstraints={{ top: 0, bottom: 0 }}
+                dragElastic={{ top: 0, bottom: 0.65 }}
+                onDragEnd={(_e, info) => {
+                  if (info.offset.y > 120 || info.velocity.y > 500) {
+                    if (!isSaving) {
+                      setShowMateriaModal(false);
+                      setEditingMateriaId(null);
+                    }
+                  }
+                }}
                 onClick={(e) => e.stopPropagation()}
                 className="w-full max-w-xl max-h-[85vh] flex flex-col bg-white dark:bg-black/85 backdrop-blur-md rounded-t-3xl sm:rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
               >
+              <div
+                onPointerDown={(e) => { e.stopPropagation(); dragControlsSubject.start(e); }}
+                className="w-full h-8 flex items-center justify-center sm:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none"
+              >
+                <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+              </div>
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-zinc-800/40 bg-white dark:bg-black/85 backdrop-blur-md">
                 <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">
                   {editingMateriaId
@@ -4670,14 +4714,33 @@ export default function AcademicView({
             }}
             className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4 cursor-pointer"
           >
-            <div
+            <motion.div
+              initial={{ opacity: 0, scale: 0.97, y: 24 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              transition={{ type: "spring", stiffness: 380, damping: 32, mass: 0.8 }}
+              drag="y"
+              dragControls={dragControlsTask}
+              dragListener={false}
+              dragConstraints={{ top: 0, bottom: 0 }}
+              dragElastic={{ top: 0, bottom: 0.65 }}
+              onDragEnd={(_e, info) => {
+                if (info.offset.y > 120 || info.velocity.y > 500) {
+                  if (!isSaving) setShowAddTask(false);
+                }
+              }}
               onClick={(e) => e.stopPropagation()}
-              className={`animate-sheet-in w-full max-w-md max-h-[92vh] sm:max-h-[85vh] overflow-y-auto p-6 rounded-t-3xl sm:rounded-3xl border shadow-2xl space-y-4 cursor-default ${
+              className={`w-full max-w-md max-h-[92vh] sm:max-h-[85vh] overflow-y-auto p-6 rounded-t-3xl sm:rounded-3xl border shadow-2xl space-y-4 cursor-default ${
                 darkMode
                   ? "bg-zinc-900 border-zinc-800 text-white"
                   : "bg-white border-zinc-200 text-zinc-800"
               }`}
             >
+              <div
+                onPointerDown={(e) => { e.stopPropagation(); dragControlsTask.start(e); }}
+                className="w-full h-10 flex items-center justify-center sm:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none -mt-6 -mx-6 mb-2"
+              >
+                <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+              </div>
               <h3 className="font-extrabold text-lg">
                 Programar Tarea / Examen
               </h3>
@@ -4772,7 +4835,7 @@ export default function AcademicView({
                   </button>
                 </div>
               </form>
-            </div>
+            </motion.div>
           </div>,
           document.body,
         )}
@@ -4798,9 +4861,28 @@ export default function AcademicView({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 15 }}
                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                drag="y"
+                dragControls={dragControlsHorario}
+                dragListener={false}
+                dragConstraints={{ top: 0, bottom: 0 }}
+                dragElastic={{ top: 0, bottom: 0.65 }}
+                onDragEnd={(_e, info) => {
+                  if (info.offset.y > 120 || info.velocity.y > 500) {
+                    if (!isSaving) {
+                      setShowHorarioModal(false);
+                      setEditingHorarioId(null);
+                    }
+                  }
+                }}
                 onClick={(e) => e.stopPropagation()}
                 className="w-full max-w-lg max-h-[85vh] flex flex-col bg-white dark:bg-black/85 backdrop-blur-md rounded-t-3xl sm:rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
               >
+              <div
+                onPointerDown={(e) => { e.stopPropagation(); dragControlsHorario.start(e); }}
+                className="w-full h-8 flex items-center justify-center sm:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none"
+              >
+                <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+              </div>
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-zinc-800/40 bg-white dark:bg-black/85 backdrop-blur-md">
                 <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">
                   {editingHorarioId ? "Editar Horario" : "Nuevo Horario"}
@@ -4986,9 +5068,28 @@ export default function AcademicView({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 15 }}
                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                drag="y"
+                dragControls={dragControlsExamenes}
+                dragListener={false}
+                dragConstraints={{ top: 0, bottom: 0 }}
+                dragElastic={{ top: 0, bottom: 0.65 }}
+                onDragEnd={(_e, info) => {
+                  if (info.offset.y > 120 || info.velocity.y > 500) {
+                    if (!isSaving) {
+                      setShowExamenModal(false);
+                      setEditingExamenId(null);
+                    }
+                  }
+                }}
                 onClick={(e) => e.stopPropagation()}
                 className="w-full max-w-lg max-h-[85vh] flex flex-col bg-white dark:bg-black/85 backdrop-blur-md rounded-t-3xl sm:rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
               >
+              <div
+                onPointerDown={(e) => { e.stopPropagation(); dragControlsExamenes.start(e); }}
+                className="w-full h-8 flex items-center justify-center sm:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none"
+              >
+                <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+              </div>
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-zinc-800/40 bg-white dark:bg-black/85 backdrop-blur-md">
                 <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">
                   {editingExamenId

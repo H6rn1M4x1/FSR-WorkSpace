@@ -19,7 +19,7 @@ import {
   deleteItemFromFirestore,
 } from "../lib/firestoreSyncService";
 import { useToast } from "../context/ToastContext";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence, useDragControls } from "motion/react";
 import { createPortal } from "react-dom";
 import AnimatedList from "./AnimatedList";
 import { ConfirmationModal } from "./ConfirmationModal";
@@ -1022,6 +1022,10 @@ export default function FinanceView({
   };
 
   // Add Invoice / Expense Form
+  // Controlan el arrastre hacia abajo para cerrar cada modal (solo mobile, solo desde su agarre
+  // gris): dragListener={false} en el panel + dragControls.start() en el agarre.
+  const dragControlsAddForm = useDragControls();
+  const dragControlsEmailModal = useDragControls();
   const [showAddForm, setShowAddForm] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
 
@@ -4277,14 +4281,31 @@ export default function FinanceView({
             }}
             className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4 cursor-pointer"
           >
-            <div
+            <motion.div
+              initial={{ opacity: 0, scale: 0.97, y: 24 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              transition={{ type: "spring", stiffness: 380, damping: 32, mass: 0.8 }}
+              drag="y"
+              dragControls={dragControlsAddForm}
+              dragListener={false}
+              dragConstraints={{ top: 0, bottom: 0 }}
+              dragElastic={{ top: 0, bottom: 0.65 }}
+              onDragEnd={(_e, info) => {
+                if (info.offset.y > 120 || info.velocity.y > 500) { if (!isSaving) setShowAddForm(false); }
+              }}
               onClick={(e) => e.stopPropagation()}
-              className={`w-full max-w-md p-6 rounded-t-3xl sm:rounded-3xl border shadow-2xl space-y-4 cursor-default animate-sheet-in ${
+              className={`w-full max-w-md p-6 rounded-t-3xl sm:rounded-3xl border shadow-2xl space-y-4 cursor-default ${
                 darkMode
                   ? "bg-zinc-900 border-zinc-800 text-white"
                   : "bg-white border-zinc-200 text-zinc-800"
               }`}
             >
+              <div
+                onPointerDown={(e) => { e.stopPropagation(); dragControlsAddForm.start(e); }}
+                className="w-full h-10 flex items-center justify-center sm:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none"
+              >
+                <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+              </div>
               <h3 className="font-extrabold text-lg">
                 {isPaymentOnly
                   ? "Registrar Gasto Directo"
@@ -4379,7 +4400,7 @@ export default function FinanceView({
                   </button>
                 </div>
               </form>
-            </div>
+            </motion.div>
           </div>,
           document.body,
         )}
@@ -4391,14 +4412,31 @@ export default function FinanceView({
             onClick={() => setShowEmailModal(false)}
             className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4 cursor-pointer"
           >
-            <div
+            <motion.div
+              initial={{ opacity: 0, scale: 0.97, y: 24 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              transition={{ type: "spring", stiffness: 380, damping: 32, mass: 0.8 }}
+              drag="y"
+              dragControls={dragControlsEmailModal}
+              dragListener={false}
+              dragConstraints={{ top: 0, bottom: 0 }}
+              dragElastic={{ top: 0, bottom: 0.65 }}
+              onDragEnd={(_e, info) => {
+                if (info.offset.y > 120 || info.velocity.y > 500) setShowEmailModal(false);
+              }}
               onClick={(e) => e.stopPropagation()}
-              className={`w-full max-w-md p-6 rounded-t-3xl sm:rounded-3xl border shadow-2xl space-y-4 cursor-default animate-sheet-in ${
+              className={`w-full max-w-md p-6 rounded-t-3xl sm:rounded-3xl border shadow-2xl space-y-4 cursor-default ${
                 darkMode
                   ? "bg-zinc-900 border-zinc-800 text-white"
                   : "bg-white border-zinc-200 text-zinc-800"
               }`}
             >
+              <div
+                onPointerDown={(e) => { e.stopPropagation(); dragControlsEmailModal.start(e); }}
+                className="w-full h-10 flex items-center justify-center sm:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none"
+              >
+                <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+              </div>
               <h3 className="font-extrabold text-lg">
                 Enviar Reporte Financiero
               </h3>
@@ -4436,7 +4474,7 @@ export default function FinanceView({
                   </button>
                 </div>
               </div>
-            </div>
+            </motion.div>
           </div>,
           document.body,
         )}

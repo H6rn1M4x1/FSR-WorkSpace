@@ -4,7 +4,7 @@ import { useBriefLoading } from "../hooks/useBriefLoading";
 import { TableSkeleton } from "./TableSkeleton";
 import { saveItemToFirestore, deleteItemFromFirestore } from "../lib/firestoreSyncService";
 import { generateUniqueId } from "../utils/id";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence, useDragControls } from "motion/react";
 import { createPortal } from "react-dom";
 import { useToast } from "../context/ToastContext";
 import { DetailModal, DetailBlock, DetailBlockGrid } from "./DetailModal";
@@ -414,6 +414,9 @@ export default function InversionesTable({
   // Modal State
   const [showAddModal, setShowAddModal] = useState(false);
   const [showTickerPicker, setShowTickerPicker] = useState(false);
+  // Arrastrar para cerrar (mobile): un dragControls por modal, iniciado solo desde su agarre.
+  const addModalDragControls = useDragControls();
+  const tickerPickerDragControls = useDragControls();
   const [editingItem, setEditingItem] = useState<Inversion | null>(null);
 
   useLockBodyScroll(
@@ -1771,9 +1774,23 @@ export default function InversionesTable({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 15 }}
                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                drag="y"
+                dragControls={tickerPickerDragControls}
+                dragListener={false}
+                dragConstraints={{ top: 0, bottom: 0 }}
+                dragElastic={{ top: 0, bottom: 0.65 }}
+                onDragEnd={(_e, info) => {
+                  if (info.offset.y > 120 || info.velocity.y > 500) setShowTickerPicker(false);
+                }}
                 onClick={(e) => e.stopPropagation()}
                 className="w-full sm:max-w-xl max-h-[92vh] sm:max-h-[85vh] flex flex-col bg-white dark:bg-zinc-900 rounded-t-3xl sm:rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
               >
+                <div
+                  onPointerDown={(e) => { e.stopPropagation(); tickerPickerDragControls.start(e); }}
+                  className="w-full h-10 flex items-center justify-center sm:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none"
+                >
+                  <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+                </div>
                 {/* Modal Header: Fixed and Non-Scrollable, exact match with Agregar Inversión */}
                 <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-zinc-800/40 bg-white dark:bg-zinc-900 z-10 shrink-0">
                   <div>
@@ -1987,9 +2004,23 @@ export default function InversionesTable({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 15 }}
                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                drag="y"
+                dragControls={addModalDragControls}
+                dragListener={false}
+                dragConstraints={{ top: 0, bottom: 0 }}
+                dragElastic={{ top: 0, bottom: 0.65 }}
+                onDragEnd={(_e, info) => {
+                  if (info.offset.y > 120 || info.velocity.y > 500) setShowAddModal(false);
+                }}
                 onClick={(e) => e.stopPropagation()}
                 className="w-full sm:max-w-2xl max-h-[92vh] sm:max-h-[85vh] flex flex-col bg-white dark:bg-zinc-900 rounded-t-3xl sm:rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
               >
+                <div
+                  onPointerDown={(e) => { e.stopPropagation(); addModalDragControls.start(e); }}
+                  className="w-full h-10 flex items-center justify-center sm:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none"
+                >
+                  <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+                </div>
                 {/* Header: Fixed and Non-Scrollable */}
                 <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-zinc-800/40 bg-white dark:bg-zinc-900 z-10">
                   <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">

@@ -53,7 +53,7 @@ import {
   CartesianGrid,
   Legend
 } from "recharts";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence, useDragControls } from "motion/react";
 import {
   GrupoMuscular,
   EjercicioRutina,
@@ -621,6 +621,11 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
   weightHistory = [],
 }) => {
   const userId = getEffectiveUserId(userEmail);
+
+  // Controles de arrastre para cerrar (gesto "deslizar hacia abajo") de los menús de
+  // agregar/editar de esta vista — uno por modal, igual que DetailModal.
+  const dragControlsAddExercise = useDragControls();
+  const dragControlsEditSession = useDragControls();
 
   // Modal de confirmación interno si no se pasa askConfirmation
   const [internalConfirmModal, setInternalConfirmModal] = useState<{
@@ -3064,10 +3069,27 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
             className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm cursor-pointer"
             onClick={() => setShowAddExerciseModal(false)}
           >
-            <div
+            <motion.div
+              initial={{ opacity: 0, scale: 0.97, y: 24 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              transition={{ type: "spring", stiffness: 380, damping: 32, mass: 0.8 }}
+              drag="y"
+              dragControls={dragControlsAddExercise}
+              dragListener={false}
+              dragConstraints={{ top: 0, bottom: 0 }}
+              dragElastic={{ top: 0, bottom: 0.65 }}
+              onDragEnd={(_e, info) => {
+                if (info.offset.y > 120 || info.velocity.y > 500) setShowAddExerciseModal(false);
+              }}
               onClick={(e) => e.stopPropagation()}
-              className={`animate-sheet-in w-full max-w-md max-h-[92vh] sm:max-h-[85vh] overflow-y-auto p-6 rounded-t-3xl sm:rounded-3xl border shadow-2xl space-y-4 cursor-default ${darkMode ? "bg-zinc-900 border-zinc-800 text-white" : "bg-white border-slate-200 text-slate-800"}`}
+              className={`w-full max-w-md max-h-[92vh] sm:max-h-[85vh] overflow-y-auto p-6 rounded-t-3xl sm:rounded-3xl border shadow-2xl space-y-4 cursor-default ${darkMode ? "bg-zinc-900 border-zinc-800 text-white" : "bg-white border-slate-200 text-slate-800"}`}
             >
+              <div
+                onPointerDown={(e) => { e.stopPropagation(); dragControlsAddExercise.start(e); }}
+                className="w-full h-10 flex items-center justify-center sm:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none -mt-6 -mx-6 mb-2"
+              >
+                <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+              </div>
               <div className="flex items-center justify-between border-b border-zinc-200/60 dark:border-zinc-800/60 pb-2">
                 <h4 className="text-sm font-extrabold">Seleccionar o Crear Ejercicio</h4>
                 <button onClick={() => setShowAddExerciseModal(false)} className="text-slate-400 hover:text-white cursor-pointer">
@@ -3171,7 +3193,7 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
                   </button>
                 </div>
               </div>
-            </div>
+            </motion.div>
           </div>,
           document.body
         )}
@@ -3346,12 +3368,29 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
             className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-md overflow-y-auto cursor-pointer"
             onClick={() => setEditingSession(null)}
           >
-            <div
+            <motion.div
+              initial={{ opacity: 0, scale: 0.97, y: 24 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              transition={{ type: "spring", stiffness: 380, damping: 32, mass: 0.8 }}
+              drag="y"
+              dragControls={dragControlsEditSession}
+              dragListener={false}
+              dragConstraints={{ top: 0, bottom: 0 }}
+              dragElastic={{ top: 0, bottom: 0.65 }}
+              onDragEnd={(_e, info) => {
+                if (info.offset.y > 120 || info.velocity.y > 500) setEditingSession(null);
+              }}
               onClick={(e) => e.stopPropagation()}
               className={`w-full max-w-2xl p-6 rounded-t-3xl sm:rounded-3xl border shadow-2xl space-y-4 my-0 sm:my-8 cursor-default max-h-[92vh] sm:max-h-[90vh] overflow-y-auto ${
                 darkMode ? "bg-zinc-900 border-zinc-800 text-white" : "bg-white border-slate-200 text-slate-800"
               }`}
             >
+              <div
+                onPointerDown={(e) => { e.stopPropagation(); dragControlsEditSession.start(e); }}
+                className="w-full h-10 flex items-center justify-center sm:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none -mt-6 -mx-6 mb-2"
+              >
+                <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+              </div>
               <div className="flex items-center justify-between border-b border-zinc-200/60 dark:border-zinc-800/60 pb-3">
                 <div className="flex items-center gap-2">
                   <Activity className="w-5 h-5 text-primary" />
@@ -3624,7 +3663,7 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
                   Cancelar
                 </button>
               </div>
-            </div>
+            </motion.div>
           </div>,
           document.body
         )}

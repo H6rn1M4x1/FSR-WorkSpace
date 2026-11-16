@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence, useDragControls } from "motion/react";
 import { X, Plus, Pencil, Star, Check, ChevronLeft, ChevronUp, ChevronDown, Trash2 } from "lucide-react";
 import { TurnoCategoriaDef } from "../types";
 import { generateUniqueId } from "../utils/id";
@@ -133,6 +133,9 @@ export const TurnoCategoryManagerModal: React.FC<TurnoCategoryManagerModalProps>
   onDelete,
   onClose,
 }) => {
+  // Arrastre hacia abajo para cerrar (solo mobile, solo desde el agarre gris de arriba) — mismo
+  // patrón que DetailModal.tsx.
+  const dragControls = useDragControls();
   const [editing, setEditing] = useState<TurnoCategoriaDef | null>(null);
   const [formLabel, setFormLabel] = useState("");
   const [formIcon, setFormIcon] = useState("Tag");
@@ -224,6 +227,14 @@ export const TurnoCategoryManagerModal: React.FC<TurnoCategoryManagerModalProps>
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 8 }}
             transition={{ type: "spring", stiffness: 420, damping: 32, mass: 0.7 }}
+            drag="y"
+            dragControls={dragControls}
+            dragListener={false}
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0, bottom: 0.65 }}
+            onDragEnd={(_e, info) => {
+              if (info.offset.y > 120 || info.velocity.y > 500) onClose();
+            }}
             onClick={(e) => e.stopPropagation()}
             className={`relative w-full max-w-md max-h-[85vh] flex flex-col rounded-t-3xl sm:rounded-3xl border shadow-2xl z-10 overflow-hidden ${
               darkMode
@@ -231,6 +242,16 @@ export const TurnoCategoryManagerModal: React.FC<TurnoCategoryManagerModalProps>
                 : "bg-white border-zinc-200 text-zinc-800"
             }`}
           >
+            <div
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                dragControls.start(e);
+              }}
+              className="w-full h-10 flex items-center justify-center sm:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none"
+            >
+              <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+            </div>
+
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-zinc-800/60 shrink-0">
               <h3 className="text-sm font-extrabold">

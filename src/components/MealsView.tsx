@@ -11,7 +11,7 @@ import { generateUniqueId } from "../utils/id";
 import { getLocalDateString } from "../utils/date";
 import React, { useState, useEffect } from "react";
 import { saveItemToFirestore, deleteItemFromFirestore, subscribeToCategory } from "../lib/firestoreSyncService";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence, useDragControls } from "motion/react";
 import { createPortal } from "react-dom";
 import { useToast } from "../context/ToastContext";
 import AnimatedList from "./AnimatedList";
@@ -451,6 +451,16 @@ export default function MealsView({
   onQuickEditHandled,
 }: MealsViewProps) {
   const { isSharedOut, sharedOutWith } = makeSharedOutHelpers(itemsIShared);
+
+  // Controles de arrastre para cerrar (gesto "deslizar hacia abajo") de los menús de
+  // agregar/editar de esta vista — uno por modal, igual que DetailModal.
+  const dragControlsShoppingItem = useDragControls();
+  const dragControlsOrgSemanal = useDragControls();
+  const dragControlsAlimento = useDragControls();
+  const dragControlsPlato = useDragControls();
+  const dragControlsPantry = useDragControls();
+  const dragControlsMercaderia = useDragControls();
+
   // Subtab navigation
   const [localActiveSubTab, setLocalActiveSubTab] = useState<
     | "planificador"
@@ -4650,10 +4660,24 @@ export default function MealsView({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 15 }}
                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                drag="y"
+                dragControls={dragControlsShoppingItem}
+                dragListener={false}
+                dragConstraints={{ top: 0, bottom: 0 }}
+                dragElastic={{ top: 0, bottom: 0.65 }}
+                onDragEnd={(_e, info) => {
+                  if (info.offset.y > 120 || info.velocity.y > 500) setShowAddManualShop(false);
+                }}
                 onClick={(e) => e.stopPropagation()}
                 id="add-manual-shop-content"
                 className="w-full max-w-lg max-h-[90vh] flex flex-col bg-white dark:bg-black/85 backdrop-blur-md rounded-t-3xl sm:rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-visible relative cursor-default"
               >
+              <div
+                onPointerDown={(e) => { e.stopPropagation(); dragControlsShoppingItem.start(e); }}
+                className="w-full h-8 flex items-center justify-center sm:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none"
+              >
+                <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+              </div>
               {/* Header */}
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-zinc-800/40 bg-white dark:bg-black/85 backdrop-blur-md rounded-t-3xl">
                 <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">
@@ -4828,10 +4852,29 @@ export default function MealsView({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 15 }}
                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                drag="y"
+                dragControls={dragControlsOrgSemanal}
+                dragListener={false}
+                dragConstraints={{ top: 0, bottom: 0 }}
+                dragElastic={{ top: 0, bottom: 0.65 }}
+                onDragEnd={(_e, info) => {
+                  if (info.offset.y > 120 || info.velocity.y > 500) {
+                    setShowAddOrg(false);
+                    setOrgFecha("");
+                    setOrgPlatoId("");
+                    setEditingOrgId(null);
+                  }
+                }}
                 onClick={(e) => e.stopPropagation()}
                 id="add-org-modal-content"
                 className="w-full max-w-lg max-h-[90vh] flex flex-col bg-white dark:bg-black/85 backdrop-blur-md rounded-t-3xl sm:rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-visible relative cursor-default"
               >
+              <div
+                onPointerDown={(e) => { e.stopPropagation(); dragControlsOrgSemanal.start(e); }}
+                className="w-full h-8 flex items-center justify-center sm:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none"
+              >
+                <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+              </div>
               {/* Header */}
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-zinc-800/40 bg-white dark:bg-black/85 backdrop-blur-md rounded-t-3xl">
                 <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">
@@ -4978,9 +5021,26 @@ export default function MealsView({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 15 }}
                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                drag="y"
+                dragControls={dragControlsAlimento}
+                dragListener={false}
+                dragConstraints={{ top: 0, bottom: 0 }}
+                dragElastic={{ top: 0, bottom: 0.65 }}
+                onDragEnd={(_e, info) => {
+                  if (info.offset.y > 120 || info.velocity.y > 500) {
+                    setShowAddAlimento(false);
+                    setEditingAlimentoId(null);
+                  }
+                }}
                 onClick={(e) => e.stopPropagation()}
                 className="w-full max-w-2xl max-h-[85vh] flex flex-col bg-white dark:bg-black/85 backdrop-blur-md rounded-t-3xl sm:rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
               >
+              <div
+                onPointerDown={(e) => { e.stopPropagation(); dragControlsAlimento.start(e); }}
+                className="w-full h-8 flex items-center justify-center sm:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none"
+              >
+                <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+              </div>
               {/* Header */}
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-zinc-800/40 bg-white dark:bg-black/85 backdrop-blur-md">
                 <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">
@@ -5271,9 +5331,26 @@ export default function MealsView({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 15 }}
                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                drag="y"
+                dragControls={dragControlsPlato}
+                dragListener={false}
+                dragConstraints={{ top: 0, bottom: 0 }}
+                dragElastic={{ top: 0, bottom: 0.65 }}
+                onDragEnd={(_e, info) => {
+                  if (info.offset.y > 120 || info.velocity.y > 500) {
+                    setShowAddPlato(false);
+                    setEditingPlatoId(null);
+                  }
+                }}
                 onClick={(e) => e.stopPropagation()}
                 className="w-full max-w-2xl max-h-[85vh] flex flex-col bg-white dark:bg-black/85 backdrop-blur-md rounded-t-3xl sm:rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
               >
+              <div
+                onPointerDown={(e) => { e.stopPropagation(); dragControlsPlato.start(e); }}
+                className="w-full h-8 flex items-center justify-center sm:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none"
+              >
+                <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+              </div>
               {/* Header */}
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-zinc-800/40 bg-white dark:bg-black/85 backdrop-blur-md">
                 <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">
@@ -5526,6 +5603,14 @@ export default function MealsView({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 15 }}
                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                drag="y"
+                dragControls={dragControlsPantry}
+                dragListener={false}
+                dragConstraints={{ top: 0, bottom: 0 }}
+                dragElastic={{ top: 0, bottom: 0.65 }}
+                onDragEnd={(_e, info) => {
+                  if (info.offset.y > 120 || info.velocity.y > 500) setShowAddPantry(false);
+                }}
                 onClick={(e) => e.stopPropagation()}
                 className={`w-full max-w-md p-6 rounded-t-3xl sm:rounded-3xl border shadow-2xl space-y-4 cursor-default ${
                   darkMode
@@ -5533,6 +5618,12 @@ export default function MealsView({
                     : "bg-white border-zinc-200 text-zinc-800"
                 }`}
               >
+              <div
+                onPointerDown={(e) => { e.stopPropagation(); dragControlsPantry.start(e); }}
+                className="w-full h-10 flex items-center justify-center sm:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none -mt-6 -mx-6 mb-2"
+              >
+                <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+              </div>
               <h3 className="font-extrabold text-lg">Agregar a la Alacena</h3>
               <form onSubmit={handleAddPantry} className="space-y-3.5">
                 <div>
@@ -5662,9 +5753,26 @@ export default function MealsView({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 15 }}
                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                drag="y"
+                dragControls={dragControlsMercaderia}
+                dragListener={false}
+                dragConstraints={{ top: 0, bottom: 0 }}
+                dragElastic={{ top: 0, bottom: 0.65 }}
+                onDragEnd={(_e, info) => {
+                  if (info.offset.y > 120 || info.velocity.y > 500) {
+                    setShowAddMercaderia(false);
+                    setEditingMercaderiaId(null);
+                  }
+                }}
                 onClick={(e) => e.stopPropagation()}
                 className="w-full max-w-lg max-h-[85vh] flex flex-col bg-white dark:bg-black/85 backdrop-blur-md rounded-t-3xl sm:rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
               >
+              <div
+                onPointerDown={(e) => { e.stopPropagation(); dragControlsMercaderia.start(e); }}
+                className="w-full h-8 flex items-center justify-center sm:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none"
+              >
+                <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+              </div>
               {/* Header */}
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-zinc-800/40 bg-white dark:bg-black/85 backdrop-blur-md">
                 <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">
