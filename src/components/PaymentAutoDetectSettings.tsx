@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Capacitor } from "@capacitor/core";
+import { App as CapacitorApp } from "@capacitor/app";
 import { Bell, ChevronDown, ChevronUp, ExternalLink, Search } from "lucide-react";
 import { PaymentListener, InstalledApp } from "../lib/paymentListenerPlugin";
 import { categorizeAppLabel, isSuggestedApp, cacheMonitoredAppLabels, PaymentAppGroup } from "../lib/paymentApps";
@@ -44,6 +45,20 @@ export function PaymentAutoDetectSettings({ darkMode }: Props) {
     refreshStatus();
   }, [isAndroid, expanded]);
 
+  // El permiso especial de "Acceso a notificaciones" lo puede revocar el propio sistema (poda de
+  // memoria, optimizaciones de batería de algunos fabricantes) sin que el usuario toque nada acá
+  // adentro. Releer el estado real cada vez que la app vuelve a primer plano, no solo cuando se
+  // despliega este panel, evita mostrar un switch "prendido" que en los hechos ya no está activo.
+  useEffect(() => {
+    if (!isAndroid) return;
+    const handlePromise = CapacitorApp.addListener("appStateChange", ({ isActive }) => {
+      if (isActive) refreshStatus();
+    });
+    return () => {
+      handlePromise.then((handle) => handle.remove()).catch(() => {});
+    };
+  }, [isAndroid]);
+
   if (!isAndroid) return null;
 
   const loadApps = async () => {
@@ -66,11 +81,15 @@ export function PaymentAutoDetectSettings({ darkMode }: Props) {
 
   const toggleEnabled = async () => {
     const next = !enabled;
+    setEnabled(next);
     try {
       await PaymentListener.setEnabled({ enabled: next });
-      setEnabled(next);
     } catch (err) {
       console.error("[PaymentAutoDetectSettings] Error activando/desactivando:", err);
+      // Si la escritura nativa falló, no dejamos el switch mostrando un estado que en los
+      // hechos no se guardó — eso es justo lo que generaba la confusión de "lo activo pero al
+      // reabrir la app está apagado".
+      setEnabled(!next);
     }
   };
 

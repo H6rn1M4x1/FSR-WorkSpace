@@ -24,6 +24,16 @@ public class PaymentListenerService extends NotificationListenerService {
     public static final String KEY_ENABLED = "listener_enabled";
 
     @Override
+    public void onListenerDisconnected() {
+        // El sistema puede desconectar este listener en cualquier momento (poda de memoria,
+        // Doze, optimizaciones agresivas de batería de algunos fabricantes) sin que el usuario
+        // haya revocado el permiso. requestRebind() es el mecanismo oficial para pedirle al
+        // sistema que vuelva a conectar el listener — sin esto, quedaba desconectado hasta que
+        // el usuario tocara algo manualmente en Ajustes del sistema.
+        requestRebind(new android.content.ComponentName(this, PaymentListenerService.class));
+    }
+
+    @Override
     public void onNotificationPosted(StatusBarNotification sbn) {
         if (sbn == null || sbn.getNotification() == null) return;
 

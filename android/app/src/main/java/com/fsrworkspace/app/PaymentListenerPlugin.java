@@ -70,7 +70,13 @@ public class PaymentListenerPlugin extends Plugin implements PaymentListenerBrid
     public void setEnabled(PluginCall call) {
         Boolean enabled = call.getBoolean("enabled", false);
         SharedPreferences prefs = getContext().getSharedPreferences(PaymentListenerService.PREFS_NAME, Context.MODE_PRIVATE);
-        prefs.edit().putBoolean(PaymentListenerService.KEY_ENABLED, Boolean.TRUE.equals(enabled)).apply();
+        // commit() en vez de apply(): apply() escribe en disco en segundo plano y devuelve el
+        // control al toque — si el usuario cierra (o el sistema mata) la app enseguida después
+        // de tocar el switch, esa escritura puede perderse y quedar guardado el valor anterior,
+        // que es justo el síntoma reportado ("lo activo pero al reabrir la app está apagado").
+        // commit() bloquea hasta que el valor ya está en disco, así que al resolver este llamado
+        // el cambio ya quedó persistido con certeza.
+        prefs.edit().putBoolean(PaymentListenerService.KEY_ENABLED, Boolean.TRUE.equals(enabled)).commit();
         call.resolve();
     }
 
@@ -108,7 +114,10 @@ public class PaymentListenerPlugin extends Plugin implements PaymentListenerBrid
             }
         }
         SharedPreferences prefs = getContext().getSharedPreferences(PaymentListenerService.PREFS_NAME, Context.MODE_PRIVATE);
-        prefs.edit().putStringSet(PaymentListenerService.KEY_MONITORED_PACKAGES, set).apply();
+        // Mismo motivo que en setEnabled(): commit() en vez de apply() para que la selección
+        // quede en disco antes de responder, no en una escritura asincrónica que un cierre
+        // rápido de la app podría llegar a perder.
+        prefs.edit().putStringSet(PaymentListenerService.KEY_MONITORED_PACKAGES, set).commit();
         call.resolve();
     }
 
