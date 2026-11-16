@@ -633,13 +633,14 @@ export default function TopNavbar({
           <nav className="flex items-center gap-1 bg-zinc-500/5 dark:bg-white/5 p-1 rounded-full border border-zinc-200/40 dark:border-white/5 relative flex-1 min-w-0 overflow-x-auto no-scrollbar md:flex-initial md:min-w-fit md:overflow-visible">
             {menuItems.map((item) => {
               const Icon = item.icon;
-              // Con el menú de "más secciones" abierto, el botón de grilla ya muestra su propio
+              // Con el menú de "más secciones" abierto (o Chat/Avisos/Ajustes, a los que solo se
+              // llega desde ese mismo menú en mobile) el botón de grilla ya muestra su propio
               // estado activo (fondo de acento + X) — la pestaña principal que estaba
               // seleccionada antes de abrirlo (ej. Turnos) se "destilda" visualmente mientras
-              // tanto, para no tener dos botones resaltados a la vez. mobileMenuOpen solo se
-              // puede activar desde el botón de grilla (md:hidden), así que esto no afecta a
-              // desktop, donde siempre vale false.
-              const isActive = currentTab === item.id && !mobileMenuOpen;
+              // tanto, para no tener dos botones resaltados a la vez. Estos flags solo se pueden
+              // activar desde elementos md:hidden, así que esto no afecta a desktop, donde
+              // siempre valen false.
+              const isActive = currentTab === item.id && !mobileMenuOpen && !showChat && !showNotifications && !isSettingsOpen;
               const onlyDesktop = ["academic", "health", "meals", "notes"].includes(item.id);
               return (
                 <button
@@ -686,13 +687,14 @@ export default function TopNavbar({
                 const nextOpening = !mobileMenuOpen;
                 setMobileMenuOpen(nextOpening);
                 setShowNotifications(false);
+                setShowChat(false);
                 setQuickAddMenuOpen(false);
-                if (nextOpening && isSettingsOpen && onOpenSettings) {
+                if (isSettingsOpen && onOpenSettings) {
                   onOpenSettings();
                 }
               }}
               className={`md:hidden flex-1 flex items-center justify-center p-3 rounded-full transition-colors duration-300 cursor-pointer ${
-                mobileMenuOpen
+                mobileMenuOpen || showChat || showNotifications || isSettingsOpen
                   ? `bg-primary shadow-md text-white dark:text-zinc-950 font-bold ${!darkMode ? "active-nav-pill-light" : ""}`
                   : darkMode
                   ? "text-zinc-300 hover:text-white hover:bg-white/10"
@@ -725,6 +727,10 @@ export default function TopNavbar({
                   setQuickAddMenuOpen(nextOpening);
                   setMobileMenuOpen(false);
                   setShowNotifications(false);
+                  setShowChat(false);
+                  if (isSettingsOpen && onOpenSettings) {
+                    onOpenSettings();
+                  }
                 }}
                 className={`md:hidden shrink-0 flex items-center justify-center p-3 rounded-full shadow-md transition-colors cursor-pointer text-white dark:text-zinc-950 ${
                   quickAddMenuOpen ? "bg-primary-hover" : "bg-primary hover:bg-primary-hover"
