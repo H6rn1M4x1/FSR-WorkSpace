@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence, useDragControls } from "motion/react";
 import { X, Pencil, Trash2, CheckCircle2, Circle } from "lucide-react";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import { uiSounds } from "../lib/sounds";
@@ -98,6 +98,11 @@ export function DetailModal({
   // de uno abierto a la vez no se desbloquea hasta que se cierre el último).
   useLockBodyScroll(isOpen);
 
+  // Controla el arrastre hacia abajo para cerrar (solo mobile, solo desde el agarre gris de
+  // arriba): dragListener={false} en el panel + dragControls.start() en el agarre, para que
+  // arrastrar desde cualquier otro lado del modal (texto, lista con scroll) no lo mueva.
+  const dragControls = useDragControls();
+
   // Sonido + vibración de abrir/cerrar — enganchado a la transición real de `isOpen` (no al click
   // que lo dispara) para que suene siempre, sin importar desde qué tabla o botón se abrió.
   const wasOpen = useRef(isOpen);
@@ -148,12 +153,27 @@ export function DetailModal({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.97, y: 16 }}
             transition={{ type: "spring", stiffness: 380, damping: 32, mass: 0.8 }}
+            drag="y"
+            dragControls={dragControls}
+            dragListener={false}
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0, bottom: 0.65 }}
+            onDragEnd={(_e, info) => {
+              if (info.offset.y > 120 || info.velocity.y > 500) onClose();
+            }}
             onClick={(e) => e.stopPropagation()}
             onContextMenu={(e) => e.stopPropagation()}
             className="w-full sm:max-w-xl max-h-[92vh] sm:max-h-[85vh] flex flex-col overflow-hidden rounded-t-3xl sm:rounded-3xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 force-solid-bg shadow-2xl"
           >
-            {/* Agarre decorativo de la hoja inferior — solo en mobile. */}
-            <div className="w-10 h-1 rounded-full bg-slate-300 dark:bg-white/15 mx-auto mt-3 mb-1 sm:hidden shrink-0" />
+            {/* Agarre de la hoja inferior — solo en mobile. Mantener presionado y arrastrar hacia
+                abajo cierra el modal (con resorte de vuelta si no se arrastra lo suficiente). */}
+            <div
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                dragControls.start(e);
+              }}
+              className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15 mx-auto mt-3 mb-1 sm:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none"
+            />
 
             <div className="flex items-start justify-between gap-3 px-5 sm:px-6 pt-3 sm:pt-6 pb-4 sm:pb-5 border-b border-slate-100 dark:border-white/[0.06] shrink-0">
               <div className="flex items-center gap-3 min-w-0">

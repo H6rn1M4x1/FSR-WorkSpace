@@ -2095,7 +2095,7 @@ export default function HomeView({
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -6, scale: 0.96 }}
                         transition={{ duration: 0.15 }}
-                        className={`absolute right-0 top-full mt-1.5 z-30 w-64 rounded-xl border shadow-lg overflow-hidden ${
+                        className={`force-solid-bg absolute right-0 top-full mt-1.5 z-30 w-full sm:w-64 rounded-xl border shadow-lg overflow-hidden ${
                           darkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-zinc-200"
                         }`}
                       >
