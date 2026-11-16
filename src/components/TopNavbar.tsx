@@ -580,8 +580,18 @@ export default function TopNavbar({
     <header
       ref={notificationsRef}
       data-no-global-sound
-      className="fixed bottom-0 inset-x-0 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:sticky md:bottom-auto md:top-3 md:inset-x-auto md:pb-0 z-50 w-full max-w-7xl mx-auto px-2 sm:px-4"
+      className="fixed bottom-0 inset-x-0 pb-[calc(0.75rem+max(0.5rem,env(safe-area-inset-bottom)))] md:sticky md:bottom-auto md:top-3 md:inset-x-auto md:pb-0 z-50 w-full max-w-7xl mx-auto px-2 sm:px-4"
     >
+      {/* Difuminado de la franja que queda libre bajo la cápsula (ahora un poco despegada del
+          borde de abajo en vez de pegada del todo) — solo mobile, para que lo que sigue
+          scrolleando atrás no se vea nítido ahí. Mismo backdrop-blur que ya usa la cápsula
+          (nunca filter, por el bug histórico de composición con el fondo animado por WebGL). */}
+      <div
+        className="md:hidden fixed inset-x-0 bottom-0 backdrop-blur-md pointer-events-none"
+        style={{ height: "calc(0.75rem + max(0.5rem, env(safe-area-inset-bottom)))" }}
+        aria-hidden="true"
+      />
+
       {/* Outer Glass Container with Animated Height/Layout Expansion */}
       <motion.div
         layout
@@ -634,7 +644,7 @@ export default function TopNavbar({
                     // sobre la nueva página.
                     if (isSettingsOpen && onOpenSettings) onOpenSettings();
                   }}
-                  className={`${onlyDesktop ? "hidden md:flex" : "flex"} flex-1 md:flex-none md:shrink-0 relative items-center justify-center md:justify-start gap-2 p-3 md:px-3.5 md:py-1.5 rounded-full text-xs font-semibold transition-colors duration-300 cursor-pointer whitespace-nowrap z-10 ${
+                  className={`${onlyDesktop ? "hidden md:flex" : "flex"} flex-1 md:flex-none md:shrink-0 relative items-center justify-center md:justify-start gap-2 p-3 md:px-3.5 md:py-1.5 rounded-2xl md:rounded-full text-xs font-semibold transition-colors duration-300 cursor-pointer whitespace-nowrap z-10 ${
                     isActive
                       ? `text-white dark:text-zinc-950 font-bold ${!darkMode ? "active-nav-pill-light" : ""}`
                       : darkMode
@@ -645,7 +655,7 @@ export default function TopNavbar({
                   {isActive && (
                     <motion.div
                       layoutId="activeMainNavPill"
-                      className="absolute inset-0 rounded-full bg-primary shadow-md -z-10"
+                      className="absolute inset-0 rounded-2xl md:rounded-full bg-primary shadow-md -z-10"
                       transition={{ type: "spring", stiffness: 220, damping: 26 }}
                     />
                   )}
@@ -670,7 +680,7 @@ export default function TopNavbar({
                   onOpenSettings();
                 }
               }}
-              className={`md:hidden flex-1 flex items-center justify-center p-3 rounded-full transition-colors duration-300 cursor-pointer ${
+              className={`md:hidden flex-1 flex items-center justify-center p-3 rounded-2xl transition-colors duration-300 cursor-pointer ${
                 mobileMenuOpen
                   ? `bg-primary shadow-md text-white dark:text-zinc-950 font-bold ${!darkMode ? "active-nav-pill-light" : ""}`
                   : darkMode
@@ -681,14 +691,23 @@ export default function TopNavbar({
             >
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <LayoutGrid className="w-5 h-5" />}
             </button>
+          </nav>
 
+          {/* Right Actions Header — chat/notificaciones/ajustes solo de md en adelante: en mobile
+              viven dentro del menú expandido (ver más abajo), para que esta fila le deje todo el
+              lugar a los íconos de sección. El botón "+" sí se ve siempre en mobile, pero
+              separado del grupo de arriba (no comparte su fondo ni su reparto de ancho) y con el
+              color de acento, como un botón de acción aparte. */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {/* Botón "+": acceso directo a agendar un turno/pago/examen/medicamento/comida —
                 mismas opciones que el botón "Agendar" de Inicio (ver App.tsx/handleQuickAdd). El
                 menú que despliega no es un cartel flotante aparte: usa el mismo espacio que
                 crece arriba de esta fila (ver MENÚ EXPANDIDO más abajo), para que todo lo que se
                 despliega desde esta barra salga del mismo lugar. */}
             {onQuickAdd && (
-              <button
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.92 }}
                 type="button"
                 onClick={() => {
                   const nextOpening = !quickAddMenuOpen;
@@ -696,24 +715,14 @@ export default function TopNavbar({
                   setMobileMenuOpen(false);
                   setShowNotifications(false);
                 }}
-                className={`md:hidden flex-1 flex items-center justify-center p-3 rounded-full transition-colors duration-300 cursor-pointer ${
-                  quickAddMenuOpen
-                    ? `bg-primary shadow-md text-white dark:text-zinc-950 font-bold ${!darkMode ? "active-nav-pill-light" : ""}`
-                    : darkMode
-                    ? "text-zinc-300 hover:text-white hover:bg-white/10"
-                    : "text-black hover:text-black hover:bg-zinc-200/50"
+                className={`md:hidden shrink-0 flex items-center justify-center p-3 rounded-full shadow-md transition-colors cursor-pointer text-white dark:text-zinc-950 ${
+                  quickAddMenuOpen ? "bg-primary-hover" : "bg-primary hover:bg-primary-hover"
                 }`}
                 title="Agendar un turno, pago, examen, medicamento o comida planificada"
               >
                 {quickAddMenuOpen ? <X className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
-              </button>
+              </motion.button>
             )}
-          </nav>
-
-          {/* Right Actions Header — chat/notificaciones/ajustes solo de md en adelante: en mobile
-              viven dentro del menú expandido (ver más abajo), para que esta fila le deje todo el
-              lugar a los íconos de sección + el botón de hamburguesa. */}
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {/* Chat Button */}
             <div className="hidden md:block">
               <motion.button
@@ -1046,9 +1055,11 @@ export default function TopNavbar({
             arriba (order-2) queda pegada abajo de todo, así que esta fila visualmente pasa a
             estar ARRIBA de ella — por eso el borde divisor se invierte (border-b en vez de
             border-t) y el margen anima en los dos lados a la vez, para que separe de la fila de
-            arriba sin importar de qué lado quede. */}
+            arriba sin importar de qué lado quede. Se oculta mientras el menú de secciones o el
+            de "Agendar" están abiertos (ambos mobile-only), para no competir por el mismo
+            espacio con ellos. */}
         <AnimatePresence mode="wait">
-          {currentSubMenu && currentSubMenu.length > 0 && (
+          {currentSubMenu && currentSubMenu.length > 0 && !mobileMenuOpen && !quickAddMenuOpen && (
             <motion.div
               key={currentTab}
               initial={{ opacity: 0, height: 0, marginTop: 0, marginBottom: 0 }}
