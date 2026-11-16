@@ -166,14 +166,18 @@ export function DetailModal({
             className="w-full sm:max-w-xl max-h-[92vh] sm:max-h-[85vh] flex flex-col overflow-hidden rounded-t-3xl sm:rounded-3xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 force-solid-bg shadow-2xl"
           >
             {/* Agarre de la hoja inferior — solo en mobile. Mantener presionado y arrastrar hacia
-                abajo cierra el modal (con resorte de vuelta si no se arrastra lo suficiente). */}
+                abajo cierra el modal (con resorte de vuelta si no se arrastra lo suficiente). La
+                zona de contacto real (este div de afuera) es mucho más grande que la barrita
+                visible, para no tener que acertarle justo a esos pocos píxeles. */}
             <div
               onPointerDown={(e) => {
                 e.stopPropagation();
                 dragControls.start(e);
               }}
-              className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15 mx-auto mt-3 mb-1 sm:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none"
-            />
+              className="w-full h-10 flex items-center justify-center sm:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none"
+            >
+              <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+            </div>
 
             <div className="flex items-start justify-between gap-3 px-5 sm:px-6 pt-3 sm:pt-6 pb-4 sm:pb-5 border-b border-slate-100 dark:border-white/[0.06] shrink-0">
               <div className="flex items-center gap-3 min-w-0">
