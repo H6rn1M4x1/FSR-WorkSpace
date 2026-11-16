@@ -644,10 +644,12 @@ export default function TopNavbar({
             })}
           </nav>
 
-          {/* Right Actions Header */}
+          {/* Right Actions Header — chat/notificaciones/ajustes solo de md en adelante: en mobile
+              viven dentro del menú expandido (ver más abajo), para que esta fila le deje todo el
+              lugar a los íconos de sección + el botón de hamburguesa. */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {/* Chat Button */}
-            <div>
+            <div className="hidden md:block">
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.92 }}
@@ -679,7 +681,7 @@ export default function TopNavbar({
             </div>
 
             {/* Notification Bell */}
-            <div>
+            <div className="hidden md:block">
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.92 }}
@@ -719,7 +721,7 @@ export default function TopNavbar({
                   setShowNotifications(false);
                   setShowChat(false);
                 }}
-                className={`p-2 sm:p-2.5 rounded-full transition-all cursor-pointer border shadow-xs header-action-btn ${
+                className={`hidden md:inline-flex p-2 sm:p-2.5 rounded-full transition-all cursor-pointer border shadow-xs header-action-btn ${
                   isSettingsOpen
                     ? "bg-primary/20 text-primary border-primary/40 dark:bg-primary/20 dark:text-primary dark:border-primary/40"
                     : "bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 text-black dark:text-white hover:text-primary dark:hover:text-primary border-zinc-200/60 dark:border-white/10"
@@ -788,6 +790,173 @@ export default function TopNavbar({
             </motion.button>
           </div>
         </div>
+
+        {/* MENÚ EXPANDIDO (solo mobile): al tocar la hamburguesa, en vez de un popup aparte,
+            esto crece hacia arriba dentro de la misma cápsula — muestra las secciones principales
+            en grande con su nombre (las de la fila compacta de abajo solo tienen el ícono) y acá
+            adentro también viven chat/notificaciones/ajustes, que ya no están en esa fila
+            compacta para dejarle lugar a las secciones. */}
+        <AnimatePresence mode="wait">
+          {mobileMenuOpen && (
+            <motion.div
+              key="mobile-expanded-menu"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+              className="w-full overflow-hidden md:hidden"
+            >
+              <div className="pb-3 pt-1 space-y-2.5">
+                {/* Secciones principales, en grande y con nombre */}
+                <div className="grid grid-cols-2 gap-2">
+                  {menuItems.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = currentTab === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => {
+                          setCurrentTab(item.id);
+                          setMobileMenuOpen(false);
+                          setShowNotifications(false);
+                          setShowChat(false);
+                        }}
+                        className={`flex items-center gap-2.5 p-3 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${
+                          isActive
+                            ? `bg-primary text-white dark:text-zinc-950 shadow-md font-bold ${!darkMode ? "active-nav-pill-light" : ""}`
+                            : darkMode
+                            ? "bg-zinc-900/60 text-zinc-300 hover:bg-zinc-800"
+                            : "bg-zinc-100/70 text-black hover:bg-zinc-200"
+                        }`}
+                      >
+                        <Icon className={`w-4 h-4 ${isActive ? `text-white dark:text-zinc-950 ${!darkMode ? "active-nav-pill-light" : ""}` : darkMode ? "text-zinc-400" : "text-black"}`} />
+                        <span className={isActive && !darkMode ? "active-nav-pill-light" : ""}>{item.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Chat / Notificaciones / Ajustes — se sacaron de la fila compacta, así que
+                    viven acá adentro del menú expandido. */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      if (isSettingsOpen) return;
+                      const nextVal = !showChat;
+                      setShowChat(nextVal);
+                      setMobileMenuOpen(false);
+                      if (nextVal) setShowNotifications(false);
+                    }}
+                    className={`flex-1 relative flex items-center justify-center gap-2 p-3 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${
+                      isSettingsOpen ? "opacity-50 cursor-not-allowed" : ""
+                    } ${
+                      showChat
+                        ? "bg-primary/20 text-primary"
+                        : darkMode
+                        ? "bg-zinc-900/60 text-zinc-300 hover:bg-zinc-800"
+                        : "bg-zinc-100/70 text-black hover:bg-zinc-200"
+                    }`}
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                    <span>Chat</span>
+                    {chatUnreadCount > 0 && (
+                      <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 rounded-full bg-primary text-white text-[9.5px] font-black flex items-center justify-center">
+                        {chatUnreadCount > 9 ? "9+" : chatUnreadCount}
+                      </span>
+                    )}
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      if (isSettingsOpen) return;
+                      const nextVal = !showNotifications;
+                      setShowNotifications(nextVal);
+                      setMobileMenuOpen(false);
+                      if (nextVal) setShowChat(false);
+                    }}
+                    className={`flex-1 relative flex items-center justify-center gap-2 p-3 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${
+                      isSettingsOpen ? "opacity-50 cursor-not-allowed" : ""
+                    } ${
+                      showNotifications
+                        ? "bg-primary/20 text-primary"
+                        : darkMode
+                        ? "bg-zinc-900/60 text-zinc-300 hover:bg-zinc-800"
+                        : "bg-zinc-100/70 text-black hover:bg-zinc-200"
+                    }`}
+                  >
+                    <Bell className="w-4 h-4" />
+                    <span>Avisos</span>
+                    {unreadCount > 0 && (
+                      <span className="absolute top-1.5 right-2.5 w-2 h-2 rounded-full bg-primary" />
+                    )}
+                  </button>
+
+                  {onOpenSettings && (
+                    <button
+                      onClick={() => {
+                        onOpenSettings();
+                        setMobileMenuOpen(false);
+                        setShowNotifications(false);
+                        setShowChat(false);
+                      }}
+                      className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-2xl text-xs font-semibold transition-all cursor-pointer ${
+                        isSettingsOpen
+                          ? "bg-primary/20 text-primary"
+                          : darkMode
+                          ? "bg-zinc-900/60 text-zinc-300 hover:bg-zinc-800"
+                          : "bg-zinc-100/70 text-black hover:bg-zinc-200"
+                      }`}
+                    >
+                      <Settings className="w-4 h-4" />
+                      <span>Ajustes</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Perfil / Cerrar sesión */}
+                <div className="pt-2.5 border-t border-zinc-200/50 dark:border-white/10 flex items-center justify-between">
+                  <div
+                    onClick={() => {
+                      if (onOpenSettings) onOpenSettings();
+                      setMobileMenuOpen(false);
+                      setShowNotifications(false);
+                    }}
+                    className="flex items-center gap-2.5 cursor-pointer"
+                  >
+                    {user?.photoURL ? (
+                      <img
+                        src={user.photoURL}
+                        alt={user.displayName || "Usuario"}
+                        className="w-8 h-8 rounded-full object-cover ring-2 ring-primary/30"
+                      />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs">
+                        {user?.displayName ? user.displayName.charAt(0).toUpperCase() : <User className="w-4 h-4" />}
+                      </div>
+                    )}
+                    <div className="flex flex-col">
+                      <span className="text-xs font-bold">{user?.displayName || "Usuario"}</span>
+                      <span className="text-[10px] text-zinc-500">{user?.email || "Sin email"}</span>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      onLogout();
+                      setMobileMenuOpen(false);
+                      setShowNotifications(false);
+                      setShowChat(false);
+                    }}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-red-500/10 text-red-500 dark:text-red-400 text-xs font-semibold"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Salir</span>
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* FILA DE SUB-PESTAÑAS (dentro de la misma cápsula). En mobile la fila principal de
             arriba (order-2) queda pegada abajo de todo, así que esta fila visualmente pasa a
@@ -895,83 +1064,6 @@ export default function TopNavbar({
             <SubPanelRow key={row.indicatorId} row={row} rowIndex={rowIndex} darkMode={darkMode} />
           ))}
         </AnimatePresence>
-
-        {/* Mobile Menu Backdrop Overlay & Floating Pop-up Card (Portal) */}
-        {createPortal(
-          <AnimatePresence>
-            {mobileMenuOpen && (
-              <motion.div
-                key="mobile-menu-backdrop-overlay"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0, transition: { duration: 0.35, ease: "easeInOut" } }}
-                transition={{ duration: 0.3, ease: "easeInOut" }}
-                onClick={() => setMobileMenuOpen(false)}
-                className="fixed inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-[3px] z-40 md:hidden cursor-pointer"
-              />
-            )}
-
-            {mobileMenuOpen && (
-              <motion.div
-                key="mobile-popup-menu-card"
-                initial={{ scale: 0.8, opacity: 0, y: 20 }}
-                animate={{ scale: 1, opacity: 1, y: 0 }}
-                exit={{ scale: 0.8, opacity: 0, y: 20, transition: { duration: 0.35, ease: [0.16, 1, 0.3, 1] } }}
-                transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-                className={`fixed bottom-[88px] left-1/2 -translate-x-1/2 w-[92%] max-w-lg p-4 rounded-3xl border shadow-2xl backdrop-blur-2xl transition-colors duration-200 z-50 md:hidden ${
-                  darkMode
-                    ? "bg-zinc-950/95 border-white/10 text-zinc-100"
-                    : "bg-white/95 border-slate-200 text-zinc-800"
-                }`}
-              >
-                {/* User Profile & Logout Mobile Row — el grid de secciones que antes vivía acá
-                    arriba se sacó: ahora se navega directo desde los íconos de la fila principal
-                    (pegada abajo de todo en mobile), así que este menú quedó solo para
-                    perfil/cerrar sesión. */}
-                <div className="flex items-center justify-between">
-                  <div
-                    onClick={() => {
-                      if (onOpenSettings) onOpenSettings();
-                      setMobileMenuOpen(false);
-                      setShowNotifications(false);
-                    }}
-                    className="flex items-center gap-2.5 cursor-pointer"
-                  >
-                    {user?.photoURL ? (
-                      <img
-                        src={user.photoURL}
-                        alt={user.displayName || "Usuario"}
-                        className="w-8 h-8 rounded-full object-cover ring-2 ring-primary/30"
-                      />
-                    ) : (
-                      <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs">
-                        {user?.displayName ? user.displayName.charAt(0).toUpperCase() : <User className="w-4 h-4" />}
-                      </div>
-                    )}
-                    <div className="flex flex-col">
-                      <span className="text-xs font-bold">{user?.displayName || "Usuario"}</span>
-                      <span className="text-[10px] text-zinc-500">{user?.email || "Sin email"}</span>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => {
-                      onLogout();
-                      setMobileMenuOpen(false);
-                      setShowNotifications(false);
-                      setShowChat(false);
-                    }}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-red-500/10 text-red-500 dark:text-red-400 text-xs font-semibold"
-                  >
-                    <LogOut className="w-3.5 h-3.5" />
-                    <span>Salir</span>
-                  </button>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>,
-          document.body
-        )}
 
         {/* NOTIFICATIONS EXPANDABLE PANEL (Seamlessly integrated into TopNavbar Capsule with Desktop Left Detail View) */}
         <AnimatePresence initial={false}>
