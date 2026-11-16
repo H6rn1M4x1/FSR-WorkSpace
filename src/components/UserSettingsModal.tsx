@@ -638,6 +638,15 @@ export function UserSettingsModal({
   const [showLeftArrow, setShowLeftArrow] = useState(false);
   const [showRightArrow, setShowRightArrow] = useState(true);
 
+  // El cuerpo scrolleable del modal (modalBodyRef) no se desmonta entre tab y tab, así que si
+  // quedaba scrolleado hacia abajo de una vista anterior, la siguiente apertura (o el siguiente
+  // tab) arrancaba a mitad de scroll, con la primera fila cortada arriba en vez de completa.
+  // Se resetea a 0 cada vez que el modal se abre o se cambia de pestaña.
+  const modalBodyRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (isOpen && modalBodyRef.current) modalBodyRef.current.scrollTop = 0;
+  }, [isOpen, activeTab]);
+
   const updateScrollButtons = () => {
     if (tabsRef.current) {
       const { scrollLeft, scrollWidth, clientWidth } = tabsRef.current;
@@ -1448,7 +1457,7 @@ export function UserSettingsModal({
             overflow-hidden del modal exterior (no este overflow-y-auto) terminaba recortando el
             final del formulario — por eso el scroll interno no dejaba llegar hasta el botón de
             "Guardar Datos Personales", quedaba cortado en vez de poder bajar hasta verlo entero. */}
-        <div className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6 space-y-6">
+        <div ref={modalBodyRef} className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6 space-y-6">
           {/* TAB 1: PROFILE & PERSONAL DATA */}
           {activeTab === "profile" && (
             <form onSubmit={handleSaveProfile} className="space-y-6">
