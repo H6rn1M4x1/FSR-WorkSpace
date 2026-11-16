@@ -1247,7 +1247,7 @@ export function UserSettingsModal({
             // igual que desktop) le deja al backdrop el aire suficiente para no terminar nunca
             // físicamente por detrás de la barra de navegación inferior, que creció de alto en
             // rondas recientes de esta misma sesión.
-            className={`w-full max-w-4xl rounded-3xl border shadow-2xl overflow-hidden flex flex-col max-h-[calc(100vh-10rem)] md:max-h-[calc(100vh-8.5rem)] ${
+            className={`relative w-full max-w-4xl rounded-3xl border shadow-2xl overflow-hidden flex flex-col max-h-[calc(100vh-10rem)] md:max-h-[calc(100vh-8.5rem)] ${
               darkMode
                 ? "bg-zinc-950 border-zinc-800 text-zinc-100"
                 : "bg-white border-zinc-200 text-zinc-900"
@@ -1304,8 +1304,8 @@ export function UserSettingsModal({
               onClick={() => scrollTabs("left")}
               className={`absolute left-0 z-10 h-full px-2.5 bg-gradient-to-r transition-all cursor-pointer flex items-center justify-center ${
                 darkMode
-                  ? "from-zinc-950 via-zinc-950/95 to-transparent text-zinc-400 hover:text-zinc-200"
-                  : "from-white via-white/95 to-transparent text-zinc-500 hover:text-zinc-800"
+                  ? "from-zinc-950/70 via-zinc-950/40 to-transparent text-zinc-400 hover:text-zinc-200"
+                  : "from-white/70 via-white/40 to-transparent text-zinc-500 hover:text-zinc-800"
               } ${["profile", "appearance", "health", "security", "backup"].indexOf(activeTab) === 0 ? "opacity-30 pointer-events-none" : ""}`}
               aria-label="Desplazar izquierda"
             >
@@ -1438,8 +1438,8 @@ export function UserSettingsModal({
               onClick={() => scrollTabs("right")}
               className={`absolute right-0 z-10 h-full px-2.5 bg-gradient-to-l transition-all cursor-pointer flex items-center justify-center ${
                 darkMode
-                  ? "from-zinc-950 via-zinc-950/95 to-transparent text-zinc-400 hover:text-zinc-200"
-                  : "from-white via-white/95 to-transparent text-zinc-500 hover:text-zinc-800"
+                  ? "from-zinc-950/70 via-zinc-950/40 to-transparent text-zinc-400 hover:text-zinc-200"
+                  : "from-white/70 via-white/40 to-transparent text-zinc-500 hover:text-zinc-800"
               } ${["profile", "health", "sharing", "appearance", "security", "backup"].indexOf(activeTab) === 5 ? "opacity-30 pointer-events-none" : ""}`}
               aria-label="Desplazar derecha"
             >
@@ -3414,6 +3414,14 @@ export function UserSettingsModal({
             </div>
           )}
         </div>
+
+        {/* Borde de cierre inferior — en vez de un difuminado, una línea clara que corta el
+            contenido antes de llegar al borde redondeado del modal. */}
+        <div
+          className={`shrink-0 border-t-2 ${
+            darkMode ? "border-white/15" : "border-slate-200"
+          }`}
+        />
       </motion.div>
     </motion.div>
       )}
