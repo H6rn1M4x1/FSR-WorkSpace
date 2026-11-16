@@ -627,7 +627,7 @@ export default function TopNavbar({
               espacio) — Universidad/Salud/Comidas/Notas se sacaron de acá y solo se llega a ellas
               desde el botón de grilla de al lado (ver "más secciones" más abajo), que ocupa el
               lugar justo después de Finanzas. */}
-          <nav className="flex items-center gap-1 bg-zinc-500/5 dark:bg-white/5 p-1 rounded-full border border-zinc-200/40 dark:border-white/5 relative flex-1 min-w-0 overflow-x-auto no-scrollbar md:flex-initial md:min-w-fit md:overflow-visible">
+          <nav className="flex items-center gap-1 bg-zinc-500/5 dark:bg-white/5 p-1 rounded-xl md:rounded-full border border-zinc-200/40 dark:border-white/5 relative flex-1 min-w-0 overflow-x-auto no-scrollbar md:flex-initial md:min-w-fit md:overflow-visible">
             {menuItems.map((item) => {
               const Icon = item.icon;
               const isActive = currentTab === item.id;
