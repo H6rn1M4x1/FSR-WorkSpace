@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence, useDragControls } from "motion/react";
 import {
   X,
   Loader2,
@@ -115,6 +115,9 @@ export function ExamModal({
   // momento. Solo se muestra si hay un examen existente (no al crear uno nuevo desde cero).
   onDeleteExam?: () => void;
 }) {
+  // Arrastre hacia abajo para cerrar (solo mobile, solo desde el agarre gris de arriba) — mismo
+  // patrón que DetailModal.tsx.
+  const dragControls = useDragControls();
   const [mode, setMode] = useState<Mode>(() =>
     existingExam ? (existingExam.status === "graded" ? "reviewing" : "answering") : "creating",
   );
@@ -338,11 +341,29 @@ export function ExamModal({
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.94, y: 10 }}
         transition={{ type: "spring", stiffness: 420, damping: 32, mass: 0.7 }}
+        drag="y"
+        dragControls={dragControls}
+        dragListener={false}
+        dragConstraints={{ top: 0, bottom: 0 }}
+        dragElastic={{ top: 0, bottom: 0.65 }}
+        onDragEnd={(_e, info) => {
+          if (info.offset.y > 120 || info.velocity.y > 500) onClose();
+        }}
         onClick={(e) => e.stopPropagation()}
         className={`w-full max-w-3xl h-[85vh] rounded-t-3xl sm:rounded-3xl border shadow-2xl flex flex-col overflow-hidden ${
             darkMode ? "bg-zinc-900 border-zinc-800 text-zinc-100" : "bg-white border-zinc-200 text-zinc-800"
           }`}
         >
+          <div
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              dragControls.start(e);
+            }}
+            className="w-full h-10 flex items-center justify-center sm:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none"
+          >
+            <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+          </div>
+
           <div
             className={`flex items-center justify-between gap-3 px-5 py-4 border-b shrink-0 ${
               darkMode ? "border-zinc-800" : "border-zinc-150"

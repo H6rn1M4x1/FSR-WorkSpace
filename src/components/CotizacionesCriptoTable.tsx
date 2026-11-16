@@ -5,7 +5,7 @@ import { TableSkeleton } from "./TableSkeleton";
 import { saveItemToFirestore, deleteItemFromFirestore } from "../lib/firestoreSyncService";
 import { auth } from "../lib/supabase";
 import React, { useState, useMemo, useEffect } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence, useDragControls } from "motion/react";
 import { createPortal } from "react-dom";
 import { ConfirmationModal } from "./ConfirmationModal";
 import { DetailModal, DetailBlock, DetailBlockGrid } from "./DetailModal";
@@ -81,6 +81,8 @@ export default function CotizacionesCriptoTable({
   const criptoTableLoading = useBriefLoading([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
+  // Arrastrar para cerrar (mobile), iniciado solo desde el agarre del modal.
+  const addModalDragControls = useDragControls();
   const [isSaving, setIsSaving] = useState(false);
   const [editingItem, setEditingItem] = useState<CotizacionCripto | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -839,6 +841,14 @@ export default function CotizacionesCriptoTable({
                 initial={{ scale: 0.95, opacity: 0, y: 10 }}
                 animate={{ scale: 1, opacity: 1, y: 0 }}
                 exit={{ scale: 0.95, opacity: 0, y: 10 }}
+                drag="y"
+                dragControls={addModalDragControls}
+                dragListener={false}
+                dragConstraints={{ top: 0, bottom: 0 }}
+                dragElastic={{ top: 0, bottom: 0.65 }}
+                onDragEnd={(_e, info) => {
+                  if (info.offset.y > 120 || info.velocity.y > 500) setShowAddModal(false);
+                }}
                 onClick={(e) => e.stopPropagation()}
                 className={`w-full sm:max-w-lg overflow-hidden rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col max-h-[92vh] sm:max-h-[90vh] ${
                   darkMode
@@ -846,6 +856,12 @@ export default function CotizacionesCriptoTable({
                     : "bg-white border border-slate-100"
                 }`}
               >
+                <div
+                  onPointerDown={(e) => { e.stopPropagation(); addModalDragControls.start(e); }}
+                  className="w-full h-10 flex items-center justify-center sm:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none"
+                >
+                  <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+                </div>
                 <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-zinc-800/40 bg-slate-50/50 dark:bg-[#0a0a0a] flex items-center justify-between shrink-0">
                   <div>
                     <h3 className="text-sm font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">

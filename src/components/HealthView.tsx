@@ -14,7 +14,7 @@ import React, { useState, useRef, useEffect, useMemo } from "react";
 import { subscribeToCategory, saveItemToFirestore, deleteItemFromFirestore } from "../lib/firestoreSyncService";
 import { addDeletedId, getDeletedIds } from "../lib/storage";
 import { auth } from "../lib/supabase";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence, useDragControls } from "motion/react";
 import { useToast } from "../context/ToastContext";
 import AnimatedList from "./AnimatedList";
 import { PillFilterBar } from "./PillFilterBar";
@@ -617,6 +617,20 @@ export default function HealthView({
   const [expandedDispId, setExpandedDispId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Controles de arrastre para cerrar (gesto "deslizar hacia abajo") de los menús de
+  // agregar/editar de esta vista — uno por modal, igual que DetailModal.
+  const dragControlsModal1 = useDragControls();
+  const dragControlsModal2 = useDragControls();
+  const dragControlsModal3 = useDragControls();
+  const dragControlsModal4 = useDragControls();
+  const dragControlsModal5 = useDragControls();
+  const dragControlsModal6 = useDragControls();
+  const dragControlsModal7 = useDragControls();
+  const dragControlsModal8 = useDragControls();
+  const dragControlsModal9 = useDragControls();
+  const dragControlsModal10 = useDragControls();
+  const dragControlsModal11 = useDragControls();
 
   const userId =(userEmail || auth.currentUser?.email || auth.currentUser?.uid || "hernanmaximiliano10@gmail.com").toLowerCase().trim();
 
@@ -7677,9 +7691,26 @@ export default function HealthView({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 15 }}
                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                drag="y"
+                dragControls={dragControlsModal1}
+                dragListener={false}
+                dragConstraints={{ top: 0, bottom: 0 }}
+                dragElastic={{ top: 0, bottom: 0.65 }}
+                onDragEnd={(_e, info) => {
+                  if (info.offset.y > 120 || info.velocity.y > 500) {
+                    setShowBpTableModal(false);
+                    setEditingBpLogItem(null);
+                  }
+                }}
                 onClick={(e) => e.stopPropagation()}
                 className="w-full max-w-lg max-h-[85vh] flex flex-col bg-white dark:bg-black/85 backdrop-blur-md rounded-t-3xl sm:rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
               >
+              <div
+                onPointerDown={(e) => { e.stopPropagation(); dragControlsModal1.start(e); }}
+                className="w-full h-8 flex items-center justify-center sm:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none"
+              >
+                <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+              </div>
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-zinc-800/40 bg-white dark:bg-black/85 backdrop-blur-md">
                 <h3 className="text-lg font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
                   <Activity className="w-5 h-5 text-primary" />
@@ -7841,9 +7872,26 @@ export default function HealthView({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 15 }}
                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                drag="y"
+                dragControls={dragControlsModal2}
+                dragListener={false}
+                dragConstraints={{ top: 0, bottom: 0 }}
+                dragElastic={{ top: 0, bottom: 0.65 }}
+                onDragEnd={(_e, info) => {
+                  if (info.offset.y > 120 || info.velocity.y > 500) {
+                    setShowEstudioModal(false);
+                    setEditingEstudio(null);
+                  }
+                }}
                 onClick={(e) => e.stopPropagation()}
                 className="w-full max-w-lg max-h-[85vh] flex flex-col bg-white dark:bg-black/85 backdrop-blur-md rounded-t-3xl sm:rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
               >
+              <div
+                onPointerDown={(e) => { e.stopPropagation(); dragControlsModal2.start(e); }}
+                className="w-full h-8 flex items-center justify-center sm:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none"
+              >
+                <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+              </div>
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-zinc-800/40 bg-white dark:bg-black/85 backdrop-blur-md">
                 <h3 className="text-lg font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
                   <FileText className="w-5 h-5 text-primary" />
@@ -8129,9 +8177,26 @@ export default function HealthView({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 15 }}
                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                drag="y"
+                dragControls={dragControlsModal3}
+                dragListener={false}
+                dragConstraints={{ top: 0, bottom: 0 }}
+                dragElastic={{ top: 0, bottom: 0.65 }}
+                onDragEnd={(_e, info) => {
+                  if (info.offset.y > 120 || info.velocity.y > 500) {
+                    setShowDocModal(false);
+                    setEditingDoc(null);
+                  }
+                }}
                 onClick={(e) => e.stopPropagation()}
                 className="w-full max-w-lg max-h-[85vh] flex flex-col bg-white dark:bg-black/85 backdrop-blur-md rounded-t-3xl sm:rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
               >
+              <div
+                onPointerDown={(e) => { e.stopPropagation(); dragControlsModal3.start(e); }}
+                className="w-full h-8 flex items-center justify-center sm:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none"
+              >
+                <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+              </div>
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-zinc-800/40 bg-white dark:bg-black/85 backdrop-blur-md">
                 <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">
                   {editingDoc ? "Editar Profesional" : "Registrar Profesional"}
@@ -8272,9 +8337,26 @@ export default function HealthView({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 15 }}
                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                drag="y"
+                dragControls={dragControlsModal4}
+                dragListener={false}
+                dragConstraints={{ top: 0, bottom: 0 }}
+                dragElastic={{ top: 0, bottom: 0.65 }}
+                onDragEnd={(_e, info) => {
+                  if (info.offset.y > 120 || info.velocity.y > 500) {
+                    setShowDispModal(false);
+                    setEditingDisp(null);
+                  }
+                }}
                 onClick={(e) => e.stopPropagation()}
                 className="w-full max-w-sm max-h-[85vh] flex flex-col bg-white dark:bg-black/85 backdrop-blur-md rounded-t-3xl sm:rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
               >
+              <div
+                onPointerDown={(e) => { e.stopPropagation(); dragControlsModal4.start(e); }}
+                className="w-full h-8 flex items-center justify-center sm:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none"
+              >
+                <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+              </div>
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-zinc-800/40 bg-white dark:bg-black/85 backdrop-blur-md">
                 <h3 className="text-lg font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
                   <Pill className="w-5 h-5 text-primary" />
@@ -8422,9 +8504,23 @@ export default function HealthView({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 15 }}
                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                drag="y"
+                dragControls={dragControlsModal5}
+                dragListener={false}
+                dragConstraints={{ top: 0, bottom: 0 }}
+                dragElastic={{ top: 0, bottom: 0.65 }}
+                onDragEnd={(_e, info) => {
+                  if (info.offset.y > 120 || info.velocity.y > 500) setShowActividadModal(false);
+                }}
                 onClick={(e) => e.stopPropagation()}
                 className="w-full max-w-lg max-h-[85vh] flex flex-col bg-white dark:bg-black/85 backdrop-blur-md/95 dark:backdrop-blur-md rounded-t-3xl sm:rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
               >
+              <div
+                onPointerDown={(e) => { e.stopPropagation(); dragControlsModal5.start(e); }}
+                className="w-full h-8 flex items-center justify-center sm:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none"
+              >
+                <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+              </div>
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-zinc-800/40 bg-white/95 dark:bg-black/95 backdrop-blur-md">
                 <h3 className="text-lg font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
                   <Activity className="w-5 h-5 text-primary" />
@@ -8642,9 +8738,26 @@ export default function HealthView({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 15 }}
                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                drag="y"
+                dragControls={dragControlsModal6}
+                dragListener={false}
+                dragConstraints={{ top: 0, bottom: 0 }}
+                dragElastic={{ top: 0, bottom: 0.65 }}
+                onDragEnd={(_e, info) => {
+                  if (info.offset.y > 120 || info.velocity.y > 500) {
+                    setShowDetailedModal(false);
+                    setEditingMed(null);
+                  }
+                }}
                 onClick={(e) => e.stopPropagation()}
                 className="w-full max-w-lg max-h-[85vh] flex flex-col bg-white dark:bg-black/85 backdrop-blur-md rounded-t-3xl sm:rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
               >
+              <div
+                onPointerDown={(e) => { e.stopPropagation(); dragControlsModal6.start(e); }}
+                className="w-full h-8 flex items-center justify-center sm:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none"
+              >
+                <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+              </div>
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-zinc-800/40 bg-white dark:bg-black/85 backdrop-blur-md">
                 <h3 className="text-lg font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
                   <Pill className="w-5 h-5 text-primary" />
@@ -8923,6 +9036,14 @@ export default function HealthView({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 15 }}
                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                drag="y"
+                dragControls={dragControlsModal7}
+                dragListener={false}
+                dragConstraints={{ top: 0, bottom: 0 }}
+                dragElastic={{ top: 0, bottom: 0.65 }}
+                onDragEnd={(_e, info) => {
+                  if (info.offset.y > 120 || info.velocity.y > 500) setShowAddMed(false);
+                }}
                 onClick={(e) => e.stopPropagation()}
                 className={`w-full max-w-md p-6 rounded-t-3xl sm:rounded-3xl border shadow-2xl space-y-4 cursor-default ${
                   darkMode
@@ -8930,6 +9051,12 @@ export default function HealthView({
                     : "bg-white border-zinc-200 text-zinc-800"
                 }`}
               >
+              <div
+                onPointerDown={(e) => { e.stopPropagation(); dragControlsModal7.start(e); }}
+                className="w-full h-10 flex items-center justify-center sm:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none -mt-6 -mx-6 mb-2"
+              >
+                <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+              </div>
               <h3 className="font-extrabold text-lg">Agregar Medicamento</h3>
               <form onSubmit={handleAddMedication} className="space-y-3.5">
                 <div>
@@ -9037,9 +9164,23 @@ export default function HealthView({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 15 }}
                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                drag="y"
+                dragControls={dragControlsModal8}
+                dragListener={false}
+                dragConstraints={{ top: 0, bottom: 0 }}
+                dragElastic={{ top: 0, bottom: 0.65 }}
+                onDragEnd={(_e, info) => {
+                  if (info.offset.y > 120 || info.velocity.y > 500) setShowAddBp(false);
+                }}
                 onClick={(e) => e.stopPropagation()}
                 className="w-full max-w-md max-h-[85vh] flex flex-col bg-white dark:bg-black/85 backdrop-blur-md rounded-t-3xl sm:rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
               >
+              <div
+                onPointerDown={(e) => { e.stopPropagation(); dragControlsModal8.start(e); }}
+                className="w-full h-8 flex items-center justify-center sm:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none"
+              >
+                <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+              </div>
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-zinc-800/40 bg-white dark:bg-black/85 backdrop-blur-md">
                 <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">Registrar Medición</h3>
                 <button
@@ -9171,9 +9312,23 @@ export default function HealthView({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 15 }}
                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                drag="y"
+                dragControls={dragControlsModal9}
+                dragListener={false}
+                dragConstraints={{ top: 0, bottom: 0 }}
+                dragElastic={{ top: 0, bottom: 0.65 }}
+                onDragEnd={(_e, info) => {
+                  if (info.offset.y > 120 || info.velocity.y > 500) setShowAddDoc(false);
+                }}
                 onClick={(e) => e.stopPropagation()}
                 className="w-full max-w-lg max-h-[85vh] flex flex-col bg-white dark:bg-black/85 backdrop-blur-md rounded-t-3xl sm:rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
               >
+              <div
+                onPointerDown={(e) => { e.stopPropagation(); dragControlsModal9.start(e); }}
+                className="w-full h-8 flex items-center justify-center sm:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none"
+              >
+                <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+              </div>
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-zinc-800/40 bg-white dark:bg-black/85 backdrop-blur-md">
                 <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">Agregar Profesional</h3>
                 <button
@@ -9461,6 +9616,14 @@ export default function HealthView({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
+              drag="y"
+              dragControls={dragControlsModal10}
+              dragListener={false}
+              dragConstraints={{ top: 0, bottom: 0 }}
+              dragElastic={{ top: 0, bottom: 0.65 }}
+              onDragEnd={(_e, info) => {
+                if (info.offset.y > 120 || info.velocity.y > 500) setShowProfileModal(false);
+              }}
               onClick={(e) => e.stopPropagation()}
               className={`w-full max-w-sm rounded-t-3xl sm:rounded-3xl border p-6 shadow-2xl relative transition-all cursor-default ${
                 darkMode
@@ -9468,6 +9631,12 @@ export default function HealthView({
                   : "bg-white border-zinc-200 text-zinc-800 shadow-slate-200"
               }`}
             >
+              <div
+                onPointerDown={(e) => { e.stopPropagation(); dragControlsModal10.start(e); }}
+                className="w-full h-10 flex items-center justify-center sm:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none -mt-6 -mx-6 mb-2"
+              >
+                <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+              </div>
               <button
                 onClick={() => setShowProfileModal(false)}
                 className="absolute top-5 right-5 p-1.5 rounded-xl hover:bg-zinc-500/10 text-zinc-400 hover:text-zinc-500 dark:hover:text-zinc-200 cursor-pointer transition-colors"
@@ -9630,6 +9799,14 @@ export default function HealthView({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
+              drag="y"
+              dragControls={dragControlsModal11}
+              dragListener={false}
+              dragConstraints={{ top: 0, bottom: 0 }}
+              dragElastic={{ top: 0, bottom: 0.65 }}
+              onDragEnd={(_e, info) => {
+                if (info.offset.y > 120 || info.velocity.y > 500) setShowMedidasModal(false);
+              }}
               onClick={(e) => e.stopPropagation()}
               className={`w-full max-w-sm rounded-t-3xl sm:rounded-3xl border p-6 shadow-2xl relative transition-all cursor-default ${
                 darkMode
@@ -9637,6 +9814,12 @@ export default function HealthView({
                   : "bg-white border-zinc-200 text-zinc-800 shadow-slate-200"
               }`}
             >
+              <div
+                onPointerDown={(e) => { e.stopPropagation(); dragControlsModal11.start(e); }}
+                className="w-full h-10 flex items-center justify-center sm:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none -mt-6 -mx-6 mb-2"
+              >
+                <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+              </div>
               <button
                 onClick={() => setShowMedidasModal(false)}
                 className="absolute top-5 right-5 p-1.5 rounded-xl hover:bg-zinc-500/10 text-zinc-400 hover:text-zinc-500 dark:hover:text-zinc-200 cursor-pointer transition-colors"

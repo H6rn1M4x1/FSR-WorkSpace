@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, useDragControls } from "motion/react";
 import {
   MapPin,
   ExternalLink,
@@ -660,6 +660,9 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
   // "Deportes que seguís" now lives in a Guardar/Cancelar modal instead of writing to
   // Firestore on every click — all edits happen on this local draft, committed only on Guardar.
   const [sportsModalOpen, setSportsModalOpen] = useState(false);
+  // Controla el arrastre hacia abajo para cerrar el modal (solo mobile, solo desde su agarre
+  // gris): dragListener={false} en el panel + dragControls.start() en el agarre.
+  const dragControlsSportsModal = useDragControls();
   const [draftPrefs, setDraftPrefs] = useState<EventPreferences | null>(null);
   // Id (índice dentro de la página actual) de la tarjeta de "Eventos del Día" expandida en el
   // DetailModal — estos eventos no tienen un id propio, así que se identifican por posición.
@@ -1272,7 +1275,26 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
       {sportsModalOpen && draftPrefs && createPortal(
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-6">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={cancelSportsModal} />
-          <div className={`relative w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl border p-4 sm:p-6 space-y-4 force-solid-bg animate-sheet-in ${darkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-slate-200"}`}>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.97, y: 24 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ type: "spring", stiffness: 380, damping: 32, mass: 0.8 }}
+            drag="y"
+            dragControls={dragControlsSportsModal}
+            dragListener={false}
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0, bottom: 0.65 }}
+            onDragEnd={(_e, info) => {
+              if (info.offset.y > 120 || info.velocity.y > 500) cancelSportsModal();
+            }}
+            className={`relative w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl border p-4 sm:p-6 space-y-4 force-solid-bg ${darkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-slate-200"}`}
+          >
+            <div
+              onPointerDown={(e) => { e.stopPropagation(); dragControlsSportsModal.start(e); }}
+              className="w-full h-6 flex items-center justify-center sm:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none"
+            >
+              <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+            </div>
             <div className="flex items-center justify-between gap-2">
               <h3 className="font-extrabold text-sm flex items-center gap-2">
                 <Trophy className="w-4 h-4 text-primary" /> Deportes que seguís
@@ -1479,7 +1501,7 @@ export function EventsView({ userId, darkMode = false, turnosCompromisos, setTur
                 Guardar
               </button>
             </div>
-          </div>
+          </motion.div>
         </div>,
         document.body
       )}

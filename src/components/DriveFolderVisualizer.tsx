@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useContext, useMemo } from "react";
 import AnimatedFolder from "./AnimatedFolder";
 import { PdfHighlightViewer } from "./PdfHighlightViewer";
 import { createPortal } from "react-dom";
+import { motion, useDragControls } from "motion/react";
 import {
   Folder,
   FolderOpen,
@@ -443,6 +444,12 @@ export default function DriveFolderVisualizer({
   const [searchQuery, setSearchQuery] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Arrastre hacia abajo para cerrar (solo mobile, solo desde el agarre gris de arriba) — mismo
+  // patrón que DetailModal.tsx. Uno por modal, no se comparten.
+  const createFolderDragControls = useDragControls();
+  const createDocDragControls = useDragControls();
+  const renameDragControls = useDragControls();
 
   // Modals & Forms State
   const [showCreateFolderModal, setShowCreateFolderModal] = useState(false);
@@ -3694,13 +3701,36 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
       {showCreateFolderModal &&
         createPortal(
           <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-zinc-950/60 backdrop-blur-xs">
-            <div
-              className={`animate-sheet-in w-full max-w-sm rounded-t-3xl sm:rounded-3xl p-6 border shadow-2xl ${
+            <motion.div
+              initial={{ opacity: 0, scale: 0.97, y: 24 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              transition={{ type: "spring", stiffness: 380, damping: 32, mass: 0.8 }}
+              drag="y"
+              dragControls={createFolderDragControls}
+              dragListener={false}
+              dragConstraints={{ top: 0, bottom: 0 }}
+              dragElastic={{ top: 0, bottom: 0.65 }}
+              onDragEnd={(_e, info) => {
+                if (info.offset.y > 120 || info.velocity.y > 500) {
+                  setShowCreateFolderModal(false);
+                  setNewFolderName("");
+                }
+              }}
+              className={`w-full max-w-sm rounded-t-3xl sm:rounded-3xl p-6 border shadow-2xl ${
                 darkMode
                   ? "bg-zinc-950 border-zinc-800 text-zinc-100"
                   : "bg-white border-zinc-200 text-zinc-800"
               }`}
             >
+              <div
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  createFolderDragControls.start(e);
+                }}
+                className="w-full h-10 flex items-center justify-center sm:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none"
+              >
+                <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+              </div>
               <h3 className="text-sm font-bold mb-4">
                 Nueva Carpeta de Facultad
               </h3>
@@ -3736,7 +3766,7 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
                   </button>
                 </div>
               </form>
-            </div>
+            </motion.div>
           </div>,
           document.body,
         )}
@@ -3745,13 +3775,36 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
       {showCreateDocModal &&
         createPortal(
           <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-zinc-950/60 backdrop-blur-xs">
-            <div
-              className={`animate-sheet-in w-full max-w-sm rounded-t-3xl sm:rounded-3xl p-6 border shadow-2xl ${
+            <motion.div
+              initial={{ opacity: 0, scale: 0.97, y: 24 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              transition={{ type: "spring", stiffness: 380, damping: 32, mass: 0.8 }}
+              drag="y"
+              dragControls={createDocDragControls}
+              dragListener={false}
+              dragConstraints={{ top: 0, bottom: 0 }}
+              dragElastic={{ top: 0, bottom: 0.65 }}
+              onDragEnd={(_e, info) => {
+                if (info.offset.y > 120 || info.velocity.y > 500) {
+                  setShowCreateDocModal(false);
+                  setNewDocName("");
+                }
+              }}
+              className={`w-full max-w-sm rounded-t-3xl sm:rounded-3xl p-6 border shadow-2xl ${
                 darkMode
                   ? "bg-zinc-950 border-zinc-800 text-zinc-100"
                   : "bg-white border-zinc-200 text-zinc-800"
               }`}
             >
+              <div
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  createDocDragControls.start(e);
+                }}
+                className="w-full h-10 flex items-center justify-center sm:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none"
+              >
+                <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+              </div>
               <h3 className="text-sm font-bold mb-4">
                 Crear Nuevo Apunte o Planilla
               </h3>
@@ -3839,7 +3892,7 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
                   </button>
                 </div>
               </form>
-            </div>
+            </motion.div>
           </div>,
           document.body,
         )}
@@ -3849,13 +3902,36 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
         renameTarget &&
         createPortal(
           <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-zinc-950/60 backdrop-blur-xs">
-            <div
-              className={`animate-sheet-in w-full max-w-sm rounded-t-3xl sm:rounded-3xl p-6 border shadow-2xl ${
+            <motion.div
+              initial={{ opacity: 0, scale: 0.97, y: 24 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              transition={{ type: "spring", stiffness: 380, damping: 32, mass: 0.8 }}
+              drag="y"
+              dragControls={renameDragControls}
+              dragListener={false}
+              dragConstraints={{ top: 0, bottom: 0 }}
+              dragElastic={{ top: 0, bottom: 0.65 }}
+              onDragEnd={(_e, info) => {
+                if ((info.offset.y > 120 || info.velocity.y > 500) && !isRenaming) {
+                  setShowRenameModal(false);
+                  setRenameTarget(null);
+                }
+              }}
+              className={`w-full max-w-sm rounded-t-3xl sm:rounded-3xl p-6 border shadow-2xl ${
                 darkMode
                   ? "bg-zinc-950 border-zinc-800 text-zinc-100"
                   : "bg-white border-zinc-200 text-zinc-800"
               }`}
             >
+              <div
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  renameDragControls.start(e);
+                }}
+                className="w-full h-10 flex items-center justify-center sm:hidden shrink-0 cursor-grab active:cursor-grabbing touch-none"
+              >
+                <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+              </div>
               <h3 className="text-sm font-bold mb-4">
                 Cambiar nombre del Archivo
               </h3>
@@ -3901,7 +3977,7 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
                   </button>
                 </div>
               </form>
-            </div>
+            </motion.div>
           </div>,
           document.body,
         )}
