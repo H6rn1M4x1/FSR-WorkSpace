@@ -470,8 +470,8 @@ export default function TopNavbar({
     };
   }, [showNotifications, showChat]);
 
-  const currentSubMenu = isSettingsOpen || mobileMenuOpen ? [] : (SUBMENUS_BY_TAB[currentTab] || []);
-  const effectiveSubPanelRows = isSettingsOpen || mobileMenuOpen ? null : subPanelRows;
+  const currentSubMenu = isSettingsOpen || mobileMenuOpen || showChat || showNotifications ? [] : (SUBMENUS_BY_TAB[currentTab] || []);
+  const effectiveSubPanelRows = isSettingsOpen || mobileMenuOpen || showChat || showNotifications ? null : subPanelRows;
 
   const [showLeftArrow, setShowLeftArrow] = useState(false);
   const [showRightArrow, setShowRightArrow] = useState(false);
