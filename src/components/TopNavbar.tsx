@@ -644,7 +644,7 @@ export default function TopNavbar({
                     // sobre la nueva página.
                     if (isSettingsOpen && onOpenSettings) onOpenSettings();
                   }}
-                  className={`${onlyDesktop ? "hidden md:flex" : "flex"} flex-1 md:flex-none md:shrink-0 relative items-center justify-center md:justify-start gap-2 p-3 md:px-3.5 md:py-1.5 rounded-lg md:rounded-full text-xs font-semibold transition-colors duration-300 cursor-pointer whitespace-nowrap z-10 ${
+                  className={`${onlyDesktop ? "hidden md:flex" : "flex"} flex-1 md:flex-none md:shrink-0 relative items-center justify-center md:justify-start gap-2 p-3 md:px-3.5 md:py-1.5 rounded-xl md:rounded-full text-xs font-semibold transition-colors duration-300 cursor-pointer whitespace-nowrap z-10 ${
                     isActive
                       ? `text-white dark:text-zinc-950 font-bold ${!darkMode ? "active-nav-pill-light" : ""}`
                       : darkMode
@@ -655,7 +655,7 @@ export default function TopNavbar({
                   {isActive && (
                     <motion.div
                       layoutId="activeMainNavPill"
-                      className="absolute inset-0 rounded-lg md:rounded-full bg-primary shadow-md -z-10"
+                      className="absolute inset-0 rounded-xl md:rounded-full bg-primary shadow-md -z-10"
                       transition={{ type: "spring", stiffness: 220, damping: 26 }}
                     />
                   )}
@@ -680,7 +680,7 @@ export default function TopNavbar({
                   onOpenSettings();
                 }
               }}
-              className={`md:hidden flex-1 flex items-center justify-center p-3 rounded-lg transition-colors duration-300 cursor-pointer ${
+              className={`md:hidden flex-1 flex items-center justify-center p-3 rounded-xl transition-colors duration-300 cursor-pointer ${
                 mobileMenuOpen
                   ? `bg-primary shadow-md text-white dark:text-zinc-950 font-bold ${!darkMode ? "active-nav-pill-light" : ""}`
                   : darkMode
@@ -715,7 +715,7 @@ export default function TopNavbar({
                   setMobileMenuOpen(false);
                   setShowNotifications(false);
                 }}
-                className={`md:hidden shrink-0 flex items-center justify-center p-3 rounded-full shadow-md transition-colors cursor-pointer text-white dark:text-zinc-950 ${
+                className={`md:hidden shrink-0 flex items-center justify-center p-3 rounded-xl shadow-md transition-colors cursor-pointer text-white dark:text-zinc-950 ${
                   quickAddMenuOpen ? "bg-primary-hover" : "bg-primary hover:bg-primary-hover"
                 }`}
                 title="Agendar un turno, pago, examen, medicamento o comida planificada"
