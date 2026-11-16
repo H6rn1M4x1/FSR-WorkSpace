@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence, useDragControls } from "motion/react";
 import {
   MessageCircle,
   Send,
@@ -150,6 +150,12 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
   const barRefs = useRef<Array<HTMLDivElement | null>>([]);
   const rafRef = useRef<number | null>(null);
   const isTouchDevice = typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)")?.matches;
+
+  // Arrastrar hacia abajo para cerrar el panel (solo mobile, solo desde el agarre de arriba) —
+  // mismo patrón que DetailModal.tsx: dragListener={false} acá + dragControls.start() en el
+  // agarre, para que arrastrar desde la lista de contactos o los mensajes (que tienen su propio
+  // scroll) no mueva el panel entero.
+  const dragControls = useDragControls();
 
   // These two subscriptions stay alive for as long as this component is mounted (i.e. for as
   // long as TopNavbar itself is mounted), regardless of `isOpen` — that's what lets the unread
@@ -776,13 +782,32 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
           animate={{ opacity: 1, height: "auto" }}
           exit={{ opacity: 0, height: 0 }}
           transition={{ duration: 0.2, ease: "easeInOut" }}
+          drag="y"
+          dragControls={dragControls}
+          dragListener={false}
+          dragConstraints={{ top: 0, bottom: 0 }}
+          dragElastic={{ top: 0, bottom: 0.65 }}
+          onDragEnd={(_e, info) => {
+            if (info.offset.y > 120 || info.velocity.y > 500) onClose();
+          }}
           className="w-full overflow-hidden"
         >
-          <div className="w-full border-t border-zinc-200/60 dark:border-white/10 pt-3 mt-2">
+          {/* Agarre para cerrar deslizando hacia abajo — solo mobile. */}
+          <div
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              dragControls.start(e);
+            }}
+            className="w-full h-7 flex items-center justify-center md:hidden cursor-grab active:cursor-grabbing touch-none"
+          >
+            <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+          </div>
+
+          <div className="w-full border-t border-zinc-200/60 dark:border-white/10 pt-3 mt-2 pb-2 md:pb-0">
             {/* En mobile ocupa casi toda la altura disponible debajo del navbar (en vez de una
                 cajita chica) — 130px cubre la fila de navegación + los paddings del capsule de
                 arriba. En desktop vuelve al alto fijo de siempre. */}
-            <div className="w-full flex flex-col md:flex-row items-stretch gap-3 h-[calc(100dvh-130px)] max-h-[720px] md:h-[440px] md:max-h-none">
+            <div className="w-full flex flex-col md:flex-row items-stretch gap-3 h-[calc(100dvh-165px)] max-h-[720px] md:h-[440px] md:max-h-none">
               {/* LEFT: Contacts */}
               <div className={`w-full md:w-72 shrink-0 flex flex-col min-h-0 ${showMobileConversation ? "hidden md:flex" : "flex"}`}>
                 <div className="flex items-center justify-between px-1 pb-2 shrink-0">
@@ -1090,8 +1115,9 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                         type="button"
                         onClick={() => setShowMobileConversation(false)}
                         className="md:hidden p-1 rounded-full hover:bg-zinc-200/60 dark:hover:bg-zinc-800 cursor-pointer text-zinc-500"
+                        title="Volver a la lista de contactos"
                       >
-                        <X className="w-3.5 h-3.5" />
+                        <ChevronLeft className="w-4 h-4" />
                       </button>
                       {profiles[selectedEmail]?.photoURL ? (
                         <img

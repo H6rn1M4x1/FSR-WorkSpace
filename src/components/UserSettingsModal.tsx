@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import { useToast } from "../context/ToastContext";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence, useDragControls } from "motion/react";
 import { createPortal } from "react-dom";
 import { Eye, EyeOff } from "lucide-react";
 import { SmartDateTimePicker } from "./SmartDateTimePicker";
@@ -426,6 +426,9 @@ export function UserSettingsModal({
 }: UserSettingsModalProps) {
   useLockBodyScroll(isOpen);
   const { showToast } = useToast();
+  // Arrastrar hacia abajo para cerrar (solo mobile, solo desde el agarre de arriba) — mismo
+  // patrón que DetailModal.tsx y ChatPanel.tsx.
+  const dragControls = useDragControls();
   const [activeTab, setActiveTab] = useState<
     "profile" | "health" | "sharing" | "appearance" | "security" | "backup" | "notifications"
   >("profile");
@@ -1213,6 +1216,14 @@ export function UserSettingsModal({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 15 }}
             transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+            drag="y"
+            dragControls={dragControls}
+            dragListener={false}
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0, bottom: 0.65 }}
+            onDragEnd={(_e, info) => {
+              if (info.offset.y > 120 || info.velocity.y > 500) onClose();
+            }}
             onClick={(e) => e.stopPropagation()}
             // max-h se calcula contra el espacio REAL disponible (viewport menos el padding fijo
             // de arriba/abajo del backdrop: pt-16/24 + pb-10), no contra el viewport completo
@@ -1230,6 +1241,17 @@ export function UserSettingsModal({
                 : "bg-white border-zinc-200 text-zinc-900"
             }`}
           >
+        {/* Agarre para cerrar deslizando hacia abajo — solo mobile. */}
+        <div
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            dragControls.start(e);
+          }}
+          className="w-full h-7 flex items-center justify-center md:hidden cursor-grab active:cursor-grabbing touch-none shrink-0"
+        >
+          <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+        </div>
+
         {/* Modal Header */}
         <div className="px-6 py-4 border-b border-inherit flex items-center justify-between bg-slate-50 dark:bg-zinc-900/60 shrink-0">
           <div className="flex items-center gap-3">
