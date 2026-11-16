@@ -3693,9 +3693,9 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
       {/* MODAL: Create Folder */}
       {showCreateFolderModal &&
         createPortal(
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/60 backdrop-blur-xs">
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-zinc-950/60 backdrop-blur-xs">
             <div
-              className={`w-full max-w-sm rounded-3xl p-6 border shadow-2xl ${
+              className={`animate-sheet-in w-full max-w-sm rounded-t-3xl sm:rounded-3xl p-6 border shadow-2xl ${
                 darkMode
                   ? "bg-zinc-950 border-zinc-800 text-zinc-100"
                   : "bg-white border-zinc-200 text-zinc-800"
@@ -3744,9 +3744,9 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
       {/* MODAL: Create Document / Sheet / Slide */}
       {showCreateDocModal &&
         createPortal(
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/60 backdrop-blur-xs">
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-zinc-950/60 backdrop-blur-xs">
             <div
-              className={`w-full max-w-sm rounded-3xl p-6 border shadow-2xl ${
+              className={`animate-sheet-in w-full max-w-sm rounded-t-3xl sm:rounded-3xl p-6 border shadow-2xl ${
                 darkMode
                   ? "bg-zinc-950 border-zinc-800 text-zinc-100"
                   : "bg-white border-zinc-200 text-zinc-800"
@@ -3848,9 +3848,9 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
       {showRenameModal &&
         renameTarget &&
         createPortal(
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/60 backdrop-blur-xs">
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-zinc-950/60 backdrop-blur-xs">
             <div
-              className={`w-full max-w-sm rounded-3xl p-6 border shadow-2xl ${
+              className={`animate-sheet-in w-full max-w-sm rounded-t-3xl sm:rounded-3xl p-6 border shadow-2xl ${
                 darkMode
                   ? "bg-zinc-950 border-zinc-800 text-zinc-100"
                   : "bg-white border-zinc-200 text-zinc-800"

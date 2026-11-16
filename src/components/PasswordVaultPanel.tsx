@@ -844,9 +844,9 @@ export function PasswordVaultPanel({
         {/* Add/Edit modal — portaled to <body> so it's fixed to the real viewport, not to
             whatever animated (transformed) ancestor happens to wrap this panel. */}
         {editingItem && createPortal(
-          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-sm">
             <div
-              className={`w-full max-w-md rounded-2xl border p-5 space-y-3 ${
+              className={`animate-sheet-in w-full max-w-md rounded-t-2xl sm:rounded-2xl border p-5 space-y-3 ${
                 darkMode ? "bg-zinc-950 border-zinc-800" : "bg-white border-zinc-200"
               }`}
             >

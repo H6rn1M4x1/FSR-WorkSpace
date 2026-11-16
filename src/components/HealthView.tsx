@@ -5777,9 +5777,9 @@ export default function HealthView({
                     visual que el Calendario de Exámenes y Trabajos: a la izquierda se ve, de solo
                     lectura, el resumen del día elegido (hoy por defecto) y a la derecha se elige
                     el día tocándolo (doble click abre el detalle completo, con gym/deporte). */}
-                <div className="lg:flex lg:gap-6 lg:items-start">
+                <div className="flex flex-col lg:flex-row lg:gap-6 lg:items-start">
                   <div
-                    className={`w-full lg:w-[320px] shrink-0 mb-6 lg:mb-0 rounded-2xl border p-4 space-y-3 ${
+                    className={`order-2 lg:order-1 w-full lg:w-[320px] shrink-0 mt-6 lg:mt-0 lg:mb-0 rounded-2xl border p-4 space-y-3 ${
                       darkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-slate-200"
                     }`}
                   >
@@ -5847,7 +5847,7 @@ export default function HealthView({
                     })()}
                   </div>
 
-                  <div className="flex-1 min-w-0">
+                  <div className="order-1 lg:order-2 flex-1 min-w-0">
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-5">
                       <div className="min-w-0">
                         <h3 className="font-extrabold text-sm flex items-center gap-2">
@@ -7670,7 +7670,7 @@ export default function HealthView({
                 setShowBpTableModal(false);
                 setEditingBpLogItem(null);
               }}
-              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm cursor-pointer"
+              className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm cursor-pointer"
             >
               <motion.div
                 initial={{ opacity: 0, scale: 0.95, y: 15 }}
@@ -7678,7 +7678,7 @@ export default function HealthView({
                 exit={{ opacity: 0, scale: 0.95, y: 15 }}
                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
                 onClick={(e) => e.stopPropagation()}
-                className="w-full max-w-lg max-h-[85vh] flex flex-col bg-white dark:bg-black/85 backdrop-blur-md rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
+                className="w-full max-w-lg max-h-[85vh] flex flex-col bg-white dark:bg-black/85 backdrop-blur-md rounded-t-3xl sm:rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
               >
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-zinc-800/40 bg-white dark:bg-black/85 backdrop-blur-md">
                 <h3 className="text-lg font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
@@ -7834,7 +7834,7 @@ export default function HealthView({
                 setShowEstudioModal(false);
                 setEditingEstudio(null);
               }}
-              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm cursor-pointer"
+              className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm cursor-pointer"
             >
               <motion.div
                 initial={{ opacity: 0, scale: 0.95, y: 15 }}
@@ -7842,7 +7842,7 @@ export default function HealthView({
                 exit={{ opacity: 0, scale: 0.95, y: 15 }}
                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
                 onClick={(e) => e.stopPropagation()}
-                className="w-full max-w-lg max-h-[85vh] flex flex-col bg-white dark:bg-black/85 backdrop-blur-md rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
+                className="w-full max-w-lg max-h-[85vh] flex flex-col bg-white dark:bg-black/85 backdrop-blur-md rounded-t-3xl sm:rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
               >
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-zinc-800/40 bg-white dark:bg-black/85 backdrop-blur-md">
                 <h3 className="text-lg font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
@@ -8122,7 +8122,7 @@ export default function HealthView({
                 setShowDocModal(false);
                 setEditingDoc(null);
               }}
-              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm cursor-pointer"
+              className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm cursor-pointer"
             >
               <motion.div
                 initial={{ opacity: 0, scale: 0.95, y: 15 }}
@@ -8130,7 +8130,7 @@ export default function HealthView({
                 exit={{ opacity: 0, scale: 0.95, y: 15 }}
                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
                 onClick={(e) => e.stopPropagation()}
-                className="w-full max-w-lg max-h-[85vh] flex flex-col bg-white dark:bg-black/85 backdrop-blur-md rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
+                className="w-full max-w-lg max-h-[85vh] flex flex-col bg-white dark:bg-black/85 backdrop-blur-md rounded-t-3xl sm:rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
               >
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-zinc-800/40 bg-white dark:bg-black/85 backdrop-blur-md">
                 <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">
@@ -8265,7 +8265,7 @@ export default function HealthView({
                 setShowDispModal(false);
                 setEditingDisp(null);
               }}
-              className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm cursor-pointer"
+              className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm cursor-pointer"
             >
               <motion.div
                 initial={{ opacity: 0, scale: 0.95, y: 15 }}
@@ -8273,7 +8273,7 @@ export default function HealthView({
                 exit={{ opacity: 0, scale: 0.95, y: 15 }}
                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
                 onClick={(e) => e.stopPropagation()}
-                className="w-full max-w-sm max-h-[85vh] flex flex-col bg-white dark:bg-black/85 backdrop-blur-md rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
+                className="w-full max-w-sm max-h-[85vh] flex flex-col bg-white dark:bg-black/85 backdrop-blur-md rounded-t-3xl sm:rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
               >
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-zinc-800/40 bg-white dark:bg-black/85 backdrop-blur-md">
                 <h3 className="text-lg font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
@@ -8415,7 +8415,7 @@ export default function HealthView({
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
               onClick={() => setShowActividadModal(false)}
-              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm cursor-pointer"
+              className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm cursor-pointer"
             >
               <motion.div
                 initial={{ opacity: 0, scale: 0.95, y: 15 }}
@@ -8423,7 +8423,7 @@ export default function HealthView({
                 exit={{ opacity: 0, scale: 0.95, y: 15 }}
                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
                 onClick={(e) => e.stopPropagation()}
-                className="w-full max-w-lg max-h-[85vh] flex flex-col bg-white dark:bg-black/85 backdrop-blur-md/95 dark:backdrop-blur-md rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
+                className="w-full max-w-lg max-h-[85vh] flex flex-col bg-white dark:bg-black/85 backdrop-blur-md/95 dark:backdrop-blur-md rounded-t-3xl sm:rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
               >
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-zinc-800/40 bg-white/95 dark:bg-black/95 backdrop-blur-md">
                 <h3 className="text-lg font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
@@ -8635,7 +8635,7 @@ export default function HealthView({
                 setShowDetailedModal(false);
                 setEditingMed(null);
               }}
-              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm cursor-pointer"
+              className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm cursor-pointer"
             >
               <motion.div
                 initial={{ opacity: 0, scale: 0.95, y: 15 }}
@@ -8643,7 +8643,7 @@ export default function HealthView({
                 exit={{ opacity: 0, scale: 0.95, y: 15 }}
                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
                 onClick={(e) => e.stopPropagation()}
-                className="w-full max-w-lg max-h-[85vh] flex flex-col bg-white dark:bg-black/85 backdrop-blur-md rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
+                className="w-full max-w-lg max-h-[85vh] flex flex-col bg-white dark:bg-black/85 backdrop-blur-md rounded-t-3xl sm:rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
               >
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-zinc-800/40 bg-white dark:bg-black/85 backdrop-blur-md">
                 <h3 className="text-lg font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
@@ -8916,7 +8916,7 @@ export default function HealthView({
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
               onClick={() => setShowAddMed(false)}
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 cursor-pointer"
+              className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4 cursor-pointer"
             >
               <motion.div
                 initial={{ opacity: 0, scale: 0.95, y: 15 }}
@@ -8924,7 +8924,7 @@ export default function HealthView({
                 exit={{ opacity: 0, scale: 0.95, y: 15 }}
                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
                 onClick={(e) => e.stopPropagation()}
-                className={`w-full max-w-md p-6 rounded-3xl border shadow-2xl space-y-4 cursor-default ${
+                className={`w-full max-w-md p-6 rounded-t-3xl sm:rounded-3xl border shadow-2xl space-y-4 cursor-default ${
                   darkMode
                     ? "bg-zinc-900 border-zinc-800 text-white"
                     : "bg-white border-zinc-200 text-zinc-800"
@@ -9030,7 +9030,7 @@ export default function HealthView({
               onClick={() => {
                 setShowAddBp(false);
               }}
-              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm cursor-pointer"
+              className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm cursor-pointer"
             >
               <motion.div
                 initial={{ opacity: 0, scale: 0.95, y: 15 }}
@@ -9038,7 +9038,7 @@ export default function HealthView({
                 exit={{ opacity: 0, scale: 0.95, y: 15 }}
                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
                 onClick={(e) => e.stopPropagation()}
-                className="w-full max-w-md max-h-[85vh] flex flex-col bg-white dark:bg-black/85 backdrop-blur-md rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
+                className="w-full max-w-md max-h-[85vh] flex flex-col bg-white dark:bg-black/85 backdrop-blur-md rounded-t-3xl sm:rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
               >
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-zinc-800/40 bg-white dark:bg-black/85 backdrop-blur-md">
                 <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">Registrar Medición</h3>
@@ -9164,7 +9164,7 @@ export default function HealthView({
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
               onClick={() => setShowAddDoc(false)}
-              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm cursor-pointer"
+              className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm cursor-pointer"
             >
               <motion.div
                 initial={{ opacity: 0, scale: 0.95, y: 15 }}
@@ -9172,7 +9172,7 @@ export default function HealthView({
                 exit={{ opacity: 0, scale: 0.95, y: 15 }}
                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
                 onClick={(e) => e.stopPropagation()}
-                className="w-full max-w-lg max-h-[85vh] flex flex-col bg-white dark:bg-black/85 backdrop-blur-md rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
+                className="w-full max-w-lg max-h-[85vh] flex flex-col bg-white dark:bg-black/85 backdrop-blur-md rounded-t-3xl sm:rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
               >
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-zinc-800/40 bg-white dark:bg-black/85 backdrop-blur-md">
                 <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">Agregar Profesional</h3>
@@ -9453,7 +9453,7 @@ export default function HealthView({
       {showProfileModal &&
         createPortal(
           <div
-            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-xs cursor-pointer"
+            className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-xs cursor-pointer"
             onClick={() => setShowProfileModal(false)}
           >
             <motion.div
@@ -9462,7 +9462,7 @@ export default function HealthView({
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
               onClick={(e) => e.stopPropagation()}
-              className={`w-full max-w-sm rounded-3xl border p-6 shadow-2xl relative transition-all cursor-default ${
+              className={`w-full max-w-sm rounded-t-3xl sm:rounded-3xl border p-6 shadow-2xl relative transition-all cursor-default ${
                 darkMode
                   ? "bg-zinc-950 border-zinc-800 text-white shadow-primary/5"
                   : "bg-white border-zinc-200 text-zinc-800 shadow-slate-200"
@@ -9622,7 +9622,7 @@ export default function HealthView({
       {showMedidasModal &&
         createPortal(
           <div
-            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-xs cursor-pointer"
+            className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-xs cursor-pointer"
             onClick={() => setShowMedidasModal(false)}
           >
             <motion.div
@@ -9631,7 +9631,7 @@ export default function HealthView({
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
               onClick={(e) => e.stopPropagation()}
-              className={`w-full max-w-sm rounded-3xl border p-6 shadow-2xl relative transition-all cursor-default ${
+              className={`w-full max-w-sm rounded-t-3xl sm:rounded-3xl border p-6 shadow-2xl relative transition-all cursor-default ${
                 darkMode
                   ? "bg-zinc-950 border-zinc-800 text-white shadow-primary/5"
                   : "bg-white border-zinc-200 text-zinc-800 shadow-slate-200"

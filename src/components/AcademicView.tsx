@@ -2699,11 +2699,11 @@ export default function AcademicView({
             createPortal(
               <div
                 onClick={() => { if (!isSaving) setShowAddSubject(false); }}
-                className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 cursor-pointer"
+                className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4 cursor-pointer"
               >
                 <div
                   onClick={(e) => e.stopPropagation()}
-                  className={`w-full max-w-md p-6 rounded-3xl border shadow-2xl space-y-4 cursor-default ${
+                  className={`animate-sheet-in w-full max-w-md p-6 rounded-t-3xl sm:rounded-3xl border shadow-2xl space-y-4 cursor-default ${
                     darkMode
                       ? "bg-zinc-900 border-zinc-800 text-white"
                       : "bg-white border-zinc-200 text-zinc-800"
@@ -4438,7 +4438,7 @@ export default function AcademicView({
                 setShowMateriaModal(false);
                 setEditingMateriaId(null);
               }}
-              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm cursor-pointer"
+              className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm cursor-pointer"
             >
               <motion.div
                 initial={{ opacity: 0, scale: 0.95, y: 15 }}
@@ -4446,7 +4446,7 @@ export default function AcademicView({
                 exit={{ opacity: 0, scale: 0.95, y: 15 }}
                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
                 onClick={(e) => e.stopPropagation()}
-                className="w-full max-w-xl max-h-[85vh] flex flex-col bg-white dark:bg-black/85 backdrop-blur-md rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
+                className="w-full max-w-xl max-h-[85vh] flex flex-col bg-white dark:bg-black/85 backdrop-blur-md rounded-t-3xl sm:rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
               >
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-zinc-800/40 bg-white dark:bg-black/85 backdrop-blur-md">
                 <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">
@@ -4668,11 +4668,11 @@ export default function AcademicView({
               if (isSaving) return;
               setShowAddTask(false);
             }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 cursor-pointer"
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4 cursor-pointer"
           >
             <div
               onClick={(e) => e.stopPropagation()}
-              className={`w-full max-w-md p-6 rounded-3xl border shadow-2xl space-y-4 cursor-default ${
+              className={`animate-sheet-in w-full max-w-md max-h-[92vh] sm:max-h-[85vh] overflow-y-auto p-6 rounded-t-3xl sm:rounded-3xl border shadow-2xl space-y-4 cursor-default ${
                 darkMode
                   ? "bg-zinc-900 border-zinc-800 text-white"
                   : "bg-white border-zinc-200 text-zinc-800"
@@ -4791,7 +4791,7 @@ export default function AcademicView({
                 setShowHorarioModal(false);
                 setEditingHorarioId(null);
               }}
-              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm cursor-pointer"
+              className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm cursor-pointer"
             >
               <motion.div
                 initial={{ opacity: 0, scale: 0.95, y: 15 }}
@@ -4799,7 +4799,7 @@ export default function AcademicView({
                 exit={{ opacity: 0, scale: 0.95, y: 15 }}
                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
                 onClick={(e) => e.stopPropagation()}
-                className="w-full max-w-lg max-h-[85vh] flex flex-col bg-white dark:bg-black/85 backdrop-blur-md rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
+                className="w-full max-w-lg max-h-[85vh] flex flex-col bg-white dark:bg-black/85 backdrop-blur-md rounded-t-3xl sm:rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
               >
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-zinc-800/40 bg-white dark:bg-black/85 backdrop-blur-md">
                 <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">
@@ -4979,7 +4979,7 @@ export default function AcademicView({
                 setShowExamenModal(false);
                 setEditingExamenId(null);
               }}
-              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm cursor-pointer"
+              className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm cursor-pointer"
             >
               <motion.div
                 initial={{ opacity: 0, scale: 0.95, y: 15 }}
@@ -4987,7 +4987,7 @@ export default function AcademicView({
                 exit={{ opacity: 0, scale: 0.95, y: 15 }}
                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
                 onClick={(e) => e.stopPropagation()}
-                className="w-full max-w-lg max-h-[85vh] flex flex-col bg-white dark:bg-black/85 backdrop-blur-md rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
+                className="w-full max-w-lg max-h-[85vh] flex flex-col bg-white dark:bg-black/85 backdrop-blur-md rounded-t-3xl sm:rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden relative cursor-default"
               >
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-zinc-800/40 bg-white dark:bg-black/85 backdrop-blur-md">
                 <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">

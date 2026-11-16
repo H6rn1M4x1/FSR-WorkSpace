@@ -4275,11 +4275,11 @@ export default function FinanceView({
             onClick={() => {
               if (!isSaving) setShowAddForm(false);
             }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 cursor-pointer"
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4 cursor-pointer"
           >
             <div
               onClick={(e) => e.stopPropagation()}
-              className={`w-full max-w-md p-6 rounded-3xl border shadow-2xl space-y-4 cursor-default ${
+              className={`w-full max-w-md p-6 rounded-t-3xl sm:rounded-3xl border shadow-2xl space-y-4 cursor-default animate-sheet-in ${
                 darkMode
                   ? "bg-zinc-900 border-zinc-800 text-white"
                   : "bg-white border-zinc-200 text-zinc-800"
@@ -4389,11 +4389,11 @@ export default function FinanceView({
         createPortal(
           <div
             onClick={() => setShowEmailModal(false)}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 cursor-pointer"
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4 cursor-pointer"
           >
             <div
               onClick={(e) => e.stopPropagation()}
-              className={`w-full max-w-md p-6 rounded-3xl border shadow-2xl space-y-4 cursor-default ${
+              className={`w-full max-w-md p-6 rounded-t-3xl sm:rounded-3xl border shadow-2xl space-y-4 cursor-default animate-sheet-in ${
                 darkMode
                   ? "bg-zinc-900 border-zinc-800 text-white"
                   : "bg-white border-zinc-200 text-zinc-800"

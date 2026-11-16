@@ -832,7 +832,7 @@ export default function CotizacionesCriptoTable({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+              className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm"
               onClick={() => setShowAddModal(false)}
             >
               <motion.div
@@ -840,7 +840,7 @@ export default function CotizacionesCriptoTable({
                 animate={{ scale: 1, opacity: 1, y: 0 }}
                 exit={{ scale: 0.95, opacity: 0, y: 10 }}
                 onClick={(e) => e.stopPropagation()}
-                className={`w-full max-w-lg overflow-hidden rounded-3xl shadow-2xl flex flex-col max-h-[90vh] ${
+                className={`w-full sm:max-w-lg overflow-hidden rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col max-h-[92vh] sm:max-h-[90vh] ${
                   darkMode
                     ? "bg-[#0a0a0a] border border-zinc-800"
                     : "bg-white border border-slate-100"
