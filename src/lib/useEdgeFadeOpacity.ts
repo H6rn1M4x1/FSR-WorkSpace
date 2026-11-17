@@ -9,6 +9,14 @@ import { useMotionValue, MotionValue } from "motion/react";
  * que la tarjeta queda visible siempre. No usa useScroll/useTransform de framer-motion porque esas
  * dos, atadas a offsets "start end"/"end start", se quedan pegadas en opacidad 0 justamente cuando
  * el contenedor no tiene rango de scroll real para recorrer — rompía TODAS las listas cortas.
+ *
+ * La comparación siempre es tarjeta vs. SU PROPIO contenedor (nunca contra la ventana/página), así
+ * que el desvanecido solo depende del scroll interno de la lista, no de dónde quedó esa lista
+ * dentro de la página. Pero el recálculo necesita dispararse ante CUALQUIER scroll que pueda haber
+ * movido a la tarjeta o al contenedor en la pantalla — el del propio contenedor, pero también el de
+ * la página (el layout de esta app hace que la página entera scrollee, no <main> por su cuenta) —
+ * por eso escucha en la fase de captura sobre window: los eventos de scroll no burbujean, pero en
+ * captura sí llegan a un ancestro aunque el scroll haya ocurrido en un descendiente cualquiera.
  */
 export function useEdgeFadeOpacity(
   itemRef: React.RefObject<HTMLElement | null>,
@@ -31,10 +39,10 @@ export function useEdgeFadeOpacity(
     };
 
     update();
-    container.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("scroll", update, { passive: true, capture: true });
     window.addEventListener("resize", update, { passive: true });
     return () => {
-      container.removeEventListener("scroll", update);
+      window.removeEventListener("scroll", update, { capture: true });
       window.removeEventListener("resize", update);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
