@@ -21,7 +21,7 @@ import { useMotionValue, MotionValue } from "motion/react";
 export function useEdgeFadeOpacity(
   itemRef: React.RefObject<HTMLElement | null>,
   containerRef: React.RefObject<HTMLElement | null> | undefined,
-  margin = 32
+  margin = 110
 ): MotionValue<number> {
   const opacity = useMotionValue(1);
 

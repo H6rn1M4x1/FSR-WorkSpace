@@ -765,7 +765,7 @@ export function NotesView({
   useEffect(() => {
     const container = notesListContainerRef.current;
     if (!container) return;
-    const margin = 32;
+    const margin = 110;
     const update = () => {
       const containerRect = container.getBoundingClientRect();
       noteElsRef.current.forEach((el) => {
