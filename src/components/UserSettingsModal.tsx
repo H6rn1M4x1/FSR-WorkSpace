@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import { useToast } from "../context/ToastContext";
-import { motion, AnimatePresence, useDragControls } from "motion/react";
+import { motion, AnimatePresence, useDragControls, useMotionValue, useTransform } from "motion/react";
 import { createPortal } from "react-dom";
 import { Eye, EyeOff } from "lucide-react";
 import { SmartDateTimePicker } from "./SmartDateTimePicker";
@@ -373,9 +373,125 @@ export interface UserProfileData {
   favoriteTeam?: string;
 }
 
+interface SettingsShellProps {
+  embedded?: boolean;
+  isOpen: boolean;
+  darkMode: boolean;
+  dragControls: ReturnType<typeof useDragControls>;
+  onClose: () => void;
+  children: React.ReactNode;
+}
+
+// Envuelve el contenido de Ajustes (header + tabs + body, sin tocarlo, pasado como children) en
+// dos estructuras posibles. embedded=false (desktop): el modal flotante centrado de siempre,
+// backdrop oscurecido + tarjeta — exactamente igual que antes de que existiera este wrapper.
+// embedded=true (mobile): en vez de un modal aparte, el MISMO mecanismo de panel que Chat/Avisos
+// en TopNavbar.tsx — un motion.div que crece hacia arriba DENTRO de la misma cápsula del navbar,
+// con el mismo drag-to-dismiss y el mismo margin-bottom atado al offset del arrastre (ver
+// dragY/dragMarginBottom en ChatPanel.tsx) — así Ajustes es una pieza más de esa cápsula, con un
+// corte limpio contra la fila de íconos principal, en vez de un modal que aparece por detrás.
+function SettingsShell({ embedded, isOpen, darkMode, dragControls, onClose, children }: SettingsShellProps) {
+  const dragY = useMotionValue(0);
+  const dragMarginBottom = useTransform(dragY, (v) => -v);
+
+  const grip = (
+    <div
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        dragControls.start(e);
+      }}
+      className="w-full h-7 flex items-center justify-center md:hidden cursor-grab active:cursor-grabbing touch-none shrink-0"
+    >
+      <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+    </div>
+  );
+
+  // Línea clara que corta el contenido antes de llegar al borde del panel/modal, en vez de un
+  // difuminado — igual arriba (grip) que abajo, para ambas variantes.
+  const closingBorder = (
+    <div className={`shrink-0 border-t-2 ${darkMode ? "border-white/15" : "border-slate-200"}`} />
+  );
+
+  if (embedded) {
+    return (
+      <AnimatePresence initial={false}>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2, ease: "easeInOut" }}
+            drag="y"
+            dragControls={dragControls}
+            dragListener={false}
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0, bottom: 0.65 }}
+            onDrag={(_e, info) => {
+              dragY.set(Math.max(0, info.offset.y));
+            }}
+            onDragEnd={(_e, info) => {
+              dragY.set(0);
+              if (info.offset.y > 120 || info.velocity.y > 500) onClose();
+            }}
+            style={{ willChange: "transform", marginBottom: dragMarginBottom }}
+            className="w-full overflow-hidden"
+          >
+            {grip}
+            <div className="w-full flex flex-col h-[calc(100dvh-165px)] max-h-[720px]">
+              {children}
+            </div>
+            {closingBorder}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    );
+  }
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          className="fixed inset-0 z-[100] flex items-start justify-center p-3 md:p-6 pt-16 md:pt-24 pb-24 md:pb-10 bg-black/60 backdrop-blur-md"
+          onClick={onClose}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 15 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 15 }}
+            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+            drag="y"
+            dragControls={dragControls}
+            dragListener={false}
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0, bottom: 0.65 }}
+            onDragEnd={(_e, info) => {
+              if (info.offset.y > 120 || info.velocity.y > 500) onClose();
+            }}
+            onClick={(e) => e.stopPropagation()}
+            className={`relative w-full max-w-4xl rounded-3xl border shadow-2xl overflow-hidden flex flex-col max-h-[calc(100vh-10rem)] md:max-h-[calc(100vh-8.5rem)] ${
+              darkMode
+                ? "bg-zinc-950 border-zinc-800 text-zinc-100"
+                : "bg-white border-zinc-200 text-zinc-900"
+            }`}
+          >
+            {grip}
+            {children}
+            {closingBorder}
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
 interface UserSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
+  embedded?: boolean;
   darkMode: boolean;
   setDarkMode?: (dark: boolean) => void;
   backgroundStyle?: "dither" | "pixelblast" | "plasma";
@@ -402,6 +518,7 @@ interface UserSettingsModalProps {
 export function UserSettingsModal({
   isOpen,
   onClose,
+  embedded = false,
   darkMode,
   setDarkMode,
   backgroundStyle,
@@ -1210,64 +1327,7 @@ export function UserSettingsModal({
 
   return (
     <>
-    <AnimatePresence>
-      {isOpen && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.2 }}
-          className="fixed inset-0 z-[100] flex items-end md:items-start justify-center px-2 md:p-6 md:pt-24 md:pb-10 pb-[calc(0.75rem+max(0.5rem,env(safe-area-inset-bottom)))] md:bg-black/60 md:backdrop-blur-md"
-          onClick={onClose}
-        >
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 15 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 15 }}
-            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-            drag="y"
-            dragControls={dragControls}
-            dragListener={false}
-            dragConstraints={{ top: 0, bottom: 0 }}
-            dragElastic={{ top: 0, bottom: 0.65 }}
-            onDragEnd={(_e, info) => {
-              if (info.offset.y > 120 || info.velocity.y > 500) onClose();
-            }}
-            onClick={(e) => e.stopPropagation()}
-            style={{ willChange: "transform" }}
-            // max-h se calcula contra el espacio REAL disponible (viewport menos el padding fijo
-            // de arriba/abajo del backdrop: pt-16 + pb-24 en mobile, pt-24 + pb-10 en desktop), no
-            // contra el viewport completo (max-h-[92vh] anterior) — "vh" es siempre relativo al
-            // viewport entero, así que con ese padding fijo el modal terminaba siendo más alto que
-            // el hueco que le quedaba. El backdrop no scrollea (nunca tuvo overflow-y-auto en sí
-            // mismo) a propósito: si llegara a scrollear, el header del modal (con el título) se
-            // desplaza hacia arriba JUNTO con el resto y puede terminar por detrás del navbar
-            // superior, que tiene mayor z-index — este cálculo exacto evita que eso haga falta, el
-            // modal siempre entra entero en el espacio disponible y solo su contenido interno
-            // (flex-1 min-h-0 overflow-y-auto) scrollea. El pb-24 en mobile (en vez de pb-10,
-            // igual que desktop) le deja al backdrop el aire suficiente para no terminar nunca
-            // físicamente por detrás de la barra de navegación inferior, que creció de alto en
-            // rondas recientes de esta misma sesión.
-            // En mobile queda "pegado" al borde inferior de la pantalla, con las esquinas de
-            // abajo sin redondear (en vez de un modal flotante centrado con fondo oscurecido) —
-            // para que se sienta como una continuación de la barra de navegación inferior, no
-            // como algo aparte. En desktop sigue siendo el modal centrado flotante de siempre.
-            className={`relative w-full max-w-4xl rounded-t-3xl md:rounded-3xl border shadow-2xl overflow-hidden flex flex-col max-h-[calc(100vh-10rem)] md:max-h-[calc(100vh-8.5rem)] ${
-              darkMode
-                ? "bg-zinc-950 border-zinc-800 text-zinc-100"
-                : "bg-white border-zinc-200 text-zinc-900"
-            }`}
-          >
-        {/* Agarre para cerrar deslizando hacia abajo — solo mobile. */}
-        <div
-          onPointerDown={(e) => {
-            e.stopPropagation();
-            dragControls.start(e);
-          }}
-          className="w-full h-7 flex items-center justify-center md:hidden cursor-grab active:cursor-grabbing touch-none shrink-0"
-        >
-          <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
-        </div>
+    <SettingsShell embedded={embedded} isOpen={isOpen} darkMode={darkMode} dragControls={dragControls} onClose={onClose}>
 
         {/* Modal Header */}
         <div className="px-6 py-4 border-b border-inherit flex items-center justify-between bg-slate-50 dark:bg-zinc-900/60 shrink-0">
@@ -3420,17 +3480,7 @@ export function UserSettingsModal({
           )}
         </div>
 
-        {/* Borde de cierre inferior — en vez de un difuminado, una línea clara que corta el
-            contenido antes de llegar al borde redondeado del modal. */}
-        <div
-          className={`shrink-0 border-t-2 ${
-            darkMode ? "border-white/15" : "border-slate-200"
-          }`}
-        />
-      </motion.div>
-    </motion.div>
-      )}
-    </AnimatePresence>
+    </SettingsShell>
     <AddressBookModal
       isOpen={isAddressBookOpen}
       onClose={() => setIsAddressBookOpen(false)}
