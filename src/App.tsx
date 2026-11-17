@@ -117,13 +117,24 @@ export default function App() {
   // estilo directamente (sin estado de React) para no re-renderizar en cada pixel de scroll.
   const TOP_SCRIM_FADE_DISTANCE = 56;
   const handleMainScroll = () => {
-    if (!mainScrollRef.current) return;
-    const opacity = Math.min(1, Math.max(0, mainScrollRef.current.scrollTop / TOP_SCRIM_FADE_DISTANCE));
+    // El que realmente scrollea es el documento (el wrapper raíz usa min-h-screen, no h-screen),
+    // no mainScrollRef por su cuenta — por eso se lee window/document en vez de su scrollTop.
+    const scrollY = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || mainScrollRef.current?.scrollTop || 0;
+    const opacity = Math.min(1, Math.max(0, scrollY / TOP_SCRIM_FADE_DISTANCE));
     // Se setea en documentElement (no gestionado por React) en vez de vía ref sobre el propio
     // elemento: si fuera por ref, cualquier re-render de App (muy frecuentes acá) pisa el estilo
     // inline con el valor fijo del JSX y el scrim se queda siempre transparente.
     document.documentElement.style.setProperty("--fsr-top-scrim-opacity", String(opacity));
   };
+
+  // El scroll de <main> (onScroll en el JSX) no alcanza porque, en la práctica, la página entera
+  // es la que scrollea — se escucha también en fase de captura sobre window, que sí detecta
+  // cualquier scroll (de la página o de un contenedor interno) aunque el evento no burbujee.
+  useEffect(() => {
+    window.addEventListener("scroll", handleMainScroll, { passive: true, capture: true });
+    return () => window.removeEventListener("scroll", handleMainScroll, { capture: true } as EventListenerOptions);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const isLocalMutatingRef = useRef(false);
   const mutationLockTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -150,8 +161,13 @@ export default function App() {
 
   // Vuelve arriba del todo cada vez que se cambia de sección, en vez de dejar la posición de
   // scroll de la pestaña anterior (que podía quedar más allá del final de una pestaña más corta).
+  // mainScrollRef.current.scrollTop no alcanza: el que realmente scrollea es el documento (ver
+  // handleMainScroll más abajo), así que hay que resetear también ese scroll real.
   useEffect(() => {
     if (mainScrollRef.current) mainScrollRef.current.scrollTop = 0;
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
   }, [currentTab, activeSubTab]);
 
   // Key de transición para el esqueleto ascii de sección (ver <SectionTransition> más abajo, en
