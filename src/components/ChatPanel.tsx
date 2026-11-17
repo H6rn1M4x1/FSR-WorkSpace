@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { motion, AnimatePresence, useDragControls } from "motion/react";
+import { motion, AnimatePresence, useDragControls, useMotionValue, useTransform } from "motion/react";
 import {
   MessageCircle,
   Send,
@@ -156,6 +156,11 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
   // agarre, para que arrastrar desde la lista de contactos o los mensajes (que tienen su propio
   // scroll) no mueva el panel entero.
   const dragControls = useDragControls();
+  // Ver el comentario junto a expandedMenuDragY en TopNavbar.tsx: este margin-bottom negativo,
+  // atado al offset del arrastre, hace que la cápsula se achique en vivo mientras se arrastra en
+  // vez de quedarse fija hasta soltar.
+  const dragY = useMotionValue(0);
+  const dragMarginBottom = useTransform(dragY, (v) => -v);
 
   // These two subscriptions stay alive for as long as this component is mounted (i.e. for as
   // long as TopNavbar itself is mounted), regardless of `isOpen` — that's what lets the unread
@@ -787,10 +792,14 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
           dragListener={false}
           dragConstraints={{ top: 0, bottom: 0 }}
           dragElastic={{ top: 0, bottom: 0.65 }}
+          onDrag={(_e, info) => {
+            dragY.set(Math.max(0, info.offset.y));
+          }}
           onDragEnd={(_e, info) => {
+            dragY.set(0);
             if (info.offset.y > 120 || info.velocity.y > 500) onClose();
           }}
-          style={{ willChange: "transform" }}
+          style={{ willChange: "transform", marginBottom: dragMarginBottom }}
           className="w-full overflow-hidden"
         >
           {/* Agarre para cerrar deslizando hacia abajo — solo mobile. */}

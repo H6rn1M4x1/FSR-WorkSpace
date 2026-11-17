@@ -768,10 +768,12 @@ export function NotesView({
     const margin = 200;
     const update = () => {
       const containerRect = container.getBoundingClientRect();
+      const atTop = container.scrollTop <= 1;
+      const atBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 1;
       noteElsRef.current.forEach((el) => {
         const itemRect = el.getBoundingClientRect();
-        const topFactor = Math.max(0, Math.min(1, (itemRect.bottom - containerRect.top) / margin));
-        const bottomFactor = Math.max(0, Math.min(1, (containerRect.bottom - itemRect.top) / margin));
+        const topFactor = atTop ? 1 : Math.max(0, Math.min(1, (itemRect.bottom - containerRect.top) / margin));
+        const bottomFactor = atBottom ? 1 : Math.max(0, Math.min(1, (containerRect.bottom - itemRect.top) / margin));
         el.style.opacity = String(topFactor * bottomFactor);
       });
     };
