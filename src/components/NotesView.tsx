@@ -753,6 +753,36 @@ export function NotesView({
   const dragSnapshotRef = useRef<Map<string, DOMRect>>(new Map());
   // Elemento DOM de cada nota (de cualquier grupo) — se usa para tomar la foto de arriba.
   const noteElsRef = useRef<Map<string, HTMLDivElement>>(new Map());
+  // Contenedor con scroll propio de la lista de notas (ver el div "max-h-[28rem] overflow-y-auto"
+  // más abajo) — usado para el desvanecido de los bordes.
+  const notesListContainerRef = useRef<HTMLDivElement>(null);
+
+  // Desvanecido continuo arriba/abajo del bloque con scroll propio de las notas, igual que en
+  // ScrollFadeItem/useEdgeFadeOpacity — no se puede usar ese hook tal cual acá porque cada nota es
+  // un <div> plano (no motion.div) a propósito, para que el drag-and-drop nativo de HTML5 funcione
+  // (ver el comentario en renderNoteListItem). Se calcula a mano sobre todos los elementos
+  // registrados en noteElsRef y se aplica directo al estilo, sin pasar por React.
+  useEffect(() => {
+    const container = notesListContainerRef.current;
+    if (!container) return;
+    const margin = 32;
+    const update = () => {
+      const containerRect = container.getBoundingClientRect();
+      noteElsRef.current.forEach((el) => {
+        const itemRect = el.getBoundingClientRect();
+        const topFactor = Math.max(0, Math.min(1, (itemRect.bottom - containerRect.top) / margin));
+        const bottomFactor = Math.max(0, Math.min(1, (containerRect.bottom - itemRect.top) / margin));
+        el.style.opacity = String(topFactor * bottomFactor);
+      });
+    };
+    update();
+    window.addEventListener("scroll", update, { passive: true, capture: true });
+    window.addEventListener("resize", update, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", update, { capture: true } as EventListenerOptions);
+      window.removeEventListener("resize", update);
+    };
+  }, []);
   // Clon 100% sólido (sin la transparencia que el navegador le pone por defecto a la imagen de
   // arrastre nativa) que sigue al cursor mientras se arrastra una nota — ver dataTransfer.
   // setDragImage con un canvas en blanco en renderNoteListItem.
@@ -1286,7 +1316,7 @@ export function NotesView({
             {/* Alto fijo (≈4 tarjetas) con scroll propio en vez de una lista que crece sin
                 límite — con la barra de scroll invisible global de la app (sigue andando con
                 rueda/touch/teclado, solo no se ve la barra). */}
-            <div className="max-h-[28rem] overflow-y-auto space-y-4 -mx-1 px-1">
+            <div ref={notesListContainerRef} className="max-h-[28rem] overflow-y-auto space-y-4 -mx-1 px-1">
               {pinned.length > 0 && (
                 <div className="space-y-2">
                   <p className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5 px-1">
