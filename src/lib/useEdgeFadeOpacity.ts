@@ -33,8 +33,13 @@ export function useEdgeFadeOpacity(
     const update = () => {
       const itemRect = el.getBoundingClientRect();
       const containerRect = container.getBoundingClientRect();
-      const topFactor = Math.max(0, Math.min(1, (itemRect.bottom - containerRect.top) / margin));
-      const bottomFactor = Math.max(0, Math.min(1, (containerRect.bottom - itemRect.top) / margin));
+      // En el extremo real de la lista (scrolleado hasta arriba del todo, o hasta abajo del
+      // todo) no hay nada escondido de ese lado — el desvanecido de ese borde no debe aplicarse
+      // aunque geométricamente la tarjeta esté cerca del borde del contenedor.
+      const atTop = container.scrollTop <= 1;
+      const atBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 1;
+      const topFactor = atTop ? 1 : Math.max(0, Math.min(1, (itemRect.bottom - containerRect.top) / margin));
+      const bottomFactor = atBottom ? 1 : Math.max(0, Math.min(1, (containerRect.bottom - itemRect.top) / margin));
       opacity.set(topFactor * bottomFactor);
     };
 

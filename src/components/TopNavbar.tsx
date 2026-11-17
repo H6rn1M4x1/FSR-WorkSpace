@@ -1,7 +1,7 @@
 import { createPortal } from "react-dom";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import React, { useState, useRef, useEffect } from "react";
-import { motion, AnimatePresence, useDragControls } from "motion/react";
+import { motion, AnimatePresence, useDragControls, useMotionValue, useTransform } from "motion/react";
 import type { NavPanelRow } from "../lib/navPanelContext";
 import {
   Home,
@@ -433,6 +433,14 @@ export default function TopNavbar({
   // Arrastrar hacia abajo para cerrar el menú expandido (grilla o "+") — mismo patrón que
   // DetailModal.tsx y ChatPanel.tsx.
   const expandedMenuDragControls = useDragControls();
+  // Mientras se arrastra, el contenido se mueve (vía el "y" que maneja drag="y" internamente)
+  // pero por sí solo eso no cambia el alto que el panel reserva en el flex de la cápsula — el
+  // fondo/borde de la cápsula se quedaba fijo hasta soltar. Este margin-bottom negativo, atado al
+  // mismo offset del arrastre, hace que la cápsula acompañe en vivo: a medida que el dedo baja,
+  // el espacio reservado se achica al mismo ritmo, así se ve como un solo bloque colapsando, no
+  // contenido despegado de un fondo que no se mueve.
+  const expandedMenuDragY = useMotionValue(0);
+  const expandedMenuMarginBottom = useTransform(expandedMenuDragY, (v) => -v);
   const [showNotifications, setShowNotifications] = useState(false);
   const [selectedNotifId, setSelectedNotifId] = useState<string | null>(null);
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
@@ -605,7 +613,11 @@ export default function TopNavbar({
           layout: { duration: 0.3, ease: [0.16, 1, 0.3, 1] },
           duration: 0.3,
         }}
-        className={`w-full px-3 sm:px-5 py-2.5 rounded-2xl sm:rounded-[28px] border backdrop-blur-2xl transition-colors duration-300 shadow-xl flex flex-col ${
+        // overflow-hidden: sin esto, el contenido de los paneles que crecen hacia arriba (más
+        // secciones, chat, avisos) podía salirse de la forma redondeada de la cápsula durante la
+        // animación de alto o el gesto de arrastre, y quedar visualmente por detrás/solapado con
+        // la fila de íconos principal de abajo en vez de quedar recortado prolijamente.
+        className={`w-full overflow-hidden px-3 sm:px-5 py-2.5 rounded-2xl sm:rounded-[28px] border backdrop-blur-2xl transition-colors duration-300 shadow-xl flex flex-col ${
           darkMode
             ? "bg-zinc-950/75 border-white/10 text-zinc-100 shadow-black/40"
             : "bg-white/80 border-slate-200/80 text-zinc-800 shadow-slate-200/50"
@@ -907,7 +919,11 @@ export default function TopNavbar({
               dragListener={false}
               dragConstraints={{ top: 0, bottom: 0 }}
               dragElastic={{ top: 0, bottom: 0.65 }}
+              onDrag={(_e, info) => {
+                expandedMenuDragY.set(Math.max(0, info.offset.y));
+              }}
               onDragEnd={(_e, info) => {
+                expandedMenuDragY.set(0);
                 if (info.offset.y > 80 || info.velocity.y > 500) {
                   setMobileMenuOpen(false);
                   setQuickAddMenuOpen(false);
@@ -916,8 +932,8 @@ export default function TopNavbar({
               // willChange obliga a este panel a su propia capa de composición mientras se
               // arrastra — sin esto, en algunos WebView el fondo detrás no se repinta en sync
               // con el contenido durante el gesto (queda "pegado" mientras el contenido sí
-              // sigue al dedo).
-              style={{ willChange: "transform" }}
+              // sigue al dedo). marginBottom: ver expandedMenuMarginBottom más arriba.
+              style={{ willChange: "transform", marginBottom: expandedMenuMarginBottom }}
               className="w-full overflow-y-hidden md:hidden"
             >
               {/* Agarre para cerrar deslizando hacia abajo. */}
