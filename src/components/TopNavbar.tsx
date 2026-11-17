@@ -585,16 +585,6 @@ export default function TopNavbar({
       data-no-global-sound
       className="fixed bottom-0 inset-x-0 pb-[calc(0.75rem+max(0.5rem,env(safe-area-inset-bottom)))] md:sticky md:bottom-auto md:top-3 md:inset-x-auto md:pb-0 z-50 w-full max-w-7xl mx-auto px-2 sm:px-4"
     >
-      {/* Difuminado de la franja que queda libre bajo la cápsula (ahora un poco despegada del
-          borde de abajo en vez de pegada del todo) — solo mobile, para que lo que sigue
-          scrolleando atrás no se vea nítido ahí. Mismo backdrop-blur que ya usa la cápsula
-          (nunca filter, por el bug histórico de composición con el fondo animado por WebGL). */}
-      <div
-        className="md:hidden fixed inset-x-0 bottom-0 backdrop-blur-md pointer-events-none"
-        style={{ height: "calc(0.75rem + max(0.5rem, env(safe-area-inset-bottom)))" }}
-        aria-hidden="true"
-      />
-
       {/* Outer Glass Container with Animated Height/Layout Expansion */}
       <motion.div
         layout

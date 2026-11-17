@@ -2256,8 +2256,12 @@ export default function AppointmentsView({
         (async () => {
           try {
             if (!token) {
-              const { silentGoogleReauth } = await import("../lib/supabase");
-              await silentGoogleReauth();
+              // El token de Google de esta app viene de Firebase (initAuth en App.tsx), no de
+              // Supabase — disparar acá el reauth de Supabase (silentGoogleReauth) abría una
+              // pestaña de login real cada vez que faltaba el token, sin falta, porque esa sesión
+              // de Supabase nunca existió. Si no hay token simplemente no se sincroniza este
+              // evento puntual con Calendar — el turno ya se guardó bien igual.
+              console.warn("Sin token de Google: se omite la sincronización con Calendar para este turno.");
               return;
             }
             const dateStr = String(payload.fecha || "").split("T")[0];
@@ -2323,8 +2327,10 @@ export default function AppointmentsView({
         (async () => {
           try {
             if (!token) {
-              const { silentGoogleReauth } = await import("../lib/supabase");
-              await silentGoogleReauth(); // will redirect back here; user can just save again
+              // Mismo motivo que en la edición de arriba: el token de Google viene de Firebase,
+              // no de Supabase, así que silentGoogleReauth (de ../lib/supabase) abría una pestaña
+              // de login real cada vez — se omite la sincronización en silencio en su lugar.
+              console.warn("Sin token de Google: se omite la sincronización con Calendar para este turno.");
               return;
             }
             const { WorkspaceService } = await import("../lib/workspace");
