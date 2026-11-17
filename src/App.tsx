@@ -14,6 +14,7 @@ import { getLocalDateString } from "./utils/date";
 import { useToast } from "./context/ToastContext";
 import { initAuth, logout, auth, consumeGoogleReauthNotice, initNativeGoogleAuthListener } from "./lib/supabase";
 import { scheduleLocalReminders } from "./lib/localReminders";
+import { syncNativeStatusBar } from "./lib/statusBarTheme";
 import { WorkspaceService } from "./lib/workspace";
 import { Eye, EyeOff, Settings, Folder, RefreshCw } from "lucide-react";
 import LoginScreen from "./components/LoginScreen";
@@ -2436,6 +2437,11 @@ export default function App() {
     }
   }, [darkMode]);
 
+  // Barra de estado nativa (Android): fondo transparente + íconos según el tema real de la app.
+  useEffect(() => {
+    syncNativeStatusBar(darkMode);
+  }, [darkMode]);
+
   if (!authInitialized) {
     return (
       <div
@@ -2613,7 +2619,7 @@ export default function App() {
 
         <main
           ref={mainScrollRef}
-          className="flex-1 overflow-y-auto pb-28 md:pb-0 [mask-image:linear-gradient(to_bottom,black_calc(100%-7rem),transparent_100%)] [-webkit-mask-image:linear-gradient(to_bottom,black_calc(100%-7rem),transparent_100%)] md:[mask-image:none] md:[-webkit-mask-image:none]"
+          className="flex-1 overflow-y-auto pb-28 md:pb-0"
         >
           {driveLoading || !isInitialLoadDone ? (
             <AsciiSectionSkeleton tab={currentTab} darkMode={darkMode} />
