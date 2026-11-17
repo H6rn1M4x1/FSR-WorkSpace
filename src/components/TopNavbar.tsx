@@ -1,6 +1,7 @@
 import { createPortal } from "react-dom";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
-import React, { useState, useRef, useEffect } from "react";
+import { useIsMobile } from "../hooks/useIsMobile";
+import React, { useState, useRef, useEffect, lazy, Suspense } from "react";
 import { motion, AnimatePresence, useDragControls, useMotionValue, useTransform } from "motion/react";
 import type { NavPanelRow } from "../lib/navPanelContext";
 import {
@@ -65,12 +66,18 @@ import {
   MedicamentoDetallado,
   DoctorCard,
   MedicalRecord,
+  AgendaShare,
 } from "../types";
 import Logo from "./Logo";
 import { ChatPanel } from "./ChatPanel";
 import { NotificationDetailPreview } from "./NotificationDetailPreview";
 import { getMealImage } from "../lib/mealHelpers";
 import { uiSounds } from "../lib/sounds";
+import type { UserProfileData } from "./UserSettingsModal";
+
+const UserSettingsModal = lazy(() =>
+  import("./UserSettingsModal").then((m) => ({ default: m.UserSettingsModal })),
+);
 
 const getNotificationCategoryDetails = (notif: AppNotification) => {
   const type = notif.type?.toLowerCase() || "";
@@ -201,6 +208,16 @@ interface TopNavbarProps {
   onOpenSettings?: () => void;
   isSettingsOpen?: boolean;
   menuVisibility?: Record<string, boolean>;
+  setMenuVisibility?: (visibility: Record<string, boolean>) => void;
+  backgroundStyle?: "dither" | "pixelblast" | "plasma";
+  setBackgroundStyle?: (style: "dither" | "pixelblast" | "plasma") => void;
+  themeColor?: string;
+  setThemeColor?: (color: string) => void;
+  profileSyncVersion?: string;
+  onUpdateUser?: (updated: UserProfileData) => void;
+  outgoingShares?: AgendaShare[];
+  incomingShares?: AgendaShare[];
+  disponibilidadMedicamentos?: any[];
   turnosCompromisos?: TurnoCompromiso[];
   appointments?: Appointment[];
   detailedPayments?: DetailedPayment[];
@@ -416,6 +433,16 @@ export default function TopNavbar({
   onOpenSettings,
   isSettingsOpen = false,
   menuVisibility,
+  setMenuVisibility,
+  backgroundStyle,
+  setBackgroundStyle,
+  themeColor,
+  setThemeColor,
+  profileSyncVersion,
+  onUpdateUser,
+  outgoingShares = [],
+  incomingShares = [],
+  disponibilidadMedicamentos = [],
   turnosCompromisos = [],
   appointments = [],
   detailedPayments = [],
@@ -428,6 +455,7 @@ export default function TopNavbar({
   medicalRecords = [],
   onQuickAdd,
 }: TopNavbarProps) {
+  const isMobile = useIsMobile();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [quickAddMenuOpen, setQuickAddMenuOpen] = useState(false);
   // Arrastrar hacia abajo para cerrar el menú expandido (grilla o "+") — mismo patrón que
@@ -1493,6 +1521,43 @@ export default function TopNavbar({
           onClose={() => setShowChat(false)}
           onUnreadCountChange={setChatUnreadCount}
         />
+
+        {/* AJUSTES & CONFIGURACIÓN (solo mobile): embebido en esta misma cápsula, con el mismo
+            mecanismo de panel que Chat/Avisos (ver SettingsShell en UserSettingsModal.tsx), en
+            vez del modal flotante aparte que sigue usando desktop (montado desde App.tsx). Se
+            monta solo en mobile para no duplicar el estado interno del modal (pestaña activa,
+            2FA, etc.) con la instancia de escritorio. onOpenSettings alterna isSettingsOpen, así
+            que reusarlo como onClose cierra el panel igual que el botón de Ajustes que lo abrió. */}
+        {isMobile && onOpenSettings && (
+          <Suspense fallback={null}>
+            <UserSettingsModal
+              embedded
+              isOpen={isSettingsOpen}
+              onClose={onOpenSettings}
+              darkMode={darkMode}
+              setDarkMode={setDarkMode}
+              backgroundStyle={backgroundStyle}
+              setBackgroundStyle={setBackgroundStyle}
+              themeColor={themeColor}
+              setThemeColor={setThemeColor}
+              menuVisibility={menuVisibility}
+              setMenuVisibility={setMenuVisibility}
+              user={user}
+              profileSyncVersion={profileSyncVersion}
+              onUpdateUser={onUpdateUser}
+              outgoingShares={outgoingShares}
+              incomingShares={incomingShares}
+              appointments={appointments}
+              turnosCompromisos={turnosCompromisos}
+              invoices={invoices}
+              detailedPayments={detailedPayments}
+              organizacionSemanal={organizacionSemanal}
+              platos={platos}
+              disponibilidadMedicamentos={disponibilidadMedicamentos}
+              medicamentosDetallados={medicamentosDetallados}
+            />
+          </Suspense>
+        )}
 
         {/* Mobile Detail Modal (For narrow screens when tapping a notification) */}
         {typeof document !== "undefined" &&

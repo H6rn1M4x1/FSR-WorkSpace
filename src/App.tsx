@@ -41,6 +41,7 @@ import { TwoFactorLoginModal } from "./components/TwoFactorLoginModal";
 import { ConfirmationModal } from "./components/ConfirmationModal";
 import { useScrollReveal } from "./hooks/useScrollReveal";
 import { usePaymentAutoLogger } from "./hooks/usePaymentAutoLogger";
+import { useIsMobile } from "./hooks/useIsMobile";
 import { DriveBackupService } from "./lib/driveBackupService";
 import { syncMonthlyMatches } from "./lib/matchScheduler";
 import Dither from "./components/Dither";
@@ -653,6 +654,7 @@ export default function App() {
   const [exams, setExams] = useState<Exam[]>([]);
 
   // User Settings State
+  const isMobile = useIsMobile();
   const [isUserSettingsOpen, setIsUserSettingsOpen] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfileData | null>(null);
 
@@ -2585,6 +2587,16 @@ export default function App() {
           doctors={doctors}
           medicalRecords={medicalRecords}
           onQuickAdd={handleQuickAdd}
+          backgroundStyle={backgroundStyle}
+          setBackgroundStyle={setBackgroundStyle}
+          themeColor={themeColor}
+          setThemeColor={setThemeColor}
+          setMenuVisibility={setMenuVisibility}
+          profileSyncVersion={userProfile ? JSON.stringify(userProfile) : undefined}
+          onUpdateUser={(updated) => setUserProfile(updated)}
+          outgoingShares={outgoingShares}
+          incomingShares={incomingShares}
+          disponibilidadMedicamentos={disponibilidadMedicamentos}
         />
       )}
 
@@ -2964,7 +2976,9 @@ export default function App() {
           )}
         </main>
 
-        {/* User Profile Settings Modal */}
+        {/* User Profile Settings Modal — en mobile vive embebido en la cápsula de TopNavbar (ver
+            TopNavbar.tsx), no acá, así que este modal flotante queda reservado a desktop. */}
+        {!isMobile && (
         <Suspense fallback={null}>
         <UserSettingsModal
           isOpen={isUserSettingsOpen}
@@ -2992,6 +3006,7 @@ export default function App() {
           medicamentosDetallados={medicamentosDetallados}
         />
         </Suspense>
+        )}
 
         {/* 2FA Login Modal */}
         <TwoFactorLoginModal
