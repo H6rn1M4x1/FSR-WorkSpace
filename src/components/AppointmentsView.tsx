@@ -830,7 +830,6 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const turnosListRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [coords, setCoords] = useState<{
     top: number;
@@ -1484,6 +1483,7 @@ export default function AppointmentsView({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recognitionRef = useRef<any>(null);
+  const turnosListRef = useRef<HTMLDivElement>(null);
 
   const startRecording = async () => {
     try {
