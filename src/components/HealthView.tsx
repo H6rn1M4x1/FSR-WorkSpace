@@ -6291,11 +6291,15 @@ export default function HealthView({
                           </p>
                         </div>
                       </div>
+                      {/* En "historial" se oculta en mobile (el "+" de la barra inferior ya
+                          abre este mismo formulario de "Agregar Medicamento" directo); en
+                          "disponibilidad" se mantiene visible porque esa acción no tiene
+                          equivalente en el "+". */}
                       <motion.button
                         whileHover={{ scale: 1.04 }}
                         whileTap={{ scale: 0.94 }}
                         onClick={medsActiveTab === "historial" ? openAddModal : handleOpenAddDisp}
-                        className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-full bg-primary hover:bg-primary-hover text-white dark:text-blue-950 text-xs font-bold transition-all cursor-pointer shadow-xs w-full sm:w-auto mt-2 sm:mt-0 sm:self-center"
+                        className={`${medsActiveTab === "historial" ? "hidden md:flex" : "flex"} items-center justify-center gap-1.5 px-4 py-2.5 rounded-full bg-primary hover:bg-primary-hover text-white dark:text-blue-950 text-xs font-bold transition-all cursor-pointer shadow-xs w-full sm:w-auto mt-2 sm:mt-0 sm:self-center`}
                       >
                         <Plus className="w-4 h-4" />
                         <span>

@@ -2075,9 +2075,10 @@ export default function HomeView({
               <div className="flex items-center flex-wrap gap-2 w-full sm:w-auto">
                 {/* Botón "Agendar": acceso directo a cargar un turno, pago, examen, medicamento o
                     comida planificada sin tener que ir a buscar esa pestaña — abre el formulario
-                    real de esa sección (ver App.tsx/handleQuickAdd). En celular ocupa todo el
-                    ancho disponible; de sm (640px) en adelante vuelve a su ancho fijo de siempre. */}
-                <div className="relative w-full sm:w-auto" ref={quickAddMenuRef}>
+                    real de esa sección (ver App.tsx/handleQuickAdd). Solo en desktop/tablet: en
+                    mobile el botón "+" de la barra de navegación inferior ya cumple esta misma
+                    función. */}
+                <div className="hidden md:block relative w-full sm:w-auto" ref={quickAddMenuRef}>
                   <button
                     type="button"
                     onClick={() => setQuickAddMenuOpen((v) => !v)}
@@ -2126,26 +2127,29 @@ export default function HomeView({
                   </AnimatePresence>
                 </div>
 
-                {/* Push Notification Toggle & Test Button */}
-                {notifPerm === "granted" ? null : notifPerm === "denied" ? (
-                  <span
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-zinc-100 dark:bg-zinc-800/60 text-zinc-400 border border-zinc-200 dark:border-zinc-700"
-                    title="Permiso de notificaciones bloqueado en los ajustes del dispositivo/navegador"
-                  >
-                    <BellOff className="w-3.5 h-3.5 shrink-0" />
-                    <span>Push Bloqueado</span>
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleRequestNotifications}
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-extrabold bg-primary/10 hover:bg-primary text-primary hover:text-white dark:hover:text-blue-950 border border-primary/20 transition-all cursor-pointer shadow-xs active:scale-95"
-                    title="Activar notificaciones nativas en tu dispositivo para avisarte de tus tareas de hoy"
-                  >
-                    <Bell className="w-3.5 h-3.5 shrink-0" />
-                    <span>Activar Push</span>
-                  </button>
-                )}
+                {/* Push Notification Toggle & Test Button — solo desktop/tablet, para no competir
+                    visualmente con el "+" en mobile. */}
+                <div className="hidden md:block">
+                  {notifPerm === "granted" ? null : notifPerm === "denied" ? (
+                    <span
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-zinc-100 dark:bg-zinc-800/60 text-zinc-400 border border-zinc-200 dark:border-zinc-700"
+                      title="Permiso de notificaciones bloqueado en los ajustes del dispositivo/navegador"
+                    >
+                      <BellOff className="w-3.5 h-3.5 shrink-0" />
+                      <span>Push Bloqueado</span>
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleRequestNotifications}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-extrabold bg-primary/10 hover:bg-primary text-primary hover:text-white dark:hover:text-blue-950 border border-primary/20 transition-all cursor-pointer shadow-xs active:scale-95"
+                      title="Activar notificaciones nativas en tu dispositivo para avisarte de tus tareas de hoy"
+                    >
+                      <Bell className="w-3.5 h-3.5 shrink-0" />
+                      <span>Activar Push</span>
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 

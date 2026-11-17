@@ -3016,7 +3016,9 @@ export default function AppointmentsView({
                         Agenda de Turnos y Compromisos
                       </h3>
                     </div>
-                    <div className="flex shrink-0 w-full sm:w-auto mt-2 sm:mt-0">
+                    {/* Solo desktop/tablet: en mobile el "+" de la barra de navegación inferior
+                        ya abre este mismo formulario directo, sin pasar por acá. */}
+                    <div className="hidden md:flex shrink-0 w-full sm:w-auto mt-2 sm:mt-0">
                       <motion.button
                         whileHover={{ scale: 1.04 }}
                         whileTap={{ scale: 0.94 }}
@@ -3618,7 +3620,9 @@ export default function AppointmentsView({
                   compromisos cotidianos.
                 </p>
               </div>
-              <div className="flex shrink-0 w-full sm:w-auto mt-2 sm:mt-0">
+              {/* Solo desktop/tablet: en mobile el "+" de la barra de navegación inferior ya
+                  abre este mismo formulario directo, sin pasar por acá. */}
+              <div className="hidden md:flex shrink-0 w-full sm:w-auto mt-2 sm:mt-0">
                 <motion.button
                   whileHover={{ scale: 1.04 }}
                   whileTap={{ scale: 0.94 }}
