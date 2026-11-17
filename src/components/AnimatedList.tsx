@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect, useCallback, ReactNode, MouseEventHandler, UIEvent } from 'react';
-import { motion, useInView, useScroll, useTransform } from 'motion/react';
+import { motion, useInView } from 'motion/react';
+import { useEdgeFadeOpacity } from '../lib/useEdgeFadeOpacity';
 import './AnimatedList.css';
 
 interface AnimatedItemProps {
@@ -17,13 +18,10 @@ export const AnimatedItem: React.FC<AnimatedItemProps> = ({ children, delay = 0,
 
   // Desvanecido continuo atado al scroll de la lista (no al "inView" binario de arriba, que solo
   // controla el pop de escala): a medida que la tarjeta entra/sale del contenedor por arriba o
-  // por abajo, su opacidad baja a 0 de a poco en vez de desaparecer de golpe.
-  const { scrollYProgress } = useScroll({
-    target: ref,
-    container: containerRef,
-    offset: ['start end', 'end start'],
-  });
-  const scrollOpacity = useTransform(scrollYProgress, [0, 0.15, 0.85, 1], [0, 1, 1, 0]);
+  // por abajo, su opacidad baja a 0 de a poco en vez de desaparecer de golpe. Ver
+  // useEdgeFadeOpacity: a diferencia de useScroll/useTransform, nunca se queda pegada en 0
+  // cuando el contenedor no necesita scrollear (listas cortas, el caso más común).
+  const scrollOpacity = useEdgeFadeOpacity(ref, containerRef);
 
   return (
     <motion.div
