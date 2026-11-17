@@ -110,6 +110,18 @@ export default function App() {
   // Custom hook for smooth scroll reveal animations across sections
   useScrollReveal();
   const mainScrollRef = useRef<HTMLElement>(null);
+  // Scrim mobile-only sobre la barra de estado: a medida que el contenido se desplaza hacia
+  // arriba y pasa por detrás de ella, esta franja se va poniendo sólida (negra/blanca según el
+  // tema) para que la hora/batería sigan siendo legibles, en vez de solaparse con el contenido
+  // que scrollea. En el tope vuelve a ser transparente y se ve el fondo animado. Se setea el
+  // estilo directamente (sin estado de React) para no re-renderizar en cada pixel de scroll.
+  const topScrimRef = useRef<HTMLDivElement>(null);
+  const TOP_SCRIM_FADE_DISTANCE = 56;
+  const handleMainScroll = () => {
+    if (!topScrimRef.current || !mainScrollRef.current) return;
+    const opacity = Math.min(1, Math.max(0, mainScrollRef.current.scrollTop / TOP_SCRIM_FADE_DISTANCE));
+    topScrimRef.current.style.opacity = String(opacity);
+  };
 
   const isLocalMutatingRef = useRef(false);
   const mutationLockTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -2617,8 +2629,17 @@ export default function App() {
           </div>
         )}
 
+        {/* Scrim mobile-only sobre la barra de estado — ver topScrimRef/handleMainScroll. */}
+        <div
+          ref={topScrimRef}
+          aria-hidden="true"
+          className={`md:hidden fixed top-0 inset-x-0 z-40 pointer-events-none ${darkMode ? "bg-black" : "bg-white"}`}
+          style={{ height: "env(safe-area-inset-top)", opacity: 0 }}
+        />
+
         <main
           ref={mainScrollRef}
+          onScroll={handleMainScroll}
           className="flex-1 overflow-y-auto pt-[calc(0.75rem+env(safe-area-inset-top))] md:pt-0 pb-28 md:pb-0"
         >
           {driveLoading || !isInitialLoadDone ? (
