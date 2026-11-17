@@ -302,7 +302,7 @@ function SubPanelRow({ row, rowIndex, darkMode }: { row: NavPanelRow; rowIndex: 
       animate={{ opacity: 1, height: "auto", marginTop: 8 }}
       exit={{ opacity: 0, height: 0, marginTop: 0 }}
       transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-      className="w-full overflow-hidden relative flex items-center gap-1.5 pt-2.5 border-t border-zinc-200/50 dark:border-white/10"
+      className="w-full overflow-hidden relative flex items-center gap-1.5 pb-2.5 md:pb-0 md:pt-2.5 border-b md:border-b-0 md:border-t border-zinc-200/50 dark:border-white/10"
     >
       {showLeftArrow && (
         <button
@@ -1117,12 +1117,25 @@ export default function TopNavbar({
           )}
         </AnimatePresence>
 
-        {/* FILA DE SUB-PESTAÑAS (dentro de la misma cápsula). En mobile la fila principal de
-            arriba (order-2) queda pegada abajo de todo, así que esta fila visualmente pasa a
-            estar ARRIBA de ella — por eso el borde divisor se invierte (border-b en vez de
-            border-t) y el margen anima en los dos lados a la vez, para que separe de la fila de
-            arriba sin importar de qué lado quede. Se oculta mientras el menú de secciones o el
-            de "Agendar" están abiertos (ambos mobile-only), para no competir por el mismo
+        {/* Filas anidadas registradas por la vista actual (ej. Doctores/Presión Arterial/... en
+            Salud → Control Clínico) — dibujadas DENTRO de esta misma cápsula, como continuación
+            del menú, en vez de cada vista armando su propio menú flotante aparte. Van ANTES que
+            la fila de sub-pestañas de primer nivel (más abajo) para que en mobile queden más
+            arriba en la pantalla: son el segundo nivel (hijas de la pestaña de primer nivel
+            activa), así que visualmente deben estar por encima de ese primer nivel, que a su vez
+            queda pegado arriba de los íconos principales. */}
+        <AnimatePresence mode="popLayout">
+          {effectiveSubPanelRows && effectiveSubPanelRows.length > 0 && effectiveSubPanelRows.map((row, rowIndex) => (
+            <SubPanelRow key={row.indicatorId} row={row} rowIndex={rowIndex} darkMode={darkMode} />
+          ))}
+        </AnimatePresence>
+
+        {/* FILA DE SUB-PESTAÑAS DE PRIMER NIVEL (dentro de la misma cápsula). En mobile la fila
+            principal de abajo (order-2) queda pegada abajo de todo, así que esta fila visualmente
+            pasa a estar justo ARRIBA de ella — por eso el borde divisor se invierte (border-b en
+            vez de border-t) y el margen anima en los dos lados a la vez, para que separe de la
+            fila de abajo sin importar de qué lado quede. Se oculta mientras el menú de secciones
+            o el de "Agendar" están abiertos (ambos mobile-only), para no competir por el mismo
             espacio con ellos. */}
         <AnimatePresence mode="wait">
           {currentSubMenu && currentSubMenu.length > 0 && !mobileMenuOpen && !quickAddMenuOpen && (
@@ -1215,15 +1228,6 @@ export default function TopNavbar({
               )}
             </motion.div>
           )}
-        </AnimatePresence>
-
-        {/* Filas anidadas registradas por la vista actual (ej. Doctores/Presión Arterial/... en
-            Salud → Control Clínico) — dibujadas DENTRO de esta misma cápsula, como continuación
-            del menú, en vez de cada vista armando su propio menú flotante aparte. */}
-        <AnimatePresence mode="popLayout">
-          {effectiveSubPanelRows && effectiveSubPanelRows.length > 0 && effectiveSubPanelRows.map((row, rowIndex) => (
-            <SubPanelRow key={row.indicatorId} row={row} rowIndex={rowIndex} darkMode={darkMode} />
-          ))}
         </AnimatePresence>
 
         {/* NOTIFICATIONS EXPANDABLE PANEL (Seamlessly integrated into TopNavbar Capsule with Desktop Left Detail View) */}
