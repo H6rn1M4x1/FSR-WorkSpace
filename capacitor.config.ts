@@ -10,6 +10,16 @@ const config: CapacitorConfig = {
   android: {
     allowMixedContent: false,
   },
+  plugins: {
+    // Capacitor 8 trae su propio plugin nativo SystemBars que, por defecto ("css"), acolchona
+    // el WebView lejos de la barra de estado y la de gestos y pinta ese hueco con el fondo gris
+    // del tema Android — "native" deja que el WebView (y su fondo animado) se extienda debajo de
+    // ambas barras de verdad, confiando en env(safe-area-inset-*) (ya usado en la app) en vez de
+    // las variables CSS propias que inyecta el modo "css".
+    SystemBars: {
+      insetsHandling: "native",
+    },
+  },
 };
 
 export default config;
