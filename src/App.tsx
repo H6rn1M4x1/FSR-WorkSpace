@@ -2611,7 +2611,10 @@ export default function App() {
           </div>
         )}
 
-        <main ref={mainScrollRef} className="flex-1 overflow-y-auto pb-28 md:pb-0">
+        <main
+          ref={mainScrollRef}
+          className="flex-1 overflow-y-auto pb-28 md:pb-0 [mask-image:linear-gradient(to_bottom,black_calc(100%-7rem),transparent_100%)] [-webkit-mask-image:linear-gradient(to_bottom,black_calc(100%-7rem),transparent_100%)] md:[mask-image:none] md:[-webkit-mask-image:none]"
+        >
           {driveLoading || !isInitialLoadDone ? (
             <AsciiSectionSkeleton tab={currentTab} darkMode={darkMode} />
           ) : (
