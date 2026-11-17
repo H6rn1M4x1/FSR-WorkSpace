@@ -790,6 +790,7 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
           onDragEnd={(_e, info) => {
             if (info.offset.y > 120 || info.velocity.y > 500) onClose();
           }}
+          style={{ willChange: "transform" }}
           className="w-full overflow-hidden"
         >
           {/* Agarre para cerrar deslizando hacia abajo — solo mobile. */}

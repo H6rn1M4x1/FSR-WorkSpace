@@ -1217,7 +1217,7 @@ export function UserSettingsModal({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2 }}
-          className="fixed inset-0 z-[100] flex items-start justify-center p-3 md:p-6 pt-16 md:pt-24 pb-24 md:pb-10 bg-black/60 backdrop-blur-md"
+          className="fixed inset-0 z-[100] flex items-end md:items-start justify-center px-2 md:p-6 md:pt-24 md:pb-10 pb-[calc(0.75rem+max(0.5rem,env(safe-area-inset-bottom)))] md:bg-black/60 md:backdrop-blur-md"
           onClick={onClose}
         >
           <motion.div
@@ -1234,6 +1234,7 @@ export function UserSettingsModal({
               if (info.offset.y > 120 || info.velocity.y > 500) onClose();
             }}
             onClick={(e) => e.stopPropagation()}
+            style={{ willChange: "transform" }}
             // max-h se calcula contra el espacio REAL disponible (viewport menos el padding fijo
             // de arriba/abajo del backdrop: pt-16 + pb-24 en mobile, pt-24 + pb-10 en desktop), no
             // contra el viewport completo (max-h-[92vh] anterior) — "vh" es siempre relativo al
@@ -1247,7 +1248,11 @@ export function UserSettingsModal({
             // igual que desktop) le deja al backdrop el aire suficiente para no terminar nunca
             // físicamente por detrás de la barra de navegación inferior, que creció de alto en
             // rondas recientes de esta misma sesión.
-            className={`relative w-full max-w-4xl rounded-3xl border shadow-2xl overflow-hidden flex flex-col max-h-[calc(100vh-10rem)] md:max-h-[calc(100vh-8.5rem)] ${
+            // En mobile queda "pegado" al borde inferior de la pantalla, con las esquinas de
+            // abajo sin redondear (en vez de un modal flotante centrado con fondo oscurecido) —
+            // para que se sienta como una continuación de la barra de navegación inferior, no
+            // como algo aparte. En desktop sigue siendo el modal centrado flotante de siempre.
+            className={`relative w-full max-w-4xl rounded-t-3xl md:rounded-3xl border shadow-2xl overflow-hidden flex flex-col max-h-[calc(100vh-10rem)] md:max-h-[calc(100vh-8.5rem)] ${
               darkMode
                 ? "bg-zinc-950 border-zinc-800 text-zinc-100"
                 : "bg-white border-zinc-200 text-zinc-900"
