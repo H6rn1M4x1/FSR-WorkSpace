@@ -115,12 +115,14 @@ export default function App() {
   // tema) para que la hora/batería sigan siendo legibles, en vez de solaparse con el contenido
   // que scrollea. En el tope vuelve a ser transparente y se ve el fondo animado. Se setea el
   // estilo directamente (sin estado de React) para no re-renderizar en cada pixel de scroll.
-  const topScrimRef = useRef<HTMLDivElement>(null);
   const TOP_SCRIM_FADE_DISTANCE = 56;
   const handleMainScroll = () => {
-    if (!topScrimRef.current || !mainScrollRef.current) return;
+    if (!mainScrollRef.current) return;
     const opacity = Math.min(1, Math.max(0, mainScrollRef.current.scrollTop / TOP_SCRIM_FADE_DISTANCE));
-    topScrimRef.current.style.opacity = String(opacity);
+    // Se setea en documentElement (no gestionado por React) en vez de vía ref sobre el propio
+    // elemento: si fuera por ref, cualquier re-render de App (muy frecuentes acá) pisa el estilo
+    // inline con el valor fijo del JSX y el scrim se queda siempre transparente.
+    document.documentElement.style.setProperty("--fsr-top-scrim-opacity", String(opacity));
   };
 
   const isLocalMutatingRef = useRef(false);
@@ -2629,12 +2631,13 @@ export default function App() {
           </div>
         )}
 
-        {/* Scrim mobile-only sobre la barra de estado — ver topScrimRef/handleMainScroll. */}
+        {/* Scrim mobile-only sobre la barra de estado — ver handleMainScroll. La opacidad lee la
+            variable CSS seteada ahí (en documentElement) en vez de un valor fijo, para que la
+            mutación directa del scroll handler no sea pisada por los re-renders de App. */}
         <div
-          ref={topScrimRef}
           aria-hidden="true"
           className={`md:hidden fixed top-0 inset-x-0 z-40 pointer-events-none ${darkMode ? "bg-black" : "bg-white"}`}
-          style={{ height: "env(safe-area-inset-top)", opacity: 0 }}
+          style={{ height: "env(safe-area-inset-top)", opacity: "var(--fsr-top-scrim-opacity, 0)" }}
         />
 
         <main
