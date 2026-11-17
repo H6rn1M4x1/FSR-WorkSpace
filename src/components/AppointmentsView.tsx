@@ -28,6 +28,7 @@ import { PillFilterBar } from "./PillFilterBar";
 import { ConfirmationModal } from "./ConfirmationModal";
 import { DetailModal, DetailBlock, DetailBlockGrid } from "./DetailModal";
 import { motion, AnimatePresence, useDragControls } from "motion/react";
+import { ScrollFadeItem } from "./ScrollFadeItem";
 import { createPortal } from "react-dom";
 import {
   Calendar,
@@ -1482,6 +1483,7 @@ export default function AppointmentsView({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recognitionRef = useRef<any>(null);
+  const turnosListRef = useRef<HTMLDivElement>(null);
 
   const startRecording = async () => {
     try {
@@ -3078,6 +3080,7 @@ export default function AppointmentsView({
                     exit={{ opacity: 0, y: -6 }}
                     transition={{ duration: 0.2 }}
                     className="space-y-3 max-h-[380px] overflow-y-auto pr-1"
+                    ref={turnosListRef}
                   >
                   {sortedTurnosCompromisos.filter((tc) => {
                     const matchesDate =
@@ -3129,7 +3132,8 @@ export default function AppointmentsView({
                         const estado = getEstadoLabel(tc.estatus, tc.fecha);
                         const isExpanded = expandedTurnoId === tc.id;
                         return (
-                          <div
+                          <ScrollFadeItem
+                            containerRef={turnosListRef}
                             key={`tc-${tc.id}-${idx}`}
                             onClick={() =>
                               setExpandedTurnoId(isExpanded ? null : tc.id)
@@ -3547,7 +3551,7 @@ export default function AppointmentsView({
                                 ))}
                               </div>
                             )}
-                          </div>
+                          </ScrollFadeItem>
                         );
                       })
                   )}
