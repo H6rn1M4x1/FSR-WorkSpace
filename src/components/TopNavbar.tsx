@@ -694,7 +694,11 @@ export default function TopNavbar({
                 }
               }}
               className={`md:hidden flex-1 flex items-center justify-center p-3 rounded-full transition-colors duration-300 cursor-pointer ${
-                mobileMenuOpen || showChat || showNotifications || isSettingsOpen
+                mobileMenuOpen ||
+                showChat ||
+                showNotifications ||
+                isSettingsOpen ||
+                ["academic", "health", "meals", "notes"].includes(currentTab)
                   ? `bg-primary shadow-md text-white dark:text-zinc-950 font-bold ${!darkMode ? "active-nav-pill-light" : ""}`
                   : darkMode
                   ? "text-zinc-300 hover:text-white hover:bg-white/10"
