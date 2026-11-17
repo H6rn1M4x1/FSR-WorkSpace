@@ -88,6 +88,11 @@ html, body {
   color: var(--color-text-main);
   scroll-behavior: smooth;
   -webkit-font-smoothing: antialiased;
+  /* El "scroll anchoring" del navegador reajusta el scroll solo cuando el contenido de arriba
+     cambia de alto (por ejemplo, una sección que carga de a poco por Suspense/lazy) — esto
+     peleaba contra el reset a (0,0) al cambiar de sección, devolviendo el scroll a donde estaba
+     apenas terminaba de cargar el contenido nuevo. */
+  overflow-anchor: none;
 }
 
 /* Glassmorphism utility classes for Liquid Ether background */

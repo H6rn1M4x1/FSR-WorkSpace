@@ -164,10 +164,21 @@ export default function App() {
   // mainScrollRef.current.scrollTop no alcanza: el que realmente scrollea es el documento (ver
   // handleMainScroll más abajo), así que hay que resetear también ese scroll real.
   useEffect(() => {
-    if (mainScrollRef.current) mainScrollRef.current.scrollTop = 0;
-    window.scrollTo(0, 0);
-    document.documentElement.scrollTop = 0;
-    document.body.scrollTop = 0;
+    const resetScroll = () => {
+      if (mainScrollRef.current) mainScrollRef.current.scrollTop = 0;
+      window.scrollTo(0, 0);
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    };
+    resetScroll();
+    // El contenido de la sección nueva puede terminar de montar/crecer un instante después (lazy
+    // chunk, Suspense, imágenes) — se repite el reset en el siguiente frame por si ese cambio de
+    // alto post-montaje mueve el scroll de nuevo.
+    const raf1 = requestAnimationFrame(() => {
+      resetScroll();
+      requestAnimationFrame(resetScroll);
+    });
+    return () => cancelAnimationFrame(raf1);
   }, [currentTab, activeSubTab]);
 
   // Key de transición para el esqueleto ascii de sección (ver <SectionTransition> más abajo, en
