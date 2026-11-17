@@ -2619,7 +2619,7 @@ export default function App() {
 
         <main
           ref={mainScrollRef}
-          className="flex-1 overflow-y-auto pb-28 md:pb-0"
+          className="flex-1 overflow-y-auto pt-[calc(0.75rem+env(safe-area-inset-top))] md:pt-0 pb-28 md:pb-0"
         >
           {driveLoading || !isInitialLoadDone ? (
             <AsciiSectionSkeleton tab={currentTab} darkMode={darkMode} />
