@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback, ReactNode, MouseEventHandler, UIEvent } from 'react';
-import { motion, useInView } from 'motion/react';
+import { motion, useInView, useScroll, useTransform } from 'motion/react';
 import './AnimatedList.css';
 
 interface AnimatedItemProps {
@@ -14,16 +14,27 @@ interface AnimatedItemProps {
 export const AnimatedItem: React.FC<AnimatedItemProps> = ({ children, delay = 0, index, containerRef, onMouseEnter, onClick }) => {
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { root: containerRef, amount: 0.1, once: false });
+
+  // Desvanecido continuo atado al scroll de la lista (no al "inView" binario de arriba, que solo
+  // controla el pop de escala): a medida que la tarjeta entra/sale del contenedor por arriba o
+  // por abajo, su opacidad baja a 0 de a poco en vez de desaparecer de golpe.
+  const { scrollYProgress } = useScroll({
+    target: ref,
+    container: containerRef,
+    offset: ['start end', 'end start'],
+  });
+  const scrollOpacity = useTransform(scrollYProgress, [0, 0.15, 0.85, 1], [0, 1, 1, 0]);
+
   return (
     <motion.div
       ref={ref}
       data-index={index}
       onMouseEnter={onMouseEnter}
       onClick={onClick}
-      initial={{ scale: 0.85, opacity: 0 }}
-      animate={inView ? { scale: 1, opacity: 1 } : { scale: 0.85, opacity: 0 }}
+      initial={{ scale: 0.85 }}
+      animate={inView ? { scale: 1 } : { scale: 0.85 }}
       transition={{ duration: 0.22, delay }}
-      style={{ cursor: 'pointer' }}
+      style={{ cursor: 'pointer', opacity: scrollOpacity }}
     >
       {children}
     </motion.div>
