@@ -913,6 +913,11 @@ export default function TopNavbar({
                   setQuickAddMenuOpen(false);
                 }
               }}
+              // willChange obliga a este panel a su propia capa de composición mientras se
+              // arrastra — sin esto, en algunos WebView el fondo detrás no se repinta en sync
+              // con el contenido durante el gesto (queda "pegado" mientras el contenido sí
+              // sigue al dedo).
+              style={{ willChange: "transform" }}
               className="w-full overflow-y-hidden md:hidden"
             >
               {/* Agarre para cerrar deslizando hacia abajo. */}
