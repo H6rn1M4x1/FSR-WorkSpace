@@ -4110,7 +4110,9 @@ export default function MealsView({
                 Planifica qué días vas a cocinar cada plato.
               </p>
             </div>
-            <div className="flex flex-col items-stretch sm:items-end gap-2 shrink-0 w-full sm:w-auto mt-2 sm:mt-0">
+            {/* Solo desktop/tablet: en mobile el "+" de la barra de navegación inferior ya
+                abre este mismo formulario directo. */}
+            <div className="hidden md:flex flex-col items-stretch sm:items-end gap-2 shrink-0 w-full sm:w-auto mt-2 sm:mt-0">
               <motion.button
                 whileHover={{ scale: 1.04 }}
                 whileTap={{ scale: 0.94 }}

@@ -2352,11 +2352,13 @@ export default function FinanceView({
                           Facturas y Vencimientos
                         </h3>
                       </div>
+                      {/* Solo desktop/tablet: en mobile el "+" de la barra de navegación
+                          inferior ya abre este mismo formulario directo. */}
                       <button
                         type="button"
                         onClick={handleQuickAddPaymentCard}
                         title="Agregar pago (en Gastos Mensuales)"
-                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-primary hover:bg-primary-hover text-white dark:text-blue-950 text-[11px] font-bold cursor-pointer transition-all shadow-sm shrink-0"
+                        className="hidden md:flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-primary hover:bg-primary-hover text-white dark:text-blue-950 text-[11px] font-bold cursor-pointer transition-all shadow-sm shrink-0"
                       >
                         <Plus className="w-3.5 h-3.5" />
                         <span>Agregar</span>
