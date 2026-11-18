@@ -188,14 +188,17 @@ export function generateStrongPassword(opts: PasswordGeneratorOptions): string {
 }
 
 // ---------- "stay unlocked" persistence ----------
-// By request, the vault should only re-ask for the master password after an
-// explicit logout (or an explicit "Bloquear" click) — not on every reload, tab
-// close, or period of inactivity. To make that possible, the unwrapped MEK is
-// cached in localStorage instead of living only in memory. Trade-off, spelled
-// out plainly: anyone with access to this browser profile while the account
-// stays logged in can read the vault without the master password, since the
-// key needed to decrypt it is sitting in local storage. Locking manually or
-// logging out removes it immediately.
+// Por pedido original, la caja no debía volver a pedir la clave maestra salvo por un logout o
+// un "Bloquear" explícito — no en cada reload, cierre de pestaña o rato de inactividad. Por eso
+// el MEK ya desenvuelto se cachea en localStorage en vez de vivir solo en memoria. Trade-off,
+// dicho claramente: cualquiera con acceso a este perfil mientras la cuenta siga logueada puede
+// leer la caja sin la clave maestra, porque la clave que hace falta para desencriptar está ahí
+// guardada. Bloquear manualmente o cerrar sesión la saca al instante.
+//
+// Por un pedido posterior, ahora hay además un LÍMITE DE TIEMPO (ver VAULT_AUTO_LOCK_MS más
+// abajo): aunque nadie la bloquee a mano, pasada una hora desde que se desbloqueó se considera
+// vencida igual — así el "quedar desbloqueada" sigue siendo cómodo para usarla seguido, pero no
+// para siempre.
 const VAULT_UNLOCK_STORAGE_PREFIX = "fsr_vault_unlock:";
 
 export function persistVaultUnlock(userId: string, mek: Uint8Array): void {
@@ -219,6 +222,38 @@ export function loadPersistedVaultUnlock(userId: string): Uint8Array | null {
 export function clearPersistedVaultUnlock(userId: string): void {
   try {
     localStorage.removeItem(VAULT_UNLOCK_STORAGE_PREFIX + userId);
+  } catch {
+    // ignore
+  }
+}
+
+// Vencimiento del "stay unlocked": una hora desde el último desbloqueo (por clave, frase de
+// recuperación, o huella — cualquiera de los tres cuenta como "se desbloqueó ahora"). Guardado
+// aparte del MEK en sí para no tocar el formato ya existente de ese valor.
+export const VAULT_AUTO_LOCK_MS = 60 * 60 * 1000;
+const VAULT_UNLOCKED_AT_PREFIX = "fsr_vault_unlocked_at:";
+
+export function persistVaultUnlockedAt(userId: string, timestamp: number): void {
+  try {
+    localStorage.setItem(VAULT_UNLOCKED_AT_PREFIX + userId, String(timestamp));
+  } catch {
+    // ignore
+  }
+}
+
+export function loadVaultUnlockedAt(userId: string): number | null {
+  try {
+    const raw = localStorage.getItem(VAULT_UNLOCKED_AT_PREFIX + userId);
+    const parsed = raw ? parseInt(raw, 10) : NaN;
+    return Number.isFinite(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearVaultUnlockedAt(userId: string): void {
+  try {
+    localStorage.removeItem(VAULT_UNLOCKED_AT_PREFIX + userId);
   } catch {
     // ignore
   }
