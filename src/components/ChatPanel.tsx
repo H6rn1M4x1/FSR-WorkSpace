@@ -945,7 +945,7 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                   </div>
                 )}
 
-                <div className="flex-1 min-h-0 overflow-y-auto scrollbar-none space-y-1.5 px-1">
+                <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain scrollbar-none space-y-1.5 px-1">
                   {incoming.map((invite) => (
                     <div
                       key={invite.id}
@@ -1157,7 +1157,7 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
                     </div>
 
                     <div className="relative flex-1 min-h-0 flex flex-col">
-                    <div ref={messagesContainerRef} className="flex-1 min-h-0 overflow-y-auto scrollbar-none p-3 space-y-1.5">
+                    <div ref={messagesContainerRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain scrollbar-none p-3 space-y-1.5">
                       {messages.length === 0 ? (
                         <div className="h-full flex items-center justify-center text-xs text-zinc-400 font-medium text-center px-6">
                           Todavía no hay mensajes. ¡Escribe el primero!
