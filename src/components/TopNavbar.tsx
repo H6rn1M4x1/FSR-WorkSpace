@@ -2,6 +2,7 @@ import { createPortal } from "react-dom";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useDragToCollapse } from "../hooks/useDragToCollapse";
+import type { UseVaultResult } from "../hooks/useVault";
 import React, { useState, useRef, useEffect, lazy, Suspense } from "react";
 import { motion, AnimatePresence, useDragControls } from "motion/react";
 import type { NavPanelRow } from "../lib/navPanelContext";
@@ -193,6 +194,7 @@ interface TopNavbarProps {
   currentTab: string;
   setCurrentTab: (tab: string) => void;
   activeSubTab?: string;
+  vault: UseVaultResult;
   onSubTabChange?: (subTabId: string) => void;
   darkMode: boolean;
   setDarkMode: (dark: boolean) => void;
@@ -417,6 +419,7 @@ export default function TopNavbar({
   currentTab,
   setCurrentTab,
   activeSubTab,
+  vault,
   onSubTabChange,
   subPanelRows,
   darkMode,
@@ -1554,6 +1557,7 @@ export default function TopNavbar({
           <Suspense fallback={null}>
             <UserSettingsModal
               embedded
+              vault={vault}
               isOpen={isSettingsOpen}
               onClose={onOpenSettings}
               darkMode={darkMode}

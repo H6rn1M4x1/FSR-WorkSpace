@@ -21,7 +21,7 @@ import {
   Search,
   Fingerprint,
 } from "lucide-react";
-import { useVault } from "../hooks/useVault";
+import type { UseVaultResult } from "../hooks/useVault";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import { verify2FAToken } from "../lib/totp";
 import { isBiometricAvailable, authenticateWithBiometric } from "../lib/biometricAuth";
@@ -41,6 +41,7 @@ import type { VaultItemDecrypted } from "../types";
 
 interface PasswordVaultPanelProps {
   userId: string;
+  vault: UseVaultResult;
   darkMode?: boolean;
   twoFactorEnabled: boolean;
   twoFactorSecret: string;
@@ -156,11 +157,11 @@ function parsePasswordsCsv(text: string): ImportedPasswordRow[] {
 
 export function PasswordVaultPanel({
   userId,
+  vault,
   darkMode = false,
   twoFactorEnabled,
   twoFactorSecret,
 }: PasswordVaultPanelProps) {
-  const vault = useVault(userId);
   const { showToast } = useToast();
   const [masterPwInput, setMasterPwInput] = useState("");
   const [confirmPwInput, setConfirmPwInput] = useState("");
@@ -179,7 +180,7 @@ export function PasswordVaultPanel({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [totpGateFor, setTotpGateFor] = useState<{
     id: string;
-    action: "reveal" | "copy" | "disable-gate";
+    action: "reveal" | "copy";
   } | null>(null);
   const [totpCodeInput, setTotpCodeInput] = useState("");
   const [totpError, setTotpError] = useState<string | null>(null);
@@ -338,7 +339,7 @@ export function PasswordVaultPanel({
 
   // Lo que pasa UNA VEZ que ya se verificó la identidad — sea con el código de Google
   // Authenticator o con la huella, da igual cuál de los dos lo confirmó.
-  const performGateAction = async (gate: { id: string; action: "reveal" | "copy" | "disable-gate" }) => {
+  const performGateAction = async (gate: { id: string; action: "reveal" | "copy" }) => {
     if (gate.action === "reveal") {
       const item = vault.items.find((i) => i.id === gate.id);
       showItem(gate.id);
@@ -350,9 +351,6 @@ export function PasswordVaultPanel({
         setCopiedId(item.id);
         setTimeout(() => setCopiedId(null), 1500);
       }
-    } else if (gate.action === "disable-gate") {
-      await vault.setRequireTotpToReveal(false);
-      showToast("Verificación con Google Authenticator desactivada para revelar contraseñas.", "success");
     }
     setTotpGateFor(null);
     setTotpCodeInput("");
@@ -379,18 +377,6 @@ export function PasswordVaultPanel({
       await performGateAction(totpGateFor);
     } else if (outcome === "error") {
       setTotpError("No se pudo usar la huella. Probá de nuevo o ingresá el código.");
-    }
-  };
-
-  const handleToggleRequireTotp = async (checked: boolean) => {
-    if (checked) {
-      await vault.setRequireTotpToReveal(true);
-      showToast("Verificación con Google Authenticator activada para ver o copiar contraseñas.", "success");
-    } else {
-      // Disabling this protection is itself sensitive, so it requires a live 2FA code too.
-      setTotpGateFor({ id: "", action: "disable-gate" });
-      setTotpCodeInput("");
-      setTotpError(null);
     }
   };
 
@@ -801,62 +787,10 @@ export function PasswordVaultPanel({
           </p>
         )}
 
-        {/* 2FA reveal-gate toggle */}
-        <label
-          className={`flex items-start gap-2.5 p-3 rounded-xl border text-xs ${
-            twoFactorEnabled
-              ? "border-slate-200 dark:border-zinc-800 cursor-pointer"
-              : "border-slate-200 dark:border-zinc-800 opacity-60"
-          }`}
-        >
-          <input
-            type="checkbox"
-            checked={!!vault.config?.requireTotpToReveal}
-            disabled={!twoFactorEnabled}
-            onChange={(e) => handleToggleRequireTotp(e.target.checked)}
-            className="mt-0.5"
-          />
-          <span>
-            <span className="font-bold text-zinc-800 dark:text-zinc-200 block">
-              Pedir código de Google Authenticator para ver o copiar una contraseña
-            </span>
-            <span className="text-[10px] text-zinc-500 dark:text-zinc-400 block mt-0.5">
-              {twoFactorEnabled
-                ? "Capa extra: aunque la caja esté desbloqueada, cada revelado pide el código de 6 dígitos y se vuelve a ocultar solo a los 5 minutos."
-                : "Activá primero el 2FA (arriba en esta misma pestaña) para poder usar esta opción."}
-            </span>
-          </span>
-        </label>
-
-        {/* Desbloqueo con huella (solo app nativa) — atajo opcional, la clave maestra sigue
-            funcionando siempre igual que antes. */}
-        {biometricAvailable && (
-          <label className="flex items-start gap-2.5 p-3 rounded-xl border border-slate-200 dark:border-zinc-800 text-xs cursor-pointer">
-            <input
-              type="checkbox"
-              checked={vault.isBiometricUnlockEnabled}
-              onChange={(e) => {
-                if (e.target.checked) {
-                  vault.enableBiometricUnlock();
-                  showToast("Ahora podés desbloquear la Caja Fuerte con tu huella.", "success");
-                } else {
-                  vault.disableBiometricUnlock();
-                  showToast("Desbloqueo con huella desactivado.", "info");
-                }
-              }}
-              className="mt-0.5"
-            />
-            <span>
-              <span className="font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
-                <Fingerprint className="w-3.5 h-3.5" /> Desbloquear con huella digital
-              </span>
-              <span className="text-[10px] text-zinc-500 dark:text-zinc-400 block mt-0.5">
-                Atajo más rápido para la próxima vez que la Caja Fuerte esté bloqueada — tu clave
-                maestra sigue funcionando siempre, por si cambiás de equipo o falla el sensor.
-              </span>
-            </span>
-          </label>
-        )}
+        {/* La activación/desactivación del pedido de código al revelar y del desbloqueo con
+            huella vive en Ajustes > Seguridad, junto con el resto de las opciones de 2FA — acá
+            solo se USAN (ver el botón "Usar huella" más arriba, al desbloquear, y el de abajo,
+            al revelar/copiar una contraseña puntual). */}
 
         {/* Search */}
         {vault.items.length > 0 && (
@@ -1086,12 +1020,6 @@ export function PasswordVaultPanel({
                 <ShieldCheck className="w-5 h-5 text-primary" />
                 <h4 className="font-extrabold text-sm">Confirmá con Google Authenticator</h4>
               </div>
-              {totpGateFor.action === "disable-gate" && (
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                  Para desactivar el pedido de código al revelar contraseñas, ingresá tu código
-                  de Google Authenticator una última vez.
-                </p>
-              )}
               <input
                 type="text"
                 inputMode="numeric"

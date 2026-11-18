@@ -72,7 +72,10 @@ import {
   VolumeX,
   BookMarked,
   Download,
+  Fingerprint,
 } from "lucide-react";
+import type { UseVaultResult } from "../hooks/useVault";
+import { isBiometricAvailable, authenticateWithBiometric } from "../lib/biometricAuth";
 import { AddressBookModal, AddressEntry } from "./AddressBookModal";
 import {
   generate2FAQRCode,
@@ -494,6 +497,7 @@ interface UserSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   embedded?: boolean;
+  vault: UseVaultResult;
   darkMode: boolean;
   setDarkMode?: (dark: boolean) => void;
   backgroundStyle?: "dither" | "pixelblast" | "plasma";
@@ -521,6 +525,7 @@ export function UserSettingsModal({
   isOpen,
   onClose,
   embedded = false,
+  vault,
   darkMode,
   setDarkMode,
   backgroundStyle,
@@ -994,6 +999,55 @@ export function UserSettingsModal({
   const [isActivating2FA, setIsActivating2FA] = useState<boolean>(false);
   const [setupCode, setSetupCode] = useState<string>("");
   const [verifyingSetup, setVerifyingSetup] = useState<boolean>(false);
+
+  // Caja Fuerte: opciones de seguridad (pedido de código al revelar, desbloqueo con huella) —
+  // los controles viven acá, en Seguridad, junto al resto de 2FA; el uso en sí (desbloquear,
+  // revelar/copiar una contraseña puntual) sigue viviendo en Caja Fuerte (Notas).
+  const [vaultBiometricAvailable, setVaultBiometricAvailable] = useState(false);
+  const [showDisableVaultGateConfirm, setShowDisableVaultGateConfirm] = useState(false);
+  const [disableVaultGateCode, setDisableVaultGateCode] = useState("");
+  const [disableVaultGateError, setDisableVaultGateError] = useState<string | null>(null);
+  useEffect(() => {
+    isBiometricAvailable().then(setVaultBiometricAvailable);
+  }, []);
+
+  const handleToggleRequireTotp = async (checked: boolean) => {
+    if (checked) {
+      await vault.setRequireTotpToReveal(true);
+      showToast("Verificación con Google Authenticator activada para ver o copiar contraseñas.", "success");
+    } else {
+      // Desactivar esta protección es sensible, así que también pide un código 2FA vivo.
+      setShowDisableVaultGateConfirm(true);
+      setDisableVaultGateCode("");
+      setDisableVaultGateError(null);
+    }
+  };
+
+  const confirmDisableVaultGate = async () => {
+    const ok = await verify2FAToken(disableVaultGateCode, profile.twoFactorSecret);
+    if (!ok) {
+      setDisableVaultGateError("Código incorrecto o expirado.");
+      return;
+    }
+    await vault.setRequireTotpToReveal(false);
+    showToast("Verificación con Google Authenticator desactivada para revelar contraseñas.", "success");
+    setShowDisableVaultGateConfirm(false);
+    setDisableVaultGateCode("");
+  };
+
+  const handleToggleBiometricUnlock = (checked: boolean) => {
+    if (checked) {
+      const ok = vault.enableBiometricUnlock();
+      if (ok) {
+        showToast("Ahora podés desbloquear la Caja Fuerte con tu huella.", "success");
+      } else {
+        showToast("Primero desbloqueá la Caja Fuerte (en Notas) con tu clave maestra, y volvé a intentar acá.", "error");
+      }
+    } else {
+      vault.disableBiometricUnlock();
+      showToast("Desbloqueo con huella desactivado.", "info");
+    }
+  };
 
   // Copy helper
   const [copiedField, setCopiedField] = useState<string | null>(null);
@@ -3322,7 +3376,136 @@ export function UserSettingsModal({
                 </div>
               </div>
 
+              {/* Caja Fuerte: opciones de seguridad — el uso en sí (desbloquear, revelar/copiar
+                  una contraseña puntual) sigue viviendo en Caja Fuerte (Notas); acá solo viven
+                  los interruptores, junto con el resto de 2FA. */}
+              <div className="p-5 rounded-2xl border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-2xl bg-primary text-white dark:text-blue-950 shadow-md">
+                    <Lock className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-sm text-zinc-900 dark:text-zinc-100">
+                      Caja Fuerte de Contraseñas
+                    </h3>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                      Opciones de seguridad de Caja Fuerte (la encontrás en Notas).
+                    </p>
+                  </div>
+                </div>
+
+                <label
+                  className={`flex items-start gap-2.5 p-3 rounded-xl border text-xs ${
+                    profile.twoFactorEnabled
+                      ? "border-slate-200 dark:border-zinc-800 cursor-pointer"
+                      : "border-slate-200 dark:border-zinc-800 opacity-60"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={!!vault.config?.requireTotpToReveal}
+                    disabled={!profile.twoFactorEnabled}
+                    onChange={(e) => handleToggleRequireTotp(e.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    <span className="font-bold text-zinc-800 dark:text-zinc-200 block">
+                      Pedir código de Google Authenticator para ver o copiar una contraseña
+                    </span>
+                    <span className="text-[10px] text-zinc-500 dark:text-zinc-400 block mt-0.5">
+                      {profile.twoFactorEnabled
+                        ? "Capa extra: aunque la caja esté desbloqueada, cada revelado pide el código de 6 dígitos y se vuelve a ocultar solo a los 5 minutos."
+                        : "Activá primero el 2FA (arriba en esta misma pestaña) para poder usar esta opción."}
+                    </span>
+                  </span>
+                </label>
+
+                {vaultBiometricAvailable && (
+                  <div className="flex items-center justify-between gap-3 p-3 rounded-xl border border-slate-200 dark:border-zinc-800">
+                    <div className="min-w-0">
+                      <span className="font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                        <Fingerprint className="w-3.5 h-3.5 shrink-0" /> Desbloquear con huella digital
+                      </span>
+                      <span className="text-[10px] text-zinc-500 dark:text-zinc-400 block mt-0.5">
+                        {vault.isBiometricUnlockEnabled || vault.status === "unlocked"
+                          ? "Atajo más rápido para la próxima vez que la Caja Fuerte esté bloqueada — tu clave maestra sigue funcionando siempre, por si cambiás de equipo o falla el sensor."
+                          : "Desbloqueá primero la Caja Fuerte (en Notas) con tu clave maestra, y volvé acá para activarlo."}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={vault.isBiometricUnlockEnabled}
+                      onClick={() => handleToggleBiometricUnlock(!vault.isBiometricUnlockEnabled)}
+                      disabled={!vault.isBiometricUnlockEnabled && vault.status !== "unlocked"}
+                      className={`shrink-0 w-12 h-6 rounded-full relative transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                        vault.isBiometricUnlockEnabled ? "bg-primary" : "bg-slate-300 dark:bg-zinc-700"
+                      }`}
+                    >
+                      <span
+                        className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-transform ${
+                          vault.isBiometricUnlockEnabled ? "translate-x-6" : "translate-x-0"
+                        }`}
+                      />
+                    </button>
+                  </div>
+                )}
+              </div>
+
             </div>
+          )}
+
+          {showDisableVaultGateConfirm && createPortal(
+            <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+              <div
+                className={`w-full max-w-sm rounded-2xl border p-5 space-y-3 ${
+                  darkMode ? "bg-zinc-950 border-zinc-800" : "bg-white border-zinc-200"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-primary" />
+                  <h4 className="font-extrabold text-sm">Confirmá con Google Authenticator</h4>
+                </div>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Para desactivar el pedido de código al revelar contraseñas, ingresá tu código de
+                  Google Authenticator una última vez.
+                </p>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  autoFocus
+                  value={disableVaultGateCode}
+                  onChange={(e) => setDisableVaultGateCode(e.target.value.replace(/\D/g, ""))}
+                  onKeyDown={(e) => e.key === "Enter" && confirmDisableVaultGate()}
+                  placeholder="000000"
+                  className={`w-full px-3.5 py-2.5 rounded-xl border text-center font-mono text-xl tracking-[0.4em] focus:ring-2 focus:ring-primary focus:outline-none ${
+                    darkMode ? "border-zinc-700 bg-zinc-900" : "border-slate-300 bg-white"
+                  }`}
+                />
+                {disableVaultGateError && (
+                  <p className="text-xs font-bold text-red-600 dark:text-red-400">{disableVaultGateError}</p>
+                )}
+                <div className="flex items-center justify-center sm:justify-start gap-2">
+                  <button
+                    type="button"
+                    onClick={confirmDisableVaultGate}
+                    disabled={disableVaultGateCode.length !== 6}
+                    className="px-4 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-white font-bold text-xs cursor-pointer transition-all shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    <Check className="w-4 h-4" /> Confirmar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowDisableVaultGateConfirm(false)}
+                    className="px-3 py-2 rounded-xl border border-slate-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 font-bold text-xs cursor-pointer transition-all flex items-center justify-center gap-1.5"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
           )}
 
           {activeTab === "backup" && (

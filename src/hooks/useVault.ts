@@ -26,7 +26,7 @@ import type { VaultConfig, VaultItemDecrypted, VaultItemEncrypted } from "../typ
 
 export type VaultStatus = "loading" | "not_setup" | "locked" | "unlocked";
 
-interface UseVaultResult {
+export interface UseVaultResult {
   status: VaultStatus;
   config: VaultConfig | null;
   items: VaultItemDecrypted[];
