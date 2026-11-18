@@ -461,20 +461,20 @@ export default function TopNavbar({
   // Arrastrar hacia abajo para cerrar el menú expandido (grilla o "+") — mismo patrón que
   // DetailModal.tsx y ChatPanel.tsx.
   const expandedMenuDragControls = useDragControls();
-  // Mientras se arrastra, el contenido se mueve (vía el "y" que maneja drag="y" internamente)
-  // pero por sí solo eso no cambia el alto que el panel reserva en el flex de la cápsula — el
-  // fondo/borde de la cápsula se quedaba fijo hasta soltar. Este margin-bottom negativo, atado al
-  // mismo offset del arrastre, hace que la cápsula acompañe en vivo: a medida que el dedo baja,
-  // el espacio reservado se achica al mismo ritmo, así se ve como un solo bloque colapsando, no
-  // contenido despegado de un fondo que no se mueve.
-  const expandedMenuDragY = useMotionValue(0);
-  const expandedMenuMarginBottom = useTransform(expandedMenuDragY, (v) => -v);
+  // Un único motion value COMPARTIDO por los 4 paneles que crecen en esta cápsula (menú
+  // expandido, Avisos, Chat, Ajustes embebido — nunca hay dos abiertos/arrastrándose a la vez,
+  // así que compartirlo es seguro). Mientras se arrastra cualquiera de ellos, "drag" escribe
+  // directo sobre ESTE valor (vía style={{ y: footerLiftY }} en cada panel, en vez de que cada
+  // uno tenga el suyo propio leído de info.offset.y crudo) y la fila de íconos lee el mismo
+  // valor, negado, para subir exactamente al mismo ritmo — ya no hace falta un margin-bottom
+  // (que afecta layout y competía con la animación "layout" de la cápsula, causando el
+  // desfasaje) ni que cada panel reimplemente su propia sincronización.
+  const footerLiftY = useMotionValue(0);
+  const footerLiftYNegated = useTransform(footerLiftY, (v) => -v);
   const [showNotifications, setShowNotifications] = useState(false);
   const [selectedNotifId, setSelectedNotifId] = useState<string | null>(null);
   // Arrastrar hacia abajo para cerrar Avisos — mismo patrón que el menú expandido y Chat.
   const notificationsDragControls = useDragControls();
-  const notificationsDragY = useMotionValue(0);
-  const notificationsMarginBottom = useTransform(notificationsDragY, (v) => -v);
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
@@ -658,8 +658,13 @@ export default function TopNavbar({
         {/* TOP ROW: Main Header Bar — en mobile queda al final (order-2) para que sea la fila
             pegada al borde inferior de la pantalla (la más fácil de alcanzar con el pulgar); el
             resto del contenido de la cápsula (sub-pestañas, notificaciones, chat) crece hacia
-            arriba, por encima de esta fila, en vez de taparla. */}
-        <div className="order-2 md:order-none flex items-center justify-between gap-2 w-full">
+            arriba, por encima de esta fila, en vez de taparla. style y: sube en vivo (transform,
+            no layout) mientras se arrastra hacia abajo cualquiera de esos paneles — ver
+            footerLiftY más arriba. */}
+        <motion.div
+          style={{ y: footerLiftYNegated, willChange: "transform" }}
+          className="order-2 md:order-none flex items-center justify-between gap-2 w-full"
+        >
           {/* Brand / Logo */}
           <div
             onClick={() => {
@@ -931,7 +936,7 @@ export default function TopNavbar({
             </div>
 
           </div>
-        </div>
+        </motion.div>
 
         {/* MENÚ EXPANDIDO (solo mobile): al tocar la grilla o el "+", en vez de un cartel aparte,
             esto crece hacia arriba dentro de la misma cápsula — y AMBOS disparadores comparten
@@ -941,18 +946,20 @@ export default function TopNavbar({
         <AnimatePresence mode="wait">
           {(mobileMenuOpen || quickAddMenuOpen) && (
             // OUTER: anima el alto y recorta, sin transform propio, así su borde de abajo queda
-            // fijo donde el panel termina en reposo. INNER: el que se arrastra de verdad. Ver el
-            // comentario largo junto al SettingsShell embebido en UserSettingsModal.tsx — mismo
-            // motivo: evita que el contenido se asome por detrás de la fila de íconos de abajo
-            // (semitransparente) al arrastrar, y mantiene el contenido y el achique de la cápsula
-            // exactamente sincronizados (antes dependían de dos lecturas distintas del offset).
+            // fijo donde el panel termina en reposo — SIN margin-bottom (eso era lo que competía
+            // con la animación "layout" de la cápsula y causaba el desfasaje/solapamiento: un
+            // cambio de margin es un cambio de layout, que la cápsula intentaba re-animar con su
+            // propia transición, a destiempo del arrastre). INNER: el que se arrastra de verdad,
+            // escribiendo sobre footerLiftY — la fila de íconos lee ESE mismo valor (ver más
+            // arriba) para subir en espejo, puramente por transform, sin tocar layout en ningún
+            // lado, así los dos quedan siempre exactamente sincronizados y nada se escapa del
+            // recorte fijo de este wrapper.
             <motion.div
               key={mobileMenuOpen ? "mobile-expanded-menu" : "mobile-quickadd-menu"}
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-              style={{ marginBottom: expandedMenuMarginBottom }}
               className="w-full overflow-y-hidden md:hidden"
             >
             <motion.div
@@ -970,9 +977,8 @@ export default function TopNavbar({
               // willChange obliga a este panel a su propia capa de composición mientras se
               // arrastra — sin esto, en algunos WebView el fondo detrás no se repinta en sync
               // con el contenido durante el gesto (queda "pegado" mientras el contenido sí
-              // sigue al dedo). y: expandedMenuDragY en vez de un valor interno de "drag", para
-              // que expandedMenuMarginBottom dependa del offset YA con el elástico aplicado.
-              style={{ y: expandedMenuDragY, willChange: "transform" }}
+              // sigue al dedo).
+              style={{ y: footerLiftY, willChange: "transform" }}
             >
               {/* Agarre para cerrar deslizando hacia abajo. */}
               <div
@@ -1294,13 +1300,13 @@ export default function TopNavbar({
         <AnimatePresence initial={false}>
           {showNotifications && (
             // OUTER/INNER: ver el comentario largo junto al menú expandido más arriba — mismo
-            // motivo (corte limpio contra la fila de íconos + arrastre sincronizado).
+            // motivo (corte limpio contra la fila de íconos + arrastre sincronizado, vía el
+            // footerLiftY compartido, sin margin-bottom).
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.2, ease: "easeInOut" }}
-              style={{ marginBottom: notificationsMarginBottom }}
               className="w-full overflow-hidden"
             >
             <motion.div
@@ -1312,7 +1318,7 @@ export default function TopNavbar({
               onDragEnd={(_e, info) => {
                 if (info.offset.y > 120 || info.velocity.y > 500) setShowNotifications(false);
               }}
-              style={{ y: notificationsDragY, willChange: "transform" }}
+              style={{ y: footerLiftY, willChange: "transform" }}
             >
               {/* Agarre para cerrar deslizando hacia abajo — solo mobile. */}
               <div
@@ -1557,6 +1563,7 @@ export default function TopNavbar({
           isOpen={showChat}
           onClose={() => setShowChat(false)}
           onUnreadCountChange={setChatUnreadCount}
+          panelDragY={footerLiftY}
         />
 
         {/* AJUSTES & CONFIGURACIÓN (solo mobile): embebido en esta misma cápsula, con el mismo
@@ -1569,6 +1576,7 @@ export default function TopNavbar({
           <Suspense fallback={null}>
             <UserSettingsModal
               embedded
+              panelDragY={footerLiftY}
               isOpen={isSettingsOpen}
               onClose={onOpenSettings}
               darkMode={darkMode}

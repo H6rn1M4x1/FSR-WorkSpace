@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { motion, AnimatePresence, useDragControls, useMotionValue, useTransform } from "motion/react";
+import { motion, AnimatePresence, useDragControls, type MotionValue } from "motion/react";
 import {
   MessageCircle,
   Send,
@@ -69,9 +69,14 @@ interface ChatPanelProps {
   isOpen: boolean;
   onClose: () => void;
   onUnreadCountChange?: (count: number) => void;
+  // Motion value COMPARTIDO con TopNavbar (ver footerLiftY en TopNavbar.tsx): mientras se
+  // arrastra este panel hacia abajo, "drag" escribe directo acá, y la fila de íconos de abajo
+  // lee el mismo valor (negado) para subir en espejo — puro transform, sin margin/layout, así
+  // quedan siempre sincronizados y nada se escapa del recorte del wrapper de abajo.
+  panelDragY: MotionValue<number>;
 }
 
-export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountChange }: ChatPanelProps) {
+export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountChange, panelDragY }: ChatPanelProps) {
   const normalizedUserEmail = (userEmail || "").trim().toLowerCase();
 
   const [incoming, setIncoming] = useState<ChatContact[]>([]);
@@ -154,13 +159,9 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
   // Arrastrar hacia abajo para cerrar el panel (solo mobile, solo desde el agarre de arriba) —
   // mismo patrón que DetailModal.tsx: dragListener={false} acá + dragControls.start() en el
   // agarre, para que arrastrar desde la lista de contactos o los mensajes (que tienen su propio
-  // scroll) no mueva el panel entero.
+  // scroll) no mueva el panel entero. panelDragY: ver el comentario junto a footerLiftY en
+  // TopNavbar.tsx.
   const dragControls = useDragControls();
-  // Ver el comentario junto a expandedMenuDragY en TopNavbar.tsx: este margin-bottom negativo,
-  // atado al offset del arrastre, hace que la cápsula se achique en vivo mientras se arrastra en
-  // vez de quedarse fija hasta soltar.
-  const dragY = useMotionValue(0);
-  const dragMarginBottom = useTransform(dragY, (v) => -v);
 
   // These two subscriptions stay alive for as long as this component is mounted (i.e. for as
   // long as TopNavbar itself is mounted), regardless of `isOpen` — that's what lets the unread
@@ -782,16 +783,17 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
   return (
     <AnimatePresence initial={false}>
       {isOpen && (
-        // OUTER: anima el alto y recorta (overflow-hidden), sin transform propio — su borde de
-        // abajo queda fijo donde el panel termina en reposo. INNER: el que se arrastra de verdad.
-        // Separarlos es lo que evita que, al arrastrar, el contenido se asome por detrás de la
-        // fila de íconos (semitransparente) de más abajo — nunca se ve pasado ese límite fijo.
+        // OUTER: anima el alto y recorta (overflow-hidden), sin transform propio ni margin —
+        // su borde de abajo queda fijo donde el panel termina en reposo. INNER: el que se
+        // arrastra de verdad, escribiendo sobre panelDragY (compartido con la fila de íconos de
+        // TopNavbar, que sube en espejo por transform). Separar ambas capas es lo que evita que
+        // el contenido se asome por detrás de esa fila (semitransparente) al arrastrar — nunca
+        // se ve pasado el límite fijo de este wrapper.
         <motion.div
           initial={{ opacity: 0, height: 0 }}
           animate={{ opacity: 1, height: "auto" }}
           exit={{ opacity: 0, height: 0 }}
           transition={{ duration: 0.2, ease: "easeInOut" }}
-          style={{ marginBottom: dragMarginBottom }}
           className="w-full overflow-hidden"
         >
         <motion.div
@@ -803,11 +805,7 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
           onDragEnd={(_e, info) => {
             if (info.offset.y > 120 || info.velocity.y > 500) onClose();
           }}
-          // y: dragY (en vez de dejar que "drag" use su propio valor interno) para que
-          // dragMarginBottom dependa del MISMO valor, ya con el elástico de dragElastic
-          // aplicado — así el contenido y la cápsula que se achica se mueven exactamente
-          // en sincro en vez de a ritmos distintos (uno con elástico, el otro sin él).
-          style={{ y: dragY, willChange: "transform" }}
+          style={{ y: panelDragY, willChange: "transform" }}
         >
           {/* Agarre para cerrar deslizando hacia abajo — solo mobile. */}
           <div

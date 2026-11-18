@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import { useToast } from "../context/ToastContext";
-import { motion, AnimatePresence, useDragControls, useMotionValue, useTransform } from "motion/react";
+import { motion, AnimatePresence, useDragControls, type MotionValue } from "motion/react";
 import { createPortal } from "react-dom";
 import { Eye, EyeOff } from "lucide-react";
 import { SmartDateTimePicker } from "./SmartDateTimePicker";
@@ -378,6 +378,10 @@ interface SettingsShellProps {
   isOpen: boolean;
   darkMode: boolean;
   dragControls: ReturnType<typeof useDragControls>;
+  // Motion value compartido con la fila de íconos de TopNavbar (ver footerLiftY ahí) — solo se
+  // usa cuando embedded=true; desktop no lo necesita (su drag-to-dismiss no convive con ninguna
+  // fila de íconos detrás). Opcional en el tipo para no obligar a App.tsx (desktop) a pasarlo.
+  panelDragY?: MotionValue<number>;
   onClose: () => void;
   children: React.ReactNode;
 }
@@ -387,13 +391,10 @@ interface SettingsShellProps {
 // backdrop oscurecido + tarjeta — exactamente igual que antes de que existiera este wrapper.
 // embedded=true (mobile): en vez de un modal aparte, el MISMO mecanismo de panel que Chat/Avisos
 // en TopNavbar.tsx — un motion.div que crece hacia arriba DENTRO de la misma cápsula del navbar,
-// con el mismo drag-to-dismiss y el mismo margin-bottom atado al offset del arrastre (ver
-// dragY/dragMarginBottom en ChatPanel.tsx) — así Ajustes es una pieza más de esa cápsula, con un
-// corte limpio contra la fila de íconos principal, en vez de un modal que aparece por detrás.
-function SettingsShell({ embedded, isOpen, darkMode, dragControls, onClose, children }: SettingsShellProps) {
-  const dragY = useMotionValue(0);
-  const dragMarginBottom = useTransform(dragY, (v) => -v);
-
+// con el mismo drag-to-dismiss, escribiendo sobre el MISMO panelDragY que la fila de íconos lee
+// (negado) para subir en espejo — así Ajustes es una pieza más de esa cápsula, con un corte
+// limpio contra la fila de íconos principal, en vez de un modal que aparece por detrás.
+function SettingsShell({ embedded, isOpen, darkMode, dragControls, panelDragY, onClose, children }: SettingsShellProps) {
   const grip = (
     <div
       onPointerDown={(e) => {
@@ -418,13 +419,13 @@ function SettingsShell({ embedded, isOpen, darkMode, dragControls, onClose, chil
   if (embedded) {
     return (
       // OUTER: el que anima el alto al abrir/cerrar y el que recorta (overflow-hidden) — a
-      // propósito SIN el drag ni el transform del arrastre, así su propio borde inferior queda
-      // fijo en el lugar donde el panel termina en reposo (el mismo lugar donde estaba la línea
-      // de cierre). INNER: el que se arrastra de verdad (transform). Separarlos en dos capas es
-      // lo que logra el "corte" pedido: al arrastrar hacia abajo, el contenido (INNER, que se
-      // traslada) queda recortado contra el borde fijo de OUTER en vez de poder asomarse por
-      // detrás de la fila de íconos (que es semitransparente) — nunca se ve lo que hay más abajo
-      // del límite original del panel, se arrastre lo que se arrastre.
+      // propósito SIN el drag ni el transform del arrastre, y SIN margin, así su propio borde
+      // inferior queda fijo en el lugar donde el panel termina en reposo. INNER: el que se
+      // arrastra de verdad, escribiendo sobre panelDragY — la fila de íconos de TopNavbar lee
+      // ESE mismo valor (negado) para subir en espejo, puro transform, nunca layout. Separarlos
+      // en dos capas es lo que logra el "corte" pedido: al arrastrar hacia abajo, el contenido
+      // (INNER, que se traslada) queda recortado contra el borde fijo de OUTER en vez de poder
+      // asomarse por detrás de la fila de íconos (que es semitransparente).
       <AnimatePresence initial={false}>
         {isOpen && (
           <motion.div
@@ -432,7 +433,6 @@ function SettingsShell({ embedded, isOpen, darkMode, dragControls, onClose, chil
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.2, ease: "easeInOut" }}
-            style={{ marginBottom: dragMarginBottom }}
             className="w-full overflow-hidden"
           >
             <motion.div
@@ -444,13 +444,7 @@ function SettingsShell({ embedded, isOpen, darkMode, dragControls, onClose, chil
               onDragEnd={(_e, info) => {
                 if (info.offset.y > 120 || info.velocity.y > 500) onClose();
               }}
-              // y: dragY en vez de dejar que "drag" maneje su propio valor interno — así
-              // dragMarginBottom (de donde depende cuánto sube la fila de íconos) queda atado al
-              // MISMO valor, ya con el elástico de dragElastic aplicado, en vez de al offset
-              // crudo del puntero. Antes el contenido (con elástico, más lento) y la fila de
-              // íconos (offset crudo, más rápido) se movían a ritmos distintos — ahora se mueven
-              // exactamente en sincro, sueltes o no sueltes.
-              style={{ y: dragY, willChange: "transform" }}
+              style={{ y: panelDragY, willChange: "transform" }}
             >
               {grip}
               <div className="w-full flex flex-col h-[calc(100dvh-165px)] max-h-[720px]">
@@ -509,6 +503,7 @@ interface UserSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   embedded?: boolean;
+  panelDragY?: MotionValue<number>;
   darkMode: boolean;
   setDarkMode?: (dark: boolean) => void;
   backgroundStyle?: "dither" | "pixelblast" | "plasma";
@@ -536,6 +531,7 @@ export function UserSettingsModal({
   isOpen,
   onClose,
   embedded = false,
+  panelDragY,
   darkMode,
   setDarkMode,
   backgroundStyle,
@@ -1344,7 +1340,7 @@ export function UserSettingsModal({
 
   return (
     <>
-    <SettingsShell embedded={embedded} isOpen={isOpen} darkMode={darkMode} dragControls={dragControls} onClose={onClose}>
+    <SettingsShell embedded={embedded} panelDragY={panelDragY} isOpen={isOpen} darkMode={darkMode} dragControls={dragControls} onClose={onClose}>
 
         {/* Modal Header. El borde inferior (y el de la fila de pestañas de abajo) solo se dibuja
             en el modal flotante de desktop: embebido en la cápsula de TopNavbar (mobile) no hay
