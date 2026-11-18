@@ -205,7 +205,7 @@ export function StudyPlanTreeModal({
                   type="button"
                   onClick={() => setExamModalOpen(true)}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold bg-primary/10 hover:bg-primary hover:text-white dark:hover:text-black text-primary transition-all cursor-pointer"
-                  title="Armar un examen de práctica con IA a partir del material de esta materia"
+                  title="Armar un examen de práctica con Viernes a partir del material de esta materia"
                 >
                   <GraduationCap className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">Crear Examen</span>

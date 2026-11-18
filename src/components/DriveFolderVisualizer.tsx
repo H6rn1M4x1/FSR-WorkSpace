@@ -562,7 +562,7 @@ export default function DriveFolderVisualizer({
   const [isReadingFileContent, setIsReadingFileContent] = useState(false);
 
   const GEMINI_GREETING_TEXT =
-    "¡Hola! Soy tu **Profesor de Facultad** impulsado por Google Gemini. 🎓✨ Estudiemos juntos.\n\nCuando selecciones o edites un apunte o documento aquí en la sección de Facultad, podré **leerlo automáticamente** para responder tus preguntas, explicar fórmulas complejas, resumir conceptos difíciles o crear cuestionarios de práctica para tus exámenes.\n\n¿En qué materia o tema te gustaría trabajar hoy?";
+    "¡Hola! Soy **Viernes**, tu tutor académico. 🎓✨ Estudiemos juntos.\n\nCuando selecciones o edites un apunte o documento aquí en la sección de Facultad, podré **leerlo automáticamente** para responder tus preguntas, explicar fórmulas complejas, resumir conceptos difíciles o crear cuestionarios de práctica para tus exámenes.\n\n¿En qué materia o tema te gustaría trabajar hoy?";
 
   const createGreetingMessage = (): GeminiChatMessage => ({
     sender: "bot",
@@ -1047,7 +1047,7 @@ export default function DriveFolderVisualizer({
           history: formattedHistory,
           model: "gemini-3.5-flash",
           files: selectedFileInlineData ? [selectedFileInlineData] : [],
-          systemInstruction: `Eres "Prof. Gemini", un distinguido y empático profesor universitario y tutor académico personal.
+          systemInstruction: `Eres "Viernes", un distinguido y empático profesor universitario y tutor académico personal.
 Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a comprender los conceptos de sus apuntes, guías y materias de la facultad.
 - Explica los temas de forma educativa, constructiva y con ejemplos claros.
 - En el bloque "CONTEXTO DE DOCUMENTOS ABIERTOS EN EL ESCRITORIO" se te provee el texto o estado de todos los documentos y apuntes que el estudiante tiene abiertos en pantalla (tanto la vista principal como las ventanas flotantes). Léelos detenidamente para relacionarlos, comparar conceptos, responder dudas o armar cuestionarios citando/nombrando el archivo correspondiente.
@@ -1059,7 +1059,7 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
       });
 
       if (!response.ok) {
-        let errMsg = "Error al comunicarse con el Profesor Gemini.";
+        let errMsg = "Error al comunicarse con Viernes.";
         try {
           const errData = await response.json();
           if (errData?.error) errMsg = errData.error;
@@ -4700,10 +4700,10 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
                 </div>
                 <div>
                   <h3 className="text-xs font-bold leading-none tracking-tight">
-                    Profesor Gemini
+                    Viernes
                   </h3>
                   <span className="text-[9px] text-zinc-400 dark:text-zinc-500 font-semibold uppercase tracking-wider">
-                    Tutor Académico IA
+                    Tutor Académico
                   </span>
                 </div>
               </div>
@@ -5117,7 +5117,7 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
           <button
             onClick={() => setIsChatOpen(!isChatOpen)}
             className="w-13 h-13 rounded-full bg-primary hover:bg-primary-hover text-white dark:text-blue-950 shadow-xl shadow-primary/20 dark:shadow-indigo-950/40 flex items-center justify-center border border-white/10 cursor-pointer hover:scale-105 active:scale-95 transition-all duration-300 relative"
-            title="Profesor Gemini - Consultas y Tutorías"
+            title="Viernes - Consultas y Tutorías"
           >
             {isChatOpen ? (
               <X className="w-5 h-5" />

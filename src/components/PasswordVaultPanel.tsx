@@ -19,10 +19,12 @@ import {
   X,
   Upload,
   Search,
+  Fingerprint,
 } from "lucide-react";
 import { useVault } from "../hooks/useVault";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import { verify2FAToken } from "../lib/totp";
+import { isBiometricAvailable, authenticateWithBiometric } from "../lib/biometricAuth";
 import { useToast } from "../context/ToastContext";
 import { ConfirmationModal } from "./ConfirmationModal";
 import {
@@ -177,6 +179,11 @@ export function PasswordVaultPanel({
   const [totpCodeInput, setTotpCodeInput] = useState("");
   const [totpError, setTotpError] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [unlockingWithBiometric, setUnlockingWithBiometric] = useState(false);
+  useEffect(() => {
+    isBiometricAvailable().then(setBiometricAvailable);
+  }, []);
 
   // Import from a browser's "Export passwords" CSV file.
   const importFileInputRef = useRef<HTMLInputElement>(null);
@@ -249,6 +256,24 @@ export function PasswordVaultPanel({
     }
   };
 
+  const handleBiometricUnlock = async () => {
+    setLocalError(null);
+    setUnlockingWithBiometric(true);
+    const outcome = await authenticateWithBiometric(
+      "Desbloqueá tu Caja Fuerte con tu huella",
+      "Caja Fuerte"
+    );
+    setUnlockingWithBiometric(false);
+    if (outcome === "success" && !vault.unlockWithBiometricCache()) {
+      // Caso borde: la huella activó, pero ya no hay un MEK guardado para este usuario (se
+      // desactivó la opción desde otro dispositivo, por ejemplo). La clave maestra de abajo
+      // sigue funcionando normalmente.
+      setLocalError("El desbloqueo con huella ya no está disponible. Usá tu clave maestra.");
+    } else if (outcome === "error") {
+      setLocalError("No se pudo usar la huella. Probá de nuevo o usá tu clave maestra.");
+    }
+  };
+
   const handleUnlock = async () => {
     setLocalError(null);
     if (usingRecovery) {
@@ -306,6 +331,28 @@ export function PasswordVaultPanel({
     }
   };
 
+  // Lo que pasa UNA VEZ que ya se verificó la identidad — sea con el código de Google
+  // Authenticator o con la huella, da igual cuál de los dos lo confirmó.
+  const performGateAction = async (gate: { id: string; action: "reveal" | "copy" | "disable-gate" }) => {
+    if (gate.action === "reveal") {
+      const item = vault.items.find((i) => i.id === gate.id);
+      showItem(gate.id);
+      showToast(`Mostrando la contraseña de ${item?.site || "este sitio"} durante 5 minutos.`, "success");
+    } else if (gate.action === "copy") {
+      const item = vault.items.find((i) => i.id === gate.id);
+      if (item) {
+        clipboardCopy(item.password);
+        setCopiedId(item.id);
+        setTimeout(() => setCopiedId(null), 1500);
+      }
+    } else if (gate.action === "disable-gate") {
+      await vault.setRequireTotpToReveal(false);
+      showToast("Verificación con Google Authenticator desactivada para revelar contraseñas.", "success");
+    }
+    setTotpGateFor(null);
+    setTotpCodeInput("");
+  };
+
   const confirmTotpGate = async () => {
     if (!totpGateFor) return;
     const ok = await verify2FAToken(totpCodeInput, twoFactorSecret);
@@ -313,23 +360,21 @@ export function PasswordVaultPanel({
       setTotpError("Código incorrecto o expirado.");
       return;
     }
-    if (totpGateFor.action === "reveal") {
-      const item = vault.items.find((i) => i.id === totpGateFor.id);
-      showItem(totpGateFor.id);
-      showToast(`Mostrando la contraseña de ${item?.site || "este sitio"} durante 5 minutos.`, "success");
-    } else if (totpGateFor.action === "copy") {
-      const item = vault.items.find((i) => i.id === totpGateFor.id);
-      if (item) {
-        clipboardCopy(item.password);
-        setCopiedId(item.id);
-        setTimeout(() => setCopiedId(null), 1500);
-      }
-    } else if (totpGateFor.action === "disable-gate") {
-      await vault.setRequireTotpToReveal(false);
-      showToast("Verificación con Google Authenticator desactivada para revelar contraseñas.", "success");
+    await performGateAction(totpGateFor);
+  };
+
+  const confirmBiometricGate = async () => {
+    if (!totpGateFor) return;
+    setTotpError(null);
+    const outcome = await authenticateWithBiometric(
+      "Confirmá tu huella para continuar",
+      "Caja Fuerte"
+    );
+    if (outcome === "success") {
+      await performGateAction(totpGateFor);
+    } else if (outcome === "error") {
+      setTotpError("No se pudo usar la huella. Probá de nuevo o ingresá el código.");
     }
-    setTotpGateFor(null);
-    setTotpCodeInput("");
   };
 
   const handleToggleRequireTotp = async (checked: boolean) => {
@@ -613,10 +658,22 @@ export function PasswordVaultPanel({
             {(localError || vault.error) && (
               <p className="text-xs font-bold text-red-600 dark:text-red-400">{localError || vault.error}</p>
             )}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <button type="button" onClick={handleUnlock} className={BTN_PRIMARY}>
                 <Unlock className="w-4 h-4" /> Desbloquear
               </button>
+              {biometricAvailable && vault.isBiometricUnlockEnabled && (
+                <button
+                  type="button"
+                  onClick={handleBiometricUnlock}
+                  disabled={unlockingWithBiometric}
+                  className={BTN_GHOST}
+                  title="Desbloquear con huella digital"
+                >
+                  <Fingerprint className="w-4 h-4" />
+                  {unlockingWithBiometric ? "Verificando..." : "Usar huella"}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setUsingRecovery(true)}
@@ -738,6 +795,36 @@ export function PasswordVaultPanel({
             </span>
           </span>
         </label>
+
+        {/* Desbloqueo con huella (solo app nativa) — atajo opcional, la clave maestra sigue
+            funcionando siempre igual que antes. */}
+        {biometricAvailable && (
+          <label className="flex items-start gap-2.5 p-3 rounded-xl border border-slate-200 dark:border-zinc-800 text-xs cursor-pointer">
+            <input
+              type="checkbox"
+              checked={vault.isBiometricUnlockEnabled}
+              onChange={(e) => {
+                if (e.target.checked) {
+                  vault.enableBiometricUnlock();
+                  showToast("Ahora podés desbloquear la Caja Fuerte con tu huella.", "success");
+                } else {
+                  vault.disableBiometricUnlock();
+                  showToast("Desbloqueo con huella desactivado.", "info");
+                }
+              }}
+              className="mt-0.5"
+            />
+            <span>
+              <span className="font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                <Fingerprint className="w-3.5 h-3.5" /> Desbloquear con huella digital
+              </span>
+              <span className="text-[10px] text-zinc-500 dark:text-zinc-400 block mt-0.5">
+                Atajo más rápido para la próxima vez que la Caja Fuerte esté bloqueada — tu clave
+                maestra sigue funcionando siempre, por si cambiás de equipo o falla el sensor.
+              </span>
+            </span>
+          </label>
+        )}
 
         {/* Search */}
         {vault.items.length > 0 && (
@@ -985,7 +1072,7 @@ export function PasswordVaultPanel({
                 className={`${INPUT} text-center font-mono text-xl tracking-[0.4em]`}
               />
               {totpError && <p className="text-xs font-bold text-red-600 dark:text-red-400">{totpError}</p>}
-              <div className="flex items-center justify-center sm:justify-start gap-2">
+              <div className="flex items-center justify-center sm:justify-start gap-2 flex-wrap">
                 <button
                   type="button"
                   onClick={confirmTotpGate}
@@ -994,6 +1081,11 @@ export function PasswordVaultPanel({
                 >
                   <Check className="w-4 h-4" /> Confirmar
                 </button>
+                {biometricAvailable && (
+                  <button type="button" onClick={confirmBiometricGate} className={BTN_GHOST}>
+                    <Fingerprint className="w-4 h-4" /> Usar huella
+                  </button>
+                )}
                 <button type="button" onClick={() => setTotpGateFor(null)} className={BTN_GHOST}>
                   Cancelar
                 </button>

@@ -10,6 +10,9 @@ import {
   persistVaultUnlock,
   loadPersistedVaultUnlock,
   clearPersistedVaultUnlock,
+  persistBiometricVaultUnlock,
+  loadPersistedBiometricVaultUnlock,
+  clearPersistedBiometricVaultUnlock,
 } from "../lib/vaultCrypto";
 import {
   fetchVaultConfig,
@@ -36,6 +39,12 @@ interface UseVaultResult {
   saveItem: (item: Omit<VaultItemDecrypted, "createdAt" | "updatedAt"> & { createdAt?: number }) => Promise<void>;
   deleteItem: (id: string) => Promise<void>;
   setRequireTotpToReveal: (value: boolean) => Promise<void>;
+  // Desbloqueo rápido con huella (solo app nativa) — opt-in, independiente del "stay unlocked"
+  // de arriba: sobrevive a un "Bloquear" manual a propósito, así la huella sigue funcionando.
+  isBiometricUnlockEnabled: boolean;
+  enableBiometricUnlock: () => boolean;
+  disableBiometricUnlock: () => void;
+  unlockWithBiometricCache: () => boolean;
 }
 
 /**
@@ -54,6 +63,7 @@ export function useVault(userId: string | null | undefined): UseVaultResult {
   const [encryptedItems, setEncryptedItems] = useState<VaultItemEncrypted[]>([]);
   const [decryptedItems, setDecryptedItems] = useState<VaultItemDecrypted[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [isBiometricUnlockEnabled, setIsBiometricUnlockEnabled] = useState(false);
 
   const mekRef = useRef<Uint8Array | null>(null);
   const userIdRef = useRef<string | null | undefined>(userId);
@@ -70,10 +80,12 @@ export function useVault(userId: string | null | undefined): UseVaultResult {
     setDecryptedItems([]);
     if (!userId) {
       mekRef.current = null;
+      setIsBiometricUnlockEnabled(false);
       setStatus("loading");
       return;
     }
     setStatus("loading");
+    setIsBiometricUnlockEnabled(loadPersistedBiometricVaultUnlock(userId) !== null);
     let cancelled = false;
     const persistedMek = loadPersistedVaultUnlock(userId);
     fetchVaultConfig(userId).then((cfg) => {
@@ -83,6 +95,8 @@ export function useVault(userId: string | null | undefined): UseVaultResult {
         // Vault was never set up (or was reset elsewhere) — nothing valid to stay unlocked with.
         mekRef.current = null;
         clearPersistedVaultUnlock(userId);
+        clearPersistedBiometricVaultUnlock(userId);
+        setIsBiometricUnlockEnabled(false);
         setStatus("not_setup");
       } else if (persistedMek) {
         mekRef.current = persistedMek;
@@ -223,6 +237,32 @@ export function useVault(userId: string | null | undefined): UseVaultResult {
     [userId, config]
   );
 
+  // El MEK no cambia al poner una clave maestra nueva ni al usar la frase de recuperación (ambas
+  // solo re-envuelven el MISMO MEK) — así que activarla una vez alcanza, no hay que repetirlo
+  // cada vez que cambia la clave maestra.
+  const enableBiometricUnlock = useCallback(() => {
+    if (!userIdRef.current || !mekRef.current) return false;
+    persistBiometricVaultUnlock(userIdRef.current, mekRef.current);
+    setIsBiometricUnlockEnabled(true);
+    return true;
+  }, []);
+
+  const disableBiometricUnlock = useCallback(() => {
+    if (!userIdRef.current) return;
+    clearPersistedBiometricVaultUnlock(userIdRef.current);
+    setIsBiometricUnlockEnabled(false);
+  }, []);
+
+  const unlockWithBiometricCache = useCallback(() => {
+    if (!userIdRef.current) return false;
+    const mek = loadPersistedBiometricVaultUnlock(userIdRef.current);
+    if (!mek) return false;
+    mekRef.current = mek;
+    persistVaultUnlock(userIdRef.current, mek);
+    setStatus("unlocked");
+    return true;
+  }, []);
+
   const saveItem = useCallback(
     async (item: Omit<VaultItemDecrypted, "createdAt" | "updatedAt"> & { createdAt?: number }) => {
       if (!userId || !mekRef.current) throw new Error("La caja fuerte está bloqueada.");
@@ -262,6 +302,10 @@ export function useVault(userId: string | null | undefined): UseVaultResult {
       saveItem,
       deleteItem,
       setRequireTotpToReveal,
+      isBiometricUnlockEnabled,
+      enableBiometricUnlock,
+      disableBiometricUnlock,
+      unlockWithBiometricCache,
     }),
     [
       status,
@@ -276,6 +320,10 @@ export function useVault(userId: string | null | undefined): UseVaultResult {
       saveItem,
       deleteItem,
       setRequireTotpToReveal,
+      isBiometricUnlockEnabled,
+      enableBiometricUnlock,
+      disableBiometricUnlock,
+      unlockWithBiometricCache,
     ]
   );
 }

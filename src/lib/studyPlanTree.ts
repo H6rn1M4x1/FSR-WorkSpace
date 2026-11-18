@@ -116,7 +116,7 @@ function isTransientExtractionError(err: any): boolean {
 function friendlyExtractionError(err: any): string {
   const raw = String(err?.message || err || "");
   if (/UNAVAILABLE|503|overloaded|high demand/i.test(raw)) {
-    return "El servicio de IA está saturado en este momento. Probá de nuevo en unos segundos.";
+    return "Viernes está saturado en este momento. Probá de nuevo en unos segundos.";
   }
   if (/Unexpected token|is not valid JSON|<html/i.test(raw)) {
     return "La generación tardó demasiado y se cortó. Probá de nuevo en un momento.";
@@ -177,7 +177,7 @@ async function requestOutline(fileBase64: string, mimeType: string): Promise<Gem
   try {
     parsed = JSON.parse(stripCodeFences(text));
   } catch {
-    throw new Error("La IA no devolvió un JSON válido.");
+    throw new Error("Viernes no devolvió un JSON válido.");
   }
   if (!parsed || !Array.isArray(parsed.nodes) || parsed.nodes.length === 0) {
     throw new Error("No se encontraron materias ni unidades en ese documento.");
@@ -194,7 +194,7 @@ async function requestUnitDetail(fileBase64: string, mimeType: string, unitLabel
   try {
     parsed = JSON.parse(stripCodeFences(text));
   } catch {
-    throw new Error("La IA no devolvió un JSON válido.");
+    throw new Error("Viernes no devolvió un JSON válido.");
   }
   if (!parsed || !Array.isArray(parsed.nodes)) return [];
   return parsed.nodes.filter((n) => n && typeof n.label === "string" && n.label.trim());

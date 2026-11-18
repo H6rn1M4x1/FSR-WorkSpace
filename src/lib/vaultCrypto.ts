@@ -224,6 +224,40 @@ export function clearPersistedVaultUnlock(userId: string): void {
   }
 }
 
+// ---------- biometric unlock (opt-in, app nativa Android únicamente) ----------
+// Mismo MEK, mismo localStorage sin cifrado adicional que el "stay unlocked" de arriba — ya es
+// el tradeoff aceptado de esta misma caja fuerte. La diferencia es que este slot es SEPARADO y
+// solo se lee/escribe detrás de un prompt de huella real (ver src/lib/biometricAuth.ts): sirve
+// para el caso en que el usuario YA bloqueó manualmente (o recién hizo login), no para el "stay
+// unlocked" normal. clearPersistedVaultUnlock (arriba, por Bloquear/logout) NO toca este slot a
+// propósito — la huella debe seguir funcionando después de un "Bloquear" manual.
+const VAULT_BIOMETRIC_UNLOCK_STORAGE_PREFIX = "fsr_vault_biometric_unlock:";
+
+export function persistBiometricVaultUnlock(userId: string, mek: Uint8Array): void {
+  try {
+    localStorage.setItem(VAULT_BIOMETRIC_UNLOCK_STORAGE_PREFIX + userId, bytesToBase64(mek));
+  } catch {
+    // Storage unavailable — la huella simplemente no va a quedar disponible la próxima vez.
+  }
+}
+
+export function loadPersistedBiometricVaultUnlock(userId: string): Uint8Array | null {
+  try {
+    const raw = localStorage.getItem(VAULT_BIOMETRIC_UNLOCK_STORAGE_PREFIX + userId);
+    return raw ? base64ToBytes(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearPersistedBiometricVaultUnlock(userId: string): void {
+  try {
+    localStorage.removeItem(VAULT_BIOMETRIC_UNLOCK_STORAGE_PREFIX + userId);
+  } catch {
+    // ignore
+  }
+}
+
 export function estimatePasswordStrength(pw: string): { score: 0 | 1 | 2 | 3 | 4; label: string } {
   if (!pw) return { score: 0, label: "Vacía" };
   let variety = 0;
