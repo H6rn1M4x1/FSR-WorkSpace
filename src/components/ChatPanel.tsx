@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { motion, AnimatePresence, useDragControls, type MotionValue } from "motion/react";
+import { motion, AnimatePresence, useDragControls } from "motion/react";
+import { useDragToCollapse } from "../hooks/useDragToCollapse";
 import {
   MessageCircle,
   Send,
@@ -69,14 +70,9 @@ interface ChatPanelProps {
   isOpen: boolean;
   onClose: () => void;
   onUnreadCountChange?: (count: number) => void;
-  // Motion value COMPARTIDO con TopNavbar (ver footerLiftY en TopNavbar.tsx): mientras se
-  // arrastra este panel hacia abajo, "drag" escribe directo acá, y la fila de íconos de abajo
-  // lee el mismo valor (negado) para subir en espejo — puro transform, sin margin/layout, así
-  // quedan siempre sincronizados y nada se escapa del recorte del wrapper de abajo.
-  panelDragY: MotionValue<number>;
 }
 
-export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountChange, panelDragY }: ChatPanelProps) {
+export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountChange }: ChatPanelProps) {
   const normalizedUserEmail = (userEmail || "").trim().toLowerCase();
 
   const [incoming, setIncoming] = useState<ChatContact[]>([]);
@@ -159,9 +155,13 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
   // Arrastrar hacia abajo para cerrar el panel (solo mobile, solo desde el agarre de arriba) —
   // mismo patrón que DetailModal.tsx: dragListener={false} acá + dragControls.start() en el
   // agarre, para que arrastrar desde la lista de contactos o los mensajes (que tienen su propio
-  // scroll) no mueva el panel entero. panelDragY: ver el comentario junto a footerLiftY en
-  // TopNavbar.tsx.
+  // scroll) no mueva el panel entero. Ver useDragToCollapse: el arrastre achica el alto real del
+  // panel (nunca un transform), así nunca hay una segunda capa que deje ver un hueco.
   const dragControls = useDragControls();
+  const { outerRef, liveHeight, handleGripPointerDown, onDrag, onDragEnd } = useDragToCollapse({
+    dragControls,
+    onClose,
+  });
 
   // These two subscriptions stay alive for as long as this component is mounted (i.e. for as
   // long as TopNavbar itself is mounted), regardless of `isOpen` — that's what lets the unread
@@ -783,36 +783,30 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
   return (
     <AnimatePresence initial={false}>
       {isOpen && (
-        // OUTER: anima el alto y recorta (overflow-hidden), sin transform propio ni margin —
-        // su borde de abajo queda fijo donde el panel termina en reposo. INNER: el que se
-        // arrastra de verdad, escribiendo sobre panelDragY (compartido con la fila de íconos de
-        // TopNavbar, que sube en espejo por transform). Separar ambas capas es lo que evita que
-        // el contenido se asome por detrás de esa fila (semitransparente) al arrastrar — nunca
-        // se ve pasado el límite fijo de este wrapper.
+        // El arrastre achica el alto REAL del panel (useDragToCollapse) en vez de desplazarlo
+        // por transform — así nunca hay una segunda capa que, al moverse, deje ver un hueco
+        // detrás (el bug real de la versión anterior, presente por igual en los 4 paneles de
+        // esta cápsula). Como la cápsula está anclada abajo, que este panel pierda alto real
+        // nunca mueve la fila de íconos ni un píxel.
         <motion.div
+          ref={outerRef}
           initial={{ opacity: 0, height: 0 }}
           animate={{ opacity: 1, height: "auto" }}
           exit={{ opacity: 0, height: 0 }}
           transition={{ duration: 0.2, ease: "easeInOut" }}
-          className="w-full overflow-hidden"
-        >
-        <motion.div
           drag="y"
           dragControls={dragControls}
           dragListener={false}
           dragConstraints={{ top: 0, bottom: 0 }}
-          dragElastic={{ top: 0, bottom: 0.65 }}
-          onDragEnd={(_e, info) => {
-            if (info.offset.y > 120 || info.velocity.y > 500) onClose();
-          }}
-          style={{ y: panelDragY, willChange: "transform" }}
+          dragElastic={{ top: 0, bottom: 0 }}
+          onDrag={onDrag}
+          onDragEnd={onDragEnd}
+          style={{ height: liveHeight }}
+          className="w-full overflow-hidden"
         >
           {/* Agarre para cerrar deslizando hacia abajo — solo mobile. */}
           <div
-            onPointerDown={(e) => {
-              e.stopPropagation();
-              dragControls.start(e);
-            }}
+            onPointerDown={handleGripPointerDown}
             className="w-full h-7 flex items-center justify-center md:hidden cursor-grab active:cursor-grabbing touch-none"
           >
             <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
@@ -1758,7 +1752,6 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
               </div>
             </div>
           </div>
-        </motion.div>
         </motion.div>
       )}
     </AnimatePresence>

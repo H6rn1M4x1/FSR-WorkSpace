@@ -1,8 +1,9 @@
 import { createPortal } from "react-dom";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import { useIsMobile } from "../hooks/useIsMobile";
+import { useDragToCollapse } from "../hooks/useDragToCollapse";
 import React, { useState, useRef, useEffect, lazy, Suspense } from "react";
-import { motion, AnimatePresence, useDragControls, useMotionValue } from "motion/react";
+import { motion, AnimatePresence, useDragControls } from "motion/react";
 import type { NavPanelRow } from "../lib/navPanelContext";
 import {
   Home,
@@ -459,21 +460,26 @@ export default function TopNavbar({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [quickAddMenuOpen, setQuickAddMenuOpen] = useState(false);
   // Arrastrar hacia abajo para cerrar el menú expandido (grilla o "+") — mismo patrón que
-  // DetailModal.tsx y ChatPanel.tsx.
+  // DetailModal.tsx y ChatPanel.tsx. useDragToCollapse achica el alto REAL del panel en vez de
+  // desplazarlo por transform — así nunca hay una segunda capa que deje ver un hueco detrás al
+  // arrastrar, y como la cápsula está anclada abajo, esto nunca mueve la fila de íconos.
   const expandedMenuDragControls = useDragControls();
-  // Un único motion value COMPARTIDO por los 4 paneles que crecen en esta cápsula (menú
-  // expandido, Avisos, Chat, Ajustes embebido — nunca hay dos abiertos/arrastrándose a la vez,
-  // así que compartirlo es seguro). Mientras se arrastra cualquiera de ellos, "drag" escribe
-  // directo sobre ESTE valor (vía style={{ y: footerLiftY }} en cada panel, en vez de que cada
-  // uno tenga el suyo propio leído de info.offset.y crudo) — el panel entero (texto + su propio
-  // fondo) se desliza como un bloque rígido, y el overflow-hidden de su wrapper (ver OUTER/INNER
-  // en cada panel) lo recorta de golpe contra la fila de íconos de abajo, que a propósito NUNCA
-  // se mueve (ver el comentario junto a esa fila, más abajo).
-  const footerLiftY = useMotionValue(0);
+  const expandedMenuCollapse = useDragToCollapse({
+    dragControls: expandedMenuDragControls,
+    onClose: () => {
+      setMobileMenuOpen(false);
+      setQuickAddMenuOpen(false);
+    },
+    offsetThreshold: 80,
+  });
   const [showNotifications, setShowNotifications] = useState(false);
   const [selectedNotifId, setSelectedNotifId] = useState<string | null>(null);
   // Arrastrar hacia abajo para cerrar Avisos — mismo patrón que el menú expandido y Chat.
   const notificationsDragControls = useDragControls();
+  const notificationsCollapse = useDragToCollapse({
+    dragControls: notificationsDragControls,
+    onClose: () => setShowNotifications(false),
+  });
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
@@ -659,9 +665,9 @@ export default function TopNavbar({
             resto del contenido de la cápsula (sub-pestañas, notificaciones, chat) crece hacia
             arriba, por encima de esta fila, en vez de taparla. A propósito totalmente fija —
             nunca se mueve, ni siquiera mientras se arrastra un panel: los paneles (ver
-            footerLiftY) se deslizan hacia abajo como un bloque y se recortan contra el borde de
-            su propio wrapper (overflow-hidden) antes de llegar acá, así nunca se asoman detrás
-            de esta fila (que sigue siendo semitransparente) ni hace falta moverla para evitarlo. */}
+            useDragToCollapse) achican su propio ALTO real durante el arrastre en vez de
+            desplazarse por transform, así que la cápsula se achica por arriba y este borde de
+            abajo nunca se mueve ni hace falta moverlo a propósito. */}
         <div className="order-2 md:order-none flex items-center justify-between gap-2 w-full">
           {/* Brand / Logo */}
           <div
@@ -943,47 +949,29 @@ export default function TopNavbar({
             lado. */}
         <AnimatePresence mode="wait">
           {(mobileMenuOpen || quickAddMenuOpen) && (
-            // OUTER: anima el alto y recorta, sin transform propio, así su borde de abajo queda
-            // fijo donde el panel termina en reposo — SIN margin-bottom (eso era lo que competía
-            // con la animación "layout" de la cápsula y causaba el desfasaje/solapamiento: un
-            // cambio de margin es un cambio de layout, que la cápsula intentaba re-animar con su
-            // propia transición, a destiempo del arrastre). INNER: el que se arrastra de verdad,
-            // escribiendo sobre footerLiftY — la fila de íconos lee ESE mismo valor (ver más
-            // arriba) para subir en espejo, puramente por transform, sin tocar layout en ningún
-            // lado, así los dos quedan siempre exactamente sincronizados y nada se escapa del
-            // recorte fijo de este wrapper.
+            // useDragToCollapse: ver el comentario largo del hook — un único elemento cuyo alto
+            // real se achica en vivo durante el arrastre (sin transform ni segunda capa), así
+            // nunca queda un wrapper transparente mostrando un hueco detrás.
             <motion.div
               key={mobileMenuOpen ? "mobile-expanded-menu" : "mobile-quickadd-menu"}
+              ref={expandedMenuCollapse.outerRef}
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-              className="w-full overflow-y-hidden md:hidden"
-            >
-            <motion.div
               drag="y"
               dragControls={expandedMenuDragControls}
               dragListener={false}
               dragConstraints={{ top: 0, bottom: 0 }}
-              dragElastic={{ top: 0, bottom: 0.65 }}
-              onDragEnd={(_e, info) => {
-                if (info.offset.y > 80 || info.velocity.y > 500) {
-                  setMobileMenuOpen(false);
-                  setQuickAddMenuOpen(false);
-                }
-              }}
-              // willChange obliga a este panel a su propia capa de composición mientras se
-              // arrastra — sin esto, en algunos WebView el fondo detrás no se repinta en sync
-              // con el contenido durante el gesto (queda "pegado" mientras el contenido sí
-              // sigue al dedo).
-              style={{ y: footerLiftY, willChange: "transform" }}
+              dragElastic={{ top: 0, bottom: 0 }}
+              onDrag={expandedMenuCollapse.onDrag}
+              onDragEnd={expandedMenuCollapse.onDragEnd}
+              style={{ height: expandedMenuCollapse.liveHeight }}
+              className="w-full overflow-hidden md:hidden"
             >
               {/* Agarre para cerrar deslizando hacia abajo. */}
               <div
-                onPointerDown={(e) => {
-                  e.stopPropagation();
-                  expandedMenuDragControls.start(e);
-                }}
+                onPointerDown={expandedMenuCollapse.handleGripPointerDown}
                 className="w-full h-6 flex items-center justify-center cursor-grab active:cursor-grabbing touch-none"
               >
                 <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
@@ -1177,7 +1165,6 @@ export default function TopNavbar({
               </div>
               )}
             </motion.div>
-            </motion.div>
           )}
         </AnimatePresence>
 
@@ -1297,33 +1284,28 @@ export default function TopNavbar({
         {/* NOTIFICATIONS EXPANDABLE PANEL (Seamlessly integrated into TopNavbar Capsule with Desktop Left Detail View) */}
         <AnimatePresence initial={false}>
           {showNotifications && (
-            // OUTER/INNER: ver el comentario largo junto al menú expandido más arriba — mismo
-            // motivo (corte limpio contra la fila de íconos + arrastre sincronizado, vía el
-            // footerLiftY compartido, sin margin-bottom).
+            // useDragToCollapse: ver el comentario largo del hook — un único elemento cuyo alto
+            // real se achica en vivo durante el arrastre (sin transform ni segunda capa), así
+            // nunca queda un wrapper transparente mostrando un hueco detrás.
             <motion.div
+              ref={notificationsCollapse.outerRef}
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.2, ease: "easeInOut" }}
-              className="w-full overflow-hidden"
-            >
-            <motion.div
               drag="y"
               dragControls={notificationsDragControls}
               dragListener={false}
               dragConstraints={{ top: 0, bottom: 0 }}
-              dragElastic={{ top: 0, bottom: 0.65 }}
-              onDragEnd={(_e, info) => {
-                if (info.offset.y > 120 || info.velocity.y > 500) setShowNotifications(false);
-              }}
-              style={{ y: footerLiftY, willChange: "transform" }}
+              dragElastic={{ top: 0, bottom: 0 }}
+              onDrag={notificationsCollapse.onDrag}
+              onDragEnd={notificationsCollapse.onDragEnd}
+              style={{ height: notificationsCollapse.liveHeight }}
+              className="w-full overflow-hidden"
             >
               {/* Agarre para cerrar deslizando hacia abajo — solo mobile. */}
               <div
-                onPointerDown={(e) => {
-                  e.stopPropagation();
-                  notificationsDragControls.start(e);
-                }}
+                onPointerDown={notificationsCollapse.handleGripPointerDown}
                 className="w-full h-7 flex items-center justify-center md:hidden cursor-grab active:cursor-grabbing touch-none"
               >
                 <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
@@ -1550,7 +1532,6 @@ export default function TopNavbar({
                 </div>
               </div>
             </motion.div>
-            </motion.div>
           )}
         </AnimatePresence>
 
@@ -1561,7 +1542,6 @@ export default function TopNavbar({
           isOpen={showChat}
           onClose={() => setShowChat(false)}
           onUnreadCountChange={setChatUnreadCount}
-          panelDragY={footerLiftY}
         />
 
         {/* AJUSTES & CONFIGURACIÓN (solo mobile): embebido en esta misma cápsula, con el mismo
@@ -1574,7 +1554,6 @@ export default function TopNavbar({
           <Suspense fallback={null}>
             <UserSettingsModal
               embedded
-              panelDragY={footerLiftY}
               isOpen={isSettingsOpen}
               onClose={onOpenSettings}
               darkMode={darkMode}
