@@ -27,6 +27,11 @@ import { verify2FAToken } from "../lib/totp";
 import { isBiometricAvailable, authenticateWithBiometric } from "../lib/biometricAuth";
 import { useToast } from "../context/ToastContext";
 import { ConfirmationModal } from "./ConfirmationModal";
+import { MigrationBanner } from "./MigrationBanner";
+import {
+  bulkImportFromFirestore as bulkImportVault,
+  SUPABASE_MIGRATED_CATEGORIES as VAULT_MIGRATED_CATEGORIES,
+} from "../lib/supabaseVaultSync";
 import {
   generateStrongPassword,
   estimatePasswordStrength,
@@ -498,6 +503,15 @@ export function PasswordVaultPanel({
   if (vault.status === "not_setup") {
     return (
       <div className={CARD}>
+        <MigrationBanner
+          darkMode={darkMode}
+          userId={userId}
+          title="Migración piloto a Supabase (Caja Fuerte)"
+          categories={Array.from(VAULT_MIGRATED_CATEGORIES)}
+          bulkImport={bulkImportVault}
+          dismissKey="vault_migration_dismissed"
+          onComplete={() => vault.lock()}
+        />
         <div className="flex items-center gap-3">
           <KeyRound className="w-5 h-5 text-primary" />
           <div>
@@ -603,6 +617,15 @@ export function PasswordVaultPanel({
     const resettingAfterRecovery = usingRecovery === "reset-password";
     return (
       <div className={CARD}>
+        <MigrationBanner
+          darkMode={darkMode}
+          userId={userId}
+          title="Migración piloto a Supabase (Caja Fuerte)"
+          categories={Array.from(VAULT_MIGRATED_CATEGORIES)}
+          bulkImport={bulkImportVault}
+          dismissKey="vault_migration_dismissed"
+          onComplete={() => vault.lock()}
+        />
         <div className="flex items-center gap-3">
           <Lock className="w-5 h-5 text-primary" />
           <div>
@@ -720,6 +743,15 @@ export function PasswordVaultPanel({
   if (vault.status === "unlocked") {
     return (
       <div className={CARD}>
+        <MigrationBanner
+          darkMode={darkMode}
+          userId={userId}
+          title="Migración piloto a Supabase (Caja Fuerte)"
+          categories={Array.from(VAULT_MIGRATED_CATEGORIES)}
+          bulkImport={bulkImportVault}
+          dismissKey="vault_migration_dismissed"
+          onComplete={() => vault.lock()}
+        />
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
             <Unlock className="w-5 h-5 text-primary" />
