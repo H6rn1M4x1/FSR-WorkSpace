@@ -471,6 +471,10 @@ export default function TopNavbar({
   const expandedMenuMarginBottom = useTransform(expandedMenuDragY, (v) => -v);
   const [showNotifications, setShowNotifications] = useState(false);
   const [selectedNotifId, setSelectedNotifId] = useState<string | null>(null);
+  // Arrastrar hacia abajo para cerrar Avisos — mismo patrón que el menú expandido y Chat.
+  const notificationsDragControls = useDragControls();
+  const notificationsDragY = useMotionValue(0);
+  const notificationsMarginBottom = useTransform(notificationsDragY, (v) => -v);
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
@@ -936,22 +940,28 @@ export default function TopNavbar({
             lado. */}
         <AnimatePresence mode="wait">
           {(mobileMenuOpen || quickAddMenuOpen) && (
+            // OUTER: anima el alto y recorta, sin transform propio, así su borde de abajo queda
+            // fijo donde el panel termina en reposo. INNER: el que se arrastra de verdad. Ver el
+            // comentario largo junto al SettingsShell embebido en UserSettingsModal.tsx — mismo
+            // motivo: evita que el contenido se asome por detrás de la fila de íconos de abajo
+            // (semitransparente) al arrastrar, y mantiene el contenido y el achique de la cápsula
+            // exactamente sincronizados (antes dependían de dos lecturas distintas del offset).
             <motion.div
               key={mobileMenuOpen ? "mobile-expanded-menu" : "mobile-quickadd-menu"}
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+              style={{ marginBottom: expandedMenuMarginBottom }}
+              className="w-full overflow-y-hidden md:hidden"
+            >
+            <motion.div
               drag="y"
               dragControls={expandedMenuDragControls}
               dragListener={false}
               dragConstraints={{ top: 0, bottom: 0 }}
               dragElastic={{ top: 0, bottom: 0.65 }}
-              onDrag={(_e, info) => {
-                expandedMenuDragY.set(Math.max(0, info.offset.y));
-              }}
               onDragEnd={(_e, info) => {
-                expandedMenuDragY.set(0);
                 if (info.offset.y > 80 || info.velocity.y > 500) {
                   setMobileMenuOpen(false);
                   setQuickAddMenuOpen(false);
@@ -960,9 +970,9 @@ export default function TopNavbar({
               // willChange obliga a este panel a su propia capa de composición mientras se
               // arrastra — sin esto, en algunos WebView el fondo detrás no se repinta en sync
               // con el contenido durante el gesto (queda "pegado" mientras el contenido sí
-              // sigue al dedo). marginBottom: ver expandedMenuMarginBottom más arriba.
-              style={{ willChange: "transform", marginBottom: expandedMenuMarginBottom }}
-              className="w-full overflow-y-hidden md:hidden"
+              // sigue al dedo). y: expandedMenuDragY en vez de un valor interno de "drag", para
+              // que expandedMenuMarginBottom dependa del offset YA con el elástico aplicado.
+              style={{ y: expandedMenuDragY, willChange: "transform" }}
             >
               {/* Agarre para cerrar deslizando hacia abajo. */}
               <div
@@ -1163,6 +1173,7 @@ export default function TopNavbar({
               </div>
               )}
             </motion.div>
+            </motion.div>
           )}
         </AnimatePresence>
 
@@ -1282,13 +1293,38 @@ export default function TopNavbar({
         {/* NOTIFICATIONS EXPANDABLE PANEL (Seamlessly integrated into TopNavbar Capsule with Desktop Left Detail View) */}
         <AnimatePresence initial={false}>
           {showNotifications && (
+            // OUTER/INNER: ver el comentario largo junto al menú expandido más arriba — mismo
+            // motivo (corte limpio contra la fila de íconos + arrastre sincronizado).
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.2, ease: "easeInOut" }}
+              style={{ marginBottom: notificationsMarginBottom }}
               className="w-full overflow-hidden"
             >
+            <motion.div
+              drag="y"
+              dragControls={notificationsDragControls}
+              dragListener={false}
+              dragConstraints={{ top: 0, bottom: 0 }}
+              dragElastic={{ top: 0, bottom: 0.65 }}
+              onDragEnd={(_e, info) => {
+                if (info.offset.y > 120 || info.velocity.y > 500) setShowNotifications(false);
+              }}
+              style={{ y: notificationsDragY, willChange: "transform" }}
+            >
+              {/* Agarre para cerrar deslizando hacia abajo — solo mobile. */}
+              <div
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  notificationsDragControls.start(e);
+                }}
+                className="w-full h-7 flex items-center justify-center md:hidden cursor-grab active:cursor-grabbing touch-none"
+              >
+                <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
+              </div>
+
               <div className="w-full border-t border-zinc-200/60 dark:border-white/10 pt-3 mt-2">
                 <div className="w-full flex flex-col md:flex-row items-stretch gap-4">
                   {/* Left Column (Desktop / Large Screen Detail Panel: Map, Photos, Files, Metadata) */}
@@ -1509,6 +1545,7 @@ export default function TopNavbar({
                   </div>
                 </div>
               </div>
+            </motion.div>
             </motion.div>
           )}
         </AnimatePresence>

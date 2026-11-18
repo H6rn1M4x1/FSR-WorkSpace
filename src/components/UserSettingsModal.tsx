@@ -407,13 +407,24 @@ function SettingsShell({ embedded, isOpen, darkMode, dragControls, onClose, chil
   );
 
   // Línea clara que corta el contenido antes de llegar al borde del panel/modal, en vez de un
-  // difuminado — igual arriba (grip) que abajo, para ambas variantes.
-  const closingBorder = (
+  // difuminado — solo tiene sentido en el modal flotante de desktop (tarjeta sólida); embebido en
+  // la cápsula de TopNavbar (mobile) se saca, por el mismo motivo que los bordes de arriba.
+  const closingBorder = embedded ? (
+    <div className="shrink-0" />
+  ) : (
     <div className={`shrink-0 border-t-2 ${darkMode ? "border-white/15" : "border-slate-200"}`} />
   );
 
   if (embedded) {
     return (
+      // OUTER: el que anima el alto al abrir/cerrar y el que recorta (overflow-hidden) — a
+      // propósito SIN el drag ni el transform del arrastre, así su propio borde inferior queda
+      // fijo en el lugar donde el panel termina en reposo (el mismo lugar donde estaba la línea
+      // de cierre). INNER: el que se arrastra de verdad (transform). Separarlos en dos capas es
+      // lo que logra el "corte" pedido: al arrastrar hacia abajo, el contenido (INNER, que se
+      // traslada) queda recortado contra el borde fijo de OUTER en vez de poder asomarse por
+      // detrás de la fila de íconos (que es semitransparente) — nunca se ve lo que hay más abajo
+      // del límite original del panel, se arrastre lo que se arrastre.
       <AnimatePresence initial={false}>
         {isOpen && (
           <motion.div
@@ -421,26 +432,32 @@ function SettingsShell({ embedded, isOpen, darkMode, dragControls, onClose, chil
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.2, ease: "easeInOut" }}
-            drag="y"
-            dragControls={dragControls}
-            dragListener={false}
-            dragConstraints={{ top: 0, bottom: 0 }}
-            dragElastic={{ top: 0, bottom: 0.65 }}
-            onDrag={(_e, info) => {
-              dragY.set(Math.max(0, info.offset.y));
-            }}
-            onDragEnd={(_e, info) => {
-              dragY.set(0);
-              if (info.offset.y > 120 || info.velocity.y > 500) onClose();
-            }}
-            style={{ willChange: "transform", marginBottom: dragMarginBottom }}
+            style={{ marginBottom: dragMarginBottom }}
             className="w-full overflow-hidden"
           >
-            {grip}
-            <div className="w-full flex flex-col h-[calc(100dvh-165px)] max-h-[720px]">
-              {children}
-            </div>
-            {closingBorder}
+            <motion.div
+              drag="y"
+              dragControls={dragControls}
+              dragListener={false}
+              dragConstraints={{ top: 0, bottom: 0 }}
+              dragElastic={{ top: 0, bottom: 0.65 }}
+              onDragEnd={(_e, info) => {
+                if (info.offset.y > 120 || info.velocity.y > 500) onClose();
+              }}
+              // y: dragY en vez de dejar que "drag" maneje su propio valor interno — así
+              // dragMarginBottom (de donde depende cuánto sube la fila de íconos) queda atado al
+              // MISMO valor, ya con el elástico de dragElastic aplicado, en vez de al offset
+              // crudo del puntero. Antes el contenido (con elástico, más lento) y la fila de
+              // íconos (offset crudo, más rápido) se movían a ritmos distintos — ahora se mueven
+              // exactamente en sincro, sueltes o no sueltes.
+              style={{ y: dragY, willChange: "transform" }}
+            >
+              {grip}
+              <div className="w-full flex flex-col h-[calc(100dvh-165px)] max-h-[720px]">
+                {children}
+              </div>
+              {closingBorder}
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -1329,21 +1346,19 @@ export function UserSettingsModal({
     <>
     <SettingsShell embedded={embedded} isOpen={isOpen} darkMode={darkMode} dragControls={dragControls} onClose={onClose}>
 
-        {/* Modal Header */}
-        <div className="px-6 py-4 border-b border-inherit flex items-center justify-between bg-slate-50 dark:bg-zinc-900/60 shrink-0">
+        {/* Modal Header. El borde inferior (y el de la fila de pestañas de abajo) solo se dibuja
+            en el modal flotante de desktop: embebido en la cápsula de TopNavbar (mobile) no hay
+            una tarjeta sólida detrás que le dé sentido a ese corte, así que se saca del todo en
+            vez de quedar como una línea sin motivo. */}
+        <div className={`px-6 py-4 ${embedded ? "" : "border-b border-inherit"} flex items-center justify-between bg-slate-50 dark:bg-zinc-900/60 shrink-0`}>
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-2xl bg-white text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50 shadow-sm border border-slate-200 dark:border-transparent">
               <Settings className="w-5 h-5 animate-spin-slow" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h2 className="font-extrabold text-base md:text-lg">
-                  Ajustes & Configuración de Usuario
-                </h2>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary dark:text-primary border border-primary/20">
-                  ID: Hernan Sarmiento
-                </span>
-              </div>
+              <h2 className="font-extrabold text-base md:text-lg">
+                Ajustes & Configuración de Usuario
+              </h2>
               <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 font-medium">
                 Gestiona tus datos personales, dirección y autenticación 2FA con
                 Google Authenticator
@@ -1359,7 +1374,7 @@ export function UserSettingsModal({
         </div>
 
         {/* Tab Navigation with Scroll Buttons */}
-        <div className={`relative flex items-center border-b border-inherit shrink-0 ${
+        <div className={`relative flex items-center ${embedded ? "" : "border-b border-inherit"} shrink-0 ${
           darkMode ? "bg-zinc-950" : "bg-white"
         }`}>
           {/* Left Scroll Button */}

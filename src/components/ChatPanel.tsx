@@ -782,25 +782,32 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
   return (
     <AnimatePresence initial={false}>
       {isOpen && (
+        // OUTER: anima el alto y recorta (overflow-hidden), sin transform propio — su borde de
+        // abajo queda fijo donde el panel termina en reposo. INNER: el que se arrastra de verdad.
+        // Separarlos es lo que evita que, al arrastrar, el contenido se asome por detrás de la
+        // fila de íconos (semitransparente) de más abajo — nunca se ve pasado ese límite fijo.
         <motion.div
           initial={{ opacity: 0, height: 0 }}
           animate={{ opacity: 1, height: "auto" }}
           exit={{ opacity: 0, height: 0 }}
           transition={{ duration: 0.2, ease: "easeInOut" }}
+          style={{ marginBottom: dragMarginBottom }}
+          className="w-full overflow-hidden"
+        >
+        <motion.div
           drag="y"
           dragControls={dragControls}
           dragListener={false}
           dragConstraints={{ top: 0, bottom: 0 }}
           dragElastic={{ top: 0, bottom: 0.65 }}
-          onDrag={(_e, info) => {
-            dragY.set(Math.max(0, info.offset.y));
-          }}
           onDragEnd={(_e, info) => {
-            dragY.set(0);
             if (info.offset.y > 120 || info.velocity.y > 500) onClose();
           }}
-          style={{ willChange: "transform", marginBottom: dragMarginBottom }}
-          className="w-full overflow-hidden"
+          // y: dragY (en vez de dejar que "drag" use su propio valor interno) para que
+          // dragMarginBottom dependa del MISMO valor, ya con el elástico de dragElastic
+          // aplicado — así el contenido y la cápsula que se achica se mueven exactamente
+          // en sincro en vez de a ritmos distintos (uno con elástico, el otro sin él).
+          style={{ y: dragY, willChange: "transform" }}
         >
           {/* Agarre para cerrar deslizando hacia abajo — solo mobile. */}
           <div
@@ -1749,6 +1756,7 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
               </div>
             </div>
           </div>
+        </motion.div>
         </motion.div>
       )}
     </AnimatePresence>
