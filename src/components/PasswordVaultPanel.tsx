@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, useDragControls } from "motion/react";
 import {
@@ -255,7 +255,7 @@ export function PasswordVaultPanel({
     }
   };
 
-  const handleBiometricUnlock = async () => {
+  const handleBiometricUnlock = useCallback(async () => {
     setLocalError(null);
     setUnlockingWithBiometric(true);
     const outcome = await authenticateWithBiometric(
@@ -271,7 +271,24 @@ export function PasswordVaultPanel({
     } else if (outcome === "error") {
       setLocalError("No se pudo usar la huella. Probá de nuevo o usá tu clave maestra.");
     }
-  };
+  }, [vault]);
+
+  // Al entrar bloqueada (por ejemplo por el auto-bloqueo de una hora) con la huella habilitada,
+  // pedirla directamente en vez de esperar a que toquen "Usar huella". El ref hace que se
+  // dispare una sola vez por cada vez que entra en "locked" — si cancela el prompt, ahí sí
+  // tiene que tocar el botón a mano para reintentar.
+  const autoBiometricTriedRef = useRef(false);
+  useEffect(() => {
+    if (vault.status !== "locked") {
+      autoBiometricTriedRef.current = false;
+      return;
+    }
+    if (!biometricAvailable || !vault.isBiometricUnlockEnabled || autoBiometricTriedRef.current) {
+      return;
+    }
+    autoBiometricTriedRef.current = true;
+    handleBiometricUnlock();
+  }, [vault.status, biometricAvailable, vault.isBiometricUnlockEnabled, handleBiometricUnlock]);
 
   const handleUnlock = async () => {
     setLocalError(null);

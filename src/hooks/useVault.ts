@@ -10,6 +10,10 @@ import {
   persistVaultUnlock,
   loadPersistedVaultUnlock,
   clearPersistedVaultUnlock,
+  persistVaultUnlockedAt,
+  loadVaultUnlockedAt,
+  clearVaultUnlockedAt,
+  VAULT_AUTO_LOCK_MS,
   persistBiometricVaultUnlock,
   loadPersistedBiometricVaultUnlock,
   clearPersistedBiometricVaultUnlock,
@@ -25,6 +29,13 @@ import {
 import type { VaultConfig, VaultItemDecrypted, VaultItemEncrypted } from "../types";
 
 export type VaultStatus = "loading" | "not_setup" | "locked" | "unlocked";
+
+// Sin timestamp guardado (versión vieja de la app, o se perdió por algún motivo) se trata como
+// vencido — es la opción más segura, y cuesta como mucho un desbloqueo de más.
+function isVaultUnlockExpired(userId: string): boolean {
+  const unlockedAt = loadVaultUnlockedAt(userId);
+  return unlockedAt == null || Date.now() - unlockedAt > VAULT_AUTO_LOCK_MS;
+}
 
 export interface UseVaultResult {
   status: VaultStatus;
@@ -72,7 +83,10 @@ export function useVault(userId: string | null | undefined): UseVaultResult {
   const lock = useCallback(() => {
     mekRef.current = null;
     setDecryptedItems([]);
-    if (userIdRef.current) clearPersistedVaultUnlock(userIdRef.current);
+    if (userIdRef.current) {
+      clearPersistedVaultUnlock(userIdRef.current);
+      clearVaultUnlockedAt(userIdRef.current);
+    }
     setStatus((prev) => (prev === "unlocked" ? "locked" : prev));
   }, []);
 
@@ -98,10 +112,15 @@ export function useVault(userId: string | null | undefined): UseVaultResult {
         clearPersistedBiometricVaultUnlock(userId);
         setIsBiometricUnlockEnabled(false);
         setStatus("not_setup");
-      } else if (persistedMek) {
+      } else if (persistedMek && !isVaultUnlockExpired(userId)) {
         mekRef.current = persistedMek;
         setStatus("unlocked");
       } else {
+        if (persistedMek) {
+          // Había un MEK guardado pero ya pasó más de una hora — vencido, no cuenta.
+          clearPersistedVaultUnlock(userId);
+          clearVaultUnlockedAt(userId);
+        }
         mekRef.current = null;
         setStatus("locked");
       }
@@ -158,6 +177,24 @@ export function useVault(userId: string | null | undefined): UseVaultResult {
     if (userId && mek) persistBiometricVaultUnlock(userId, mek);
   }, [status, isBiometricUnlockEnabled]);
 
+  // Auto-bloqueo a la hora: mientras esté desbloqueada, programa el lock() justo para cuando se
+  // cumpla VAULT_AUTO_LOCK_MS desde el último desbloqueo — así se bloquea sola aunque se deje la
+  // app abierta de más, sin necesidad de cerrarla y reabrirla para que el chequeo del montaje
+  // (más arriba) se vuelva a correr.
+  useEffect(() => {
+    if (status !== "unlocked") return;
+    const userId = userIdRef.current;
+    if (!userId) return;
+    const unlockedAt = loadVaultUnlockedAt(userId) ?? Date.now();
+    const remaining = VAULT_AUTO_LOCK_MS - (Date.now() - unlockedAt);
+    if (remaining <= 0) {
+      lock();
+      return;
+    }
+    const timer = setTimeout(lock, remaining);
+    return () => clearTimeout(timer);
+  }, [status, lock]);
+
   const setupVault = useCallback(
     async (masterPassword: string) => {
       if (!userId) return null;
@@ -179,6 +216,7 @@ export function useVault(userId: string | null | undefined): UseVaultResult {
         await saveVaultConfig(userId, newConfig);
         mekRef.current = mek;
         persistVaultUnlock(userId, mek);
+        persistVaultUnlockedAt(userId, now);
         setConfig(newConfig);
         setStatus("unlocked");
         return { recoveryPhrase };
@@ -200,7 +238,10 @@ export function useVault(userId: string | null | undefined): UseVaultResult {
         return false;
       }
       mekRef.current = mek;
-      if (userId) persistVaultUnlock(userId, mek);
+      if (userId) {
+        persistVaultUnlock(userId, mek);
+        persistVaultUnlockedAt(userId, Date.now());
+      }
       setStatus("unlocked");
       return true;
     },
@@ -217,7 +258,10 @@ export function useVault(userId: string | null | undefined): UseVaultResult {
         return false;
       }
       mekRef.current = mek;
-      if (userId) persistVaultUnlock(userId, mek);
+      if (userId) {
+        persistVaultUnlock(userId, mek);
+        persistVaultUnlockedAt(userId, Date.now());
+      }
       setStatus("unlocked");
       return true;
     },
@@ -274,6 +318,7 @@ export function useVault(userId: string | null | undefined): UseVaultResult {
     if (!mek) return false;
     mekRef.current = mek;
     persistVaultUnlock(userIdRef.current, mek);
+    persistVaultUnlockedAt(userIdRef.current, Date.now());
     setStatus("unlocked");
     return true;
   }, []);
