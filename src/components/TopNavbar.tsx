@@ -2,7 +2,7 @@ import { createPortal } from "react-dom";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import { useIsMobile } from "../hooks/useIsMobile";
 import React, { useState, useRef, useEffect, lazy, Suspense } from "react";
-import { motion, AnimatePresence, useDragControls, useMotionValue, useTransform } from "motion/react";
+import { motion, AnimatePresence, useDragControls, useMotionValue } from "motion/react";
 import type { NavPanelRow } from "../lib/navPanelContext";
 import {
   Home,
@@ -465,12 +465,11 @@ export default function TopNavbar({
   // expandido, Avisos, Chat, Ajustes embebido — nunca hay dos abiertos/arrastrándose a la vez,
   // así que compartirlo es seguro). Mientras se arrastra cualquiera de ellos, "drag" escribe
   // directo sobre ESTE valor (vía style={{ y: footerLiftY }} en cada panel, en vez de que cada
-  // uno tenga el suyo propio leído de info.offset.y crudo) y la fila de íconos lee el mismo
-  // valor, negado, para subir exactamente al mismo ritmo — ya no hace falta un margin-bottom
-  // (que afecta layout y competía con la animación "layout" de la cápsula, causando el
-  // desfasaje) ni que cada panel reimplemente su propia sincronización.
+  // uno tenga el suyo propio leído de info.offset.y crudo) — el panel entero (texto + su propio
+  // fondo) se desliza como un bloque rígido, y el overflow-hidden de su wrapper (ver OUTER/INNER
+  // en cada panel) lo recorta de golpe contra la fila de íconos de abajo, que a propósito NUNCA
+  // se mueve (ver el comentario junto a esa fila, más abajo).
   const footerLiftY = useMotionValue(0);
-  const footerLiftYNegated = useTransform(footerLiftY, (v) => -v);
   const [showNotifications, setShowNotifications] = useState(false);
   const [selectedNotifId, setSelectedNotifId] = useState<string | null>(null);
   // Arrastrar hacia abajo para cerrar Avisos — mismo patrón que el menú expandido y Chat.
@@ -658,13 +657,12 @@ export default function TopNavbar({
         {/* TOP ROW: Main Header Bar — en mobile queda al final (order-2) para que sea la fila
             pegada al borde inferior de la pantalla (la más fácil de alcanzar con el pulgar); el
             resto del contenido de la cápsula (sub-pestañas, notificaciones, chat) crece hacia
-            arriba, por encima de esta fila, en vez de taparla. style y: sube en vivo (transform,
-            no layout) mientras se arrastra hacia abajo cualquiera de esos paneles — ver
-            footerLiftY más arriba. */}
-        <motion.div
-          style={{ y: footerLiftYNegated, willChange: "transform" }}
-          className="order-2 md:order-none flex items-center justify-between gap-2 w-full"
-        >
+            arriba, por encima de esta fila, en vez de taparla. A propósito totalmente fija —
+            nunca se mueve, ni siquiera mientras se arrastra un panel: los paneles (ver
+            footerLiftY) se deslizan hacia abajo como un bloque y se recortan contra el borde de
+            su propio wrapper (overflow-hidden) antes de llegar acá, así nunca se asoman detrás
+            de esta fila (que sigue siendo semitransparente) ni hace falta moverla para evitarlo. */}
+        <div className="order-2 md:order-none flex items-center justify-between gap-2 w-full">
           {/* Brand / Logo */}
           <div
             onClick={() => {
@@ -936,7 +934,7 @@ export default function TopNavbar({
             </div>
 
           </div>
-        </motion.div>
+        </div>
 
         {/* MENÚ EXPANDIDO (solo mobile): al tocar la grilla o el "+", en vez de un cartel aparte,
             esto crece hacia arriba dentro de la misma cápsula — y AMBOS disparadores comparten
