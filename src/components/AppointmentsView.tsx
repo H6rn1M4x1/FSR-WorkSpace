@@ -4758,7 +4758,7 @@ export default function AppointmentsView({
                         {isTranscribing && (
                           <span className="flex items-center gap-1 text-[10px] font-bold text-primary animate-pulse">
                             <Loader2 className="w-3 h-3 animate-spin" />
-                            Transcribiendo con IA...
+                            Transcribiendo con Jarvis...
                           </span>
                         )}
                       </div>
@@ -4779,7 +4779,7 @@ export default function AppointmentsView({
                              value={tcTranscripcionAutomatica}
                              onChange={(e) => setTcTranscripcionAutomatica(e.target.value)}
                              className="w-full text-xs text-slate-700 dark:text-zinc-300 bg-transparent border-none focus:ring-0 resize-y min-h-[60px] p-0 italic"
-                             placeholder={isTranscribing ? "Procesando transcripción con Inteligencia Artificial..." : "La transcripción aparecerá aquí..."}
+                             placeholder={isTranscribing ? "Procesando transcripción con Jarvis..." : "La transcripción aparecerá aquí..."}
                            />
                         );
                       })()}

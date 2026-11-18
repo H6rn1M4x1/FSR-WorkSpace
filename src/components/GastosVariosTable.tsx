@@ -661,7 +661,7 @@ export default function GastosVariosTable({
               </h2>
               <p className="text-xs text-slate-500 dark:text-zinc-400 font-medium">
                 Sigue tus consumos por tarjeta de crédito o débito e importa
-                resúmenes automáticamente con Inteligencia Artificial.
+                resúmenes automáticamente con Jarvis.
               </p>
             </div>
           </div>
@@ -676,7 +676,7 @@ export default function GastosVariosTable({
               className="w-full sm:w-auto justify-center px-4 py-2 rounded-full bg-primary hover:bg-primary-hover text-white dark:text-blue-950 font-bold text-xs shadow-md hover:shadow-lg transition-all flex items-center gap-2 cursor-pointer active:scale-95"
             >
               <Sparkles className="w-4 h-4" />
-              <span>Subir Resumen con IA</span>
+              <span>Subir Resumen con Jarvis</span>
             </button>
 
             <button
@@ -812,7 +812,7 @@ export default function GastosVariosTable({
                         No se encontraron gastos varios registrados.
                       </p>
                       <p className="text-[11px] opacity-70">
-                        Presiona "Agregar Gasto" o "Subir Resumen con IA" para
+                        Presiona "Agregar Gasto" o "Subir Resumen con Jarvis" para
                         cargar consumos.
                       </p>
                     </div>
@@ -899,7 +899,7 @@ export default function GastosVariosTable({
               <div className="flex flex-col items-center gap-2">
                 <Receipt className="w-8 h-8 opacity-40" />
                 <p className="font-semibold text-xs">No se encontraron gastos varios registrados.</p>
-                <p className="text-[11px] opacity-70 px-4">Presiona "Agregar Gasto" o "Subir Resumen con IA" para cargar consumos.</p>
+                <p className="text-[11px] opacity-70 px-4">Presiona "Agregar Gasto" o "Subir Resumen con Jarvis" para cargar consumos.</p>
               </div>
             </div>
           ) : (
@@ -1187,7 +1187,7 @@ export default function GastosVariosTable({
                   </div>
                   <div>
                     <h3 className="font-black text-base">
-                      Cargar Resumen de Tarjeta con IA
+                      Cargar Resumen de Tarjeta con Jarvis
                     </h3>
                     <p className="text-xs text-slate-500 dark:text-zinc-400 font-medium">
                       Lee de forma automática imágenes (PNG/JPG), PDFs o textos
@@ -1273,7 +1273,7 @@ export default function GastosVariosTable({
                     <div className="flex items-center justify-between">
                       <h4 className="text-xs font-black uppercase tracking-wider text-primary flex items-center gap-1.5">
                         <Check className="w-4 h-4" />
-                        Consumos Detectados por IA ({extractedPreview.length})
+                        Consumos Detectados por Jarvis ({extractedPreview.length})
                       </h4>
                       <span className="text-xs font-black text-slate-900 dark:text-white">
                         Total:{" "}

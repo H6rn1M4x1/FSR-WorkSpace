@@ -32,7 +32,7 @@ function isTransientError(err: any): boolean {
 function friendlyExamError(err: any): string {
   const raw = String(err?.message || err || "");
   if (/UNAVAILABLE|503|overloaded|high demand/i.test(raw)) {
-    return "El servicio de IA está saturado en este momento. Probá de nuevo en unos segundos.";
+    return "Viernes está saturado en este momento. Probá de nuevo en unos segundos.";
   }
   if (/Unexpected token|is not valid JSON|<html/i.test(raw)) {
     return "Tardó demasiado y se cortó. Probá con menos preguntas o menos archivos a la vez.";
@@ -229,10 +229,10 @@ export async function generateExamQuestions(
     throw new Error(friendlyExamError(err));
   }
   if (!parsed || !Array.isArray(parsed.questions) || parsed.questions.length === 0) {
-    throw new Error("La IA no generó ninguna pregunta. Probá con otro archivo.");
+    throw new Error("Viernes no generó ninguna pregunta. Probá con otro archivo.");
   }
   const raw = parsed.questions.filter((q) => q && typeof q.prompt === "string" && q.prompt.trim());
-  if (raw.length === 0) throw new Error("La IA no generó ninguna pregunta válida. Probá de nuevo.");
+  if (raw.length === 0) throw new Error("Viernes no generó ninguna pregunta válida. Probá de nuevo.");
 
   const difficulties: ExamDifficulty[] = raw.map((q) =>
     VALID_DIFFICULTIES.includes(q.difficulty as ExamDifficulty) ? (q.difficulty as ExamDifficulty) : "media",

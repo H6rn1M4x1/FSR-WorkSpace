@@ -334,7 +334,7 @@ export function GymAIAnalysisPanel({
           objetivo: curObjetivo,
         });
       }
-      if (silent) showToast?.("Generamos tu resumen semanal de entrenamiento con IA.", "info");
+      if (silent) showToast?.("Generamos tu resumen semanal de entrenamiento con Jarvis.", "info");
     } catch (err: any) {
       console.error("Error generando análisis IA de progreso:", err);
       setStatus("error");
@@ -437,7 +437,7 @@ export function GymAIAnalysisPanel({
             <Sparkles className="w-5 h-5 stroke-[2.25px]" />
           </div>
           <div>
-            <h3 className="text-base font-black tracking-tight">Tu Entrenador Personal (IA)</h3>
+            <h3 className="text-base font-black tracking-tight">Tu Entrenador Personal (Jarvis)</h3>
             <p className="text-xs text-slate-500 dark:text-zinc-400">
               Análisis de tu progreso real, con recomendaciones y una rutina de descanso/recuperación a medida.
             </p>

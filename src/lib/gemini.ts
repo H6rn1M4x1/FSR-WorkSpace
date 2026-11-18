@@ -165,7 +165,7 @@ export class GeminiService {
     });
     if (!res.ok) {
       const err = await res.json();
-      throw new Error(err.error || "Error al procesar el resumen con IA.");
+      throw new Error(err.error || "Error al procesar el resumen con Jarvis.");
     }
     const data = await res.json();
     return data.items || [];

@@ -231,7 +231,7 @@ function PinnedFolderCard({
             e.stopPropagation();
             onTreeClick();
           }}
-          title={hasTree ? "Ver el árbol de materias" : "Crear el árbol de materias con IA"}
+          title={hasTree ? "Ver el árbol de materias" : "Crear el árbol de materias con Viernes"}
           className={`shrink-0 h-9 px-3 flex items-center justify-center gap-1.5 rounded-full text-[11px] font-bold transition-all cursor-pointer hover:brightness-110 active:brightness-95 ${
             hasTree
               ? "bg-primary text-white dark:text-black"

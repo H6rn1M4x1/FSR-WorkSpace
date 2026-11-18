@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import {
   Shield,
@@ -7,8 +7,10 @@ import {
   AlertTriangle,
   Lock,
   Smartphone,
+  Fingerprint,
 } from "lucide-react";
 import { verify2FAToken } from "../lib/totp";
+import { isBiometricAvailable, authenticateWithBiometric } from "../lib/biometricAuth";
 
 interface TwoFactorLoginModalProps {
   isOpen: boolean;
@@ -32,8 +34,29 @@ export function TwoFactorLoginModal({
   const [trustDevice, setTrustDevice] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [verifying, setVerifying] = useState(false);
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [verifyingBiometric, setVerifyingBiometric] = useState(false);
+
+  useEffect(() => {
+    isBiometricAvailable().then(setBiometricAvailable);
+  }, []);
 
   if (!isOpen) return null;
+
+  const handleBiometricLogin = async () => {
+    setErrorMsg(null);
+    setVerifyingBiometric(true);
+    const outcome = await authenticateWithBiometric(
+      "Confirmá tu huella para ingresar",
+      "FSR Workspace"
+    );
+    setVerifyingBiometric(false);
+    if (outcome === "success") {
+      onVerifySuccess(trustDevice);
+    } else if (outcome === "error") {
+      setErrorMsg("No se pudo usar la huella. Probá de nuevo o ingresá el código de 6 dígitos.");
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -122,6 +145,18 @@ export function TwoFactorLoginModal({
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
               <span>{errorMsg}</span>
             </div>
+          )}
+
+          {biometricAvailable && (
+            <button
+              type="button"
+              onClick={handleBiometricLogin}
+              disabled={verifyingBiometric}
+              className="w-full py-3 rounded-2xl border border-primary/30 bg-primary-container text-primary font-bold text-sm flex items-center justify-center gap-2 cursor-pointer hover:brightness-105 transition-all disabled:opacity-60"
+            >
+              <Fingerprint className="w-4 h-4" />
+              {verifyingBiometric ? "Verificando..." : "Ingresar con huella digital"}
+            </button>
           )}
 
           {/* Trust Device Option */}
