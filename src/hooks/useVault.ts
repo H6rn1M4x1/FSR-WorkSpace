@@ -143,6 +143,21 @@ export function useVault(userId: string | null | undefined): UseVaultResult {
     };
   }, [encryptedItems, status]);
 
+  // Mantiene el MEK cacheado para la huella SINCRONIZADO con el MEK real cada vez que el vault
+  // pasa a "unlocked" — sin esto, si la huella se activa en un momento (p. ej. con un vault
+  // recién creado por error) y DESPUÉS se desbloquea "de verdad" con la clave maestra o la
+  // frase de recuperación (p. ej. tras recuperar el vault real con la migración), ese segundo
+  // MEK correcto nunca llegaba al slot de la huella — la próxima vez que se usara la huella
+  // seguía trayendo el MEK viejo, mostrando "0 contraseñas" aunque la clave maestra sí
+  // funcionara. Re-escribirlo acá, en cualquier transición a "unlocked", lo deja siempre al día
+  // sin tener que tocar cada función de desbloqueo por separado.
+  useEffect(() => {
+    if (status !== "unlocked" || !isBiometricUnlockEnabled) return;
+    const userId = userIdRef.current;
+    const mek = mekRef.current;
+    if (userId && mek) persistBiometricVaultUnlock(userId, mek);
+  }, [status, isBiometricUnlockEnabled]);
+
   const setupVault = useCallback(
     async (masterPassword: string) => {
       if (!userId) return null;
