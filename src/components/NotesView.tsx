@@ -36,12 +36,14 @@ import { RichTextEditor } from "./RichTextEditor";
 import { SharedBadge } from "./SharedBadge";
 import { SubNav } from "./SubNav";
 import { PasswordVaultPanel } from "./PasswordVaultPanel";
+import type { UseVaultResult } from "../hooks/useVault";
 import { auth } from "../lib/firebase";
 import { getAccentColorHex, hexToRgb, rgbToHex, mixHex } from "./WeeklyScheduleGrid";
 import type { StickyNote, NoteFolder } from "../types";
 
 interface NotesViewProps {
   userId: string;
+  vault: UseVaultResult;
   darkMode?: boolean;
   activeSubTab?: string;
   onSubTabChange?: (tab: string) => void;
@@ -635,6 +637,7 @@ function NoteDetailPane({
 
 export function NotesView({
   userId,
+  vault,
   darkMode = false,
   activeSubTab: propActiveSubTab,
   onSubTabChange,
@@ -1082,6 +1085,7 @@ export function NotesView({
           {activeSubTab === "vault" ? (
             <PasswordVaultPanel
               userId={userId || auth.currentUser?.email || ""}
+              vault={vault}
               darkMode={darkMode}
               twoFactorEnabled={twoFactor.enabled}
               twoFactorSecret={twoFactor.secret}

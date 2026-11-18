@@ -42,6 +42,7 @@ import { ConfirmationModal } from "./components/ConfirmationModal";
 import { useScrollReveal } from "./hooks/useScrollReveal";
 import { usePaymentAutoLogger } from "./hooks/usePaymentAutoLogger";
 import { useIsMobile } from "./hooks/useIsMobile";
+import { useVault } from "./hooks/useVault";
 import { DriveBackupService } from "./lib/driveBackupService";
 import { syncMonthlyMatches } from "./lib/matchScheduler";
 import Dither from "./components/Dither";
@@ -657,6 +658,15 @@ export default function App() {
   const isMobile = useIsMobile();
   const [isUserSettingsOpen, setIsUserSettingsOpen] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfileData | null>(null);
+
+  // Instancia ÚNICA y compartida de la Caja Fuerte — antes PasswordVaultPanel llamaba a
+  // useVault() por su cuenta, así que al mover los toggles de 2FA-para-revelar y huella a
+  // Ajustes > Seguridad (otro componente completamente separado) una segunda instancia ahí
+  // hubiera quedado con su propio mek/status, desincronizada de la que de verdad se usa en
+  // Caja Fuerte (ver NotesView > PasswordVaultPanel). Se llama una sola vez acá y se pasa
+  // para abajo a los dos lugares que la necesitan.
+  const vaultUserId = user?.email || userProfile?.email || "";
+  const vault = useVault(vaultUserId);
 
   // Dock flotante de Electron (ver electron/main.cjs y src/components/DockApp.tsx): esta ventana
   // (la principal) es la única que tiene toda esta data ya cargada, así que es la que arma el
@@ -2559,6 +2569,7 @@ export default function App() {
           currentTab={currentTab}
           setCurrentTab={handleTabChange}
           activeSubTab={activeSubTab}
+          vault={vault}
           onSubTabChange={setActiveSubTab}
           subPanelRows={subPanelRows}
           darkMode={darkMode}
@@ -2966,6 +2977,7 @@ export default function App() {
                   onSubTabChange={setActiveSubTab}
                   autoOpenCompose={quickNoteComposeNonce}
                   autoSelectNote={quickNoteEditTarget}
+                  vault={vault}
                 />
               )}
               </>
@@ -2983,6 +2995,7 @@ export default function App() {
         <UserSettingsModal
           isOpen={isUserSettingsOpen}
           onClose={() => setIsUserSettingsOpen(false)}
+          vault={vault}
           darkMode={darkMode}
           setDarkMode={setDarkMode}
           backgroundStyle={backgroundStyle}
