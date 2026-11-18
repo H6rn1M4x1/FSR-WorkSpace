@@ -22,9 +22,14 @@ interface Props {
   // los ítems reimportados decrypten solos; forzar un re-lock obliga a tipear de nuevo la
   // clave maestra ORIGINAL, que es la que de verdad corresponde a esos ítems.
   onComplete?: () => void;
+  // Opcional: texto extra que se agrega al mensaje de "Listo" — para instrucciones puntuales
+  // de esa sección (p. ej. Caja Fuerte necesita avisar que hay que bloquear y reingresar la
+  // clave maestra ORIGINAL). No depende de que onComplete haya hecho efecto: es la instrucción
+  // explícita que vale pase lo que pase con ese mecanismo automático.
+  successNote?: string;
 }
 
-export function MigrationBanner({ darkMode, userId, title, categories, bulkImport, dismissKey, onComplete }: Props) {
+export function MigrationBanner({ darkMode, userId, title, categories, bulkImport, dismissKey, onComplete, successNote }: Props) {
   const [dismissed, setDismissed] = useState(() => {
     try {
       return localStorage.getItem(dismissKey) === "1";
@@ -77,7 +82,7 @@ export function MigrationBanner({ darkMode, userId, title, categories, bulkImpor
           <p className="text-xs font-extrabold text-primary">{title}</p>
           <p className="text-[11px] opacity-80 mt-0.5">
             {status === "done"
-              ? `Listo — importado: ${summary}`
+              ? `Listo — importado: ${summary}.${successNote ? ` ${successNote}` : ""}`
               : status === "error"
               ? `Falló: ${summary}`
               : "Copia estos datos de Firestore a Supabase. Podés correrlo las veces que quieras, no duplica datos."}

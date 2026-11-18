@@ -497,6 +497,7 @@ export function PasswordVaultPanel({
           bulkImport={bulkImportVault}
           dismissKey="vault_migration_dismissed"
           onComplete={() => vault.lock()}
+          successNote="Ahora tocá 'Bloquear' más abajo y volvé a desbloquear con tu clave maestra ORIGINAL (la de antes de esta migración) para ver tus contraseñas."
         />
         <div className="flex items-center gap-3">
           <KeyRound className="w-5 h-5 text-primary" />
@@ -611,6 +612,7 @@ export function PasswordVaultPanel({
           bulkImport={bulkImportVault}
           dismissKey="vault_migration_dismissed"
           onComplete={() => vault.lock()}
+          successNote="Ahora tocá 'Bloquear' más abajo y volvé a desbloquear con tu clave maestra ORIGINAL (la de antes de esta migración) para ver tus contraseñas."
         />
         <div className="flex items-center gap-3">
           <Lock className="w-5 h-5 text-primary" />
@@ -737,6 +739,7 @@ export function PasswordVaultPanel({
           bulkImport={bulkImportVault}
           dismissKey="vault_migration_dismissed"
           onComplete={() => vault.lock()}
+          successNote="Ahora tocá 'Bloquear' más abajo y volvé a desbloquear con tu clave maestra ORIGINAL (la de antes de esta migración) para ver tus contraseñas."
         />
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
