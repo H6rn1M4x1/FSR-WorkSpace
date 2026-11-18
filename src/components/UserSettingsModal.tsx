@@ -3394,31 +3394,34 @@ export function UserSettingsModal({
                   </div>
                 </div>
 
-                <label
-                  className={`flex items-start gap-2.5 p-3 rounded-xl border text-xs ${
-                    profile.twoFactorEnabled
-                      ? "border-slate-200 dark:border-zinc-800 cursor-pointer"
-                      : "border-slate-200 dark:border-zinc-800 opacity-60"
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={!!vault.config?.requireTotpToReveal}
-                    disabled={!profile.twoFactorEnabled}
-                    onChange={(e) => handleToggleRequireTotp(e.target.checked)}
-                    className="mt-0.5"
-                  />
-                  <span>
-                    <span className="font-bold text-zinc-800 dark:text-zinc-200 block">
-                      Pedir código de Google Authenticator para ver o copiar una contraseña
+                <div className="flex items-center justify-between gap-3 p-3 rounded-xl border border-slate-200 dark:border-zinc-800">
+                  <div className="min-w-0">
+                    <span className="font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                      <Shield className="w-3.5 h-3.5 shrink-0" /> Pedir código de Google Authenticator para ver o copiar una contraseña
                     </span>
                     <span className="text-[10px] text-zinc-500 dark:text-zinc-400 block mt-0.5">
                       {profile.twoFactorEnabled
                         ? "Capa extra: aunque la caja esté desbloqueada, cada revelado pide el código de 6 dígitos y se vuelve a ocultar solo a los 5 minutos."
                         : "Activá primero el 2FA (arriba en esta misma pestaña) para poder usar esta opción."}
                     </span>
-                  </span>
-                </label>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={!!vault.config?.requireTotpToReveal}
+                    onClick={() => handleToggleRequireTotp(!vault.config?.requireTotpToReveal)}
+                    disabled={!profile.twoFactorEnabled}
+                    className={`shrink-0 w-12 h-6 rounded-full relative transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                      vault.config?.requireTotpToReveal ? "bg-primary" : "bg-slate-300 dark:bg-zinc-700"
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-transform ${
+                        vault.config?.requireTotpToReveal ? "translate-x-6" : "translate-x-0"
+                      }`}
+                    />
+                  </button>
+                </div>
 
                 {vaultBiometricAvailable && (
                   <div className="flex items-center justify-between gap-3 p-3 rounded-xl border border-slate-200 dark:border-zinc-800">
