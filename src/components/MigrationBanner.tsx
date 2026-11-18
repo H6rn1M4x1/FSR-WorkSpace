@@ -16,9 +16,15 @@ interface Props {
   categories: string[];
   bulkImport: (userId: string, category: string, items: any[]) => Promise<number>;
   dismissKey: string;
+  // Opcional: se llama una vez terminada una migración EXITOSA. Lo usa Caja Fuerte para
+  // bloquearse sola después de importar — si la sesión ya estaba "unlocked" con un MEK
+  // nuevo/vacío (vault recién creado sin querer), el config importado no alcanza para que
+  // los ítems reimportados decrypten solos; forzar un re-lock obliga a tipear de nuevo la
+  // clave maestra ORIGINAL, que es la que de verdad corresponde a esos ítems.
+  onComplete?: () => void;
 }
 
-export function MigrationBanner({ darkMode, userId, title, categories, bulkImport, dismissKey }: Props) {
+export function MigrationBanner({ darkMode, userId, title, categories, bulkImport, dismissKey, onComplete }: Props) {
   const [dismissed, setDismissed] = useState(() => {
     try {
       return localStorage.getItem(dismissKey) === "1";
@@ -51,6 +57,7 @@ export function MigrationBanner({ darkMode, userId, title, categories, bulkImpor
       }
       setSummary(counts.join(" · "));
       setStatus("done");
+      onComplete?.();
     } catch (error: any) {
       console.error("[MigrationBanner] Error:", error);
       setSummary(error?.message || "Error desconocido");
