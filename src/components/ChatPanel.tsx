@@ -821,8 +821,12 @@ export function ChatPanel({ userEmail, darkMode, isOpen, onClose, onUnreadCountC
           <div className="w-full border-t border-zinc-200/60 dark:border-white/10 pt-3 mt-2 pb-2 md:pb-0">
             {/* En mobile ocupa casi toda la altura disponible debajo del navbar (en vez de una
                 cajita chica) — 130px cubre la fila de navegación + los paddings del capsule de
-                arriba. En desktop vuelve al alto fijo de siempre. */}
-            <div className="w-full flex flex-col md:flex-row items-stretch gap-3 h-[calc(100dvh-165px)] max-h-[720px] md:h-[440px] md:max-h-none">
+                arriba. En desktop vuelve al alto fijo de siempre. svh (no dvh): dvh se recalcula
+                en vivo cuando la barra de Safari/Chrome mobile aparece o desaparece durante el
+                propio gesto de arrastre, por eso durante un drag lento esto parecía "encogerse
+                solo" con el dedo quieto. svh asume siempre la barra visible y no cambia en medio
+                de un gesto. */}
+            <div className="w-full flex flex-col md:flex-row items-stretch gap-3 h-[calc(100svh-165px)] max-h-[720px] md:h-[440px] md:max-h-none">
               {/* LEFT: Contacts */}
               <div className={`w-full md:w-72 shrink-0 flex flex-col min-h-0 ${showMobileConversation ? "hidden md:flex" : "flex"}`}>
                 <div className="flex items-center justify-between px-1 pb-2 shrink-0">

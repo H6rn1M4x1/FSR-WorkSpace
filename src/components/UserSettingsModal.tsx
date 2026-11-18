@@ -447,7 +447,13 @@ function SettingsShell({ embedded, isOpen, darkMode, dragControls, panelDragY, o
               style={{ y: panelDragY, willChange: "transform" }}
             >
               {grip}
-              <div className="w-full flex flex-col h-[calc(100dvh-165px)] max-h-[720px]">
+              {/* svh (no dvh): dvh se recalcula en vivo cuando la barra de herramientas de
+                  Safari/Chrome mobile aparece o desaparece durante el propio gesto de arrastre
+                  — eso era lo que hacía que el contenido pareciera "encogerse solo" con el dedo
+                  quieto (el header, shrink-0, no se movía; el body, flex-1, se achicaba porque
+                  el contenedor que lo mide perdía alto en vivo). svh asume siempre la barra
+                  visible (el caso más chico) y no cambia en medio de un gesto. */}
+              <div className="w-full flex flex-col h-[calc(100svh-165px)] max-h-[720px]">
                 {children}
               </div>
               {closingBorder}
