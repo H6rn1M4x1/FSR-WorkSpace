@@ -1542,7 +1542,7 @@ export function UserSettingsModal({
             overflow-hidden del modal exterior (no este overflow-y-auto) terminaba recortando el
             final del formulario — por eso el scroll interno no dejaba llegar hasta el botón de
             "Guardar Datos Personales", quedaba cortado en vez de poder bajar hasta verlo entero. */}
-        <div ref={modalBodyRef} className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6 space-y-6">
+        <div ref={modalBodyRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 md:p-6 space-y-6">
           {/* TAB 1: PROFILE & PERSONAL DATA */}
           {activeTab === "profile" && (
             <form onSubmit={handleSaveProfile} className="space-y-6">

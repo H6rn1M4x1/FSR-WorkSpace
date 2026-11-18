@@ -93,6 +93,15 @@ html, body {
      peleaba contra el reset a (0,0) al cambiar de sección, devolviendo el scroll a donde estaba
      apenas terminaba de cargar el contenido nuevo. */
   overflow-anchor: none;
+  /* En iOS (Safari y Chrome, que ahí corre sobre el mismo motor WebKit) el rebote de goma
+     (rubber-band/overscroll) de la página puede recalcular en vivo, a mitad de un gesto táctil
+     sin soltar el dedo, el "inset" de alto que WebKit le resta a elementos position:fixed — es
+     una categoría de bug conocida de WebKit (no de esta app), y es la causa real de que un
+     panel position:fixed con alto animado (como la cápsula del navbar) pareciera "abrir un
+     hueco" arriba durante un arrastre lento. overscroll-behavior:none en el documento entero
+     es la mitigación estándar: sin rebote de goma en la página, WebKit no tiene ese recálculo
+     en vivo que disparar.*/
+  overscroll-behavior: none;
 }
 
 /* Glassmorphism utility classes for Liquid Ether background */
