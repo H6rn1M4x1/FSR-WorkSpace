@@ -951,6 +951,11 @@ export function NotesView({
   // Tanto el drawer de carpetas como el editor de pantalla completa (ambos solo en mobile) son
   // overlays de pantalla completa — bloquear el scroll de fondo mientras cualquiera esté abierto.
   useLockBodyScroll(isMobile && (mobileFolderDrawerOpen || Boolean(selectedNote)));
+  // Mientras una nota está armada para reordenar (ver armMobileReorder más abajo), el scroll de
+  // fondo también debe quedar bloqueado — si no, scrollear por accidente mientras se arrastra
+  // cancela el gesto. La fase de ESPERA previa (los 2s sosteniendo quieto) no pasa por acá: ver
+  // el touchAction:"none" + scroll manual en handleMobileNotePointerMove más abajo.
+  useLockBodyScroll(isMobile && !!draggingId);
 
   const handleDrop = async (group: StickyNote[], targetId: string) => {
     const dragId = draggingId;
@@ -1000,6 +1005,7 @@ export function NotesView({
     noteId: string;
     startX: number;
     startY: number;
+    scrollStartY: number;
     moved: boolean;
     armed: boolean;
     reorderTimer: ReturnType<typeof setTimeout>;
@@ -1123,11 +1129,16 @@ export function NotesView({
       armMobileReorder(note, group, startX, startY);
     }, MOBILE_REORDER_HOLD_MS);
 
-    mobilePressRef.current = { noteId: note.id, startX, startY, moved: false, armed: false, reorderTimer };
+    mobilePressRef.current = { noteId: note.id, startX, startY, scrollStartY: window.scrollY, moved: false, armed: false, reorderTimer };
   };
 
   // Solo atiende la fase ANTES de armarse (los primeros 2s) — una vez armado (ver armMobileReorder
-  // más arriba), mobilePressRef ya está en null y el gesto completo pasa al listener global.
+  // más arriba), mobilePressRef ya está en null y el gesto completo pasa al listener global. La
+  // tarjeta tiene touchAction:"none" (ver renderMobileNoteCard) para que el navegador nunca
+  // arranque su propio scroll táctil mientras el dedo está sobre ella — si no, ese scroll nativo
+  // puede ganarle al JS y cancelar el mantener-presionado antes de completar los 2s. Una vez que
+  // el movimiento confirma que esto NO es un long-press (superó el umbral), se hace ese mismo
+  // scroll a mano para que se sienta igual de fluido que el nativo que se está reemplazando.
   const handleMobileNotePointerMove = (note: StickyNote) => (e: React.PointerEvent<HTMLButtonElement>) => {
     const press = mobilePressRef.current;
     if (!press || press.noteId !== note.id) return;
@@ -1137,6 +1148,7 @@ export function NotesView({
       press.moved = true;
       clearTimeout(press.reorderTimer);
     }
+    if (press.moved) window.scrollTo(0, press.scrollStartY - dy);
   };
 
   const handleMobileNotePointerEnd = (note: StickyNote) => (e: React.PointerEvent<HTMLButtonElement>) => {
@@ -1386,7 +1398,7 @@ export function NotesView({
         type="button"
         data-no-global-sound
         transition={{ layout: { duration: 0.22, ease: [0.16, 1, 0.3, 1] } }}
-        style={{ backgroundColor: colorEntry.bg, borderColor: colorEntry.border, touchAction: "pan-y" }}
+        style={{ backgroundColor: colorEntry.bg, borderColor: colorEntry.border, touchAction: "none" }}
         onPointerDown={handleMobileNotePointerDown(note, group)}
         onPointerMove={handleMobileNotePointerMove(note)}
         onPointerUp={handleMobileNotePointerEnd(note)}
@@ -1791,11 +1803,13 @@ export function NotesView({
         </div>
       </div>
           )}
-          {/* Aire extra al final, igual a la altura real (medida en vivo) del navbar — que tiene
-              una o dos filas según si hay sub-pestañas visibles — para que el scroll alcance a
-              dejar el bloque de notas completamente por encima de él, puntas redondeadas
-              incluidas, en vez de quedar cortado contra su borde. */}
-          {isMobile && navbarHeight > 0 && <div style={{ height: navbarHeight + 16 }} aria-hidden="true" />}
+          {/* Aire extra al final SOLO por lo que el navbar mide de más sobre lo que <main> ya
+              reserva (su pb-28 = 112px, ver App.tsx) — el navbar tiene una o dos filas según si
+              hay sub-pestañas visibles, y restar ese piso evita sumar un colchón encima de otro
+              (eso dejaba un hueco enorme antes del navbar cuando mide menos de 112px, que es el
+              caso más común). */}
+          {isMobile &&
+            navbarHeight + 16 > 112 && <div style={{ height: navbarHeight + 16 - 112 }} aria-hidden="true" />}
         </motion.div>
       </AnimatePresence>
 
@@ -1870,8 +1884,11 @@ export function NotesView({
                 // "top" viene de drawerTopPx (medido del panel de atrás al abrir, ver el botón de
                 // hamburguesa) en vez de una constante — así arranca a la misma altura que el
                 // bloque que tiene detrás, sea cual sea esa altura en cada pantalla/estado.
-                style={{ top: drawerTopPx }}
-                className={`fixed left-3 bottom-3 z-[91] w-[68vw] max-w-[280px] rounded-3xl border p-4 pr-6 overflow-y-auto shadow-2xl ${
+                // "bottom" usa navbarHeight (mismo valor medido en vivo que el spacer de abajo y
+                // el botón de tacho) en vez de un bottom-3 fijo — así el drawer siempre termina
+                // justo encima del navbar, nunca detrás/solapándolo, sea cual sea su altura actual.
+                style={{ top: drawerTopPx, bottom: navbarHeight + 12 }}
+                className={`fixed left-3 z-[91] w-[68vw] max-w-[280px] rounded-3xl border p-4 pr-6 overflow-y-auto shadow-2xl ${
                   darkMode ? "bg-zinc-900/60 border-zinc-800" : "bg-white/80 border-slate-200"
                 }`}
               >
