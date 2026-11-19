@@ -245,7 +245,7 @@ interface TopNavbarProps {
 // dentro de la misma cápsula del navbar. En mobile, si las pestañas no entran en una línea,
 // se desplaza horizontalmente con flechas — igual que el primer nivel de sub-pestañas — en vez
 // de pasar a una segunda línea.
-function SubPanelRow({ row, rowIndex, darkMode }: { row: NavPanelRow; rowIndex: number; darkMode: boolean }) {
+function SubPanelRow({ row, rowIndex, darkMode, isMobile }: { row: NavPanelRow; rowIndex: number; darkMode: boolean; isMobile: boolean }) {
   const [showLeftArrow, setShowLeftArrow] = useState(false);
   const [showRightArrow, setShowRightArrow] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -316,12 +316,21 @@ function SubPanelRow({ row, rowIndex, darkMode }: { row: NavPanelRow; rowIndex: 
     }
   };
 
+  // Orden visual dentro de la cápsula (ver comentario grande más abajo, antes de currentSubMenu):
+  // cada fila anidada es un nivel más profundo que la de primer nivel (currentSubMenu, order ±1),
+  // así que su |order| arranca en 2 y crece con rowIndex (nivel 3 = 2, nivel 4 = 3, ...). En
+  // desktop el signo es positivo (más profundo = más abajo, después del nivel 1 que vive en
+  // order:none/0); en mobile es negativo (más profundo = más arriba, más lejos de la fila
+  // principal que vive pegada abajo con order-2).
+  const rowOrder = isMobile ? -(rowIndex + 2) : rowIndex + 2;
+
   return (
     <motion.div
       initial={{ opacity: 0, height: 0, marginTop: 0 }}
       animate={{ opacity: 1, height: "auto", marginTop: 8 }}
       exit={{ opacity: 0, height: 0, marginTop: 0 }}
       transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+      style={{ order: rowOrder }}
       className="w-full overflow-hidden relative flex items-center gap-1.5 pb-2.5 md:pb-0 md:pt-2.5 border-b md:border-b-0 md:border-t border-zinc-200/50 dark:border-white/10"
     >
       {showLeftArrow && (
@@ -1171,16 +1180,19 @@ export default function TopNavbar({
           )}
         </AnimatePresence>
 
-        {/* Filas anidadas registradas por la vista actual (ej. Doctores/Presión Arterial/... en
-            Salud → Control Clínico) — dibujadas DENTRO de esta misma cápsula, como continuación
-            del menú, en vez de cada vista armando su propio menú flotante aparte. Van ANTES que
-            la fila de sub-pestañas de primer nivel (más abajo) para que en mobile queden más
-            arriba en la pantalla: son el segundo nivel (hijas de la pestaña de primer nivel
-            activa), así que visualmente deben estar por encima de ese primer nivel, que a su vez
-            queda pegado arriba de los íconos principales. */}
+        {/* Filas anidadas registradas por la vista actual (ej. Doctores/Presión Arterial/.../
+            Medicamentos → Historial/Stock, en Salud → Control Clínico) — dibujadas DENTRO de esta
+            misma cápsula, como continuación del menú, en vez de cada vista armando su propio menú
+            flotante aparte. Posición real en pantalla: ver el `order` que cada SubPanelRow se
+            asigna a sí misma (y el de currentSubMenu más abajo) — juntos arman la jerarquía
+            completa Nivel 1 (íconos principales) → Nivel 2 (currentSubMenu) → Nivel 3 → Nivel 4...
+            de arriba a abajo en desktop, e invertida (Nivel 1 pegado abajo, los niveles más
+            profundos cada vez más arriba) en mobile. El orden en que aparecen en este array (no
+            en pantalla) sigue siendo padre-antes-que-hijo (ej. [clinico, meds]), que es lo que
+            importa para que React/AnimatePresence las monte en el orden lógico correcto. */}
         <AnimatePresence mode="popLayout">
           {effectiveSubPanelRows && effectiveSubPanelRows.length > 0 && effectiveSubPanelRows.map((row, rowIndex) => (
-            <SubPanelRow key={row.indicatorId} row={row} rowIndex={rowIndex} darkMode={darkMode} />
+            <SubPanelRow key={row.indicatorId} row={row} rowIndex={rowIndex} darkMode={darkMode} isMobile={isMobile} />
           ))}
         </AnimatePresence>
 
@@ -1199,6 +1211,13 @@ export default function TopNavbar({
               animate={{ opacity: 1, height: "auto", marginTop: 8, marginBottom: 8 }}
               exit={{ opacity: 0, height: 0, marginTop: 0, marginBottom: 0 }}
               transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+              // order: este es el nivel 1 de sub-pestañas (hijo directo de la pestaña principal),
+              // así que va justo "arriba" del nivel 0 (la fila principal, order-2/md:order-none)
+              // en la jerarquía — en desktop un order chico y positivo (después del 0 de la fila
+              // principal); en mobile uno chico y negativo (antes que el 2 de la fila principal,
+              // pero más cerca de ella que cualquier SubPanelRow, cuyo |order| arranca en 2). Ver
+              // el comentario largo en SubPanelRow para el resto del esquema.
+              style={{ order: isMobile ? -1 : 1 }}
               className="w-full overflow-hidden relative flex items-center gap-1.5 pb-2.5 md:pb-0 md:pt-2.5 border-b md:border-b-0 md:border-t border-zinc-200/50 dark:border-white/10"
             >
               {/* Left Scroll Button */}
