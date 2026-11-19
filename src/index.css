@@ -1608,6 +1608,24 @@ html:not(.dark) .payment-card-solid {
   -webkit-backdrop-filter: none !important;
 }
 
+/* Drawer de carpetas y editor de pantalla completa de Notas Rápidas en mobile (NotesView.tsx):
+   son overlays que tapan TODA la pantalla, no tarjetas flotando sobre el fondo — con el bg-white/
+   dark:bg-zinc-950 normal, la regla glass de arriba los vuelve semitransparentes y se transparenta
+   el grid de notas de atrás, mismo truco que .notif-card-solid/.payment-card-solid de arriba. */
+.notes-mobile-overlay-solid,
+html:not(.dark) .notes-mobile-overlay-solid {
+  background-color: #ffffff !important;
+  opacity: 1 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+.dark .notes-mobile-overlay-solid {
+  background-color: #000000 !important;
+  opacity: 1 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
 /* Mismo par nota+tarjeta: al pasar el mouse por la franja de la tarjeta de abajo (.payment-overlap-strip-wrap),
    la nota de arriba (.payment-overlap-note) se agranda junto con ella para que las dos terminen del
    mismo tamaño — la tarjeta ya se anima sola via framer-motion. Si en cambio el mouse pasa solo por
