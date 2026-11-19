@@ -1388,6 +1388,23 @@ html:not(.dark) .map-instruction-banner span {
   color: #f8fafc !important;
 }
 
+/* NotesView.tsx: drawer de carpetas en mobile — pedido explícito de que se vea "más sólido" que
+   el resto de bloques (que siguen con su transparencia glass normal), pero sin perder el blur ni
+   llegar al 100% opaco de force-solid-bg (eso iría en contra del blur+semi-transparente pedido
+   para este mismo drawer en una ronda anterior). Mismo truco de especificidad que force-solid-bg
+   de abajo: combinar con .dark/html:not(.dark) para igualar la especificidad del selector glass
+   de más arriba y ganarle por aparecer después en este archivo. */
+.dark .notes-drawer-solid {
+  background-color: rgba(24, 24, 27, 0.94) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+}
+html:not(.dark) .notes-drawer-solid {
+  background-color: rgba(255, 255, 255, 0.94) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+}
+
 /* Nota: sin forzar "opacity: 1" acá — background-color ya queda 100% opaco por sí solo (sin
    canal alpha), y forzar la propiedad "opacity" del elemento entero rompería la animación de
    aparición/desaparición (fade) que hacen los modales con framer-motion sobre este mismo
