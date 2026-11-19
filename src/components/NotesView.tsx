@@ -1431,7 +1431,7 @@ export function NotesView({
                       animate={{ x: 0 }}
                       exit={{ x: "-100%" }}
                       transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-                      className="fixed inset-y-0 left-0 z-[91] w-[82vw] max-w-xs bg-white dark:bg-zinc-950 border-r border-slate-200 dark:border-zinc-800 p-4 overflow-y-auto"
+                      className="notes-mobile-overlay-solid fixed inset-y-0 left-0 z-[91] w-[82vw] max-w-xs bg-white dark:bg-zinc-950 border-r border-slate-200 dark:border-zinc-800 p-4 overflow-y-auto"
                     >
                       <div className="flex justify-end mb-2">
                         <button
@@ -1459,7 +1459,7 @@ export function NotesView({
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 24 }}
                     transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-                    className="fixed inset-0 z-[92] bg-white dark:bg-zinc-950 overflow-y-auto"
+                    className="notes-mobile-overlay-solid fixed inset-0 z-[92] bg-white dark:bg-zinc-950 overflow-y-auto"
                   >
                     <div className="sticky top-0 z-10 flex items-center gap-2 px-3 py-3 bg-white/90 dark:bg-zinc-950/90 backdrop-blur-md border-b border-slate-200 dark:border-zinc-800">
                       <button
