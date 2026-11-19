@@ -24,12 +24,16 @@ import {
   ShoppingBag,
   Plane,
   GraduationCap,
+  Menu,
+  ArrowLeft,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { createPortal } from "react-dom";
 import { useNotes } from "../hooks/useNotes";
 import { useNoteFolders } from "../hooks/useNoteFolders";
 import { useToast } from "../context/ToastContext";
+import { useIsMobile } from "../hooks/useIsMobile";
+import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import { uiSounds } from "../lib/sounds";
 import { ConfirmationModal } from "./ConfirmationModal";
 import { RichTextEditor } from "./RichTextEditor";
@@ -173,10 +177,11 @@ function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
 
-// Texto plano, recortado, para la vista previa de la lista compacta del medio.
-function stripHtmlPreview(html: string): string {
+// Texto plano, recortado, para la vista previa de la lista compacta del medio (o, con un maxLen
+// mayor, para la tarjeta más alta del grid de 2 columnas en mobile).
+function stripHtmlPreview(html: string, maxLen = 90): string {
   const text = (html || "").replace(/<[^>]*>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
-  return text.length > 90 ? `${text.slice(0, 90)}…` : text;
+  return text.length > maxLen ? `${text.slice(0, maxLen)}…` : text;
 }
 
 // "Hoy"/"Ayer" para fechas recientes, igual que el diseño de referencia — una fecha corta para
@@ -659,6 +664,12 @@ export function NotesView({
   const { showToast } = useToast();
   const notePalette = useMemo(() => buildNoteColorPalette(darkMode), [darkMode]);
 
+  // Rediseño de Notas Rápidas SOLO en mobile (grid de 2 columnas + drawer de carpetas + editor
+  // de pantalla completa, por pedido explícito) — en desktop/tablet (isMobile === false) el
+  // layout de 3 columnas de siempre queda sin ningún cambio.
+  const isMobile = useIsMobile();
+  const [mobileFolderDrawerOpen, setMobileFolderDrawerOpen] = useState(false);
+
   // The submenu ("Notas Rápidas" / "Caja Fuerte") is normally driven by the main top navbar
   // (see SUBMENUS_BY_TAB in TopNavbar.tsx), same as Turnos/Salud/etc. Fall back to local state
   // only if this view is ever rendered without that wiring.
@@ -878,11 +889,18 @@ export function NotesView({
 
   // Si no hay nada seleccionado (primera carga, se cambió de carpeta, o se borró la nota que
   // estaba abierta) pero la lista actual tiene notas, se selecciona la primera — el panel de
-  // detalle de la derecha nunca queda vacío mientras haya algo para mostrar.
+  // detalle de la derecha nunca queda vacío mientras haya algo para mostrar. En mobile esto NO
+  // aplica: ahí "nada seleccionado" es la pantalla del grid (ver isMobile más abajo), que es la
+  // que tiene que verse por defecto en vez de abrir una nota sola de entrada.
   useEffect(() => {
+    if (isMobile) return;
     if (!selectedNote && orderedVisible.length > 0) setSelectedNoteId(orderedVisible[0].id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedNote, orderedVisible.map((n) => n.id).join(",")]);
+  }, [selectedNote, orderedVisible.map((n) => n.id).join(","), isMobile]);
+
+  // Tanto el drawer de carpetas como el editor de pantalla completa (ambos solo en mobile) son
+  // overlays de pantalla completa — bloquear el scroll de fondo mientras cualquiera esté abierto.
+  useLockBodyScroll(isMobile && (mobileFolderDrawerOpen || Boolean(selectedNote)));
 
   const handleDrop = async (group: StickyNote[], targetId: string) => {
     const dragId = draggingId;
@@ -915,6 +933,254 @@ export function NotesView({
     reorderedIds.splice(toIndex, 0, draggingId);
     const byId = new Map(group.map((n) => [n.id, n]));
     return reorderedIds.map((id) => byId.get(id)!);
+  };
+
+  // Contenido de la barra de carpetas — compartido entre la columna 1 de desktop (sticky, a la
+  // izquierda) y el drawer de mobile (ver mobileFolderDrawerOpen): misma lista, mismos botones de
+  // renombrar/eliminar/crear carpeta, mismo drag-and-drop para soltar una nota sobre una carpeta.
+  // forceVertical=true (mobile) fuerza la columna siempre vertical (nunca fila con scroll
+  // horizontal, que no tendría sentido dentro de un drawer angosto) y cierra el drawer al elegir
+  // "Todas las notas" o una carpeta puntual, para que seleccionar y ver el resultado sea un solo
+  // gesto.
+  const renderFolderSidebarContent = (forceVertical: boolean) => {
+    const selectFolder = (id: string | null) => {
+      setSelectedFolderId(id);
+      uiSounds.navigate();
+      if (forceVertical) setMobileFolderDrawerOpen(false);
+    };
+    return (
+      <>
+        <div className="flex items-center justify-between px-1">
+          <p className="text-[10px] font-extrabold uppercase tracking-widest text-zinc-400">Carpetas</p>
+          <button
+            type="button"
+            onClick={() => { setNewFolderOpen((v) => !v); uiSounds.click(); }}
+            className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-primary cursor-pointer"
+            title="Nueva carpeta"
+          >
+            <FolderPlus className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        <AnimatePresence>
+          {newFolderOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
+              className={`p-2.5 rounded-xl border space-y-2 overflow-hidden ${darkMode ? "bg-zinc-950/60 border-zinc-800" : "bg-slate-50 border-slate-200"}`}
+            >
+              <input
+                autoFocus
+                value={newFolderName}
+                onChange={(e) => setNewFolderName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleCreateFolder()}
+                placeholder="Nombre de la carpeta"
+                className="w-full px-2 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+              <div className="flex flex-wrap gap-1.5">
+                {FOLDER_ICON_KEYS.map((key) => {
+                  const Icon = FOLDER_ICONS[key];
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => { setNewFolderIcon(key); uiSounds.click(); }}
+                      title="Ícono de la carpeta"
+                      className={`w-7 h-7 rounded-lg flex items-center justify-center text-primary cursor-pointer transition-transform ${
+                        newFolderIcon === key
+                          ? "bg-primary/20 ring-2 ring-primary scale-110"
+                          : "hover:bg-primary/10 hover:scale-110"
+                      }`}
+                    >
+                      <Icon className="w-4 h-4" />
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => { setNewFolderOpen(false); setNewFolderName(""); }}
+                  className="px-2.5 py-1 text-[10px] font-bold text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCreateFolder}
+                  disabled={!newFolderName.trim()}
+                  className="px-3 py-1 rounded-full bg-primary hover:bg-primary/90 text-white text-[10px] font-bold cursor-pointer disabled:opacity-50"
+                >
+                  Crear
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <div
+          className={`flex ${forceVertical ? "flex-col" : "lg:flex-col"} gap-1.5 ${
+            forceVertical ? "" : "overflow-x-auto lg:overflow-visible pb-1 lg:pb-0"
+          }`}
+        >
+          <motion.button
+            type="button"
+            whileTap={{ scale: 0.97 }}
+            onClick={() => selectFolder(null)}
+            className={`shrink-0 flex items-center gap-2 px-2.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap cursor-pointer transition-colors ${
+              selectedFolderId === null
+                ? "bg-primary text-white dark:text-zinc-950 shadow-md"
+                : "text-zinc-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800"
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5 shrink-0" />
+            <span className="flex-1 text-left truncate">Todas las notas</span>
+            <span className={`text-[10px] font-semibold ${selectedFolderId === null ? "text-white/80 dark:text-zinc-950/70" : "text-zinc-400"}`}>
+              {notes.length}
+            </span>
+          </motion.button>
+
+          {folders.map((f) => {
+            const FolderIcon = FOLDER_ICONS[f.icon] || Folder;
+            const isEditing = editingFolderId === f.id;
+            const isActive = selectedFolderId === f.id;
+            return (
+              <motion.div
+                key={f.id}
+                layout
+                onDragOver={(e) => {
+                  if (!draggingId) return;
+                  e.preventDefault();
+                  if (dragOverFolderId !== f.id) setDragOverFolderId(f.id);
+                }}
+                onDragLeave={() => setDragOverFolderId((id) => (id === f.id ? null : id))}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (draggingId) {
+                    updateNote(draggingId, { folderId: f.id });
+                    uiSounds.toggle();
+                  }
+                  setDraggingId(null);
+                  setDragOverId(null);
+                  setDragOverFolderId(null);
+                }}
+                className={`group relative shrink-0 flex items-center gap-1 rounded-xl transition-colors ${
+                  dragOverFolderId === f.id ? "ring-2 ring-primary bg-primary/10" : ""
+                } ${isActive && dragOverFolderId !== f.id ? "bg-primary text-white dark:text-zinc-950 shadow-md" : ""}`}
+              >
+                {isEditing ? (
+                  <input
+                    autoFocus
+                    value={editingFolderName}
+                    onChange={(e) => setEditingFolderName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") { renameFolder(f.id, editingFolderName); setEditingFolderId(null); }
+                      if (e.key === "Escape") setEditingFolderId(null);
+                    }}
+                    onBlur={() => { if (editingFolderName.trim()) renameFolder(f.id, editingFolderName); setEditingFolderId(null); }}
+                    className="flex-1 min-w-0 px-2.5 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-primary text-xs font-bold text-zinc-900 dark:text-white focus:outline-none"
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => selectFolder(f.id)}
+                    className={`flex-1 min-w-0 flex items-center gap-2 px-2.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap cursor-pointer ${
+                      isActive ? "" : "text-zinc-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800"
+                    }`}
+                  >
+                    <FolderIcon
+                      className={`w-3.5 h-3.5 shrink-0 ${isActive ? "" : "text-primary"}`}
+                      fill="currentColor"
+                      fillOpacity={isActive ? 0.35 : 0.2}
+                    />
+                    <span className="flex-1 text-left truncate">{f.name}</span>
+                    <span className={`text-[10px] font-semibold ${isActive ? "text-white/80 dark:text-zinc-950/70" : "text-zinc-400"}`}>
+                      {folderCounts[f.id] || 0}
+                    </span>
+                  </button>
+                )}
+                {!isEditing && (
+                  <div className="relative shrink-0">
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setFolderMenuId(folderMenuId === f.id ? null : f.id); }}
+                      className={`opacity-0 group-hover:opacity-100 focus:opacity-100 p-1 mr-1 rounded-lg cursor-pointer ${
+                        isActive ? "hover:bg-black/15 text-white/80 dark:text-zinc-950/70" : "hover:bg-black/10 dark:hover:bg-white/10 text-zinc-400"
+                      }`}
+                      title="Opciones de la carpeta"
+                    >
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    </button>
+                    {folderMenuId === f.id && (
+                      <div onClick={(e) => e.stopPropagation()} className={`absolute z-20 top-full right-0 mt-1 p-1 w-36 ${DARK_PANEL}`}>
+                        <button
+                          type="button"
+                          onClick={() => { setEditingFolderId(f.id); setEditingFolderName(f.name); setFolderMenuId(null); }}
+                          className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs font-bold text-left text-zinc-200 hover:bg-white/10 cursor-pointer"
+                        >
+                          <Pencil className="w-3.5 h-3.5" /> Renombrar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setDeleteFolderConfirmId(f.id); setFolderMenuId(null); }}
+                          className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs font-bold text-left text-red-400 hover:bg-red-500/15 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" /> Eliminar
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </motion.div>
+            );
+          })}
+        </div>
+      </>
+    );
+  };
+
+  // Tarjeta del grid de 2 columnas en mobile (estilo Keep) — mismo contenido que
+  // renderNoteListItem, pero sin drag-and-drop (no aplica a un dedo en pantalla táctil) y sin
+  // altura mínima fija, para que las tarjetas tengan alturas distintas entre sí (el efecto
+  // "masonry" de la imagen de referencia) en vez de todas iguales.
+  const renderMobileNoteCard = (note: StickyNote) => {
+    const colorEntry = findNoteColorEntry(notePalette, note.color);
+    const draft = drafts[note.id];
+    const titleValue = draft?.title !== undefined ? draft.title : note.title || "";
+    const textValue = draft?.text !== undefined ? draft.text : note.text;
+    const isSharedIn = !!note.__sharedByEmail;
+    const folderName = folders.find((f) => f.id === note.folderId)?.name;
+    const preview = stripHtmlPreview(textValue, 280);
+
+    return (
+      <button
+        key={note.id}
+        type="button"
+        onClick={() => { uiSounds.expand(); setSelectedNoteId(note.id); }}
+        className="w-full block text-left rounded-2xl border p-3 shadow-sm mb-3 break-inside-avoid-column cursor-pointer active:scale-[0.98] transition-transform"
+        style={{ backgroundColor: colorEntry.bg, borderColor: colorEntry.border }}
+      >
+        {isSharedIn && (
+          <div className="mb-1">
+            <SharedBadge item={note} />
+          </div>
+        )}
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <span className="text-xs font-extrabold text-zinc-900 dark:text-white truncate">{titleValue || "Sin título"}</span>
+          {note.pinned && <Pin className="w-3 h-3 fill-current text-primary shrink-0" />}
+        </div>
+        {preview && <p className="text-[11px] text-zinc-500 dark:text-zinc-400 whitespace-pre-wrap">{preview}</p>}
+        <div className="flex items-center justify-between gap-2 mt-1.5">
+          <span className="flex items-center gap-1 text-[9.5px] font-bold text-slate-400 dark:text-zinc-500 truncate">
+            <Folder className="w-2.5 h-2.5 shrink-0" />
+            <span className="truncate">{folderName || "Sin carpeta"}</span>
+          </span>
+          <span className="text-[9.5px] text-slate-400 dark:text-zinc-500 shrink-0">{formatNoteDate(note.updatedAt)}</span>
+        </div>
+      </button>
+    );
   };
 
   // Fila compacta de la columna del medio — clic para abrirla en el panel grande de la derecha.
@@ -1088,6 +1354,173 @@ export function NotesView({
               twoFactorEnabled={twoFactor.enabled}
               twoFactorSecret={twoFactor.secret}
             />
+          ) : isMobile ? (
+            <div className="space-y-4 animate-fade-in">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setMobileFolderDrawerOpen(true)}
+                  className="shrink-0 w-10 h-10 rounded-2xl border border-slate-200 dark:border-zinc-800 flex items-center justify-center text-zinc-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer transition-colors"
+                  title="Carpetas"
+                >
+                  <Menu className="w-5 h-5" />
+                </button>
+                <div className="min-w-0 flex-1">
+                  <h2 className="font-extrabold text-lg text-zinc-900 dark:text-zinc-100 truncate">
+                    {selectedFolderId ? folders.find((f) => f.id === selectedFolderId)?.name || "Notas" : "Todas las notas"}
+                  </h2>
+                  <p className="text-xs text-slate-400 dark:text-zinc-500">
+                    {visibleNotes.length} {visibleNotes.length === 1 ? "nota" : "notas"}
+                  </p>
+                </div>
+              </div>
+
+              <motion.button
+                type="button"
+                whileTap={{ scale: 0.98 }}
+                onClick={handleCreateNote}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-primary text-white dark:text-zinc-950 text-xs font-bold hover:bg-primary/90 cursor-pointer transition-colors shadow-sm"
+              >
+                <Plus className="w-4 h-4" /> Nueva nota
+              </motion.button>
+
+              {visibleNotes.length === 0 ? (
+                <p className="text-center text-xs text-slate-400 dark:text-zinc-500 py-10 px-2">
+                  {notes.length === 0
+                    ? "Todavía no tenés notas. Creá la primera de arriba — quedan guardadas de forma permanente hasta que las borres."
+                    : "Esta carpeta todavía no tiene notas."}
+                </p>
+              ) : (
+                <div className="space-y-5">
+                  {pinned.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 flex items-center gap-1.5 px-1">
+                        <Pin className="w-3 h-3" /> Fijadas
+                      </p>
+                      <div className="columns-2 gap-3">{pinned.map((n) => renderMobileNoteCard(n))}</div>
+                    </div>
+                  )}
+                  {others.length > 0 && (
+                    <div className="space-y-2">
+                      {pinned.length > 0 && (
+                        <p className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-1">Otras</p>
+                      )}
+                      <div className="columns-2 gap-3">{others.map((n) => renderMobileNoteCard(n))}</div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Drawer de carpetas (hamburguesa arriba a la izquierda) — mismo contenido y
+                  acciones que la barra lateral de desktop, ver renderFolderSidebarContent. */}
+              <AnimatePresence>
+                {mobileFolderDrawerOpen && (
+                  <>
+                    <motion.div
+                      key="folder-drawer-backdrop"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="fixed inset-0 z-[90] bg-black/50"
+                      onClick={() => setMobileFolderDrawerOpen(false)}
+                    />
+                    <motion.div
+                      key="folder-drawer"
+                      initial={{ x: "-100%" }}
+                      animate={{ x: 0 }}
+                      exit={{ x: "-100%" }}
+                      transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                      className="fixed inset-y-0 left-0 z-[91] w-[82vw] max-w-xs bg-white dark:bg-zinc-950 border-r border-slate-200 dark:border-zinc-800 p-4 overflow-y-auto"
+                    >
+                      <div className="flex justify-end mb-2">
+                        <button
+                          type="button"
+                          onClick={() => setMobileFolderDrawerOpen(false)}
+                          className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 text-zinc-400 cursor-pointer"
+                          title="Cerrar"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <div className="space-y-3">{renderFolderSidebarContent(true)}</div>
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
+
+              {/* Editor de pantalla completa al tocar una nota — mismo NoteDetailPane que usa la
+                  columna 3 de desktop, solo que acá se muestra como overlay en vez de inline. */}
+              <AnimatePresence>
+                {selectedNote && (
+                  <motion.div
+                    key="mobile-note-editor"
+                    initial={{ opacity: 0, y: 24 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 24 }}
+                    transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                    className="fixed inset-0 z-[92] bg-white dark:bg-zinc-950 overflow-y-auto"
+                  >
+                    <div className="sticky top-0 z-10 flex items-center gap-2 px-3 py-3 bg-white/90 dark:bg-zinc-950/90 backdrop-blur-md border-b border-slate-200 dark:border-zinc-800">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedNoteId(null)}
+                        className="p-2 -ml-2 rounded-xl hover:bg-slate-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 cursor-pointer"
+                        title="Volver"
+                      >
+                        <ArrowLeft className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <div className="p-4">
+                      <NoteDetailPane
+                        key={selectedNote.id}
+                        note={selectedNote}
+                        draft={drafts[selectedNote.id]}
+                        folders={folders}
+                        colorPalette={notePalette}
+                        menu={menuFor(selectedNote.id)}
+                        onSetDraft={(patch) =>
+                          setDrafts((prev) => ({
+                            ...prev,
+                            [selectedNote.id]: {
+                              title: prev[selectedNote.id]?.title !== undefined ? prev[selectedNote.id].title : selectedNote.title || "",
+                              text: prev[selectedNote.id]?.text !== undefined ? prev[selectedNote.id].text : selectedNote.text,
+                              ...patch,
+                            },
+                          }))
+                        }
+                        onSetMenu={(m) => setMenuFor(selectedNote.id, m)}
+                        onUpdateNote={updateNote}
+                        onSaveDraft={async (patch) => {
+                          await updateNote(selectedNote.id, patch);
+                          setDrafts((prev) => {
+                            const next = { ...prev };
+                            delete next[selectedNote.id];
+                            return next;
+                          });
+                        }}
+                        onTogglePin={() => { togglePin(selectedNote.id); uiSounds.toggle(); }}
+                        onDelete={() => setDeleteConfirmId(selectedNote.id)}
+                        recipients={getRecipients(selectedNote.id)}
+                        allKnownRecipients={getAllRecipients()}
+                        onShare={async (email) => {
+                          await shareNote(selectedNote.id, email);
+                          showToast(`Nota compartida con ${email}.`, "success");
+                        }}
+                        onUnshare={async (email) => {
+                          try {
+                            await unshareNote(selectedNote.id, email);
+                            showToast(`Se dejó de compartir con ${email}.`, "success");
+                          } catch (err: any) {
+                            showToast("Error al dejar de compartir: " + (err?.message || String(err)), "error");
+                          }
+                        }}
+                      />
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           ) : (
       <div
         className={`rounded-3xl border p-4 sm:p-6 space-y-6 scroll-reveal ${
@@ -1109,192 +1542,8 @@ export function NotesView({
           {/* Columna 1: barra lateral de carpetas — "Todas las notas" + cada carpeta propia.
               Cada fila de carpeta es también blanco de drop: soltar ahí una nota que se esté
               arrastrando (draggingId, ver el drag-and-drop de cada tarjeta) le asigna esa
-              carpeta. */}
-          <div className="lg:sticky lg:top-4 space-y-3">
-            <div className="flex items-center justify-between px-1">
-              <p className="text-[10px] font-extrabold uppercase tracking-widest text-zinc-400">Carpetas</p>
-              <button
-                type="button"
-                onClick={() => { setNewFolderOpen((v) => !v); uiSounds.click(); }}
-                className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-primary cursor-pointer"
-                title="Nueva carpeta"
-              >
-                <FolderPlus className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            <AnimatePresence>
-              {newFolderOpen && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className={`p-2.5 rounded-xl border space-y-2 overflow-hidden ${darkMode ? "bg-zinc-950/60 border-zinc-800" : "bg-slate-50 border-slate-200"}`}
-                >
-                  <input
-                    autoFocus
-                    value={newFolderName}
-                    onChange={(e) => setNewFolderName(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleCreateFolder()}
-                    placeholder="Nombre de la carpeta"
-                    className="w-full px-2 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                  <div className="flex flex-wrap gap-1.5">
-                    {FOLDER_ICON_KEYS.map((key) => {
-                      const Icon = FOLDER_ICONS[key];
-                      return (
-                        <button
-                          key={key}
-                          type="button"
-                          onClick={() => { setNewFolderIcon(key); uiSounds.click(); }}
-                          title="Ícono de la carpeta"
-                          className={`w-7 h-7 rounded-lg flex items-center justify-center text-primary cursor-pointer transition-transform ${
-                            newFolderIcon === key
-                              ? "bg-primary/20 ring-2 ring-primary scale-110"
-                              : "hover:bg-primary/10 hover:scale-110"
-                          }`}
-                        >
-                          <Icon className="w-4 h-4" />
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <div className="flex items-center justify-end gap-2">
-                    <button
-                      type="button"
-                      onClick={() => { setNewFolderOpen(false); setNewFolderName(""); }}
-                      className="px-2.5 py-1 text-[10px] font-bold text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 cursor-pointer"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleCreateFolder}
-                      disabled={!newFolderName.trim()}
-                      className="px-3 py-1 rounded-full bg-primary hover:bg-primary/90 text-white text-[10px] font-bold cursor-pointer disabled:opacity-50"
-                    >
-                      Crear
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            <div className="flex lg:flex-col gap-1.5 overflow-x-auto lg:overflow-visible pb-1 lg:pb-0">
-              <motion.button
-                type="button"
-                whileTap={{ scale: 0.97 }}
-                onClick={() => { setSelectedFolderId(null); uiSounds.navigate(); }}
-                className={`shrink-0 flex items-center gap-2 px-2.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap cursor-pointer transition-colors ${
-                  selectedFolderId === null
-                    ? "bg-primary text-white dark:text-zinc-950 shadow-md"
-                    : "text-zinc-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800"
-                }`}
-              >
-                <Layers className="w-3.5 h-3.5 shrink-0" />
-                <span className="flex-1 text-left truncate">Todas las notas</span>
-                <span className={`text-[10px] font-semibold ${selectedFolderId === null ? "text-white/80 dark:text-zinc-950/70" : "text-zinc-400"}`}>
-                  {notes.length}
-                </span>
-              </motion.button>
-
-              {folders.map((f) => {
-                const FolderIcon = FOLDER_ICONS[f.icon] || Folder;
-                const isEditing = editingFolderId === f.id;
-                const isActive = selectedFolderId === f.id;
-                return (
-                  <motion.div
-                    key={f.id}
-                    layout
-                    onDragOver={(e) => {
-                      if (!draggingId) return;
-                      e.preventDefault();
-                      if (dragOverFolderId !== f.id) setDragOverFolderId(f.id);
-                    }}
-                    onDragLeave={() => setDragOverFolderId((id) => (id === f.id ? null : id))}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      if (draggingId) {
-                        updateNote(draggingId, { folderId: f.id });
-                        uiSounds.toggle();
-                      }
-                      setDraggingId(null);
-                      setDragOverId(null);
-                      setDragOverFolderId(null);
-                    }}
-                    className={`group relative shrink-0 flex items-center gap-1 rounded-xl transition-colors ${
-                      dragOverFolderId === f.id ? "ring-2 ring-primary bg-primary/10" : ""
-                    } ${isActive && dragOverFolderId !== f.id ? "bg-primary text-white dark:text-zinc-950 shadow-md" : ""}`}
-                  >
-                    {isEditing ? (
-                      <input
-                        autoFocus
-                        value={editingFolderName}
-                        onChange={(e) => setEditingFolderName(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") { renameFolder(f.id, editingFolderName); setEditingFolderId(null); }
-                          if (e.key === "Escape") setEditingFolderId(null);
-                        }}
-                        onBlur={() => { if (editingFolderName.trim()) renameFolder(f.id, editingFolderName); setEditingFolderId(null); }}
-                        className="flex-1 min-w-0 px-2.5 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-primary text-xs font-bold text-zinc-900 dark:text-white focus:outline-none"
-                      />
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => { setSelectedFolderId(f.id); uiSounds.navigate(); }}
-                        className={`flex-1 min-w-0 flex items-center gap-2 px-2.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap cursor-pointer ${
-                          isActive ? "" : "text-zinc-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800"
-                        }`}
-                      >
-                        <FolderIcon
-                          className={`w-3.5 h-3.5 shrink-0 ${isActive ? "" : "text-primary"}`}
-                          fill="currentColor"
-                          fillOpacity={isActive ? 0.35 : 0.2}
-                        />
-                        <span className="flex-1 text-left truncate">{f.name}</span>
-                        <span className={`text-[10px] font-semibold ${isActive ? "text-white/80 dark:text-zinc-950/70" : "text-zinc-400"}`}>
-                          {folderCounts[f.id] || 0}
-                        </span>
-                      </button>
-                    )}
-                    {!isEditing && (
-                      <div className="relative shrink-0">
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); setFolderMenuId(folderMenuId === f.id ? null : f.id); }}
-                          className={`opacity-0 group-hover:opacity-100 focus:opacity-100 p-1 mr-1 rounded-lg cursor-pointer ${
-                            isActive ? "hover:bg-black/15 text-white/80 dark:text-zinc-950/70" : "hover:bg-black/10 dark:hover:bg-white/10 text-zinc-400"
-                          }`}
-                          title="Opciones de la carpeta"
-                        >
-                          <ChevronDown className="w-3.5 h-3.5" />
-                        </button>
-                        {folderMenuId === f.id && (
-                          <div onClick={(e) => e.stopPropagation()} className={`absolute z-20 top-full right-0 mt-1 p-1 w-36 ${DARK_PANEL}`}>
-                            <button
-                              type="button"
-                              onClick={() => { setEditingFolderId(f.id); setEditingFolderName(f.name); setFolderMenuId(null); }}
-                              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs font-bold text-left text-zinc-200 hover:bg-white/10 cursor-pointer"
-                            >
-                              <Pencil className="w-3.5 h-3.5" /> Renombrar
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => { setDeleteFolderConfirmId(f.id); setFolderMenuId(null); }}
-                              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs font-bold text-left text-red-400 hover:bg-red-500/15 cursor-pointer"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" /> Eliminar
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </motion.div>
-                );
-              })}
-            </div>
-          </div>
+              carpeta. Contenido compartido con el drawer de mobile — ver renderFolderSidebarContent. */}
+          <div className="lg:sticky lg:top-4 space-y-3">{renderFolderSidebarContent(false)}</div>
 
           {/* Columna 2: lista compacta de notas de la carpeta actual — clic en una la abre en el
               panel grande de la derecha. Ancho fijo (300px) para que entren cómodas al menos 2
