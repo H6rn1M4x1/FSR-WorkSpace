@@ -333,7 +333,10 @@ export function MonthlyExamScheduler({
               </p>
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
+            {/* w-full + justify-between SOLO en mobile (sm: vuelve al tamaño natural, agrupado a
+                la derecha del título): las flechas quedan en las puntas y el mes (flex-1) ocupa
+                todo el ancho restante en el medio, en vez de quedar un bloque angosto suelto. */}
+            <div className="flex items-center justify-between gap-2 w-full sm:w-auto sm:justify-start sm:shrink-0">
               <button
                 type="button"
                 onClick={() => setCurrentMonth((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1))}
@@ -341,7 +344,7 @@ export function MonthlyExamScheduler({
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
-              <span className="text-xs font-extrabold uppercase tracking-wide min-w-[110px] text-center">
+              <span className="flex-1 sm:flex-initial text-xs font-extrabold uppercase tracking-wide sm:min-w-[110px] text-center">
                 {MESES[currentMonth.getMonth()]} {currentMonth.getFullYear()}
               </span>
               <button

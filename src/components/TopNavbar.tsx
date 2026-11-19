@@ -184,8 +184,8 @@ export const SUBMENUS_BY_TAB: Record<string, SubMenuItem[]> = {
     { id: "analysis", label: "Entender Video", icon: CloudLightning },
   ],
   notes: [
-    { id: "events", label: "Eventos", icon: MapPin },
     { id: "quick", label: "Notas Rápidas", icon: StickyNote },
+    { id: "events", label: "Eventos", icon: MapPin },
     { id: "vault", label: "Caja Fuerte", icon: KeyRound },
   ],
 };
