@@ -438,6 +438,7 @@ function NoteDetailPane({
   allKnownRecipients,
   onShare,
   onUnshare,
+  onBack,
 }: {
   note: StickyNote;
   draft: Draft | undefined;
@@ -457,6 +458,9 @@ function NoteDetailPane({
   allKnownRecipients: string[];
   onShare: (email: string) => Promise<void>;
   onUnshare: (email: string) => Promise<void>;
+  /** Solo en el editor de pantalla completa de mobile — botón "volver" al lado del título en vez
+   *  de una barra de header aparte (ver el overlay en el return principal de NotesView). */
+  onBack?: () => void;
 }) {
   const colorEntry = findNoteColorEntry(colorPalette, note.color);
   const titleValue = draft?.title !== undefined ? draft.title : note.title || "";
@@ -527,12 +531,24 @@ function NoteDetailPane({
         </div>
       )}
 
-      <input
-        value={titleValue}
-        onChange={(e) => onSetDraft({ title: e.target.value })}
-        placeholder="Título"
-        className="w-full bg-transparent text-base font-extrabold text-zinc-900 dark:text-white focus:outline-none placeholder:text-zinc-400 placeholder:font-extrabold mb-2"
-      />
+      <div className="flex items-center gap-1.5 mb-2">
+        {onBack && (
+          <button
+            type="button"
+            onClick={onBack}
+            className="shrink-0 -ml-1.5 p-1.5 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 text-zinc-500 dark:text-zinc-400 cursor-pointer"
+            title="Volver"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+        )}
+        <input
+          value={titleValue}
+          onChange={(e) => onSetDraft({ title: e.target.value })}
+          placeholder="Título"
+          className="w-full min-w-0 bg-transparent text-base font-extrabold text-zinc-900 dark:text-white focus:outline-none placeholder:text-zinc-400 placeholder:font-extrabold"
+        />
+      </div>
 
       <RichTextEditor
         value={textValue}
@@ -1355,7 +1371,11 @@ export function NotesView({
               twoFactorSecret={twoFactor.secret}
             />
           ) : isMobile ? (
-            <div className="space-y-4 animate-fade-in">
+            <div
+              className={`rounded-3xl border p-4 space-y-4 scroll-reveal ${
+                darkMode ? "bg-zinc-900/60 border-zinc-800" : "bg-white/80 border-slate-200"
+              }`}
+            >
               <div className="flex items-center gap-3">
                 <button
                   type="button"
@@ -1410,116 +1430,6 @@ export function NotesView({
                   )}
                 </div>
               )}
-
-              {/* Drawer de carpetas (hamburguesa arriba a la izquierda) — mismo contenido y
-                  acciones que la barra lateral de desktop, ver renderFolderSidebarContent. */}
-              <AnimatePresence>
-                {mobileFolderDrawerOpen && (
-                  <>
-                    <motion.div
-                      key="folder-drawer-backdrop"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className="fixed inset-0 z-[90] bg-black/50"
-                      onClick={() => setMobileFolderDrawerOpen(false)}
-                    />
-                    <motion.div
-                      key="folder-drawer"
-                      initial={{ x: "-100%" }}
-                      animate={{ x: 0 }}
-                      exit={{ x: "-100%" }}
-                      transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-                      className="notes-mobile-overlay-solid fixed inset-y-0 left-0 z-[91] w-[82vw] max-w-xs bg-white dark:bg-zinc-950 border-r border-slate-200 dark:border-zinc-800 p-4 overflow-y-auto"
-                    >
-                      <div className="flex justify-end mb-2">
-                        <button
-                          type="button"
-                          onClick={() => setMobileFolderDrawerOpen(false)}
-                          className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 text-zinc-400 cursor-pointer"
-                          title="Cerrar"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                      <div className="space-y-3">{renderFolderSidebarContent(true)}</div>
-                    </motion.div>
-                  </>
-                )}
-              </AnimatePresence>
-
-              {/* Editor de pantalla completa al tocar una nota — mismo NoteDetailPane que usa la
-                  columna 3 de desktop, solo que acá se muestra como overlay en vez de inline. */}
-              <AnimatePresence>
-                {selectedNote && (
-                  <motion.div
-                    key="mobile-note-editor"
-                    initial={{ opacity: 0, y: 24 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 24 }}
-                    transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-                    className="notes-mobile-overlay-solid fixed inset-0 z-[92] bg-white dark:bg-zinc-950 overflow-y-auto"
-                  >
-                    <div className="sticky top-0 z-10 flex items-center gap-2 px-3 py-3 bg-white/90 dark:bg-zinc-950/90 backdrop-blur-md border-b border-slate-200 dark:border-zinc-800">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedNoteId(null)}
-                        className="p-2 -ml-2 rounded-xl hover:bg-slate-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 cursor-pointer"
-                        title="Volver"
-                      >
-                        <ArrowLeft className="w-5 h-5" />
-                      </button>
-                    </div>
-                    <div className="p-4">
-                      <NoteDetailPane
-                        key={selectedNote.id}
-                        note={selectedNote}
-                        draft={drafts[selectedNote.id]}
-                        folders={folders}
-                        colorPalette={notePalette}
-                        menu={menuFor(selectedNote.id)}
-                        onSetDraft={(patch) =>
-                          setDrafts((prev) => ({
-                            ...prev,
-                            [selectedNote.id]: {
-                              title: prev[selectedNote.id]?.title !== undefined ? prev[selectedNote.id].title : selectedNote.title || "",
-                              text: prev[selectedNote.id]?.text !== undefined ? prev[selectedNote.id].text : selectedNote.text,
-                              ...patch,
-                            },
-                          }))
-                        }
-                        onSetMenu={(m) => setMenuFor(selectedNote.id, m)}
-                        onUpdateNote={updateNote}
-                        onSaveDraft={async (patch) => {
-                          await updateNote(selectedNote.id, patch);
-                          setDrafts((prev) => {
-                            const next = { ...prev };
-                            delete next[selectedNote.id];
-                            return next;
-                          });
-                        }}
-                        onTogglePin={() => { togglePin(selectedNote.id); uiSounds.toggle(); }}
-                        onDelete={() => setDeleteConfirmId(selectedNote.id)}
-                        recipients={getRecipients(selectedNote.id)}
-                        allKnownRecipients={getAllRecipients()}
-                        onShare={async (email) => {
-                          await shareNote(selectedNote.id, email);
-                          showToast(`Nota compartida con ${email}.`, "success");
-                        }}
-                        onUnshare={async (email) => {
-                          try {
-                            await unshareNote(selectedNote.id, email);
-                            showToast(`Se dejó de compartir con ${email}.`, "success");
-                          } catch (err: any) {
-                            showToast("Error al dejar de compartir: " + (err?.message || String(err)), "error");
-                          }
-                        }}
-                      />
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
             </div>
           ) : (
       <div
@@ -1650,6 +1560,116 @@ export function NotesView({
           )}
         </motion.div>
       </AnimatePresence>
+
+      {/* Drawer de carpetas y editor de pantalla completa de mobile — portaleados a document.body
+          (no como descendientes del motion.div animado de arriba): con el transform que motion
+          le aplica mientras anima, un position:fixed de adentro deja de posicionarse contra el
+          viewport real y pasa a posicionarse contra ESE ancestro, quedando por detrás del menú
+          inferior (que si vive al nivel real del body) y recortado para el scroll — mismo
+          problema, mismo truco del portal, que ya resuelve FolderPicker más arriba. */}
+      {isMobile && createPortal(
+        <AnimatePresence>
+          {mobileFolderDrawerOpen && (
+            <>
+              <motion.div
+                key="folder-drawer-backdrop"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="fixed inset-0 z-[90] bg-black/50"
+                onClick={() => setMobileFolderDrawerOpen(false)}
+              />
+              <motion.div
+                key="folder-drawer"
+                initial={{ x: "-100%" }}
+                animate={{ x: 0 }}
+                exit={{ x: "-100%" }}
+                transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                className="notes-mobile-overlay-solid fixed inset-y-0 left-0 z-[91] w-[82vw] max-w-xs bg-white dark:bg-zinc-950 border-r border-slate-200 dark:border-zinc-800 p-4 overflow-y-auto"
+              >
+                <div className="flex justify-end mb-2">
+                  <button
+                    type="button"
+                    onClick={() => setMobileFolderDrawerOpen(false)}
+                    className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 text-zinc-400 cursor-pointer"
+                    title="Cerrar"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="space-y-3">{renderFolderSidebarContent(true)}</div>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
+
+      {isMobile && createPortal(
+        <AnimatePresence>
+          {selectedNote && (
+            <motion.div
+              key="mobile-note-editor"
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 24 }}
+              transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+              className="notes-mobile-overlay-solid fixed inset-0 z-[92] bg-white dark:bg-zinc-950 overflow-y-auto"
+              style={{ paddingTop: "max(1rem, env(safe-area-inset-top))", paddingBottom: "max(2rem, env(safe-area-inset-bottom))" }}
+            >
+              <div className="p-4">
+                <NoteDetailPane
+                  key={selectedNote.id}
+                  note={selectedNote}
+                  draft={drafts[selectedNote.id]}
+                  folders={folders}
+                  colorPalette={notePalette}
+                  menu={menuFor(selectedNote.id)}
+                  onBack={() => setSelectedNoteId(null)}
+                  onSetDraft={(patch) =>
+                    setDrafts((prev) => ({
+                      ...prev,
+                      [selectedNote.id]: {
+                        title: prev[selectedNote.id]?.title !== undefined ? prev[selectedNote.id].title : selectedNote.title || "",
+                        text: prev[selectedNote.id]?.text !== undefined ? prev[selectedNote.id].text : selectedNote.text,
+                        ...patch,
+                      },
+                    }))
+                  }
+                  onSetMenu={(m) => setMenuFor(selectedNote.id, m)}
+                  onUpdateNote={updateNote}
+                  onSaveDraft={async (patch) => {
+                    await updateNote(selectedNote.id, patch);
+                    setDrafts((prev) => {
+                      const next = { ...prev };
+                      delete next[selectedNote.id];
+                      return next;
+                    });
+                  }}
+                  onTogglePin={() => { togglePin(selectedNote.id); uiSounds.toggle(); }}
+                  onDelete={() => setDeleteConfirmId(selectedNote.id)}
+                  recipients={getRecipients(selectedNote.id)}
+                  allKnownRecipients={getAllRecipients()}
+                  onShare={async (email) => {
+                    await shareNote(selectedNote.id, email);
+                    showToast(`Nota compartida con ${email}.`, "success");
+                  }}
+                  onUnshare={async (email) => {
+                    try {
+                      await unshareNote(selectedNote.id, email);
+                      showToast(`Se dejó de compartir con ${email}.`, "success");
+                    } catch (err: any) {
+                      showToast("Error al dejar de compartir: " + (err?.message || String(err)), "error");
+                    }
+                  }}
+                />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
 
       {/* Right-click context menu: just "Compartir con..." for now */}
       {rightClickMenu && (
