@@ -656,6 +656,24 @@ export default function App() {
 
   // User Settings State
   const isMobile = useIsMobile();
+
+  // Altura real del <header> (TopNavbar, fixed bottom-0 en mobile) — varía según la sección
+  // activa tenga o no sub-pestañas visibles (una o dos filas). El padding-bottom de <main> de
+  // abajo usa este valor en vez de una constante fija: una constante pensada para el caso de una
+  // sola fila se queda corta cuando hay sub-pestañas, dejando contenido tapado contra el navbar
+  // en el fondo del scroll (reportado en Notas Rápidas y en Turnos > Mi Agenda, pero el mismo
+  // <main> es compartido por todas las secciones, así que este fix aplica a todas a la vez).
+  const [navbarHeight, setNavbarHeight] = useState(0);
+  useEffect(() => {
+    if (!isMobile) return;
+    const headerEl = document.querySelector("header");
+    if (!headerEl || typeof ResizeObserver === "undefined") return;
+    const update = () => setNavbarHeight(headerEl.getBoundingClientRect().height);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(headerEl);
+    return () => ro.disconnect();
+  }, [isMobile]);
   const [isUserSettingsOpen, setIsUserSettingsOpen] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfileData | null>(null);
 
@@ -2693,7 +2711,10 @@ export default function App() {
         <main
           ref={mainScrollRef}
           onScroll={handleMainScroll}
-          className="flex-1 overflow-y-auto pt-[calc(0.75rem+env(safe-area-inset-top))] md:pt-0 pb-28 md:pb-0"
+          // pb-28 fijo no alcanza cuando el navbar tiene dos filas (sub-pestañas visibles) — ver
+          // el comentario junto a navbarHeight más arriba. +16px de aire extra sobre su alto real.
+          style={isMobile ? { paddingBottom: navbarHeight + 16 } : undefined}
+          className="flex-1 overflow-y-auto pt-[calc(0.75rem+env(safe-area-inset-top))] md:pt-0"
         >
           {driveLoading || !isInitialLoadDone ? (
             <AsciiSectionSkeleton tab={currentTab} darkMode={darkMode} />

@@ -4247,7 +4247,12 @@ export default function HealthView({
                             renderItem={(log) => (
                               <div
                                 key={log.id}
-                                className="flex items-center justify-between text-xs p-2 rounded-xl bg-zinc-500/5 border border-zinc-800/10"
+                                // En mobile (flex-col) la fecha queda en su propia línea arriba y
+                                // el valor+borrar en otra abajo — en una sola fila (como era antes
+                                // siempre) el texto de fecha/hora/paciente no tiene con qué
+                                // achicarse y terminaba solapado contra el valor de mmHg. En
+                                // desktop (sm:) el resultado visual es el mismo de siempre.
+                                className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-xs p-2 rounded-xl bg-zinc-500/5 border border-zinc-800/10"
                               >
                                 {(() => {
                                   const rawDate = log.date || "";
@@ -4272,16 +4277,18 @@ export default function HealthView({
                                     </span>
                                   );
                                 })()}
-                                <span className="font-extrabold font-mono">
-                                  {log.systolic}/{log.diastolic} mmHg (Pulso:{" "}
-                                  {log.pulse})
-                                </span>
-                                <button
-                                  onClick={() => handleDeleteBpLog(log.id)}
-                                  className="p-1 text-red-500 hover:bg-red-500/10 rounded-lg transition-all"
-                                >
-                                  <Trash2 className="w-3 h-3" />
-                                </button>
+                                <div className="flex items-center justify-between sm:justify-end gap-2">
+                                  <span className="font-extrabold font-mono">
+                                    {log.systolic}/{log.diastolic} mmHg (Pulso:{" "}
+                                    {log.pulse})
+                                  </span>
+                                  <button
+                                    onClick={() => handleDeleteBpLog(log.id)}
+                                    className="p-1 text-red-500 hover:bg-red-500/10 rounded-lg transition-all shrink-0"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                </div>
                               </div>
                             )}
                           />
@@ -4651,8 +4658,9 @@ export default function HealthView({
                           </div>
                         </div>
 
-                        <p className="text-[10px] font-medium text-zinc-500 leading-relaxed bg-primary/5 p-2.5 rounded-2xl border border-primary/10">
-                          💧 Mantenerse hidratado optimiza el transporte de macronutrientes, acelera la recuperación y cuida tus riñones.
+                        <p className="flex items-start gap-1.5 text-[10px] font-medium text-zinc-500 leading-relaxed bg-primary/5 p-2.5 rounded-2xl border border-primary/10">
+                          <Droplets className="w-3 h-3 text-primary shrink-0 mt-0.5" />
+                          <span>Mantenerse hidratado optimiza el transporte de macronutrientes, acelera la recuperación y cuida tus riñones.</span>
                         </p>
                       </div>
                     );
@@ -5318,7 +5326,10 @@ export default function HealthView({
                       <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
                         Comida
                       </label>
-                      <div className="flex flex-wrap gap-1.5">
+                      {/* grid 2x2 solo en mobile (Desayuno+Almuerzo arriba, Merienda+Cena abajo,
+                          cada botón a todo el ancho de su columna) — en desktop sigue siendo una
+                          sola fila, donde los 4 entran sin problema. */}
+                      <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-1.5">
                         {["Desayuno", "Almuerzo", "Merienda", "Cena"].map((es) => {
                           const isActive = alimEstado === es;
                           return (
@@ -5326,7 +5337,7 @@ export default function HealthView({
                               key={es}
                               type="button"
                               onClick={() => setAlimEstado(es as any)}
-                              className={`px-2.5 py-1.5 rounded-full text-[11px] font-bold border-2 transition-all cursor-pointer ${
+                              className={`flex items-center justify-center px-2.5 py-1.5 rounded-full text-[11px] font-bold border-2 transition-all cursor-pointer ${
                                 isActive
                                   ? "bg-primary border-primary text-white dark:text-blue-950 shadow-sm"
                                   : "bg-transparent border-slate-200 dark:border-zinc-700 text-slate-500 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800/60"

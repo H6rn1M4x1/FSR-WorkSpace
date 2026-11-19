@@ -30,6 +30,8 @@ import {
   Loader2,
   FolderOpen,
   FileX,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import { StudyPlanTree, StudyPlanTreeNode, StudyPlanTreeAttachment, StudyPlanTreeAnnotation } from "../types";
 import { layoutStudyPlanTree } from "../lib/studyPlanTree";
@@ -37,6 +39,7 @@ import { uiSounds } from "../lib/sounds";
 import { DriveFilePickerView } from "./DriveFilePickerView";
 import { useDriveFilePicker, DriveItemLite } from "../hooks/useDriveFilePicker";
 import { PdfHighlightViewer } from "./PdfHighlightViewer";
+import { useIsMobile } from "../hooks/useIsMobile";
 
 // Solo los adjuntos en PDF pueden tener una porción resaltada — el visor de resaltado está
 // construido sobre pdf.js, no sirve para otros formatos (imágenes, Office, etc.).
@@ -472,6 +475,7 @@ export function StudyPlanTreeView({
 }) {
   const planNodes = studyPlanTree.nodes;
   const attachments = studyPlanTree.attachments || {};
+  const isMobile = useIsMobile();
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [focusedTopId, setFocusedTopId] = useState<string | null>(null);
@@ -733,6 +737,194 @@ export function StudyPlanTreeView({
     }
   };
 
+  // Contenido del temario (lista de unidades) — compartido entre el sidebar animado por ancho de
+  // desktop y el bloque apilado arriba del todo en mobile (ver el layout de abajo).
+  const renderSidebarList = () => (
+    <>
+      <button
+        type="button"
+        onClick={showAll}
+        className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-bold mb-1.5 transition-colors cursor-pointer ${
+          !selectedId
+            ? "bg-primary text-white dark:text-black"
+            : darkMode
+              ? "text-zinc-300 hover:bg-zinc-800"
+              : "text-zinc-600 hover:bg-zinc-100"
+        }`}
+      >
+        <LayoutGrid className="w-3.5 h-3.5 shrink-0" />
+        Todas las unidades
+      </button>
+      {topNodes.map((topNode) => (
+        <TreeMenuItem
+          key={topNode.id}
+          node={topNode}
+          depth={0}
+          childrenByParent={childrenByParent}
+          expandedIds={expandedIds}
+          onToggleExpand={toggleExpanded}
+          onSelect={handleSelectNode}
+          isTopLevel
+          selectedId={selectedId}
+          darkMode={darkMode}
+        />
+      ))}
+    </>
+  );
+
+  // Contenido del panel de archivo (programa original/adjunto/vacío) — compartido entre el panel
+  // animado por ancho de desktop y el bloque apilado abajo del todo en mobile.
+  const renderRightPanelInner = () =>
+    rightPanel && (
+      <>
+        <div
+          className={`flex items-center justify-between gap-2 px-3 py-2.5 border-b shrink-0 ${
+            darkMode ? "border-zinc-800" : "border-zinc-150"
+          }`}
+        >
+          <div className="min-w-0">
+            <p className="text-[9px] font-bold text-primary uppercase tracking-wide truncate">
+              {rightPanel.kind === "original"
+                ? "Programa original"
+                : rightPanel.kind === "attachment"
+                  ? `Adjunto · ${rightPanel.nodeLabel}`
+                  : rightPanel.nodeLabel}
+            </p>
+            {rightPanel.kind !== "empty" && <p className="text-[11px] font-semibold truncate">{rightPanel.fileName}</p>}
+          </div>
+          <div className="flex items-center gap-0.5 shrink-0">
+            {rightPanel.kind !== "empty" && (
+              <button
+                type="button"
+                onClick={handleOpenInFacultad}
+                title="Abrir en Facultad"
+                className={`p-1.5 rounded-full cursor-pointer ${
+                  darkMode ? "hover:bg-zinc-800 text-zinc-400" : "hover:bg-zinc-200 text-zinc-500"
+                }`}
+              >
+                <FolderOpen className="w-3.5 h-3.5" />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setRightPanel(null)}
+              title="Cerrar"
+              className={`p-1.5 rounded-full cursor-pointer ${
+                darkMode ? "hover:bg-zinc-800 text-zinc-400" : "hover:bg-zinc-200 text-zinc-500"
+              }`}
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+        {rightPanel.kind === "empty" ? (
+          <div className="flex-1 flex flex-col items-center justify-center gap-2 text-center px-6">
+            <FileX className="w-7 h-7 text-zinc-400" />
+            <p className={`text-xs font-bold ${darkMode ? "text-zinc-300" : "text-zinc-600"}`}>
+              Este tema no tiene ningún archivo adjuntado
+            </p>
+            <p className="text-[10px] text-zinc-500">Clic derecho sobre el tema → "Adjuntar archivo"</p>
+          </div>
+        ) : rightPanelReady ? (
+          rightPanel.kind === "attachment" && isPdfFile(rightPanel.fileName) ? (
+            <PdfHighlightViewer
+              key={rightPanel.fileId}
+              fileId={rightPanel.fileId}
+              accessToken={accessToken}
+              darkMode={darkMode}
+              mode="view"
+              annotations={rightPanel.annotations}
+            />
+          ) : (
+            <iframe
+              key={rightPanel.fileId}
+              src={`https://drive.google.com/file/d/${rightPanel.fileId}/preview`}
+              className="flex-1 w-full border-0"
+              allow="autoplay"
+              title={rightPanel.fileName}
+            />
+          )
+        ) : (
+          <div className="flex-1 flex items-center justify-center">
+            <Loader2 className="w-5 h-5 text-primary animate-spin" />
+          </div>
+        )}
+      </>
+    );
+
+  const flowDiagram = (
+    <ReactFlowProvider>
+      <FlowDiagram
+        nodes={visibleNodes}
+        darkMode={darkMode}
+        jumpTarget={jumpTarget}
+        focusedTopId={focusedTopId}
+        attachments={attachments}
+        panelWidthSettled={panelWidthSettled}
+        onNodeContextMenu={handleDiagramNodeContextMenu}
+        onNodeClick={handleDiagramNodeClick}
+      />
+    </ReactFlowProvider>
+  );
+
+  if (isMobile) {
+    // Mobile: apilado vertical en vez de 3 columnas (que no entran en una pantalla angosta — el
+    // sidebar de 260px + el panel de 320px ya suman más que el ancho típico de un celular). Mismo
+    // contenido y mismo estado (sidebarOpen/rightPanel) que desktop, reordenado por pedido
+    // explícito: temario arriba, árbol en el medio, archivo abierto abajo. Los dos botones
+    // flotantes sobre el diagrama siguen siendo los que controlan mostrar/ocultar cada sección
+    // (en vez de animar un ancho a 0, acá simplemente ocultan/muestran el bloque entero).
+    return (
+      <div className="w-full h-full flex flex-col rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800">
+        <div className="flex-1 overflow-y-auto flex flex-col">
+          {sidebarOpen && (
+            <div
+              className={`shrink-0 border-b max-h-[32vh] overflow-y-auto p-2 ${
+                darkMode ? "bg-zinc-900/60 border-zinc-800" : "bg-slate-50 border-zinc-150"
+              }`}
+            >
+              {renderSidebarList()}
+            </div>
+          )}
+
+          <div className="shrink-0 h-[42vh] relative border-b border-zinc-200 dark:border-zinc-800">
+            <button
+              type="button"
+              onClick={() => setSidebarOpen((v) => !v)}
+              title={sidebarOpen ? "Ocultar temario" : "Mostrar temario"}
+              className={`absolute top-3 left-3 z-10 p-2 rounded-full shadow-md transition-all cursor-pointer ${
+                darkMode ? "bg-zinc-800 text-zinc-300 hover:bg-zinc-700" : "bg-white text-zinc-600 hover:bg-zinc-100"
+              }`}
+            >
+              {sidebarOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+            <button
+              type="button"
+              onClick={toggleRightPanel}
+              title={rightPanel ? "Ocultar archivo" : "Ver archivo"}
+              className={`absolute top-3 right-3 z-10 p-2 rounded-full shadow-md transition-all cursor-pointer ${
+                rightPanel
+                  ? "bg-primary text-white dark:text-black"
+                  : darkMode
+                    ? "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                    : "bg-white text-zinc-600 hover:bg-zinc-100"
+              }`}
+            >
+              {rightPanel ? <PanelRightClose className="w-4 h-4" /> : <PanelRightOpen className="w-4 h-4" />}
+            </button>
+            {flowDiagram}
+          </div>
+
+          {rightPanel && (
+            <div className={`shrink-0 min-h-[45vh] flex flex-col ${darkMode ? "bg-zinc-900/60" : "bg-slate-50"}`}>
+              {renderRightPanelInner()}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full h-full flex rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800">
       {/* Sidebar de unidades/submenús */}
@@ -743,36 +935,7 @@ export function StudyPlanTreeView({
           darkMode ? "bg-zinc-900/60 border-zinc-800" : "bg-slate-50 border-zinc-150"
         }`}
       >
-        <div className="w-[260px] h-full overflow-y-auto p-2">
-          <button
-            type="button"
-            onClick={showAll}
-            className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-bold mb-1.5 transition-colors cursor-pointer ${
-              !selectedId
-                ? "bg-primary text-white dark:text-black"
-                : darkMode
-                  ? "text-zinc-300 hover:bg-zinc-800"
-                  : "text-zinc-600 hover:bg-zinc-100"
-            }`}
-          >
-            <LayoutGrid className="w-3.5 h-3.5 shrink-0" />
-            Todas las unidades
-          </button>
-          {topNodes.map((topNode) => (
-            <TreeMenuItem
-              key={topNode.id}
-              node={topNode}
-              depth={0}
-              childrenByParent={childrenByParent}
-              expandedIds={expandedIds}
-              onToggleExpand={toggleExpanded}
-              onSelect={handleSelectNode}
-              isTopLevel
-              selectedId={selectedId}
-              darkMode={darkMode}
-            />
-          ))}
-        </div>
+        <div className="w-[260px] h-full overflow-y-auto p-2">{renderSidebarList()}</div>
       </motion.div>
 
       {/* Diagrama */}
@@ -801,18 +964,7 @@ export function StudyPlanTreeView({
         >
           {rightPanel ? <PanelRightClose className="w-4 h-4" /> : <PanelRightOpen className="w-4 h-4" />}
         </button>
-        <ReactFlowProvider>
-          <FlowDiagram
-            nodes={visibleNodes}
-            darkMode={darkMode}
-            jumpTarget={jumpTarget}
-            focusedTopId={focusedTopId}
-            attachments={attachments}
-            panelWidthSettled={panelWidthSettled}
-            onNodeContextMenu={handleDiagramNodeContextMenu}
-            onNodeClick={handleDiagramNodeClick}
-          />
-        </ReactFlowProvider>
+        {flowDiagram}
       </div>
 
       {/* Panel derecho: programa original o archivo adjunto del nodo seleccionado */}
@@ -836,84 +988,7 @@ export function StudyPlanTreeView({
           darkMode ? "bg-zinc-900/60 border-zinc-800" : "bg-slate-50 border-zinc-150"
         }`}
       >
-        <div className="w-[320px] h-full flex flex-col">
-          {rightPanel && (
-            <>
-              <div
-                className={`flex items-center justify-between gap-2 px-3 py-2.5 border-b shrink-0 ${
-                  darkMode ? "border-zinc-800" : "border-zinc-150"
-                }`}
-              >
-                <div className="min-w-0">
-                  <p className="text-[9px] font-bold text-primary uppercase tracking-wide truncate">
-                    {rightPanel.kind === "original"
-                      ? "Programa original"
-                      : rightPanel.kind === "attachment"
-                        ? `Adjunto · ${rightPanel.nodeLabel}`
-                        : rightPanel.nodeLabel}
-                  </p>
-                  {rightPanel.kind !== "empty" && <p className="text-[11px] font-semibold truncate">{rightPanel.fileName}</p>}
-                </div>
-                <div className="flex items-center gap-0.5 shrink-0">
-                  {rightPanel.kind !== "empty" && (
-                    <button
-                      type="button"
-                      onClick={handleOpenInFacultad}
-                      title="Abrir en Facultad"
-                      className={`p-1.5 rounded-full cursor-pointer ${
-                        darkMode ? "hover:bg-zinc-800 text-zinc-400" : "hover:bg-zinc-200 text-zinc-500"
-                      }`}
-                    >
-                      <FolderOpen className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setRightPanel(null)}
-                    title="Cerrar"
-                    className={`p-1.5 rounded-full cursor-pointer ${
-                      darkMode ? "hover:bg-zinc-800 text-zinc-400" : "hover:bg-zinc-200 text-zinc-500"
-                    }`}
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-              {rightPanel.kind === "empty" ? (
-                <div className="flex-1 flex flex-col items-center justify-center gap-2 text-center px-6">
-                  <FileX className="w-7 h-7 text-zinc-400" />
-                  <p className={`text-xs font-bold ${darkMode ? "text-zinc-300" : "text-zinc-600"}`}>
-                    Este tema no tiene ningún archivo adjuntado
-                  </p>
-                  <p className="text-[10px] text-zinc-500">Clic derecho sobre el tema → "Adjuntar archivo"</p>
-                </div>
-              ) : rightPanelReady ? (
-                rightPanel.kind === "attachment" && isPdfFile(rightPanel.fileName) ? (
-                  <PdfHighlightViewer
-                    key={rightPanel.fileId}
-                    fileId={rightPanel.fileId}
-                    accessToken={accessToken}
-                    darkMode={darkMode}
-                    mode="view"
-                    annotations={rightPanel.annotations}
-                  />
-                ) : (
-                  <iframe
-                    key={rightPanel.fileId}
-                    src={`https://drive.google.com/file/d/${rightPanel.fileId}/preview`}
-                    className="flex-1 w-full border-0"
-                    allow="autoplay"
-                    title={rightPanel.fileName}
-                  />
-                )
-              ) : (
-                <div className="flex-1 flex items-center justify-center">
-                  <Loader2 className="w-5 h-5 text-primary animate-spin" />
-                </div>
-              )}
-            </>
-          )}
-        </div>
+        <div className="w-[320px] h-full flex flex-col">{renderRightPanelInner()}</div>
       </motion.div>
 
       {contextMenu && contextNode && (

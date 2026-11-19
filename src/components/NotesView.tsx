@@ -1803,13 +1803,6 @@ export function NotesView({
         </div>
       </div>
           )}
-          {/* Aire extra al final SOLO por lo que el navbar mide de más sobre lo que <main> ya
-              reserva (su pb-28 = 112px, ver App.tsx) — el navbar tiene una o dos filas según si
-              hay sub-pestañas visibles, y restar ese piso evita sumar un colchón encima de otro
-              (eso dejaba un hueco enorme antes del navbar cuando mide menos de 112px, que es el
-              caso más común). */}
-          {isMobile &&
-            navbarHeight + 16 > 112 && <div style={{ height: navbarHeight + 16 - 112 }} aria-hidden="true" />}
         </motion.div>
       </AnimatePresence>
 
@@ -1888,11 +1881,7 @@ export function NotesView({
                 // el botón de tacho) en vez de un bottom-3 fijo — así el drawer siempre termina
                 // justo encima del navbar, nunca detrás/solapándolo, sea cual sea su altura actual.
                 style={{ top: drawerTopPx, bottom: navbarHeight + 12 }}
-                // notes-drawer-solid sube la opacidad del fondo (ver index.css) sin perder el
-                // blur ni volverse 100% opaco como force-solid-bg — pedido explícito de que se
-                // vea "más sólido" que el resto de bloques, que siguen con su transparencia
-                // normal (bg-zinc-900/60 queda igual para el resto de la UI).
-                className={`notes-drawer-solid fixed left-3 z-[91] w-[68vw] max-w-[280px] rounded-3xl border p-4 pr-6 overflow-y-auto shadow-2xl ${
+                className={`fixed left-3 z-[91] w-[68vw] max-w-[280px] rounded-3xl border p-4 pr-6 overflow-y-auto shadow-2xl ${
                   darkMode ? "bg-zinc-900/60 border-zinc-800" : "bg-white/80 border-slate-200"
                 }`}
               >
