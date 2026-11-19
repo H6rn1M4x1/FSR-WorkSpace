@@ -27,7 +27,7 @@ import {
   Menu,
   ArrowLeft,
 } from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence, useDragControls } from "motion/react";
 import { createPortal } from "react-dom";
 import { useNotes } from "../hooks/useNotes";
 import { useNoteFolders } from "../hooks/useNoteFolders";
@@ -535,7 +535,8 @@ function NoteDetailPane({
         {onBack && (
           <button
             type="button"
-            onClick={onBack}
+            data-no-global-sound
+            onClick={() => { uiSounds.collapse(); onBack(); }}
             className="shrink-0 -ml-1.5 p-1.5 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 text-zinc-500 dark:text-zinc-400 cursor-pointer"
             title="Volver"
           >
@@ -685,6 +686,17 @@ export function NotesView({
   // layout de 3 columnas de siempre queda sin ningún cambio.
   const isMobile = useIsMobile();
   const [mobileFolderDrawerOpen, setMobileFolderDrawerOpen] = useState(false);
+  // Arrastre horizontal para cerrar el drawer (solo desde su propio agarre, no desde cualquier
+  // parte — dragListener={false} + dragControls.start() en el agarre) y sonido/vibración de
+  // apertura/cierre enganchados a la transición real de mobileFolderDrawerOpen (no al click que
+  // lo dispara, para que suene también al cerrar arrastrando) — mismo patrón que DetailModal.tsx.
+  const drawerDragControls = useDragControls();
+  const wasDrawerOpen = useRef(mobileFolderDrawerOpen);
+  useEffect(() => {
+    if (mobileFolderDrawerOpen && !wasDrawerOpen.current) uiSounds.expand();
+    else if (!mobileFolderDrawerOpen && wasDrawerOpen.current) uiSounds.collapse();
+    wasDrawerOpen.current = mobileFolderDrawerOpen;
+  }, [mobileFolderDrawerOpen]);
 
   // The submenu ("Notas Rápidas" / "Caja Fuerte") is normally driven by the main top navbar
   // (see SUBMENUS_BY_TAB in TopNavbar.tsx), same as Turnos/Salud/etc. Fall back to local state
@@ -781,7 +793,7 @@ export function NotesView({
   // el mouse a otra nota, nunca como efecto secundario de la propia animación.
   const dragSnapshotRef = useRef<Map<string, DOMRect>>(new Map());
   // Elemento DOM de cada nota (de cualquier grupo) — se usa para tomar la foto de arriba.
-  const noteElsRef = useRef<Map<string, HTMLDivElement>>(new Map());
+  const noteElsRef = useRef<Map<string, HTMLElement>>(new Map());
   // Contenedor con scroll propio de la lista de notas (ver el div "max-h-[28rem] overflow-y-auto"
   // más abajo) — usado para el desvanecido de los bordes.
   const notesListContainerRef = useRef<HTMLDivElement>(null);
@@ -949,6 +961,169 @@ export function NotesView({
     reorderedIds.splice(toIndex, 0, draggingId);
     const byId = new Map(group.map((n) => [n.id, n]));
     return reorderedIds.map((id) => byId.get(id)!);
+  };
+
+  // Gesto táctil de "mantener para reordenar / eliminar" en el grid de mobile — el drag-and-drop
+  // de arriba es nativo HTML5 (dragstart), que no dispara con el dedo. Reusa exactamente la misma
+  // lógica de "nota más cercana al puntero" (dragSnapshotRef/noteElsRef/handleDrop) que ya usa el
+  // mouse, solo que alimentada por punteros propios con temporizador en vez de dragover nativo.
+  // Mantener 2s arma el arrastre (a partir de ahí, mover el dedo reordena en vivo); soltar antes
+  // de los 2s sin moverse abre la nota; mantener 5s sin moverse (sin haber entrado en el arrastre)
+  // abre un mini-menú para eliminarla.
+  const MOBILE_PRESS_MOVE_THRESHOLD = 10;
+  const MOBILE_REORDER_HOLD_MS = 2000;
+  const MOBILE_DELETE_HOLD_MS = 5000;
+  type MobilePressState = {
+    noteId: string;
+    startX: number;
+    startY: number;
+    moved: boolean;
+    armed: boolean;
+    reorderTimer: ReturnType<typeof setTimeout>;
+    deleteTimer: ReturnType<typeof setTimeout>;
+  };
+  const mobilePressRef = useRef<MobilePressState | null>(null);
+  const [mobileNoteMenuFor, setMobileNoteMenuFor] = useState<{ id: string; x: number; y: number } | null>(null);
+
+  // dragOverId necesita leerse "al instante" desde el listener global de más abajo (que no se
+  // vuelve a crear en cada render, solo cuando cambia draggingId) — un ref al lado del estado para
+  // no quedarse con el valor de cuando se armó el arrastre.
+  const dragOverIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    dragOverIdRef.current = dragOverId;
+  }, [dragOverId]);
+  const mobileDragGroupRef = useRef<StickyNote[]>([]);
+  // Una vez armado el arrastre a los 2s, el deleteTimer (5s) sigue vivo en paralelo — si el dedo
+  // nunca se mueve, el armado debe "degradarse" a menú de eliminar en vez de quedar atascado en
+  // modo arrastre. Esta ref es la que permite cancelarlo apenas el usuario mueve, suelta o
+  // cancela el gesto.
+  const armedDeleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelArmedDeleteTimer = () => {
+    if (armedDeleteTimerRef.current) {
+      clearTimeout(armedDeleteTimerRef.current);
+      armedDeleteTimerRef.current = null;
+    }
+  };
+
+  const armMobileReorder = (note: StickyNote, group: StickyNote[]) => {
+    const snapshot = new Map<string, DOMRect>();
+    group.forEach((n) => {
+      const el = noteElsRef.current.get(n.id);
+      if (el) snapshot.set(n.id, el.getBoundingClientRect());
+    });
+    dragSnapshotRef.current = snapshot;
+    mobileDragGroupRef.current = group;
+    setDraggingId(note.id);
+    uiSounds.toggle();
+    // A partir de acá el gesto pasa a manejarse por completo desde el listener global de abajo —
+    // limpiar la referencia local hace que cualquier pointermove/pointerup que todavía llegue a
+    // ESTA tarjeta puntual (puede que no llegue más ninguno, ver el comentario de más abajo) no
+    // haga nada, para no competir con el global.
+    mobilePressRef.current = null;
+  };
+
+  // Mientras hay una nota armada para reordenar, el resto de las notas se van reacomodando debajo
+  // del dedo (layout en vivo vía getGroupRenderOrder) — un pointermove/pointerup atado a la
+  // tarjeta puntual (onPointerMove/onPointerUp en el JSX) puede terminar yendo a OTRO elemento, el
+  // que haya quedado físicamente debajo en ese instante, en vez de seguir el mismo puntero que iba
+  // siguiendo antes (confirmado: ni siquiera setPointerCapture alcanza acá, parece una limitación
+  // de cómo React delega estos eventos en combinación con las animaciones de layout de motion). La
+  // forma confiable es escuchar document en vez de la tarjeta: un listener a ese nivel sigue
+  // recibiendo los eventos de ESTE puntero pase lo que pase visualmente debajo suyo.
+  useEffect(() => {
+    if (!draggingId) return;
+    const handleMove = (e: PointerEvent) => {
+      const snapshot = dragSnapshotRef.current;
+      if (snapshot.size === 0) return;
+      e.preventDefault();
+      let closestId: string | null = null;
+      let closestDist = Infinity;
+      snapshot.forEach((r, id) => {
+        if (id === draggingId) return;
+        const dist = Math.hypot(e.clientX - (r.left + r.width / 2), e.clientY - (r.top + r.height / 2));
+        if (dist < closestDist) {
+          closestDist = dist;
+          closestId = id;
+        }
+      });
+      if (closestId && closestId !== dragOverIdRef.current) setDragOverId(closestId);
+      cancelArmedDeleteTimer();
+    };
+    const handleEnd = () => {
+      cancelArmedDeleteTimer();
+      const targetId = dragOverIdRef.current;
+      if (targetId) handleDrop(mobileDragGroupRef.current, targetId);
+      else setDraggingId(null);
+    };
+    const handleCancel = () => {
+      cancelArmedDeleteTimer();
+      setDraggingId(null);
+      setDragOverId(null);
+    };
+    document.addEventListener("pointermove", handleMove, { passive: false });
+    document.addEventListener("pointerup", handleEnd);
+    document.addEventListener("pointercancel", handleCancel);
+    return () => {
+      document.removeEventListener("pointermove", handleMove);
+      document.removeEventListener("pointerup", handleEnd);
+      document.removeEventListener("pointercancel", handleCancel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draggingId]);
+
+  const handleMobileNotePointerDown = (note: StickyNote, group: StickyNote[]) => (e: React.PointerEvent<HTMLButtonElement>) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    const startX = e.clientX;
+    const startY = e.clientY;
+
+    const reorderTimer = setTimeout(() => {
+      const press = mobilePressRef.current;
+      if (!press || press.noteId !== note.id || press.moved) return;
+      press.armed = true;
+      armedDeleteTimerRef.current = press.deleteTimer;
+      armMobileReorder(note, group);
+    }, MOBILE_REORDER_HOLD_MS);
+
+    // Dispara 3s después de armado (2s + 3s = 5s desde el pointerdown). Si para entonces nadie
+    // canceló armedDeleteTimerRef (moviendo, soltando o cancelando el gesto), el dedo siguió
+    // quieto todo este tiempo: degradar el armado a menú de eliminar.
+    const deleteTimer = setTimeout(() => {
+      if (armedDeleteTimerRef.current !== deleteTimer) return;
+      armedDeleteTimerRef.current = null;
+      setDraggingId(null);
+      setDragOverId(null);
+      setMobileNoteMenuFor({ id: note.id, x: startX, y: startY });
+      uiSounds.delete();
+    }, MOBILE_DELETE_HOLD_MS);
+
+    mobilePressRef.current = { noteId: note.id, startX, startY, moved: false, armed: false, reorderTimer, deleteTimer };
+  };
+
+  // Solo atiende la fase ANTES de armarse (los primeros 2s) — una vez armado (ver armMobileReorder
+  // más arriba), mobilePressRef ya está en null y el gesto completo pasa al listener global.
+  const handleMobileNotePointerMove = (note: StickyNote) => (e: React.PointerEvent<HTMLButtonElement>) => {
+    const press = mobilePressRef.current;
+    if (!press || press.noteId !== note.id) return;
+    const dx = e.clientX - press.startX;
+    const dy = e.clientY - press.startY;
+    if (!press.moved && Math.hypot(dx, dy) > MOBILE_PRESS_MOVE_THRESHOLD) {
+      press.moved = true;
+      clearTimeout(press.deleteTimer);
+      clearTimeout(press.reorderTimer);
+    }
+  };
+
+  const handleMobileNotePointerEnd = (note: StickyNote) => (e: React.PointerEvent<HTMLButtonElement>) => {
+    const press = mobilePressRef.current;
+    if (!press || press.noteId !== note.id) return;
+    clearTimeout(press.reorderTimer);
+    clearTimeout(press.deleteTimer);
+    mobilePressRef.current = null;
+    if (e.type === "pointercancel") return;
+    if (!press.moved) {
+      uiSounds.expand();
+      setSelectedNoteId(note.id);
+    }
   };
 
   // Contenido de la barra de carpetas — compartido entre la columna 1 de desktop (sticky, a la
@@ -1161,7 +1336,7 @@ export function NotesView({
   // renderNoteListItem, pero sin drag-and-drop (no aplica a un dedo en pantalla táctil) y sin
   // altura mínima fija, para que las tarjetas tengan alturas distintas entre sí (el efecto
   // "masonry" de la imagen de referencia) en vez de todas iguales.
-  const renderMobileNoteCard = (note: StickyNote) => {
+  const renderMobileNoteCard = (note: StickyNote, group: StickyNote[]) => {
     const colorEntry = findNoteColorEntry(notePalette, note.color);
     const draft = drafts[note.id];
     const titleValue = draft?.title !== undefined ? draft.title : note.title || "";
@@ -1169,14 +1344,28 @@ export function NotesView({
     const isSharedIn = !!note.__sharedByEmail;
     const folderName = folders.find((f) => f.id === note.folderId)?.name;
     const preview = stripHtmlPreview(textValue, 280);
+    const isBeingDragged = draggingId === note.id;
 
     return (
-      <button
+      <motion.button
         key={note.id}
+        layout
+        ref={(el: HTMLButtonElement | null) => {
+          if (el) noteElsRef.current.set(note.id, el);
+          else noteElsRef.current.delete(note.id);
+        }}
         type="button"
-        onClick={() => { uiSounds.expand(); setSelectedNoteId(note.id); }}
-        className="w-full block text-left rounded-2xl border p-3 shadow-sm mb-3 break-inside-avoid-column cursor-pointer active:scale-[0.98] transition-transform"
-        style={{ backgroundColor: colorEntry.bg, borderColor: colorEntry.border }}
+        data-no-global-sound
+        animate={{ scale: isBeingDragged ? 1.05 : 1 }}
+        transition={{ layout: { duration: 0.22, ease: [0.16, 1, 0.3, 1] }, scale: { type: "spring", stiffness: 500, damping: 30 } }}
+        style={{ backgroundColor: colorEntry.bg, borderColor: colorEntry.border, touchAction: "pan-y", position: "relative", zIndex: isBeingDragged ? 10 : 0 }}
+        onPointerDown={handleMobileNotePointerDown(note, group)}
+        onPointerMove={handleMobileNotePointerMove(note)}
+        onPointerUp={handleMobileNotePointerEnd(note)}
+        onPointerCancel={handleMobileNotePointerEnd(note)}
+        className={`w-full block text-left overflow-hidden max-h-72 rounded-2xl border p-3 shadow-sm mb-3 break-inside-avoid-column cursor-pointer select-none ${
+          isBeingDragged ? "shadow-xl ring-2 ring-primary" : ""
+        }`}
       >
         {isSharedIn && (
           <div className="mb-1">
@@ -1187,7 +1376,12 @@ export function NotesView({
           <span className="text-xs font-extrabold text-zinc-900 dark:text-white truncate">{titleValue || "Sin título"}</span>
           {note.pinned && <Pin className="w-3 h-3 fill-current text-primary shrink-0" />}
         </div>
-        {preview && <p className="text-[11px] text-zinc-500 dark:text-zinc-400 whitespace-pre-wrap">{preview}</p>}
+        {/* line-clamp (no solo max-height en el contenedor) para que el recorte corte en un
+            límite de línea prolijo, en vez de a mitad de un renglón — el bug reportado
+            ("Información Compras" se salía de la tarjeta) además desbalanceaba la altura que el
+            layout de columns-2 le calcula a cada columna, haciendo que la tarjeta de al lado
+            quedara pisada; con una altura acotada y pareja por tarjeta no vuelve a pasar. */}
+        {preview && <p className="text-[11px] text-zinc-500 dark:text-zinc-400 whitespace-pre-wrap line-clamp-6">{preview}</p>}
         <div className="flex items-center justify-between gap-2 mt-1.5">
           <span className="flex items-center gap-1 text-[9.5px] font-bold text-slate-400 dark:text-zinc-500 truncate">
             <Folder className="w-2.5 h-2.5 shrink-0" />
@@ -1195,7 +1389,7 @@ export function NotesView({
           </span>
           <span className="text-[9.5px] text-slate-400 dark:text-zinc-500 shrink-0">{formatNoteDate(note.updatedAt)}</span>
         </div>
-      </button>
+      </motion.button>
     );
   };
 
@@ -1372,13 +1566,14 @@ export function NotesView({
             />
           ) : isMobile ? (
             <div
-              className={`rounded-3xl border p-4 space-y-4 scroll-reveal ${
+              className={`rounded-3xl border p-4 pb-10 space-y-4 scroll-reveal ${
                 darkMode ? "bg-zinc-900/60 border-zinc-800" : "bg-white/80 border-slate-200"
               }`}
             >
               <div className="flex items-center gap-3">
                 <button
                   type="button"
+                  data-no-global-sound
                   onClick={() => setMobileFolderDrawerOpen(true)}
                   className="shrink-0 w-10 h-10 rounded-2xl border border-slate-200 dark:border-zinc-800 flex items-center justify-center text-zinc-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer transition-colors"
                   title="Carpetas"
@@ -1397,6 +1592,7 @@ export function NotesView({
 
               <motion.button
                 type="button"
+                data-no-global-sound
                 whileTap={{ scale: 0.98 }}
                 onClick={handleCreateNote}
                 className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-primary text-white dark:text-zinc-950 text-xs font-bold hover:bg-primary/90 cursor-pointer transition-colors shadow-sm"
@@ -1417,15 +1613,20 @@ export function NotesView({
                       <p className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 flex items-center gap-1.5 px-1">
                         <Pin className="w-3 h-3" /> Fijadas
                       </p>
-                      <div className="columns-2 gap-3">{pinned.map((n) => renderMobileNoteCard(n))}</div>
+                      <div className="columns-2 gap-3">{getGroupRenderOrder(pinned).map((n) => renderMobileNoteCard(n, pinned))}</div>
                     </div>
                   )}
                   {others.length > 0 && (
                     <div className="space-y-2">
                       {pinned.length > 0 && (
-                        <p className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-1">Otras</p>
+                        <>
+                          {/* Separador entre "Fijadas" y "Otras" — de punta a punta DENTRO del
+                              padding del bloque, sin tocar el borde redondeado exterior. */}
+                          <div className="h-px bg-slate-200 dark:bg-zinc-800" />
+                          <p className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-1">Otras</p>
+                        </>
                       )}
-                      <div className="columns-2 gap-3">{others.map((n) => renderMobileNoteCard(n))}</div>
+                      <div className="columns-2 gap-3">{getGroupRenderOrder(others).map((n) => renderMobileNoteCard(n, others))}</div>
                     </div>
                   )}
                 </div>
@@ -1561,6 +1762,54 @@ export function NotesView({
         </motion.div>
       </AnimatePresence>
 
+      {/* Mini-menú de "Eliminar" tras mantener 5s sostenida una nota sin moverla (ver
+          handleMobileNotePointerDown) — portaleado por el mismo motivo que el drawer/editor de
+          más abajo. */}
+      {isMobile && createPortal(
+        <AnimatePresence>
+          {mobileNoteMenuFor && (
+            <>
+              <motion.div
+                key="note-menu-backdrop"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                className="fixed inset-0 z-[93]"
+                onClick={() => setMobileNoteMenuFor(null)}
+              />
+              <motion.div
+                key="note-menu"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                style={{
+                  position: "fixed",
+                  zIndex: 94,
+                  left: Math.min(mobileNoteMenuFor.x, window.innerWidth - 170),
+                  top: Math.min(mobileNoteMenuFor.y, window.innerHeight - 70),
+                }}
+                className={`p-1 w-40 ${DARK_PANEL}`}
+              >
+                <button
+                  type="button"
+                  data-no-global-sound
+                  onClick={() => {
+                    setDeleteConfirmId(mobileNoteMenuFor.id);
+                    setMobileNoteMenuFor(null);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-left text-red-400 hover:bg-red-500/15 cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Eliminar
+                </button>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
+
       {/* Drawer de carpetas y editor de pantalla completa de mobile — portaleados a document.body
           (no como descendientes del motion.div animado de arriba): con el transform que motion
           le aplica mientras anima, un position:fixed de adentro deja de posicionarse contra el
@@ -1582,15 +1831,41 @@ export function NotesView({
               />
               <motion.div
                 key="folder-drawer"
-                initial={{ x: "-100%" }}
+                initial={{ x: "-110%" }}
                 animate={{ x: 0 }}
-                exit={{ x: "-100%" }}
-                transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-                className="notes-mobile-overlay-solid fixed inset-y-0 left-0 z-[91] w-[82vw] max-w-xs bg-white dark:bg-zinc-950 border-r border-slate-200 dark:border-zinc-800 p-4 overflow-y-auto"
+                exit={{ x: "-110%" }}
+                transition={{ type: "spring", stiffness: 380, damping: 32, mass: 0.8 }}
+                drag="x"
+                dragControls={drawerDragControls}
+                dragListener={false}
+                dragConstraints={{ left: 0, right: 0 }}
+                dragElastic={{ left: 0.65, right: 0 }}
+                onDragEnd={(_e, info) => {
+                  if (info.offset.x < -80 || info.velocity.x < -500) setMobileFolderDrawerOpen(false);
+                }}
+                // Un poco más angosto que antes, con margen a los 4 lados para que se vea como
+                // una tarjeta flotando (puntas redondeadas en los 4 lados) en vez de un panel
+                // pegado a los bordes de la pantalla — mismo fondo traslúcido+blur que el resto
+                // de los bloques (la regla glass de index.css ya se lo aplica sola a bg-white/80 y
+                // dark:bg-zinc-900/60, por eso acá NO se fuerza opaco como sí hace falta en el
+                // editor de pantalla completa, que es una página entera, no un bloque flotante).
+                className={`fixed left-3 top-3 bottom-3 z-[91] w-[68vw] max-w-[280px] rounded-3xl border p-4 pr-6 overflow-y-auto shadow-2xl ${
+                  darkMode ? "bg-zinc-900/60 border-zinc-800" : "bg-white/80 border-slate-200"
+                }`}
               >
+                {/* Agarre de arrastre — toda la franja derecha es zona de contacto (no solo la
+                    barrita visible), igual que el agarre de DetailModal.tsx. */}
+                <div
+                  onPointerDown={(e) => { e.stopPropagation(); drawerDragControls.start(e); }}
+                  className="absolute right-0 top-0 bottom-0 w-6 flex items-center justify-center cursor-grab active:cursor-grabbing touch-none"
+                >
+                  <div className="w-1.5 h-12 rounded-full bg-slate-300 dark:bg-white/15" />
+                </div>
+
                 <div className="flex justify-end mb-2">
                   <button
                     type="button"
+                    data-no-global-sound
                     onClick={() => setMobileFolderDrawerOpen(false)}
                     className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 text-zinc-400 cursor-pointer"
                     title="Cerrar"
@@ -1615,7 +1890,7 @@ export function NotesView({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 24 }}
               transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-              className="notes-mobile-overlay-solid fixed inset-0 z-[92] bg-white dark:bg-zinc-950 overflow-y-auto"
+              className="force-solid-bg fixed inset-0 z-[92] bg-white dark:bg-zinc-950 overflow-y-auto"
               style={{ paddingTop: "max(1rem, env(safe-area-inset-top))", paddingBottom: "max(2rem, env(safe-area-inset-bottom))" }}
             >
               <div className="p-4">
