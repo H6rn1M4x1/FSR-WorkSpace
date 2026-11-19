@@ -697,6 +697,28 @@ export function NotesView({
     else if (!mobileFolderDrawerOpen && wasDrawerOpen.current) uiSounds.collapse();
     wasDrawerOpen.current = mobileFolderDrawerOpen;
   }, [mobileFolderDrawerOpen]);
+  // El drawer es fixed/portaleado a document.body, así que no puede alinearse con el panel de
+  // atrás solo con CSS — se mide su posición real en pantalla justo al abrirlo (ver el botón de
+  // hamburguesa) y se usa ese valor como "top" en vez de una constante.
+  const mobilePanelRef = useRef<HTMLDivElement>(null);
+  const [drawerTopPx, setDrawerTopPx] = useState(12);
+
+  // Altura real del <header> (TopNavbar, fixed bottom-0 en mobile) — varía según tenga o no
+  // sub-pestañas visibles, así que se mide en vivo en vez de asumir un valor fijo. La usan tanto
+  // el botón de "soltar para eliminar" (para flotar justo encima, sea cual sea su alto actual)
+  // como el aire extra al final del listado (para que el scroll alcance a dejarlo completamente
+  // por encima del navbar en cualquiera de sus dos alturas).
+  const [navbarHeight, setNavbarHeight] = useState(0);
+  useEffect(() => {
+    if (!isMobile) return;
+    const headerEl = document.querySelector("header");
+    if (!headerEl || typeof ResizeObserver === "undefined") return;
+    const update = () => setNavbarHeight(headerEl.getBoundingClientRect().height);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(headerEl);
+    return () => ro.disconnect();
+  }, [isMobile]);
 
   // The submenu ("Notas Rápidas" / "Caja Fuerte") is normally driven by the main top navbar
   // (see SUBMENUS_BY_TAB in TopNavbar.tsx), same as Turnos/Salud/etc. Fall back to local state
@@ -967,12 +989,13 @@ export function NotesView({
   // de arriba es nativo HTML5 (dragstart), que no dispara con el dedo. Reusa exactamente la misma
   // lógica de "nota más cercana al puntero" (dragSnapshotRef/noteElsRef/handleDrop) que ya usa el
   // mouse, solo que alimentada por punteros propios con temporizador en vez de dragover nativo.
-  // Mantener 2s arma el arrastre (a partir de ahí, mover el dedo reordena en vivo); soltar antes
-  // de los 2s sin moverse abre la nota; mantener 5s sin moverse (sin haber entrado en el arrastre)
-  // abre un mini-menú para eliminarla.
+  // Mantener 2s arma el arrastre — igual que en desktop (ver renderNoteListItem/dragGhost), la
+  // nota se atenúa en su lugar de la grilla y un clon 100% sólido (dragGhost, reusado tal cual)
+  // la "levanta" y sigue al dedo libremente; soltar antes de los 2s sin moverse abre la nota.
+  // Soltar sobre el botón de tacho que flota encima del navbar (ver deleteZoneRef) elimina la
+  // nota en vez de reordenarla.
   const MOBILE_PRESS_MOVE_THRESHOLD = 10;
   const MOBILE_REORDER_HOLD_MS = 2000;
-  const MOBILE_DELETE_HOLD_MS = 5000;
   type MobilePressState = {
     noteId: string;
     startX: number;
@@ -980,10 +1003,8 @@ export function NotesView({
     moved: boolean;
     armed: boolean;
     reorderTimer: ReturnType<typeof setTimeout>;
-    deleteTimer: ReturnType<typeof setTimeout>;
   };
   const mobilePressRef = useRef<MobilePressState | null>(null);
-  const [mobileNoteMenuFor, setMobileNoteMenuFor] = useState<{ id: string; x: number; y: number } | null>(null);
 
   // dragOverId necesita leerse "al instante" desde el listener global de más abajo (que no se
   // vuelve a crear en cada render, solo cuando cambia draggingId) — un ref al lado del estado para
@@ -993,19 +1014,15 @@ export function NotesView({
     dragOverIdRef.current = dragOverId;
   }, [dragOverId]);
   const mobileDragGroupRef = useRef<StickyNote[]>([]);
-  // Una vez armado el arrastre a los 2s, el deleteTimer (5s) sigue vivo en paralelo — si el dedo
-  // nunca se mueve, el armado debe "degradarse" a menú de eliminar en vez de quedar atascado en
-  // modo arrastre. Esta ref es la que permite cancelarlo apenas el usuario mueve, suelta o
-  // cancela el gesto.
-  const armedDeleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const cancelArmedDeleteTimer = () => {
-    if (armedDeleteTimerRef.current) {
-      clearTimeout(armedDeleteTimerRef.current);
-      armedDeleteTimerRef.current = null;
-    }
-  };
 
-  const armMobileReorder = (note: StickyNote, group: StickyNote[]) => {
+  // Zona de "soltar para eliminar" (botón con tacho, flotando encima del navbar mientras se
+  // arrastra una nota armada) — overDeleteZoneRef espeja el estado para lectura instantánea
+  // dentro del listener global, que no se recrea en cada pointermove.
+  const deleteZoneRef = useRef<HTMLDivElement>(null);
+  const [overDeleteZone, setOverDeleteZone] = useState(false);
+  const overDeleteZoneRef = useRef(false);
+
+  const armMobileReorder = (note: StickyNote, group: StickyNote[], x: number, y: number) => {
     const snapshot = new Map<string, DOMRect>();
     group.forEach((n) => {
       const el = noteElsRef.current.get(n.id);
@@ -1014,6 +1031,7 @@ export function NotesView({
     dragSnapshotRef.current = snapshot;
     mobileDragGroupRef.current = group;
     setDraggingId(note.id);
+    setDragGhost({ note, x, y });
     uiSounds.toggle();
     // A partir de acá el gesto pasa a manejarse por completo desde el listener global de abajo —
     // limpiar la referencia local hace que cualquier pointermove/pointerup que todavía llegue a
@@ -1033,9 +1051,23 @@ export function NotesView({
   useEffect(() => {
     if (!draggingId) return;
     const handleMove = (e: PointerEvent) => {
+      e.preventDefault();
+      setDragGhost((g) => (g ? { ...g, x: e.clientX, y: e.clientY } : g));
+
+      const dz = deleteZoneRef.current?.getBoundingClientRect();
+      const isOverDelete = !!dz && e.clientX >= dz.left && e.clientX <= dz.right && e.clientY >= dz.top && e.clientY <= dz.bottom;
+      if (isOverDelete !== overDeleteZoneRef.current) {
+        overDeleteZoneRef.current = isOverDelete;
+        setOverDeleteZone(isOverDelete);
+        if (isOverDelete) uiSounds.delete();
+      }
+      if (isOverDelete) {
+        if (dragOverIdRef.current !== null) setDragOverId(null);
+        return;
+      }
+
       const snapshot = dragSnapshotRef.current;
       if (snapshot.size === 0) return;
-      e.preventDefault();
       let closestId: string | null = null;
       let closestDist = Infinity;
       snapshot.forEach((r, id) => {
@@ -1047,19 +1079,27 @@ export function NotesView({
         }
       });
       if (closestId && closestId !== dragOverIdRef.current) setDragOverId(closestId);
-      cancelArmedDeleteTimer();
+    };
+    const resetDragState = () => {
+      setDraggingId(null);
+      setDragOverId(null);
+      setDragGhost(null);
+      setOverDeleteZone(false);
+      overDeleteZoneRef.current = false;
     };
     const handleEnd = () => {
-      cancelArmedDeleteTimer();
+      if (overDeleteZoneRef.current) {
+        const idToDelete = draggingId;
+        resetDragState();
+        setDeleteConfirmId(idToDelete);
+        return;
+      }
       const targetId = dragOverIdRef.current;
       if (targetId) handleDrop(mobileDragGroupRef.current, targetId);
       else setDraggingId(null);
+      setDragGhost(null);
     };
-    const handleCancel = () => {
-      cancelArmedDeleteTimer();
-      setDraggingId(null);
-      setDragOverId(null);
-    };
+    const handleCancel = () => resetDragState();
     document.addEventListener("pointermove", handleMove, { passive: false });
     document.addEventListener("pointerup", handleEnd);
     document.addEventListener("pointercancel", handleCancel);
@@ -1080,23 +1120,10 @@ export function NotesView({
       const press = mobilePressRef.current;
       if (!press || press.noteId !== note.id || press.moved) return;
       press.armed = true;
-      armedDeleteTimerRef.current = press.deleteTimer;
-      armMobileReorder(note, group);
+      armMobileReorder(note, group, startX, startY);
     }, MOBILE_REORDER_HOLD_MS);
 
-    // Dispara 3s después de armado (2s + 3s = 5s desde el pointerdown). Si para entonces nadie
-    // canceló armedDeleteTimerRef (moviendo, soltando o cancelando el gesto), el dedo siguió
-    // quieto todo este tiempo: degradar el armado a menú de eliminar.
-    const deleteTimer = setTimeout(() => {
-      if (armedDeleteTimerRef.current !== deleteTimer) return;
-      armedDeleteTimerRef.current = null;
-      setDraggingId(null);
-      setDragOverId(null);
-      setMobileNoteMenuFor({ id: note.id, x: startX, y: startY });
-      uiSounds.delete();
-    }, MOBILE_DELETE_HOLD_MS);
-
-    mobilePressRef.current = { noteId: note.id, startX, startY, moved: false, armed: false, reorderTimer, deleteTimer };
+    mobilePressRef.current = { noteId: note.id, startX, startY, moved: false, armed: false, reorderTimer };
   };
 
   // Solo atiende la fase ANTES de armarse (los primeros 2s) — una vez armado (ver armMobileReorder
@@ -1108,7 +1135,6 @@ export function NotesView({
     const dy = e.clientY - press.startY;
     if (!press.moved && Math.hypot(dx, dy) > MOBILE_PRESS_MOVE_THRESHOLD) {
       press.moved = true;
-      clearTimeout(press.deleteTimer);
       clearTimeout(press.reorderTimer);
     }
   };
@@ -1117,7 +1143,6 @@ export function NotesView({
     const press = mobilePressRef.current;
     if (!press || press.noteId !== note.id) return;
     clearTimeout(press.reorderTimer);
-    clearTimeout(press.deleteTimer);
     mobilePressRef.current = null;
     if (e.type === "pointercancel") return;
     if (!press.moved) {
@@ -1344,7 +1369,11 @@ export function NotesView({
     const isSharedIn = !!note.__sharedByEmail;
     const folderName = folders.find((f) => f.id === note.folderId)?.name;
     const preview = stripHtmlPreview(textValue, 280);
+    // Mismo lenguaje visual que renderNoteListItem (desktop): la nota que se está moviendo se
+    // atenúa en su lugar de la grilla — el clon sólido (dragGhost) es el que "flota" y sigue al
+    // dedo — y la nota sobre la que se está por soltar se resalta con un anillo.
     const isBeingDragged = draggingId === note.id;
+    const isDragOver = dragOverId === note.id;
 
     return (
       <motion.button
@@ -1356,16 +1385,15 @@ export function NotesView({
         }}
         type="button"
         data-no-global-sound
-        animate={{ scale: isBeingDragged ? 1.05 : 1 }}
-        transition={{ layout: { duration: 0.22, ease: [0.16, 1, 0.3, 1] }, scale: { type: "spring", stiffness: 500, damping: 30 } }}
-        style={{ backgroundColor: colorEntry.bg, borderColor: colorEntry.border, touchAction: "pan-y", position: "relative", zIndex: isBeingDragged ? 10 : 0 }}
+        transition={{ layout: { duration: 0.22, ease: [0.16, 1, 0.3, 1] } }}
+        style={{ backgroundColor: colorEntry.bg, borderColor: colorEntry.border, touchAction: "pan-y" }}
         onPointerDown={handleMobileNotePointerDown(note, group)}
         onPointerMove={handleMobileNotePointerMove(note)}
         onPointerUp={handleMobileNotePointerEnd(note)}
         onPointerCancel={handleMobileNotePointerEnd(note)}
-        className={`w-full block text-left overflow-hidden max-h-72 rounded-2xl border p-3 shadow-sm mb-3 break-inside-avoid-column cursor-pointer select-none ${
-          isBeingDragged ? "shadow-xl ring-2 ring-primary" : ""
-        }`}
+        className={`w-full block text-left overflow-hidden max-h-72 rounded-2xl border p-3 shadow-sm mb-3 break-inside-avoid-column cursor-pointer select-none transition-opacity ${
+          isBeingDragged ? "opacity-30" : ""
+        } ${isDragOver ? "ring-2 ring-primary" : ""}`}
       >
         {isSharedIn && (
           <div className="mb-1">
@@ -1566,6 +1594,7 @@ export function NotesView({
             />
           ) : isMobile ? (
             <div
+              ref={mobilePanelRef}
               className={`rounded-3xl border p-4 pb-10 space-y-4 scroll-reveal ${
                 darkMode ? "bg-zinc-900/60 border-zinc-800" : "bg-white/80 border-slate-200"
               }`}
@@ -1574,7 +1603,10 @@ export function NotesView({
                 <button
                   type="button"
                   data-no-global-sound
-                  onClick={() => setMobileFolderDrawerOpen(true)}
+                  onClick={() => {
+                    setDrawerTopPx(mobilePanelRef.current?.getBoundingClientRect().top ?? 12);
+                    setMobileFolderDrawerOpen(true);
+                  }}
                   className="shrink-0 w-10 h-10 rounded-2xl border border-slate-200 dark:border-zinc-800 flex items-center justify-center text-zinc-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer transition-colors"
                   title="Carpetas"
                 >
@@ -1759,52 +1791,38 @@ export function NotesView({
         </div>
       </div>
           )}
+          {/* Aire extra al final, igual a la altura real (medida en vivo) del navbar — que tiene
+              una o dos filas según si hay sub-pestañas visibles — para que el scroll alcance a
+              dejar el bloque de notas completamente por encima de él, puntas redondeadas
+              incluidas, en vez de quedar cortado contra su borde. */}
+          {isMobile && navbarHeight > 0 && <div style={{ height: navbarHeight + 16 }} aria-hidden="true" />}
         </motion.div>
       </AnimatePresence>
 
-      {/* Mini-menú de "Eliminar" tras mantener 5s sostenida una nota sin moverla (ver
-          handleMobileNotePointerDown) — portaleado por el mismo motivo que el drawer/editor de
-          más abajo. */}
+      {/* Botón de "soltar para eliminar" — aparece flotando justo encima del navbar mientras hay
+          una nota armada para reordenar (ver armMobileReorder/handleMobileNotePointerDown);
+          soltar el dedo con el puntero dentro de este botón (ver deleteZoneRef, leído por el
+          listener global de más arriba) elimina la nota en vez de reordenarla. */}
       {isMobile && createPortal(
         <AnimatePresence>
-          {mobileNoteMenuFor && (
-            <>
+          {draggingId && (
+            <div
+              ref={deleteZoneRef}
+              style={{ position: "fixed", bottom: navbarHeight + 14, left: "50%", zIndex: 95 }}
+              className="-translate-x-1/2 w-16 h-16 flex items-center justify-center"
+            >
               <motion.div
-                key="note-menu-backdrop"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.15 }}
-                className="fixed inset-0 z-[93]"
-                onClick={() => setMobileNoteMenuFor(null)}
-              />
-              <motion.div
-                key="note-menu"
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                style={{
-                  position: "fixed",
-                  zIndex: 94,
-                  left: Math.min(mobileNoteMenuFor.x, window.innerWidth - 170),
-                  top: Math.min(mobileNoteMenuFor.y, window.innerHeight - 70),
-                }}
-                className={`p-1 w-40 ${DARK_PANEL}`}
+                initial={{ opacity: 0, scale: 0.5 }}
+                animate={{ opacity: 1, scale: overDeleteZone ? 1.25 : 1 }}
+                exit={{ opacity: 0, scale: 0.5 }}
+                transition={{ type: "spring", stiffness: 400, damping: 28 }}
+                className={`w-14 h-14 rounded-full border flex items-center justify-center shadow-xl transition-colors ${
+                  overDeleteZone ? "bg-red-500 border-red-400" : darkMode ? "bg-zinc-800/90 border-white/10" : "bg-white/90 border-slate-200"
+                }`}
               >
-                <button
-                  type="button"
-                  data-no-global-sound
-                  onClick={() => {
-                    setDeleteConfirmId(mobileNoteMenuFor.id);
-                    setMobileNoteMenuFor(null);
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-left text-red-400 hover:bg-red-500/15 cursor-pointer"
-                >
-                  <Trash2 className="w-3.5 h-3.5" /> Eliminar
-                </button>
+                <Trash2 className={`w-6 h-6 ${overDeleteZone ? "text-white" : "text-red-500"}`} />
               </motion.div>
-            </>
+            </div>
           )}
         </AnimatePresence>,
         document.body
@@ -1849,7 +1867,11 @@ export function NotesView({
                 // de los bloques (la regla glass de index.css ya se lo aplica sola a bg-white/80 y
                 // dark:bg-zinc-900/60, por eso acá NO se fuerza opaco como sí hace falta en el
                 // editor de pantalla completa, que es una página entera, no un bloque flotante).
-                className={`fixed left-3 top-3 bottom-3 z-[91] w-[68vw] max-w-[280px] rounded-3xl border p-4 pr-6 overflow-y-auto shadow-2xl ${
+                // "top" viene de drawerTopPx (medido del panel de atrás al abrir, ver el botón de
+                // hamburguesa) en vez de una constante — así arranca a la misma altura que el
+                // bloque que tiene detrás, sea cual sea esa altura en cada pantalla/estado.
+                style={{ top: drawerTopPx }}
+                className={`fixed left-3 bottom-3 z-[91] w-[68vw] max-w-[280px] rounded-3xl border p-4 pr-6 overflow-y-auto shadow-2xl ${
                   darkMode ? "bg-zinc-900/60 border-zinc-800" : "bg-white/80 border-slate-200"
                 }`}
               >
