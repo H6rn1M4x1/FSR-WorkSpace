@@ -1888,7 +1888,11 @@ export function NotesView({
                 // el botón de tacho) en vez de un bottom-3 fijo — así el drawer siempre termina
                 // justo encima del navbar, nunca detrás/solapándolo, sea cual sea su altura actual.
                 style={{ top: drawerTopPx, bottom: navbarHeight + 12 }}
-                className={`fixed left-3 z-[91] w-[68vw] max-w-[280px] rounded-3xl border p-4 pr-6 overflow-y-auto shadow-2xl ${
+                // notes-drawer-solid sube la opacidad del fondo (ver index.css) sin perder el
+                // blur ni volverse 100% opaco como force-solid-bg — pedido explícito de que se
+                // vea "más sólido" que el resto de bloques, que siguen con su transparencia
+                // normal (bg-zinc-900/60 queda igual para el resto de la UI).
+                className={`notes-drawer-solid fixed left-3 z-[91] w-[68vw] max-w-[280px] rounded-3xl border p-4 pr-6 overflow-y-auto shadow-2xl ${
                   darkMode ? "bg-zinc-900/60 border-zinc-800" : "bg-white/80 border-slate-200"
                 }`}
               >
@@ -2007,11 +2011,20 @@ export function NotesView({
       )}
 
       {/* Clon 100% sólido de la nota que se está arrastrando, siguiendo al cursor — reemplaza la
-          imagen de arrastre nativa del navegador (que siempre sale semitransparente). */}
+          imagen de arrastre nativa del navegador (que siempre sale semitransparente). El offset
+          de desktop (pensado para la punta del cursor del mouse, un punto fino) no funciona para
+          el dedo en mobile: con ese mismo offset el clon terminaba mayormente a la derecha del
+          punto de contacto en vez de centrado sobre él, dando la sensación de que "no seguía al
+          dedo". En mobile se centra horizontalmente sobre el dedo (-50% del propio ancho) y se
+          sube lo suficiente para quedar visible por encima de él, en vez de tapado debajo. */}
       {dragGhost && (
         <div
           className="fixed z-[1000] pointer-events-none w-[260px]"
-          style={{ left: dragGhost.x, top: dragGhost.y, transform: "translate(-24px, -16px) rotate(-5deg)" }}
+          style={{
+            left: dragGhost.x,
+            top: dragGhost.y,
+            transform: isMobile ? "translate(-50%, -84px) rotate(-3deg)" : "translate(-24px, -16px) rotate(-5deg)",
+          }}
         >
           <div
             className="rounded-2xl border p-3 shadow-2xl"
