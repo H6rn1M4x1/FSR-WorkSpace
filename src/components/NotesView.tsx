@@ -985,6 +985,26 @@ export function NotesView({
   const mobilePressRef = useRef<MobilePressState | null>(null);
   const [mobileNoteMenuFor, setMobileNoteMenuFor] = useState<{ id: string; x: number; y: number } | null>(null);
 
+  // dragOverId necesita leerse "al instante" desde el listener global de más abajo (que no se
+  // vuelve a crear en cada render, solo cuando cambia draggingId) — un ref al lado del estado para
+  // no quedarse con el valor de cuando se armó el arrastre.
+  const dragOverIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    dragOverIdRef.current = dragOverId;
+  }, [dragOverId]);
+  const mobileDragGroupRef = useRef<StickyNote[]>([]);
+  // Una vez armado el arrastre a los 2s, el deleteTimer (5s) sigue vivo en paralelo — si el dedo
+  // nunca se mueve, el armado debe "degradarse" a menú de eliminar en vez de quedar atascado en
+  // modo arrastre. Esta ref es la que permite cancelarlo apenas el usuario mueve, suelta o
+  // cancela el gesto.
+  const armedDeleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelArmedDeleteTimer = () => {
+    if (armedDeleteTimerRef.current) {
+      clearTimeout(armedDeleteTimerRef.current);
+      armedDeleteTimerRef.current = null;
+    }
+  };
+
   const armMobileReorder = (note: StickyNote, group: StickyNote[]) => {
     const snapshot = new Map<string, DOMRect>();
     group.forEach((n) => {
@@ -992,9 +1012,64 @@ export function NotesView({
       if (el) snapshot.set(n.id, el.getBoundingClientRect());
     });
     dragSnapshotRef.current = snapshot;
+    mobileDragGroupRef.current = group;
     setDraggingId(note.id);
     uiSounds.toggle();
+    // A partir de acá el gesto pasa a manejarse por completo desde el listener global de abajo —
+    // limpiar la referencia local hace que cualquier pointermove/pointerup que todavía llegue a
+    // ESTA tarjeta puntual (puede que no llegue más ninguno, ver el comentario de más abajo) no
+    // haga nada, para no competir con el global.
+    mobilePressRef.current = null;
   };
+
+  // Mientras hay una nota armada para reordenar, el resto de las notas se van reacomodando debajo
+  // del dedo (layout en vivo vía getGroupRenderOrder) — un pointermove/pointerup atado a la
+  // tarjeta puntual (onPointerMove/onPointerUp en el JSX) puede terminar yendo a OTRO elemento, el
+  // que haya quedado físicamente debajo en ese instante, en vez de seguir el mismo puntero que iba
+  // siguiendo antes (confirmado: ni siquiera setPointerCapture alcanza acá, parece una limitación
+  // de cómo React delega estos eventos en combinación con las animaciones de layout de motion). La
+  // forma confiable es escuchar document en vez de la tarjeta: un listener a ese nivel sigue
+  // recibiendo los eventos de ESTE puntero pase lo que pase visualmente debajo suyo.
+  useEffect(() => {
+    if (!draggingId) return;
+    const handleMove = (e: PointerEvent) => {
+      const snapshot = dragSnapshotRef.current;
+      if (snapshot.size === 0) return;
+      e.preventDefault();
+      let closestId: string | null = null;
+      let closestDist = Infinity;
+      snapshot.forEach((r, id) => {
+        if (id === draggingId) return;
+        const dist = Math.hypot(e.clientX - (r.left + r.width / 2), e.clientY - (r.top + r.height / 2));
+        if (dist < closestDist) {
+          closestDist = dist;
+          closestId = id;
+        }
+      });
+      if (closestId && closestId !== dragOverIdRef.current) setDragOverId(closestId);
+      cancelArmedDeleteTimer();
+    };
+    const handleEnd = () => {
+      cancelArmedDeleteTimer();
+      const targetId = dragOverIdRef.current;
+      if (targetId) handleDrop(mobileDragGroupRef.current, targetId);
+      else setDraggingId(null);
+    };
+    const handleCancel = () => {
+      cancelArmedDeleteTimer();
+      setDraggingId(null);
+      setDragOverId(null);
+    };
+    document.addEventListener("pointermove", handleMove, { passive: false });
+    document.addEventListener("pointerup", handleEnd);
+    document.addEventListener("pointercancel", handleCancel);
+    return () => {
+      document.removeEventListener("pointermove", handleMove);
+      document.removeEventListener("pointerup", handleEnd);
+      document.removeEventListener("pointercancel", handleCancel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draggingId]);
 
   const handleMobileNotePointerDown = (note: StickyNote, group: StickyNote[]) => (e: React.PointerEvent<HTMLButtonElement>) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
@@ -1005,17 +1080,18 @@ export function NotesView({
       const press = mobilePressRef.current;
       if (!press || press.noteId !== note.id || press.moved) return;
       press.armed = true;
+      armedDeleteTimerRef.current = press.deleteTimer;
       armMobileReorder(note, group);
     }, MOBILE_REORDER_HOLD_MS);
 
+    // Dispara 3s después de armado (2s + 3s = 5s desde el pointerdown). Si para entonces nadie
+    // canceló armedDeleteTimerRef (moviendo, soltando o cancelando el gesto), el dedo siguió
+    // quieto todo este tiempo: degradar el armado a menú de eliminar.
     const deleteTimer = setTimeout(() => {
-      const press = mobilePressRef.current;
-      if (!press || press.noteId !== note.id || press.moved) return;
-      if (press.armed) {
-        setDraggingId(null);
-        setDragOverId(null);
-      }
-      mobilePressRef.current = null;
+      if (armedDeleteTimerRef.current !== deleteTimer) return;
+      armedDeleteTimerRef.current = null;
+      setDraggingId(null);
+      setDragOverId(null);
       setMobileNoteMenuFor({ id: note.id, x: startX, y: startY });
       uiSounds.delete();
     }, MOBILE_DELETE_HOLD_MS);
@@ -1023,6 +1099,8 @@ export function NotesView({
     mobilePressRef.current = { noteId: note.id, startX, startY, moved: false, armed: false, reorderTimer, deleteTimer };
   };
 
+  // Solo atiende la fase ANTES de armarse (los primeros 2s) — una vez armado (ver armMobileReorder
+  // más arriba), mobilePressRef ya está en null y el gesto completo pasa al listener global.
   const handleMobileNotePointerMove = (note: StickyNote) => (e: React.PointerEvent<HTMLButtonElement>) => {
     const press = mobilePressRef.current;
     if (!press || press.noteId !== note.id) return;
@@ -1031,43 +1109,18 @@ export function NotesView({
     if (!press.moved && Math.hypot(dx, dy) > MOBILE_PRESS_MOVE_THRESHOLD) {
       press.moved = true;
       clearTimeout(press.deleteTimer);
-      if (!press.armed) clearTimeout(press.reorderTimer);
-    }
-    if (press.armed) {
-      e.preventDefault();
-      const snapshot = dragSnapshotRef.current;
-      if (snapshot.size === 0) return;
-      let closestId: string | null = null;
-      let closestDist = Infinity;
-      snapshot.forEach((r, id) => {
-        if (id === note.id) return;
-        const dist = Math.hypot(e.clientX - (r.left + r.width / 2), e.clientY - (r.top + r.height / 2));
-        if (dist < closestDist) {
-          closestDist = dist;
-          closestId = id;
-        }
-      });
-      if (closestId && closestId !== dragOverId) setDragOverId(closestId);
+      clearTimeout(press.reorderTimer);
     }
   };
 
-  const handleMobileNotePointerEnd = (note: StickyNote, group: StickyNote[]) => (e: React.PointerEvent<HTMLButtonElement>) => {
+  const handleMobileNotePointerEnd = (note: StickyNote) => (e: React.PointerEvent<HTMLButtonElement>) => {
     const press = mobilePressRef.current;
     if (!press || press.noteId !== note.id) return;
     clearTimeout(press.reorderTimer);
     clearTimeout(press.deleteTimer);
     mobilePressRef.current = null;
-    if (e.type === "pointercancel") {
-      if (press.armed) {
-        setDraggingId(null);
-        setDragOverId(null);
-      }
-      return;
-    }
-    if (press.armed) {
-      if (dragOverId) handleDrop(group, dragOverId);
-      else setDraggingId(null);
-    } else if (!press.moved) {
+    if (e.type === "pointercancel") return;
+    if (!press.moved) {
       uiSounds.expand();
       setSelectedNoteId(note.id);
     }
@@ -1308,8 +1361,8 @@ export function NotesView({
         style={{ backgroundColor: colorEntry.bg, borderColor: colorEntry.border, touchAction: "pan-y", position: "relative", zIndex: isBeingDragged ? 10 : 0 }}
         onPointerDown={handleMobileNotePointerDown(note, group)}
         onPointerMove={handleMobileNotePointerMove(note)}
-        onPointerUp={handleMobileNotePointerEnd(note, group)}
-        onPointerCancel={handleMobileNotePointerEnd(note, group)}
+        onPointerUp={handleMobileNotePointerEnd(note)}
+        onPointerCancel={handleMobileNotePointerEnd(note)}
         className={`w-full block text-left overflow-hidden max-h-72 rounded-2xl border p-3 shadow-sm mb-3 break-inside-avoid-column cursor-pointer select-none ${
           isBeingDragged ? "shadow-xl ring-2 ring-primary" : ""
         }`}
