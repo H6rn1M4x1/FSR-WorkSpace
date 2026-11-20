@@ -47,7 +47,15 @@ export const handler: Handler = async (event) => {
       };
     }
 
-    const config: any = {};
+    const config: any = {
+      // Sin esto, los modelos "flash" de la familia 3.x gastan varios segundos de "pensamiento"
+      // interno antes de responder — en un chat con contexto largo (documentos/PDF adjuntos,
+      // historial) eso empuja la respuesta más allá del timeout de la función de Netlify (~30s),
+      // que corta la conexión con un 504 antes de que el modelo termine. Este chat es preguntas y
+      // respuestas de tutoría, no necesita razonamiento extendido: lo apagamos para que responda
+      // dentro del tiempo disponible.
+      thinkingConfig: { thinkingBudget: 0 },
+    };
     if (systemInstruction) config.systemInstruction = systemInstruction;
     if (tools.length > 0) config.tools = tools;
     if (enableMaps && userLocation) config.toolConfig = toolConfig;
