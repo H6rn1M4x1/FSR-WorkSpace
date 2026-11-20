@@ -658,22 +658,38 @@ export default function App() {
   const isMobile = useIsMobile();
 
   // Altura real del <header> (TopNavbar, fixed bottom-0 en mobile) — varía según la sección
-  // activa tenga o no sub-pestañas visibles (una o dos filas). El padding-bottom de <main> de
-  // abajo usa este valor en vez de una constante fija: una constante pensada para el caso de una
-  // sola fila se queda corta cuando hay sub-pestañas, dejando contenido tapado contra el navbar
-  // en el fondo del scroll (reportado en Notas Rápidas y en Turnos > Mi Agenda, pero el mismo
-  // <main> es compartido por todas las secciones, así que este fix aplica a todas a la vez).
+  // activa tenga o no sub-pestañas visibles (hasta 4 filas con la jerarquía de navegación). El
+  // padding-bottom de <main> de abajo usa este valor en vez de una constante fija: una constante
+  // pensada para el caso de una sola fila se queda corta cuando hay sub-pestañas, dejando
+  // contenido tapado contra el navbar en el fondo del scroll (reportado repetidas veces, en
+  // distintas secciones — el mismo <main> es compartido por todas, así que este fix aplica a
+  // todas a la vez).
   const [navbarHeight, setNavbarHeight] = useState(0);
   useEffect(() => {
     if (!isMobile) return;
     const headerEl = document.querySelector("header");
-    if (!headerEl || typeof ResizeObserver === "undefined") return;
+    if (!headerEl) return;
     const update = () => setNavbarHeight(headerEl.getBoundingClientRect().height);
     update();
-    const ro = new ResizeObserver(update);
-    ro.observe(headerEl);
-    return () => ro.disconnect();
-  }, [isMobile]);
+    // La cápsula anima su alto (framer-motion, ~300ms) al cambiar de sección/sub-pestaña — una
+    // sola medición al montar, o depender solo del ResizeObserver, puede dejar el padding con el
+    // alto VIEJO durante esa transición si el remontado/la medición inicial llegan a correr antes
+    // de que termine. Estos refuerzos puntuales (además de re-ejecutar el efecto entero en cada
+    // cambio de tab/sub-pestaña/filas anidadas, más abajo) vuelven a medir ya con la cápsula
+    // asentada, sin depender de un timing exacto.
+    const t1 = setTimeout(update, 120);
+    const t2 = setTimeout(update, 350);
+    let ro: ResizeObserver | undefined;
+    if (typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(update);
+      ro.observe(headerEl);
+    }
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      ro?.disconnect();
+    };
+  }, [isMobile, currentTab, activeSubTab, subPanelRows]);
   const [isUserSettingsOpen, setIsUserSettingsOpen] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfileData | null>(null);
 
@@ -2211,14 +2227,19 @@ export default function App() {
     }
   }, [isInitialLoadDone, turnosCompromisos, tasks]);
 
-  // Auto-sync monthly matches disabled for freeze mode
-  /*
+  // Agenda los partidos del equipo favorito del mes automáticamente (sin que el usuario tenga
+  // que apretar "Agendar Partidos del Mes en Agenda") — se dispara al cargar la app y cuando
+  // cambia el equipo favorito; syncMonthlyMatches ya controla por su cuenta (localStorage + los
+  // partidos que ya haya en turnosCompromisos) no repetir la sincronización de un mismo mes.
+  // Antes esto estaba deshabilitado ("freeze mode") por una versión vieja de syncMonthlyMatches
+  // que inventaba partidos falsos cuando la API de ESPN fallaba — ver el comentario "v2" en
+  // matchScheduler.ts: esa causa ya se corrigió (si no hay partidos reales, la lista vuelve
+  // vacía en vez de inventar rivales).
   useEffect(() => {
     if (userProfile?.favoriteTeam) {
       syncMonthlyMatches(userProfile.favoriteTeam, turnosCompromisos, setTurnosCompromisos);
     }
   }, [userProfile?.favoriteTeam]);
-  */
 
   // Handle Notifications check
   useEffect(() => {
@@ -2711,9 +2732,10 @@ export default function App() {
         <main
           ref={mainScrollRef}
           onScroll={handleMainScroll}
-          // pb-28 fijo no alcanza cuando el navbar tiene dos filas (sub-pestañas visibles) — ver
-          // el comentario junto a navbarHeight más arriba. +16px de aire extra sobre su alto real.
-          style={isMobile ? { paddingBottom: navbarHeight + 16 } : undefined}
+          // pb-28 fijo no alcanza cuando el navbar tiene más de una fila (sub-pestañas visibles)
+          // — ver el comentario junto a navbarHeight más arriba. +32px de aire extra sobre su
+          // alto real (de sobra incluso si navbarHeight todavía no terminó de asentarse).
+          style={isMobile ? { paddingBottom: navbarHeight + 32 } : undefined}
           className="flex-1 overflow-y-auto pt-[calc(0.75rem+env(safe-area-inset-top))] md:pt-0"
         >
           {driveLoading || !isInitialLoadDone ? (
@@ -2822,6 +2844,7 @@ export default function App() {
                   setExams={setExams}
                   activeSubTab={activeSubTab}
                   onSubTabChange={setActiveSubTab}
+                  token={token}
                   autoOpenQuickAdd={quickAddNonce}
                   autoOpenQuickAddDate={quickAddDate}
                   onQuickAddHandled={handleQuickAddHandled}
@@ -2852,6 +2875,7 @@ export default function App() {
                   setOrganizacionSemanal={setOrganizacionSemanal}
                   activeSubTab={activeSubTab}
                   onSubTabChange={setActiveSubTab}
+                  token={token}
                   autoOpenQuickAdd={quickAddNonce}
                   autoOpenQuickAddDate={quickAddDate}
                   onQuickAddHandled={handleQuickAddHandled}
