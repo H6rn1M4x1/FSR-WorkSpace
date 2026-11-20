@@ -7253,13 +7253,11 @@ export default function HealthView({
                               <span className="font-extrabold font-mono text-primary text-sm">
                                 {log.systolic}/{log.diastolic} <span className="text-[10px] text-zinc-500 font-normal">mmHg</span>
                               </span>
-                              <span className="text-[11px] font-semibold text-slate-500 dark:text-zinc-400">
-                                · Pulso: {log.pulse} lpm
-                              </span>
                             </div>
                             <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] font-semibold text-slate-600 dark:text-zinc-300">
                               {log.temperature !== undefined && <span>{log.temperature} °C</span>}
                               {log.oxygen !== undefined && <span>{log.oxygen}% O₂</span>}
+                              <span>{log.pulse} lpm</span>
                             </div>
                             <div
                               className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-100 dark:border-zinc-800/60"
@@ -7817,14 +7815,14 @@ export default function HealthView({
                       <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
                         Pulso (LPM)
                       </label>
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-zinc-800 transition-all focus-within:border-primary">
                         <input
                           type="number"
                           required
                           placeholder="Ej. 72"
                           value={formBpPulse}
                           onChange={(e) => setFormBpPulse(e.target.value)}
-                          className="w-full min-w-0 flex-1 px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-600 outline-none transition-all text-sm focus:border-primary"
+                          className="w-full min-w-0 flex-1 bg-transparent text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-600 outline-none text-sm"
                         />
                         {(() => {
                           const indicator = bpRangeIndicator(formBpPulse, BP_NORMAL_RANGES.pulse);
@@ -7843,14 +7841,14 @@ export default function HealthView({
                       <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
                         Presión Alta
                       </label>
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-zinc-800 transition-all focus-within:border-primary">
                         <input
                           type="number"
                           required
                           placeholder="Ej. 120"
                           value={formBpSys}
                           onChange={(e) => setFormBpSys(e.target.value)}
-                          className="w-full min-w-0 flex-1 px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-600 outline-none transition-all text-sm focus:border-primary"
+                          className="w-full min-w-0 flex-1 bg-transparent text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-600 outline-none text-sm"
                         />
                         {(() => {
                           const indicator = bpRangeIndicator(formBpSys, BP_NORMAL_RANGES.sys);
@@ -7866,14 +7864,14 @@ export default function HealthView({
                       <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
                         Presión Baja
                       </label>
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-zinc-800 transition-all focus-within:border-primary">
                         <input
                           type="number"
                           required
                           placeholder="Ej. 80"
                           value={formBpDia}
                           onChange={(e) => setFormBpDia(e.target.value)}
-                          className="w-full min-w-0 flex-1 px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-600 outline-none transition-all text-sm focus:border-primary"
+                          className="w-full min-w-0 flex-1 bg-transparent text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-600 outline-none text-sm"
                         />
                         {(() => {
                           const indicator = bpRangeIndicator(formBpDia, BP_NORMAL_RANGES.dia);
