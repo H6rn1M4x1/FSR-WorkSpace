@@ -9,7 +9,7 @@ import { TableSkeleton } from "./TableSkeleton";
 import { AnimatedNumber } from "./AnimatedNumber";
 import { UserProfileData } from "./UserSettingsModal";
 import { generateUniqueId } from "../utils/id";
-import { getLocalDateString } from "../utils/date";
+import { getLocalDateString, formatDateAR, formatDateTimeAR } from "../utils/date";
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import { subscribeToCategory, saveItemToFirestore, deleteItemFromFirestore } from "../lib/firestoreSyncService";
 import { addDeletedId, getDeletedIds } from "../lib/storage";
@@ -735,15 +735,12 @@ export default function HealthView({
     return { fechaSinAno: `${dayOfWeek} ${dayNum} de ${monthName}`, anio, hora };
   };
 
-  // DD-MM-YYYY para mostrar fechas cortas (tablas, badges) — la fecha se guarda en formato ISO
-  // (YYYY-MM-DD) y mostrarla así, cruda, confunde al leerla.
+  // dd-mm-aaaa para mostrar fechas cortas (tablas, badges) — la fecha se guarda en formato ISO
+  // (YYYY-MM-DD) y mostrarla así, cruda, confunde al leerla. Delega en el helper compartido
+  // (regla de formato de fecha de toda la app).
   const formatFechaDMY = (fechaStr: string): string => {
     if (!fechaStr) return "-";
-    const parts = fechaStr.split("T")[0].split(" ")[0].split("-");
-    if (parts.length === 3) {
-      return `${parts[2]}-${parts[1]}-${parts[0]}`;
-    }
-    return fechaStr;
+    return formatDateAR(fechaStr) || fechaStr;
   };
 
   // --- NUEVOS ESTADOS PARA SALUD METABÓLICA ---
@@ -4978,7 +4975,7 @@ export default function HealthView({
                     const fechaRaw = act.fechaDesde || new Date().toISOString();
                     const rawClean = fechaRaw.split("T")[0].split(" ")[0];
                     const parts = rawClean.split("-");
-                    const fechaShort = parts.length === 3 ? `${parts[1]}/${parts[2]}` : rawClean;
+                    const fechaShort = parts.length === 3 ? `${parts[2]}-${parts[1]}` : rawClean;
                     return {
                       id: act.id,
                       nombre: act.informacion || "Actividad Física",
@@ -4996,7 +4993,7 @@ export default function HealthView({
                     const fechaRaw = reg.fecha || new Date().toISOString();
                     const rawClean = fechaRaw.split("T")[0].split(" ")[0];
                     const parts = rawClean.split("-");
-                    const fechaShort = parts.length === 3 ? `${parts[1]}/${parts[2]}` : rawClean;
+                    const fechaShort = parts.length === 3 ? `${parts[2]}-${parts[1]}` : rawClean;
                     return {
                       id: reg.id,
                       nombre: reg.rutinaNombre || "Gimnasio",
@@ -7247,7 +7244,7 @@ export default function HealthView({
                                 {patientName}
                               </span>
                               <span className="text-[10px] font-semibold text-slate-500 dark:text-zinc-400">
-                                {log.date ? log.date.replace("T", " ").replace("Z", "").split(":").slice(0, 2).join(":") : ""}
+                                {log.date ? formatDateTimeAR(log.date) : ""}
                               </span>
                             </div>
                             <div className="flex items-center gap-1.5 mb-1.5">
@@ -10292,7 +10289,7 @@ export default function HealthView({
           <DetailModal
             isOpen={!!detailBpLog}
             onClose={() => setDetailBpLogId(null)}
-            title={detailBpLog ? `Presión del ${detailBpLog.date ? detailBpLog.date.replace("T", " ").replace("Z", "").split(":").slice(0, 2).join(":") : ""}` : undefined}
+            title={detailBpLog ? `Presión del ${detailBpLog.date ? formatDateTimeAR(detailBpLog.date) : ""}` : undefined}
             subtitle={detailBpLog?.patient || "Hernan"}
             icon={Heart}
             onEdit={detailBpLog ? () => handleOpenEditBpTableModal(detailBpLog) : undefined}

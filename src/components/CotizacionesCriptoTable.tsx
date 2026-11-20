@@ -1,4 +1,5 @@
 import { generateUniqueId } from "../utils/id";
+import { formatDateAR } from "../utils/date";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import { useBriefLoading } from "../hooks/useBriefLoading";
 import { TableSkeleton } from "./TableSkeleton";
@@ -287,7 +288,7 @@ export default function CotizacionesCriptoTable({
   }, [filteredCriptos, currentPage, pageSize]);
 
   const handleExport = () => {
-    const title = "Cotizaciones de Criptomonedas - " + new Date().toLocaleDateString();
+    const title = "Cotizaciones de Criptomonedas - " + formatDateAR(new Date());
     const headers = [
       "Name",
       "Symbol",

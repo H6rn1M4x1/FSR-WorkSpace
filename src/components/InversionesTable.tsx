@@ -878,11 +878,11 @@ export default function InversionesTable({
     setFormOperacion("Compra");
     setFormTicker("");
     const now = new Date();
-    const formattedNow = `${now.getDate().toString().padStart(2, "0")}/${(
+    const formattedNow = `${now.getDate().toString().padStart(2, "0")}-${(
       now.getMonth() + 1
     )
       .toString()
-      .padStart(2, "0")}/${now.getFullYear()} ${now
+      .padStart(2, "0")}-${now.getFullYear()} ${now
       .getHours()
       .toString()
       .padStart(2, "0")}:${now
@@ -2144,7 +2144,7 @@ export default function InversionesTable({
                       </label>
                       <input
                         type="text"
-                        placeholder="DD/MM/YYYY HH:MM:SS"
+                        placeholder="DD-MM-YYYY HH:MM:SS"
                         value={formFecha}
                         onChange={(e) => setFormFecha(e.target.value)}
                         className="w-full px-3.5 py-2.5 text-xs font-semibold rounded-xl bg-slate-50 dark:bg-zinc-950/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white outline-none focus:border-primary font-mono"

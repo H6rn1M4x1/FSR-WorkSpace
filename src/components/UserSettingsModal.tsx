@@ -6,6 +6,7 @@ import { useDragToCollapse } from "../hooks/useDragToCollapse";
 import { createPortal } from "react-dom";
 import { Eye, EyeOff } from "lucide-react";
 import { SmartDateTimePicker } from "./SmartDateTimePicker";
+import { formatDateTimeAR } from "../utils/date";
 import { SearchableSelect } from "./SearchableSelect";
 import { TeamSelect } from "./TeamSelect";
 import { Country, State } from "country-state-city";
@@ -3531,7 +3532,7 @@ export function UserSettingsModal({
                 <div className="shrink-0 flex flex-col gap-1.5 md:items-end">
                   <span className="text-[10px] uppercase font-bold text-zinc-400">Última copia</span>
                   <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300 bg-slate-100 dark:bg-zinc-900 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-zinc-800">
-                    {lastBackupDate ? new Date(lastBackupDate).toLocaleString("es-AR") : "Nunca realizada"}
+                    {lastBackupDate ? formatDateTimeAR(lastBackupDate) : "Nunca realizada"}
                   </span>
                 </div>
               </div>
@@ -3637,7 +3638,7 @@ export function UserSettingsModal({
                         {backupLogs.map((log) => (
                           <tr key={log.id} className="hover:bg-slate-50/80 dark:hover:bg-zinc-900/10 font-medium transition-colors">
                             <td className="p-3 whitespace-nowrap text-zinc-600 dark:text-zinc-400 font-semibold">
-                              {new Date(log.timestamp).toLocaleString("es-AR")}
+                              {formatDateTimeAR(log.timestamp)}
                             </td>
                             <td className="p-3 whitespace-nowrap">
                               <span

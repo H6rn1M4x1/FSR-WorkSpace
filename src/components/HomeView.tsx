@@ -204,6 +204,36 @@ export default function HomeView({
   const homeUserId = user?.email || userProfile?.email || "hernanmaximiliano10@gmail.com";
   const { showToast } = useToast();
 
+  // Calendario Unificado ya no se estira para igualar la altura de Agenda Central Integrada (ver
+  // calendarCardRef más abajo) — en vez de eso, medimos su altura real y se la aplicamos a Agenda
+  // Central Integrada en PC, para que sea ese bloque (más chico) el que defina el tamaño del par.
+  const calendarCardRef = useRef<HTMLDivElement>(null);
+  const [calendarCardHeight, setCalendarCardHeight] = useState<number | null>(null);
+  const [isDesktopWidth, setIsDesktopWidth] = useState(
+    () => typeof window !== "undefined" && window.innerWidth >= 1024,
+  );
+
+  useEffect(() => {
+    const onResize = () => setIsDesktopWidth(window.innerWidth >= 1024);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  useEffect(() => {
+    const el = calendarCardRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    // ResizeObserver.contentRect excluye padding y borde (siempre, sin importar box-sizing) —
+    // leemos offsetHeight del elemento en vez de contentRect para igualar la altura visual real
+    // (con padding/borde incluidos), que es la que necesitamos replicar en Agenda Central.
+    const ro = new ResizeObserver(() => {
+      if (el) setCalendarCardHeight(el.offsetHeight);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const agendaMatchedHeight = isDesktopWidth && calendarCardHeight ? calendarCardHeight : null;
+
   // Etiqueta legible de una categoría de Turno/Compromiso (nunca el `id` crudo, que para
   // categorías creadas con el administrador de categorías no es texto legible).
   const effectiveTurnoCategorias = turnoCategorias.length > 0 ? turnoCategorias : DEFAULT_TURNO_CATEGORIAS;
@@ -1802,10 +1832,11 @@ export default function HomeView({
   return (
     <div className="space-y-6 animate-fade-in px-3 sm:px-6 pt-1 sm:pt-1.5 pb-6" id="home-view-container">
       {/* Main Grid Content */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:items-start">
         {/* LEFT COLUMN: The Linked Interactive Calendar */}
         <div
           id="calendar-card"
+          ref={calendarCardRef}
           className={`p-6 rounded-3xl border flex flex-col lg:col-span-5 shadow-xs app-calendar-container scroll-reveal ${
             darkMode
               ? "bg-zinc-900 border-zinc-800 text-white shadow-lg"
@@ -2023,13 +2054,14 @@ export default function HomeView({
         {/* RIGHT COLUMN: The Unified Interactive Agenda */}
         <div
           id="agenda-card"
+          style={agendaMatchedHeight ? { height: agendaMatchedHeight } : undefined}
           className={`p-6 rounded-3xl border flex flex-col lg:col-span-7 justify-between shadow-xs scroll-reveal ${
             darkMode
               ? "bg-zinc-900 border-zinc-800 text-white shadow-lg"
               : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
           }`}
         >
-          <div className="space-y-4">
+          <div className="flex flex-col gap-4 flex-1 min-h-0">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800/10 dark:border-zinc-800/40 pb-3">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-5 h-5 text-primary" />
@@ -2182,7 +2214,7 @@ export default function HomeView({
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -6 }}
                 transition={{ duration: 0.2 }}
-                className="space-y-3.5 max-h-[440px] pr-1"
+                className="flex flex-col flex-1 min-h-0 pr-1"
               >
                 {totalSelectedEvents === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 text-center space-y-3">
@@ -2198,6 +2230,7 @@ export default function HomeView({
                   showGradients={false}
                   enableArrowNavigation={true}
                   className="max-h-[390px]"
+                  style={{ flex: "1 1 0%", minHeight: 0 }}
                   renderItem={(item, itemIdx) => {
                     const itemData = item.data as any;
                     const itemId = `${item.itemType}-${itemData?.id || itemData?.disp?.id || Math.random()}`;

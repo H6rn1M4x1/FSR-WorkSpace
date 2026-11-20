@@ -16,6 +16,7 @@ import { db } from "./firebase";
 import { supabase } from "./supabase";
 import { saveItemToFirestore } from "./firestoreSyncService";
 import { generateUniqueId } from "../utils/id";
+import { formatDateAR } from "../utils/date";
 import { ChatContact, ChatMessage, ChatAttachmentType, SharedEventCategory } from "../types";
 
 const CONTACTS_COLLECTION = "chat_contacts";
@@ -614,14 +615,14 @@ function buildTitleSubtitle(
       const lugarValido = data.lugar && !PLACEHOLDER_LUGARES.includes(String(data.lugar).trim().toLowerCase());
       return {
         title: data.descripcion || "Turno",
-        subtitle: joinParts([data.fecha ? data.fecha.slice(0, 10) : "", hora ? `${hora} hs` : "", lugarValido ? data.lugar : ""]),
+        subtitle: joinParts([data.fecha ? formatDateAR(data.fecha.slice(0, 10)) : "", hora ? `${hora} hs` : "", lugarValido ? data.lugar : ""]),
       };
     }
     case "finanzas":
       return {
         title: data.descripcion || "Pago",
         subtitle: joinParts([
-          data.fechaVencimiento ? `Vence ${data.fechaVencimiento}` : "",
+          data.fechaVencimiento ? `Vence ${formatDateAR(data.fechaVencimiento)}` : "",
           typeof data.montoAPagar === "number" ? `$${data.montoAPagar.toLocaleString("es-AR")} ARS` : "",
           data.metodoPago || "",
         ]),
@@ -639,17 +640,17 @@ function buildTitleSubtitle(
     case "universidad_examen":
       return {
         title: data.materia || "Examen",
-        subtitle: joinParts([data.estado || "", data.fecha || "", data.hora ? `${data.hora} hs` : "", data.aula ? `Aula ${data.aula}` : ""]),
+        subtitle: joinParts([data.estado || "", data.fecha ? formatDateAR(data.fecha) : "", data.hora ? `${data.hora} hs` : "", data.aula ? `Aula ${data.aula}` : ""]),
       };
     case "salud":
       return {
         title: data.info || data.type || "Registro médico",
-        subtitle: joinParts([data.type || "", data.location || "", data.studyDate || ""]),
+        subtitle: joinParts([data.type || "", data.location || "", data.studyDate ? formatDateAR(data.studyDate) : ""]),
       };
     case "comidas":
       return {
         title: platoName || "Comida programada",
-        subtitle: joinParts([data.fecha || "", platoDescripcion || ""]),
+        subtitle: joinParts([data.fecha ? formatDateAR(data.fecha) : "", platoDescripcion || ""]),
       };
     case "notas":
       return {

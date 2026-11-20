@@ -8,7 +8,7 @@ import { useBriefLoading } from "../hooks/useBriefLoading";
 import { TableSkeleton } from "./TableSkeleton";
 import { AnimatedNumber } from "./AnimatedNumber";
 import { generateUniqueId } from "../utils/id";
-import { getLocalDateString } from "../utils/date";
+import { getLocalDateString, formatDateAR } from "../utils/date";
 import React, { useState, useEffect } from "react";
 import { saveItemToFirestore, deleteItemFromFirestore, subscribeToCategory } from "../lib/firestoreSyncService";
 import { motion, AnimatePresence, useDragControls } from "motion/react";
@@ -1388,14 +1388,9 @@ export default function MealsView({
       getPlatoName(a.platoId).localeCompare(getPlatoName(b.platoId)),
     );
 
-  const formatFechaDMY = (fechaStr: string): string => {
-    if (!fechaStr) return "-";
-    const parts = fechaStr.split("-");
-    if (parts.length === 3) {
-      return `${parts[2]}/${parts[1]}/${parts[0]}`;
-    }
-    return fechaStr;
-  };
+  // Alias local: delega en formatDateAR para que respete la regla de formato de fecha de toda
+  // la app (dd-mm-aaaa).
+  const formatFechaDMY = (fechaStr: string): string => (fechaStr ? formatDateAR(fechaStr) : "-");
 
   const formatDateFriendly = (dateStr: string) => {
     if (!dateStr) return "";

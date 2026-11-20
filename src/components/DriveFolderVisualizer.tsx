@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useContext, useMemo } from "react";
 import AnimatedFolder from "./AnimatedFolder";
+import { formatDateAR, formatDateTimeAR } from "../utils/date";
 import { PdfHighlightViewer } from "./PdfHighlightViewer";
 import { createPortal } from "react-dom";
 import { motion, useDragControls } from "motion/react";
@@ -2388,14 +2389,7 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
 
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return "-";
-    const date = new Date(dateStr);
-    return date.toLocaleDateString("es-ES", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    return formatDateTimeAR(dateStr);
   };
 
   const getFileIcon = (mimeType: string, isFolderHovered = false) => {
@@ -3694,7 +3688,7 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
                               </p>
                               {folder.modifiedTime && (
                                 <p className="text-[9px] text-zinc-400">
-                                  Modificado: {new Date(folder.modifiedTime).toLocaleDateString()}
+                                  Modificado: {formatDateAR(folder.modifiedTime)}
                                 </p>
                               )}
                             </div>
@@ -4877,12 +4871,7 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
                         )}
                         <p className="text-[10px] text-zinc-400 dark:text-zinc-500 font-medium mt-0.5">
                           {session.messages.length} mensajes ·{" "}
-                          {new Date(session.updatedAt).toLocaleDateString("es-AR", {
-                            day: "2-digit",
-                            month: "short",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
+                          {formatDateTimeAR(session.updatedAt)}
                         </p>
                       </div>
                       <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">

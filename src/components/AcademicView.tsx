@@ -12,6 +12,7 @@ import { MonthlyExamScheduler } from "./MonthlyExamScheduler";
 import { AcademicRadarChart, AcademicGaugeChart } from "./AcademicCharts";
 import { CustomSelect, SelectPopoverPosition } from "./CustomSelect";
 import { generateUniqueId } from "../utils/id";
+import { formatDateAR, formatDateTimeAR } from "../utils/date";
 import React, { useState, useEffect } from "react";
 import { saveItemToFirestore, deleteItemFromFirestore } from "../lib/firestoreSyncService";
 import { PillFilterBar } from "./PillFilterBar";
@@ -1144,8 +1145,7 @@ export default function AcademicView({
     }
     if (!vencDateStr) return "---";
 
-    const parts = vencDateStr.split("-");
-    const formattedVenc = `${parts[2]}/${parts[1]}/${parts[0]}`;
+    const formattedVenc = formatDateAR(vencDateStr);
 
     const vencDate = new Date(vencDateStr + "T12:00:00");
     const currentDate = new Date();
@@ -3047,12 +3047,7 @@ export default function AcademicView({
                                     {ex.instancia ? `(${ex.instancia})` : ""}
                                   </span>
                                   <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-medium">
-                                    {new Date(ex.fecha)
-                                      .toLocaleString("es-AR", {
-                                        dateStyle: "short",
-                                        timeStyle: "short",
-                                      })
-                                      .replace(",", "")}
+                                    {formatDateTimeAR(ex.fecha)}
                                   </span>
                                   {ex.aula && (
                                     <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-medium">
@@ -3272,19 +3267,13 @@ export default function AcademicView({
                         {item.rendirFuerte}
                       </td>
                       <td className="py-3 px-4 text-slate-500 dark:text-zinc-400 font-mono whitespace-nowrap">
-                        {item.fechaRegularidad
-                          ? item.fechaRegularidad.split("-").reverse().join("/")
-                          : "---"}
+                        {item.fechaRegularidad ? formatDateAR(item.fechaRegularidad) : "---"}
                       </td>
                       <td className="py-3 px-4 text-slate-500 dark:text-zinc-400 font-mono whitespace-nowrap">
-                        {item.fechaVencimiento
-                          ? item.fechaVencimiento.split("-").reverse().join("/")
-                          : "---"}
+                        {item.fechaVencimiento ? formatDateAR(item.fechaVencimiento) : "---"}
                       </td>
                       <td className="py-3 px-4 text-slate-500 dark:text-zinc-400 font-mono whitespace-nowrap">
-                        {item.fechaAprobado
-                          ? item.fechaAprobado.split("-").reverse().join("/")
-                          : "---"}
+                        {item.fechaAprobado ? formatDateAR(item.fechaAprobado) : "---"}
                       </td>
                       <td className="py-3 px-4 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-1.5">
@@ -3378,7 +3367,7 @@ export default function AcademicView({
                         {fechas.map((f) => (
                           <span key={f.label} className="flex items-center gap-1">
                             <Calendar className="w-3 h-3 shrink-0" />
-                            {f.label}: {f.value.split("-").reverse().join("/")}
+                            {f.label}: {formatDateAR(f.value)}
                           </span>
                         ))}
                       </div>
@@ -4394,12 +4383,7 @@ export default function AcademicView({
                               <div className="flex items-center gap-1.5 font-mono text-slate-600 dark:text-zinc-300">
                                 <Calendar className="w-3.5 h-3.5 text-primary" />
                                 <span>
-                                  {new Date(ex.fecha)
-                                    .toLocaleString("es-AR", {
-                                      dateStyle: "short",
-                                      timeStyle: "short",
-                                    })
-                                    .replace(",", "")}
+                                  {formatDateTimeAR(ex.fecha)}
                                 </span>
                               </div>
                             </td>
@@ -4494,7 +4478,7 @@ export default function AcademicView({
                         <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] font-medium text-slate-500 dark:text-zinc-400">
                           <span className="flex items-center gap-1 font-mono">
                             <Calendar className="w-3 h-3 shrink-0 text-primary" />
-                            {new Date(ex.fecha).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" }).replace(",", "")}
+                            {formatDateTimeAR(ex.fecha)}
                           </span>
                           {ex.aula && (
                             <span className="flex items-center gap-1">
@@ -5398,9 +5382,9 @@ export default function AcademicView({
                   {detailMateria.rendirFuerte || "Sin correlativas"}
                 </DetailBlock>
                 <DetailBlock icon={Calendar} label="Fechas (Regularidad / Vencimiento / Aprobado)" span>
-                  {detailMateria.fechaRegularidad ? detailMateria.fechaRegularidad.split("-").reverse().join("/") : "---"} •{" "}
-                  {detailMateria.fechaVencimiento ? detailMateria.fechaVencimiento.split("-").reverse().join("/") : "---"} •{" "}
-                  {detailMateria.fechaAprobado ? detailMateria.fechaAprobado.split("-").reverse().join("/") : "---"}
+                  {detailMateria.fechaRegularidad ? formatDateAR(detailMateria.fechaRegularidad) : "---"} •{" "}
+                  {detailMateria.fechaVencimiento ? formatDateAR(detailMateria.fechaVencimiento) : "---"} •{" "}
+                  {detailMateria.fechaAprobado ? formatDateAR(detailMateria.fechaAprobado) : "---"}
                 </DetailBlock>
                 {statusObj && (
                   <DetailBlock icon={CheckCircle} label="Estado Académico" tone={statusTone} span>
@@ -5502,7 +5486,7 @@ export default function AcademicView({
             {detailExamen && (
               <DetailBlockGrid>
                 <DetailBlock icon={Calendar} label="Fecha" emphasis span>
-                  {new Date(detailExamen.fecha).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" }).replace(",", "")}
+                  {formatDateTimeAR(detailExamen.fecha)}
                 </DetailBlock>
                 <DetailBlock icon={FolderOpen} label="Aula" span>
                   {detailExamen.aula || "---"}

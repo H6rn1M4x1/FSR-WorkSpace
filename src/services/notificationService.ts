@@ -1,36 +1,16 @@
 // Notification Service for Agenda Central Integrada (PWA Push & Local Notifications with Device Accent Color)
 
 import { AestheticStorageService } from "../lib/storage";
+import { formatDateAR } from "../utils/date";
 
 export type AgendaCategory = "turnos" | "finanzas" | "universidad" | "salud" | "comidas" | "general";
 
 /**
- * Format any date string (e.g. YYYY-MM-DD or ISO) into dd/mm/aaaa.
+ * Format any date string (e.g. YYYY-MM-DD or ISO) into dd-mm-aaaa (regla de formato de fecha de
+ * toda la app — ver src/utils/date.ts).
  */
 export function formatDateToDDMMAAAA(dateInput?: string | Date): string {
-  if (!dateInput) {
-    const now = new Date();
-    const d = String(now.getDate()).padStart(2, "0");
-    const m = String(now.getMonth() + 1).padStart(2, "0");
-    const y = now.getFullYear();
-    return `${d}/${m}/${y}`;
-  }
-  if (dateInput instanceof Date) {
-    const d = String(dateInput.getDate()).padStart(2, "0");
-    const m = String(dateInput.getMonth() + 1).padStart(2, "0");
-    const y = dateInput.getFullYear();
-    return `${d}/${m}/${y}`;
-  }
-  const str = String(dateInput).trim();
-  const dateOnly = str.includes("T") ? str.split("T")[0] : str;
-  const parts = dateOnly.split("-");
-  if (parts.length === 3 && parts[0].length === 4) {
-    const y = parts[0];
-    const m = parts[1].padStart(2, "0");
-    const d = parts[2].padStart(2, "0");
-    return `${d}/${m}/${y}`;
-  }
-  return str;
+  return formatDateAR(dateInput ?? new Date());
 }
 
 /**

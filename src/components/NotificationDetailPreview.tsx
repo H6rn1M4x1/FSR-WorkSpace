@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
+import { formatDateTimeAR } from "../utils/date";
 import L from "leaflet";
 import { motion } from "motion/react";
 import {
@@ -431,13 +432,7 @@ export const NotificationDetailPreview: React.FC<NotificationDetailPreviewProps>
 
           <div className="flex items-center gap-1 text-[11px] text-zinc-500 font-medium">
             <Clock className="w-3 h-3" />
-            <span>
-              {new Date(notification.timestamp).toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}{" "}
-              - {new Date(notification.timestamp).toLocaleDateString([], { day: "2-digit", month: "short" })}
-            </span>
+            <span>{formatDateTimeAR(notification.timestamp)}</span>
           </div>
         </div>
 

@@ -76,7 +76,7 @@ import { SmartDateTimePicker } from "./SmartDateTimePicker";
 import { ConfirmationModal } from "./ConfirmationModal";
 import { activityMETs, distanceBasedActivities, estimateCaloriesByMET } from "../data/activityCatalog";
 import { generateUniqueId } from "../utils/id";
-import { getLocalDateString } from "../utils/date";
+import { getLocalDateString, formatDateAR } from "../utils/date";
 import { uiSounds } from "../lib/sounds";
 import { GymScheduleGrid, GymScheduleOption, GymScheduleCreatePayload, GymScheduleBatch } from "./GymScheduleGrid";
 import { GymAIAnalysisPanel } from "./GymAIAnalysisPanel";
@@ -1939,7 +1939,7 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
 
       const sorted = [...uniqueRegistros].sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
       return sorted.map(reg => {
-        const dateFormatted = new Date(reg.fecha).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit" });
+        const dateFormatted = formatDateAR(reg.fecha).slice(0, 5);
         const pesoMax = Math.max(...(reg.ejerciciosLogs || []).map(e => e.pesoMaximoKg || 0), 0);
         return {
           fecha: dateFormatted,
@@ -1958,7 +1958,7 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
       if (matchingSessions.length > 0) {
         const sorted = [...matchingSessions].sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
         return sorted.map(reg => {
-          const dateFormatted = new Date(reg.fecha).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit" });
+          const dateFormatted = formatDateAR(reg.fecha).slice(0, 5);
           const filteredExLogs = reg.ejerciciosLogs.filter(e => e.ejercicioNombre.toLowerCase() === chartExerciseFilter.toLowerCase());
           const pesoMax = Math.max(...filteredExLogs.map(e => e.pesoMaximoKg || 0), 0);
           const volumen = filteredExLogs.reduce((acc, e) => acc + (e.volumenTotalKg || 0), 0);
