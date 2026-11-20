@@ -2228,8 +2228,28 @@ export default function HealthView({
   const [formBpDate, setFormBpDate] = useState("");
   const [formBpSys, setFormBpSys] = useState("120");
   const [formBpDia, setFormBpDia] = useState("80");
+  const [formBpPulse, setFormBpPulse] = useState("72");
   const [formBpTemp, setFormBpTemp] = useState("36.5");
   const [formBpO2, setFormBpO2] = useState("98");
+
+  // Rango considerado normal/saludable para cada valor del formulario de Presión — usado para el
+  // pequeño indicador rojo/verde al lado de cada input (ver bpRangeIndicator más abajo).
+  const BP_NORMAL_RANGES = {
+    sys: { min: 90, max: 120 },
+    dia: { min: 60, max: 80 },
+    pulse: { min: 60, max: 100 },
+  } as const;
+
+  // Indicador compacto de cuánto se aleja un valor tipeado del rango normal/saludable: verde y
+  // "En rango" si cae dentro, rojo con la diferencia (+N por encima, -N por debajo) si no. null
+  // si el campo todavía no tiene un número válido (no se muestra nada en ese caso).
+  const bpRangeIndicator = (rawValue: string, range: { min: number; max: number }) => {
+    const value = Number(rawValue);
+    if (rawValue.trim() === "" || isNaN(value)) return null;
+    if (value > range.max) return { tone: "danger" as const, text: `+${value - range.max}` };
+    if (value < range.min) return { tone: "danger" as const, text: `${value - range.min}` };
+    return { tone: "success" as const, text: "En rango" };
+  };
 
   // Detailed Medications Table State
   const [searchQuery, setSearchQuery] = useState("");
@@ -2997,6 +3017,7 @@ export default function HealthView({
     setFormBpDate(new Date().toISOString().split("T")[0]);
     setFormBpSys("120");
     setFormBpDia("80");
+    setFormBpPulse("72");
     setFormBpTemp("36.5");
     setFormBpO2("98");
     setShowBpTableModal(true);
@@ -3008,6 +3029,7 @@ export default function HealthView({
     setFormBpDate(log.date);
     setFormBpSys(String(log.systolic));
     setFormBpDia(String(log.diastolic));
+    setFormBpPulse(log.pulse !== undefined ? String(log.pulse) : "72");
     setFormBpTemp(
       log.temperature !== undefined ? String(log.temperature) : "36.5",
     );
@@ -3026,6 +3048,7 @@ export default function HealthView({
       }
       const sys = Number(formBpSys) || 120;
       const dia = Number(formBpDia) || 80;
+      const pulse = Number(formBpPulse) || 72;
       const temp = Number(formBpTemp) || 36.5;
       const o2 = Number(formBpO2) || 98;
 
@@ -3035,7 +3058,7 @@ export default function HealthView({
         date: formBpDate || new Date().toISOString().split("T")[0],
         systolic: sys,
         diastolic: dia,
-        pulse: 72,
+        pulse,
         temperature: temp,
         oxygen: o2,
       };
@@ -7763,21 +7786,44 @@ export default function HealthView({
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
-                      Fecha
-                    </label>
-                    <SmartDateTimePicker
-                      value={formBpDate}
-                      onChange={(val) => setFormBpDate(val)}
-                      required
-                    />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
+                        Fecha
+                      </label>
+                      <SmartDateTimePicker
+                        value={formBpDate}
+                        onChange={(val) => setFormBpDate(val)}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
+                        Pulso (LPM)
+                      </label>
+                      <input
+                        type="number"
+                        required
+                        placeholder="Ej. 72"
+                        value={formBpPulse}
+                        onChange={(e) => setFormBpPulse(e.target.value)}
+                        className="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-600 outline-none transition-all text-sm focus:border-primary"
+                      />
+                      {(() => {
+                        const indicator = bpRangeIndicator(formBpPulse, BP_NORMAL_RANGES.pulse);
+                        return indicator ? (
+                          <span className={`mt-1 inline-block text-[10px] font-extrabold ${indicator.tone === "danger" ? "text-red-500" : "text-emerald-500"}`}>
+                            {indicator.text}
+                          </span>
+                        ) : null;
+                      })()}
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
-                        Presión Alta (Sistólica)
+                        Presión Alta
                       </label>
                       <input
                         type="number"
@@ -7787,10 +7833,18 @@ export default function HealthView({
                         onChange={(e) => setFormBpSys(e.target.value)}
                         className="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-600 outline-none transition-all text-sm focus:border-primary"
                       />
+                      {(() => {
+                        const indicator = bpRangeIndicator(formBpSys, BP_NORMAL_RANGES.sys);
+                        return indicator ? (
+                          <span className={`mt-1 inline-block text-[10px] font-extrabold ${indicator.tone === "danger" ? "text-red-500" : "text-emerald-500"}`}>
+                            {indicator.text}
+                          </span>
+                        ) : null;
+                      })()}
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
-                        Presión Baja (Diastólica)
+                        Presión Baja
                       </label>
                       <input
                         type="number"
@@ -7800,6 +7854,14 @@ export default function HealthView({
                         onChange={(e) => setFormBpDia(e.target.value)}
                         className="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-600 outline-none transition-all text-sm focus:border-primary"
                       />
+                      {(() => {
+                        const indicator = bpRangeIndicator(formBpDia, BP_NORMAL_RANGES.dia);
+                        return indicator ? (
+                          <span className={`mt-1 inline-block text-[10px] font-extrabold ${indicator.tone === "danger" ? "text-red-500" : "text-emerald-500"}`}>
+                            {indicator.text}
+                          </span>
+                        ) : null;
+                      })()}
                     </div>
                   </div>
 
