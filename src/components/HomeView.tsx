@@ -12,7 +12,7 @@ import { WeatherWidget } from "./WeatherWidget";
 import { QuickNotesMiniWidget } from "./QuickNotesMiniWidget";
 import { ExpenseFunnelWidget } from "./ExpenseFunnelWidget";
 import { PillFilterBar } from "./PillFilterBar";
-import { getMatchTeamLogos, syncMonthlyMatches } from "../lib/matchScheduler";
+import { getMatchTeamLogos } from "../lib/matchScheduler";
 import { motion, AnimatePresence } from "motion/react";
 import { ConfirmationModal } from "./ConfirmationModal";
 import { LocationPickerMap } from "./LocationPickerMap";
@@ -398,19 +398,6 @@ export default function HomeView({
     }
   };
 
-  const handleScheduleMatches = async () => {
-    const favTeam = userProfile?.favoriteTeam || "Boca Juniors";
-    const { addedCount } = await syncMonthlyMatches(
-      favTeam,
-      turnosCompromisos,
-      setTurnosCompromisos,
-      true
-    );
-    showToast(
-      `¡Partidos de ${favTeam} agendados con éxito (${addedCount} partidos) en Agenda Central Integrada y Calendario Unificado (Categoría: Ocio)!`,
-      "success"
-    );
-  };
   const [selectedIncomingShareId, setSelectedIncomingShareId] = useState<
     string | null
   >(null);
@@ -1987,7 +1974,12 @@ export default function HomeView({
               )}
             </div>
 
-            {!token ? (
+            {/* Los botones manuales "Sincronizar Día"/"Sincronizar Mes" se sacaron: la
+                sincronización con Google Calendar ahora es automática (se crea/actualiza/borra
+                el evento vinculado al cargar/editar/eliminar cada turno, pago, examen, tarea o
+                comida planificada) — el badge "Conectado" de arriba ya basta como indicador una
+                vez vinculada la cuenta. */}
+            {!token && (
               <button
                 onClick={() => handleGoogleCalendarSync("day")}
                 disabled={syncStatus.loading}
@@ -1998,33 +1990,6 @@ export default function HomeView({
                 />
                 Vincular Google Calendar
               </button>
-            ) : (
-              <div className="space-y-2">
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => handleGoogleCalendarSync("day")}
-                    disabled={syncStatus.loading}
-                    className="py-2 px-2.5 rounded-full bg-primary/10 hover:bg-primary/10 active:scale-[0.98] disabled:opacity-50 text-primary font-extrabold text-[11px] flex items-center justify-center gap-1.5 border border-primary/20 transition-all cursor-pointer"
-                    title="Sincroniza todas las citas, compromisos, comidas y vencimientos de hoy / día seleccionado"
-                  >
-                    <RefreshCw
-                      className={`w-3 h-3 ${syncStatus.loading ? "animate-spin" : ""}`}
-                    />
-                    Sincronizar Día
-                  </button>
-                  <button
-                    onClick={() => handleGoogleCalendarSync("month")}
-                    disabled={syncStatus.loading}
-                    className="py-2 px-2.5 rounded-full bg-primary hover:bg-primary active:scale-[0.98] disabled:opacity-50 text-white dark:text-blue-950 font-extrabold text-[11px] flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs"
-                    title="Sincroniza todos los eventos del mes calendario que estás visualizando"
-                  >
-                    <RefreshCw
-                      className={`w-3 h-3 ${syncStatus.loading ? "animate-spin" : ""}`}
-                    />
-                    Sincronizar Mes
-                  </button>
-                </div>
-              </div>
             )}
 
             {syncStatus.loading && (
@@ -3546,15 +3511,6 @@ export default function HomeView({
           <FavoriteTeamWidget
             favoriteTeamName={userProfile?.favoriteTeam}
             darkMode={darkMode}
-            onScheduleMonthlyMatches={handleScheduleMatches}
-            isScheduled={(() => {
-              const team = (userProfile?.favoriteTeam || "Boca Juniors").replace(/\s+/g, "_");
-              const now = new Date();
-              const monthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-              return turnosCompromisos.some(
-                (t) => t.categoria === "Ocio" && t.id.startsWith(`match-${team}`) && t.fecha.startsWith(monthPrefix)
-              );
-            })()}
           />
         </div>
       </div>

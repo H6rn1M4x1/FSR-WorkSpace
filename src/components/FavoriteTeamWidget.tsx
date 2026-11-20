@@ -15,8 +15,6 @@ const getLeagueDisplayName = (league?: string): string | undefined =>
 interface FavoriteTeamWidgetProps {
   favoriteTeamName?: string;
   darkMode?: boolean;
-  onScheduleMonthlyMatches?: () => void;
-  isScheduled?: boolean;
 }
 
 export interface MatchData {
@@ -44,8 +42,6 @@ export interface MatchData {
 export const FavoriteTeamWidget: React.FC<FavoriteTeamWidgetProps> = ({
   favoriteTeamName = "Boca Juniors",
   darkMode,
-  onScheduleMonthlyMatches,
-  isScheduled,
 }) => {
   const selectedTeamName = favoriteTeamName || "Boca Juniors";
   const teamObj: Team | undefined = TEAMS.find((t) => t.name === selectedTeamName);
@@ -556,20 +552,6 @@ export const FavoriteTeamWidget: React.FC<FavoriteTeamWidgetProps> = ({
         </div>
       )}
 
-      {/* Auto-Schedule Matches Button */}
-      {onScheduleMonthlyMatches && (
-        <div className="mt-3 pt-3 border-t border-zinc-100 dark:border-zinc-800">
-          <button
-            type="button"
-            onClick={onScheduleMonthlyMatches}
-            className="w-full py-2 px-3 rounded-2xl bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 font-extrabold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs active:scale-[0.98]"
-            title="Agendar automáticamente los partidos del mes de tu equipo favorito en Agenda Central Integrada y Calendario Unificado"
-          >
-            <Calendar className="w-4 h-4" />
-            <span>{isScheduled ? "Partidos Agendados este Mes (Ocio)" : "Agendar Partidos del Mes en Agenda"}</span>
-          </button>
-        </div>
-      )}
     </div>
   );
 };
