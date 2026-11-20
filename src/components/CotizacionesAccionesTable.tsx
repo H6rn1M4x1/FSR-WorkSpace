@@ -4,6 +4,7 @@ import { uiSounds } from "../lib/sounds";
 import { useBriefLoading } from "../hooks/useBriefLoading";
 import { TableSkeleton } from "./TableSkeleton";
 import { generateUniqueId } from "../utils/id";
+import { formatDateTimeAR } from "../utils/date";
 import { saveItemToFirestore, deleteItemFromFirestore } from "../lib/firestoreSyncService";
 import { auth } from "../lib/supabase";
 import { motion, AnimatePresence, useDragControls } from "motion/react";
@@ -336,7 +337,7 @@ export default function CotizacionesAccionesTable({
 
     const headers = { "User-Agent": "Mozilla/5.0" };
     const freshResults: CotizacionAccion[] = [];
-    const nowStr = new Date().toLocaleDateString("es-AR") + " " + new Date().toLocaleTimeString("es-AR");
+    const nowStr = formatDateTimeAR(new Date());
 
     try {
       for (const src of sources) {
@@ -536,7 +537,7 @@ export default function CotizacionesAccionesTable({
     try {
       const varNum = Number(formVariacion) || 0;
       const varText = (varNum > 0 ? "+" : "") + varNum.toFixed(2).replace(".", ",") + "%";
-      const nowStr = new Date().toLocaleDateString("es-AR") + " " + new Date().toLocaleTimeString("es-AR");
+      const nowStr = formatDateTimeAR(new Date());
 
       const userId = (auth.currentUser?.email || auth.currentUser?.uid || "hernanmaximiliano10@gmail.com").toLowerCase().trim();
 

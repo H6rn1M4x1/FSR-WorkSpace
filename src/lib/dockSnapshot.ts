@@ -15,7 +15,7 @@ import type {
   MedicamentoDetallado,
   TurnoCompromiso,
 } from "../types";
-import { getLocalDateString } from "../utils/date";
+import { getLocalDateString, formatDateAR } from "../utils/date";
 
 // De qué colección real viene cada ítem — de esto depende qué se puede hacer con él desde el dock
 // (tildarlo, editarlo, borrarlo): no todas las colecciones tienen hoy el mismo nivel de soporte
@@ -112,8 +112,7 @@ function formatMonto(n?: number): string {
 
 function formatFecha(dateOnly: string): string {
   if (!dateOnly) return "";
-  const [y, m, d] = dateOnly.split("-");
-  return d && m && y ? `${d}/${m}/${y}` : dateOnly;
+  return formatDateAR(dateOnly);
 }
 
 function byDate(a: DockItem, b: DockItem): number {

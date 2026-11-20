@@ -34,6 +34,7 @@ import { useNoteFolders } from "../hooks/useNoteFolders";
 import { useToast } from "../context/ToastContext";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
+import { formatDateAR } from "../utils/date";
 import { uiSounds } from "../lib/sounds";
 import { ConfirmationModal } from "./ConfirmationModal";
 import { RichTextEditor } from "./RichTextEditor";
@@ -193,7 +194,7 @@ function formatNoteDate(timestamp: number): string {
   const diffDays = Math.round((startOfDay(now) - startOfDay(d)) / 86400000);
   if (diffDays === 0) return "Hoy";
   if (diffDays === 1) return "Ayer";
-  return d.toLocaleDateString("es-AR", { day: "numeric", month: "short" });
+  return formatDateAR(d);
 }
 
 /** Own notes sort by their manual drag order; shared-in ones (which have no order of their own) fall back to most-recently-updated. */

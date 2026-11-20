@@ -18,6 +18,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { AgendaShare } from "../types";
+import { formatDateAR } from "../utils/date";
 import { createShare, updateShare, deleteShare } from "../lib/sharing";
 import { SmartDateTimePicker } from "./SmartDateTimePicker";
 
@@ -605,7 +606,7 @@ export function AgendaSharingManager({
                                             {t.descripcion}
                                           </p>
                                           <p className="text-[9px] text-zinc-400 font-bold uppercase">
-                                            {t.fecha} • {t.lugar}
+                                            {formatDateAR(t.fecha)} • {t.lugar}
                                           </p>
                                         </div>
                                         <input
@@ -637,7 +638,7 @@ export function AgendaSharingManager({
                                             {a.title}
                                           </p>
                                           <p className="text-[9px] text-zinc-400 font-bold uppercase">
-                                            {a.date} {a.time} • {a.location}
+                                            {formatDateAR(a.date)} {a.time} • {a.location}
                                           </p>
                                         </div>
                                         <input
@@ -685,7 +686,7 @@ export function AgendaSharingManager({
                                             {d.descripcion}
                                           </p>
                                           <p className="text-[9px] text-zinc-400 font-bold uppercase">
-                                            Monto: ARS {d.montoAPagar?.toLocaleString()} • Vence: {d.fechaVencimiento}
+                                            Monto: ARS {d.montoAPagar?.toLocaleString()} • Vence: {formatDateAR(d.fechaVencimiento)}
                                           </p>
                                         </div>
                                         <input
@@ -717,7 +718,7 @@ export function AgendaSharingManager({
                                             {i.title}
                                           </p>
                                           <p className="text-[9px] text-zinc-400 font-bold uppercase">
-                                            Monto: ARS {i.amount?.toLocaleString()} • Vence: {i.dueDate}
+                                            Monto: ARS {i.amount?.toLocaleString()} • Vence: {formatDateAR(i.dueDate)}
                                           </p>
                                         </div>
                                         <input
@@ -766,7 +767,7 @@ export function AgendaSharingManager({
                                             {matchedPlato ? matchedPlato.nombrePlato : "Plato planificado"}
                                           </p>
                                           <p className="text-[9px] text-zinc-400 font-bold uppercase">
-                                            Fecha: {o.fecha}
+                                            Fecha: {formatDateAR(o.fecha)}
                                           </p>
                                         </div>
                                         <input

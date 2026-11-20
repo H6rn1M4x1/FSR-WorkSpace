@@ -11,10 +11,11 @@ import { CustomSelect } from "./CustomSelect";
 import { ConfirmationModal } from "./ConfirmationModal";
 import { uiSounds } from "../lib/sounds";
 import { useToast } from "../context/ToastContext";
+import { formatDateAR } from "../utils/date";
 
 function formatExamDate(iso: string): string {
   try {
-    return new Date(iso).toLocaleDateString("es-AR", { day: "2-digit", month: "short", year: "numeric" });
+    return formatDateAR(iso);
   } catch {
     return "";
   }

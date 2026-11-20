@@ -31,11 +31,47 @@ export const getArgentinaDateString = (d: Date = new Date()): string => {
   return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 };
 
-export const formatLocalDate = (dateStr: string): string => {
-  if (!dateStr) return "";
-  const parts = dateStr.split("-");
-  if (parts.length === 3) {
-    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+// "YYYY-MM-DD" (sin hora) se parsea a mano en vez de con `new Date(str)`: el constructor lo
+// interpreta como medianoche UTC, que en husos con offset negativo (como Argentina, UTC-3) cae
+// en el día anterior una vez convertido a hora local.
+const toDateSafe = (input: string | number | Date): Date | null => {
+  if (input instanceof Date) return isNaN(input.getTime()) ? null : input;
+  if (typeof input === "number") {
+    const d = new Date(input);
+    return isNaN(d.getTime()) ? null : d;
   }
-  return dateStr;
+  const dateOnlyMatch = input.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (dateOnlyMatch) {
+    const [, y, m, d] = dateOnlyMatch;
+    return new Date(Number(y), Number(m) - 1, Number(d));
+  }
+  const d = new Date(input);
+  return isNaN(d.getTime()) ? null : d;
 };
+
+// Formato de fecha estándar de toda la app: dd-mm-aaaa (regla de diseño — ver CLAUDE.md/pedido
+// del usuario). Acepta "YYYY-MM-DD", un ISO datetime completo, un timestamp numérico o un Date.
+export const formatDateAR = (input: string | number | Date | null | undefined): string => {
+  if (input === null || input === undefined || input === "") return "";
+  const d = toDateSafe(input);
+  if (!d) return typeof input === "string" ? input : "";
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `${dd}-${mm}-${yyyy}`;
+};
+
+// Igual que formatDateAR pero agregando hora:minuto (24hs) — para timestamps donde la hora
+// también importa (turnos, notificaciones, registros con hora de carga, etc.).
+export const formatDateTimeAR = (input: string | number | Date | null | undefined): string => {
+  if (input === null || input === undefined || input === "") return "";
+  const d = toDateSafe(input);
+  if (!d) return typeof input === "string" ? input : "";
+  const hh = String(d.getHours()).padStart(2, "0");
+  const min = String(d.getMinutes()).padStart(2, "0");
+  return `${formatDateAR(d)} ${hh}:${min}`;
+};
+
+// Alias histórico: ya devolvía dd/mm/aaaa con "/" — ahora delega en formatDateAR para que
+// también respete el separador "-" de la regla de formato de fecha de toda la app.
+export const formatLocalDate = (dateStr: string): string => formatDateAR(dateStr);

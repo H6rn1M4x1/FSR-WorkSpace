@@ -44,7 +44,7 @@ import {
 import Logo from "./Logo";
 import { AestheticStorageService } from "../lib/storage";
 import { uiSounds } from "../lib/sounds";
-import { getLocalDateString } from "../utils/date";
+import { getLocalDateString, formatDateAR } from "../utils/date";
 import { DOCK_ITEM_CAPABILITIES, type DockItem, type DockSectionKey, type DockSnapshot } from "../lib/dockSnapshot";
 
 interface DockDisplayOption {
@@ -254,9 +254,7 @@ function timeAgo(ts: number): string {
 }
 
 function formatFechaLarga(dateOnly: string): string {
-  if (!dateOnly) return "";
-  const [y, m, d] = dateOnly.split("-");
-  return d && m && y ? `${d}/${m}/${y}` : dateOnly;
+  return formatDateAR(dateOnly);
 }
 
 function formatMonto(n?: number): string {

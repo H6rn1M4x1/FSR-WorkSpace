@@ -5,7 +5,7 @@ import { useSubPanelRows } from "../lib/navPanelContext";
 import { SharedBadge, makeSharedOutHelpers } from "./SharedBadge";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import { generateUniqueId } from "../utils/id";
-import { getLocalDateString, getArgentinaDateParts, getArgentinaDateString } from "../utils/date";
+import { getLocalDateString, getArgentinaDateParts, getArgentinaDateString, formatDateAR } from "../utils/date";
 import { processAndCreateRecurringPayments, normalizeDateComponents } from "../utils/recurringPayments";
 import { CurrencyInput } from "./CurrencyInput";
 import { parseFormattedNumber } from "../lib/numberFormat";
@@ -969,15 +969,14 @@ export default function FinanceView({
 
   const formatFechaDMY = (fechaStr: string): string => {
     if (!fechaStr) return "-";
-    if (/^\d{2}\/\d{2}\/\d{4}$/.test(fechaStr)) return fechaStr;
-    const clean = fechaStr.split("T")[0].split(" ")[0];
-    const parts = clean.split("-");
-    if (parts.length === 3 && parts[0].length === 4) {
-      const [y, m, d] = parts;
-      const pad = (s: string) => s.padStart(2, "0");
-      return `${pad(d)}/${pad(m)}/${y}`;
+    // Registros viejos que ya quedaron guardados como "dd/mm/aaaa" (con barras) — se normalizan
+    // acá a guiones en vez de dejarlos pasar tal cual, para respetar la regla de formato de toda
+    // la app incluso en datos legacy.
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(fechaStr)) {
+      const [d, m, y] = fechaStr.split("/");
+      return `${d}-${m}-${y}`;
     }
-    return fechaStr;
+    return formatDateAR(fechaStr);
   };
 
   // Días que faltan (o pasaron) hasta una fecha ISO (YYYY-MM-DD), relativo a hoy — usado en el
@@ -1239,7 +1238,7 @@ export default function FinanceView({
 
   // Sync to Google Sheets
   const handleSheetsExport = () => {
-    const title = "Workspace Finanzas - " + new Date().toLocaleDateString();
+    const title = "Workspace Finanzas - " + formatDateAR(new Date());
     const headers = ["Concepto", "Monto", "Categoría", "Fecha de Transacción"];
     const rows = payments.map((p) => [p.title, p.amount, p.category, p.date]);
     onExportSheets(title, headers, rows);
@@ -1271,7 +1270,7 @@ export default function FinanceView({
                 <td style="padding: 10px; border: 1px solid #e4e4e7;">${p.title}</td>
                 <td style="padding: 10px; border: 1px solid #e4e4e7; text-align: right; font-weight: bold;">$${p.amount}</td>
                 <td style="padding: 10px; border: 1px solid #e4e4e7;">${p.category}</td>
-                <td style="padding: 10px; border: 1px solid #e4e4e7; text-align: center; color: #71717a;">${p.date}</td>
+                <td style="padding: 10px; border: 1px solid #e4e4e7; text-align: center; color: #71717a;">${formatDateAR(p.date)}</td>
               </tr>
             `,
               )
