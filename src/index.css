@@ -310,6 +310,21 @@ input[type="number"]::-webkit-outer-spin-button:hover {
   transform: scale(1.18);
 }
 
+/* Inputs con flechas propias en JSX (ChevronUp/ChevronDown), cuando el orden visual pedido es
+   número → indicador → flechas: ese orden no se puede lograr con las flechas nativas de arriba
+   porque viven DENTRO del propio <input> (siempre quedan pegadas a su borde derecho, nunca
+   "después" de un <span> hermano) — hay que ocultarlas acá y dibujar las flechas aparte. Necesita
+   más especificidad que la regla de arriba, que ya usa !important. */
+input[type="number"].bp-input-hide-native-spin::-webkit-inner-spin-button,
+input[type="number"].bp-input-hide-native-spin::-webkit-outer-spin-button {
+  background-color: transparent !important;
+  -webkit-mask-image: none !important;
+  mask-image: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  margin: 0 !important;
+}
+
 
 
 

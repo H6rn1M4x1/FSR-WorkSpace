@@ -46,6 +46,7 @@ import {
   Image as ImageIcon,
   Edit,
   ChevronDown,
+  ChevronUp,
   Calendar,
   Check,
   Stethoscope,
@@ -7822,7 +7823,7 @@ export default function HealthView({
                           placeholder="Ej. 72"
                           value={formBpPulse}
                           onChange={(e) => setFormBpPulse(e.target.value)}
-                          className="w-full min-w-0 flex-1 bg-transparent text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-600 outline-none text-sm"
+                          className="bp-input-hide-native-spin w-full min-w-0 flex-1 bg-transparent text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-600 outline-none text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                         />
                         {(() => {
                           const indicator = bpRangeIndicator(formBpPulse, BP_NORMAL_RANGES.pulse);
@@ -7832,6 +7833,17 @@ export default function HealthView({
                             </span>
                           ) : null;
                         })()}
+                        {/* Flechas propias (las nativas del <input type="number"> quedaron
+                            ocultas arriba) — así siempre caen DESPUÉS del indicador de %, en vez
+                            de que el navegador las pegue al borde derecho del campo. */}
+                        <div className="flex flex-col shrink-0 -my-1">
+                          <button type="button" tabIndex={-1} onClick={() => setFormBpPulse(String((Number(formBpPulse) || 0) + 1))} className="text-primary hover:opacity-70 cursor-pointer leading-none">
+                            <ChevronUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button type="button" tabIndex={-1} onClick={() => setFormBpPulse(String(Math.max(0, (Number(formBpPulse) || 0) - 1)))} className="text-primary hover:opacity-70 cursor-pointer leading-none">
+                            <ChevronDown className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -7848,7 +7860,7 @@ export default function HealthView({
                           placeholder="Ej. 120"
                           value={formBpSys}
                           onChange={(e) => setFormBpSys(e.target.value)}
-                          className="w-full min-w-0 flex-1 bg-transparent text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-600 outline-none text-sm"
+                          className="bp-input-hide-native-spin w-full min-w-0 flex-1 bg-transparent text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-600 outline-none text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                         />
                         {(() => {
                           const indicator = bpRangeIndicator(formBpSys, BP_NORMAL_RANGES.sys);
@@ -7858,6 +7870,14 @@ export default function HealthView({
                             </span>
                           ) : null;
                         })()}
+                        <div className="flex flex-col shrink-0 -my-1">
+                          <button type="button" tabIndex={-1} onClick={() => setFormBpSys(String((Number(formBpSys) || 0) + 1))} className="text-primary hover:opacity-70 cursor-pointer leading-none">
+                            <ChevronUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button type="button" tabIndex={-1} onClick={() => setFormBpSys(String(Math.max(0, (Number(formBpSys) || 0) - 1)))} className="text-primary hover:opacity-70 cursor-pointer leading-none">
+                            <ChevronDown className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                     <div>
@@ -7871,7 +7891,7 @@ export default function HealthView({
                           placeholder="Ej. 80"
                           value={formBpDia}
                           onChange={(e) => setFormBpDia(e.target.value)}
-                          className="w-full min-w-0 flex-1 bg-transparent text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-600 outline-none text-sm"
+                          className="bp-input-hide-native-spin w-full min-w-0 flex-1 bg-transparent text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-600 outline-none text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                         />
                         {(() => {
                           const indicator = bpRangeIndicator(formBpDia, BP_NORMAL_RANGES.dia);
@@ -7881,6 +7901,14 @@ export default function HealthView({
                             </span>
                           ) : null;
                         })()}
+                        <div className="flex flex-col shrink-0 -my-1">
+                          <button type="button" tabIndex={-1} onClick={() => setFormBpDia(String((Number(formBpDia) || 0) + 1))} className="text-primary hover:opacity-70 cursor-pointer leading-none">
+                            <ChevronUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button type="button" tabIndex={-1} onClick={() => setFormBpDia(String(Math.max(0, (Number(formBpDia) || 0) - 1)))} className="text-primary hover:opacity-70 cursor-pointer leading-none">
+                            <ChevronDown className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
