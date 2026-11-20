@@ -2155,16 +2155,16 @@ export default function AcademicView({
             return (
               <>
                 {/* CALENDAR & AGENDA INTEGRATED SECTION IN "MIS ESTUDIOS" */}
-                {/* mb-6 (solo en mobile, donde el grid colapsa a una columna): el space-y-6 del
-                    motion.div que envuelve todo esto no hace nada acá — Tailwind solo lo aplica
-                    entre hermanos directos, y el único hijo directo de ese motion.div es
-                    SectionTransition (ver SectionTransition.tsx: envuelve su contenido en
-                    AsciiReveal, que no trae separación propia). Este div y StudyMaterialBlock de
-                    más abajo SÍ son hermanos directos entre sí (dentro de este mismo fragment),
-                    así que acá es donde corresponde el margen real. En desktop las dos columnas
-                    (calendario/agenda) ya quedan separadas de StudyMaterialBlock por tener alturas
-                    distintas, por eso ahí no hacía falta y se deja en 0 para no sumar de más. */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-6 lg:mb-0">
+                {/* mb-6 en todos los tamaños: el space-y-6 del motion.div que envuelve todo esto no
+                    hace nada acá — Tailwind solo lo aplica entre hermanos directos, y el único hijo
+                    directo de ese motion.div es SectionTransition (ver SectionTransition.tsx:
+                    envuelve su contenido en AsciiReveal, que no trae separación propia). Este div y
+                    StudyMaterialBlock de más abajo SÍ son hermanos directos entre sí (dentro de este
+                    mismo fragment), así que acá es donde corresponde el margen real — en los dos
+                    tamaños: en desktop las dos columnas (calendario/agenda) no siempre tienen más
+                    altura que su contenido mínimo, así que sin este margen quedan pegadas a
+                    StudyMaterialBlock igual que en mobile. */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-6">
                   {/* LEFT COLUMN: Academic Calendar (5 cols) */}
                   <div
                     className={`p-6 rounded-3xl border flex flex-col justify-between lg:col-span-5 shadow-xs scroll-reveal ${
@@ -2601,7 +2601,7 @@ export default function AcademicView({
                 />
 
                 {exams.length > 0 && (
-                  <div className="mt-6 mb-6 lg:mb-0">
+                  <div className="mt-6 mb-6">
                     <ExamsBlock
                       darkMode={darkMode}
                       userId={activeUserId}
@@ -2613,7 +2613,7 @@ export default function AcademicView({
                 )}
 
                 {/* Overview stats & Study timer */}
-                <div className="space-y-6 mb-6 lg:mb-0">
+                <div className="space-y-6 mb-6">
             {/* Academic summary bento — ahora full-width: stats a la izquierda, slider con el
                 radar de avance por año / gauge de carrera a la derecha. */}
             <div

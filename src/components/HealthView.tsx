@@ -10310,17 +10310,17 @@ export default function HealthView({
                 >
                   {detailBpLog.systolic} / {detailBpLog.diastolic} mmHg
                 </DetailBlock>
-                {detailBpLog.pulse !== undefined && (
-                  <DetailBlock icon={Activity} label="Pulso">
-                    {detailBpLog.pulse} lpm
-                  </DetailBlock>
-                )}
                 <DetailBlock icon={Thermometer} label="Temperatura">
                   {detailBpLog.temperature !== undefined ? `${detailBpLog.temperature} °C` : "-"}
                 </DetailBlock>
                 <DetailBlock icon={Wind} label="Oxígeno">
                   {detailBpLog.oxygen !== undefined ? `${detailBpLog.oxygen}%` : "-"}
                 </DetailBlock>
+                {detailBpLog.pulse !== undefined && (
+                  <DetailBlock icon={Activity} label="Pulso">
+                    {detailBpLog.pulse} lpm
+                  </DetailBlock>
+                )}
                 {detailBpLog.notes && (
                   <DetailBlock icon={FileText} label="Notas" span>
                     {detailBpLog.notes}

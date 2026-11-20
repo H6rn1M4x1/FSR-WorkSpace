@@ -849,7 +849,12 @@ app.post("/api/gemini/chat", async (req, res) => {
       };
     }
 
-    const config: any = {};
+    const config: any = {
+      // Ver nota en netlify/functions/gemini-chat.ts: sin esto, el "pensamiento" interno de los
+      // modelos "flash" 3.x puede empujar la respuesta más allá del timeout de la función en
+      // producción (504). Se apaga también acá para que dev y prod se comporten igual.
+      thinkingConfig: { thinkingBudget: 0 },
+    };
     if (systemInstruction) config.systemInstruction = systemInstruction;
     if (tools.length > 0) config.tools = tools;
     if (enableMaps && userLocation) config.toolConfig = toolConfig;

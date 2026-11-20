@@ -1806,7 +1806,7 @@ export default function HomeView({
         {/* LEFT COLUMN: The Linked Interactive Calendar */}
         <div
           id="calendar-card"
-          className={`p-6 rounded-3xl border flex flex-col lg:col-span-5 justify-between shadow-xs app-calendar-container scroll-reveal ${
+          className={`p-6 rounded-3xl border flex flex-col lg:col-span-5 shadow-xs app-calendar-container scroll-reveal ${
             darkMode
               ? "bg-zinc-900 border-zinc-800 text-white shadow-lg"
               : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
@@ -1950,8 +1950,8 @@ export default function HomeView({
           </div>
 
           {/* Sincronización con Google Calendar */}
-          <div className="mt-5 pt-4 border-t border-zinc-800/10 dark:border-zinc-800/40">
-            <div className="flex items-center justify-between mb-3">
+          <div className="mt-4 pt-3 border-t border-zinc-800/10 dark:border-zinc-800/40">
+            <div className="flex items-center justify-between mb-2">
               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-zinc-200 flex items-center gap-1.5">
                 <svg
                   className="w-4 h-4 text-primary"

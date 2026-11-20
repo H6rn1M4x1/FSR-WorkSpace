@@ -1156,6 +1156,49 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
     recognition.start();
   };
 
+  // Nombres de voces de SpeechSynthesis conocidas como femeninas/masculinas en los motores de TTS
+  // más comunes (Google en Android/Chrome, y las voces "Microsoft"/compactas de Windows y iOS).
+  // El Web Speech API no expone el género de una voz como dato, así que se infiere por nombre.
+  const FEMALE_VOICE_HINTS = [
+    "female", "mujer", "femenin",
+    "mónica", "monica", "paulina", "marisol", "soledad", "elvira", "helena", "lucía", "lucia",
+    "camila", "valentina", "sofía", "sofia", "isabela", "zira", "mia", "laura", "sabina", "elena",
+  ];
+  const MALE_VOICE_HINTS = [
+    "male", "hombre", "masculin",
+    "diego", "jorge", "juan", "carlos", "pablo", "raúl", "raul", "miguel", "fernando", "jacinto", "pablo",
+  ];
+
+  // Se cachea una vez encontrada: getVoices() puede devolver [] en el primer llamado (las voces
+  // cargan async) y recorrer+decidir en cada respuesta sería trabajo repetido para el mismo resultado.
+  const spanishFemaleVoiceRef = useRef<SpeechSynthesisVoice | null | undefined>(undefined);
+
+  const pickSpanishFemaleVoice = (): SpeechSynthesisVoice | null => {
+    if (spanishFemaleVoiceRef.current !== undefined) return spanishFemaleVoiceRef.current;
+    if (typeof window === "undefined" || !window.speechSynthesis) return null;
+    const voices = window.speechSynthesis.getVoices();
+    const esVoices = voices.filter((v) => v.lang?.toLowerCase().startsWith("es"));
+    if (esVoices.length === 0) return null;
+    const female = esVoices.find((v) => FEMALE_VOICE_HINTS.some((h) => v.name.toLowerCase().includes(h)));
+    const chosen = female || esVoices.find((v) => !MALE_VOICE_HINTS.some((h) => v.name.toLowerCase().includes(h))) || esVoices[0];
+    spanishFemaleVoiceRef.current = chosen;
+    return chosen;
+  };
+
+  // Las voces del navegador cargan de forma asíncrona (a veces después del primer render) — si ya
+  // se intentó elegir una y no había ninguna todavía, se reintenta cuando el navegador avisa que
+  // terminó de cargarlas.
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.speechSynthesis) return;
+    const onVoicesChanged = () => {
+      spanishFemaleVoiceRef.current = undefined;
+      pickSpanishFemaleVoice();
+    };
+    window.speechSynthesis.addEventListener("voiceschanged", onVoicesChanged);
+    onVoicesChanged();
+    return () => window.speechSynthesis.removeEventListener("voiceschanged", onVoicesChanged);
+  }, []);
+
   // Lee en voz alta una respuesta del profesor (SpeechSynthesis, nativa del navegador).
   const speakText = (text: string) => {
     if (typeof window === "undefined" || !window.speechSynthesis) return;
@@ -1175,6 +1218,11 @@ Tu objetivo es ayudar al estudiante de forma clara, didáctica y estructurada a 
       setTimeout(() => {
         const utterance = new SpeechSynthesisUtterance(clean);
         utterance.lang = "es-AR";
+        const femaleVoice = pickSpanishFemaleVoice();
+        if (femaleVoice) utterance.voice = femaleVoice;
+        // Tono levemente más agudo que el default: ayuda a que suene femenina incluso cuando el
+        // dispositivo no tiene ninguna voz en español claramente marcada como tal por nombre.
+        utterance.pitch = 1.2;
         window.speechSynthesis.speak(utterance);
       }, 60);
     } catch (_) {
