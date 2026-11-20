@@ -2240,15 +2240,17 @@ export default function HealthView({
     pulse: { min: 60, max: 100 },
   } as const;
 
-  // Indicador compacto de cuánto se aleja un valor tipeado del rango normal/saludable: verde y
-  // "En rango" si cae dentro, rojo con la diferencia (+N por encima, -N por debajo) si no. null
-  // si el campo todavía no tiene un número válido (no se muestra nada en ese caso).
+  // Indicador compacto de cuánto se aleja un valor tipeado del centro del rango normal/saludable,
+  // como porcentaje (ej. "+12%" por encima del centro ideal, "-8%" por debajo) — verde si el valor
+  // sigue cayendo dentro de [min, max] aunque no esté exacto en el centro, rojo si se sale de ese
+  // rango. null si el campo todavía no tiene un número válido (no se muestra nada en ese caso).
   const bpRangeIndicator = (rawValue: string, range: { min: number; max: number }) => {
     const value = Number(rawValue);
     if (rawValue.trim() === "" || isNaN(value)) return null;
-    if (value > range.max) return { tone: "danger" as const, text: `+${value - range.max}` };
-    if (value < range.min) return { tone: "danger" as const, text: `${value - range.min}` };
-    return { tone: "success" as const, text: "En rango" };
+    const mid = (range.min + range.max) / 2;
+    const pct = Math.round(((value - mid) / mid) * 100);
+    const inRange = value >= range.min && value <= range.max;
+    return { tone: inRange ? ("success" as const) : ("danger" as const), text: `${pct >= 0 ? "+" : ""}${pct}%` };
   };
 
   // Detailed Medications Table State
@@ -7093,6 +7095,9 @@ export default function HealthView({
                             <span className="flex items-center gap-1.5"><Activity className="w-3.5 h-3.5 shrink-0 text-slate-400 dark:text-zinc-500" /> P. Baja</span>
                           </th>
                           <th className="px-6 py-4 whitespace-nowrap">
+                            <span className="flex items-center gap-1.5"><Heart className="w-3.5 h-3.5 shrink-0 text-slate-400 dark:text-zinc-500" /> Pulso</span>
+                          </th>
+                          <th className="px-6 py-4 whitespace-nowrap">
                             <span className="flex items-center gap-1.5"><Activity className="w-3.5 h-3.5 shrink-0 text-slate-400 dark:text-zinc-500" /> Temp.</span>
                           </th>
                           <th className="px-6 py-4 whitespace-nowrap">
@@ -7105,11 +7110,11 @@ export default function HealthView({
                       </thead>
                       <tbody className="">
                         {bpLogsTableLoading ? (
-                          <TableSkeleton rows={6} columns={7} darkMode={darkMode} />
+                          <TableSkeleton rows={6} columns={8} darkMode={darkMode} />
                         ) : filteredBpLogs.length === 0 ? (
                           <tr>
                             <td
-                              colSpan={7}
+                              colSpan={8}
                               className="px-6 py-12 text-center text-slate-500 dark:text-zinc-500"
                             >
                               <div className="flex flex-col items-center justify-center space-y-2">
@@ -7163,6 +7168,14 @@ export default function HealthView({
                                     {log.diastolic}{" "}
                                     <span className="text-[10px] text-zinc-500 font-normal">
                                       mmHg
+                                    </span>
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span className="font-extrabold font-mono text-slate-700 dark:text-zinc-300">
+                                    {log.pulse}{" "}
+                                    <span className="text-[10px] text-zinc-500 font-normal">
+                                      lpm
                                     </span>
                                   </span>
                                 </td>
@@ -7239,6 +7252,9 @@ export default function HealthView({
                             <div className="flex items-center gap-1.5 mb-1.5">
                               <span className="font-extrabold font-mono text-primary text-sm">
                                 {log.systolic}/{log.diastolic} <span className="text-[10px] text-zinc-500 font-normal">mmHg</span>
+                              </span>
+                              <span className="text-[11px] font-semibold text-slate-500 dark:text-zinc-400">
+                                · Pulso: {log.pulse} lpm
                               </span>
                             </div>
                             <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] font-semibold text-slate-600 dark:text-zinc-300">
@@ -7801,22 +7817,24 @@ export default function HealthView({
                       <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
                         Pulso (LPM)
                       </label>
-                      <input
-                        type="number"
-                        required
-                        placeholder="Ej. 72"
-                        value={formBpPulse}
-                        onChange={(e) => setFormBpPulse(e.target.value)}
-                        className="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-600 outline-none transition-all text-sm focus:border-primary"
-                      />
-                      {(() => {
-                        const indicator = bpRangeIndicator(formBpPulse, BP_NORMAL_RANGES.pulse);
-                        return indicator ? (
-                          <span className={`mt-1 inline-block text-[10px] font-extrabold ${indicator.tone === "danger" ? "text-red-500" : "text-emerald-500"}`}>
-                            {indicator.text}
-                          </span>
-                        ) : null;
-                      })()}
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="number"
+                          required
+                          placeholder="Ej. 72"
+                          value={formBpPulse}
+                          onChange={(e) => setFormBpPulse(e.target.value)}
+                          className="w-full min-w-0 flex-1 px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-600 outline-none transition-all text-sm focus:border-primary"
+                        />
+                        {(() => {
+                          const indicator = bpRangeIndicator(formBpPulse, BP_NORMAL_RANGES.pulse);
+                          return indicator ? (
+                            <span className={`shrink-0 text-[11px] font-extrabold ${indicator.tone === "danger" ? "text-red-500" : "text-emerald-500"}`}>
+                              {indicator.text}
+                            </span>
+                          ) : null;
+                        })()}
+                      </div>
                     </div>
                   </div>
 
@@ -7825,43 +7843,47 @@ export default function HealthView({
                       <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
                         Presión Alta
                       </label>
-                      <input
-                        type="number"
-                        required
-                        placeholder="Ej. 120"
-                        value={formBpSys}
-                        onChange={(e) => setFormBpSys(e.target.value)}
-                        className="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-600 outline-none transition-all text-sm focus:border-primary"
-                      />
-                      {(() => {
-                        const indicator = bpRangeIndicator(formBpSys, BP_NORMAL_RANGES.sys);
-                        return indicator ? (
-                          <span className={`mt-1 inline-block text-[10px] font-extrabold ${indicator.tone === "danger" ? "text-red-500" : "text-emerald-500"}`}>
-                            {indicator.text}
-                          </span>
-                        ) : null;
-                      })()}
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="number"
+                          required
+                          placeholder="Ej. 120"
+                          value={formBpSys}
+                          onChange={(e) => setFormBpSys(e.target.value)}
+                          className="w-full min-w-0 flex-1 px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-600 outline-none transition-all text-sm focus:border-primary"
+                        />
+                        {(() => {
+                          const indicator = bpRangeIndicator(formBpSys, BP_NORMAL_RANGES.sys);
+                          return indicator ? (
+                            <span className={`shrink-0 text-[11px] font-extrabold ${indicator.tone === "danger" ? "text-red-500" : "text-emerald-500"}`}>
+                              {indicator.text}
+                            </span>
+                          ) : null;
+                        })()}
+                      </div>
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
                         Presión Baja
                       </label>
-                      <input
-                        type="number"
-                        required
-                        placeholder="Ej. 80"
-                        value={formBpDia}
-                        onChange={(e) => setFormBpDia(e.target.value)}
-                        className="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-600 outline-none transition-all text-sm focus:border-primary"
-                      />
-                      {(() => {
-                        const indicator = bpRangeIndicator(formBpDia, BP_NORMAL_RANGES.dia);
-                        return indicator ? (
-                          <span className={`mt-1 inline-block text-[10px] font-extrabold ${indicator.tone === "danger" ? "text-red-500" : "text-emerald-500"}`}>
-                            {indicator.text}
-                          </span>
-                        ) : null;
-                      })()}
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="number"
+                          required
+                          placeholder="Ej. 80"
+                          value={formBpDia}
+                          onChange={(e) => setFormBpDia(e.target.value)}
+                          className="w-full min-w-0 flex-1 px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-600 outline-none transition-all text-sm focus:border-primary"
+                        />
+                        {(() => {
+                          const indicator = bpRangeIndicator(formBpDia, BP_NORMAL_RANGES.dia);
+                          return indicator ? (
+                            <span className={`shrink-0 text-[11px] font-extrabold ${indicator.tone === "danger" ? "text-red-500" : "text-emerald-500"}`}>
+                              {indicator.text}
+                            </span>
+                          ) : null;
+                        })()}
+                      </div>
                     </div>
                   </div>
 
