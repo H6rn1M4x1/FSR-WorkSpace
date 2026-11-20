@@ -607,6 +607,9 @@ interface AcademicViewProps {
   setExams: React.Dispatch<React.SetStateAction<Exam[]>>;
   activeSubTab?: string;
   onSubTabChange?: (tab: string) => void;
+  /** Access token de Google (Calendar) — para sincronizar automáticamente exámenes y tareas con
+   *  Google Calendar al crear/editar/eliminar, igual que ya hace Turnos y Compromisos. */
+  token?: string | null;
   /** Cambia (a cualquier valor distinto del anterior) para abrir automáticamente el formulario
    *  de "Nuevo Examen / Trabajo" — usado por el botón "Agendar" de Inicio. */
   autoOpenQuickAdd?: number;
@@ -646,6 +649,7 @@ export default function AcademicView({
   setExams,
   activeSubTab: propActiveSubTab,
   onSubTabChange,
+  token,
   itemsIShared = [],
   autoOpenQuickAdd,
   autoOpenQuickAddDate,
@@ -1307,6 +1311,35 @@ export default function AcademicView({
       await saveItemToFirestore(activeUserId, "tasks", nTask);
       setTasks((prev) => [nTask, ...prev]);
       showToast("Tarea guardada con éxito", "success");
+
+      // Sincroniza automáticamente con Google Calendar (fire-and-forget) — mismo patrón que
+      // Turnos y Compromisos.
+      (async () => {
+        try {
+          const dateStr = String(nTask.dueDate || "").split("T")[0];
+          if (!dateStr) return;
+          const { autoSyncToGoogleCalendar } = await import("../lib/googleCalendarAutoSync");
+          const newGoogleId = await autoSyncToGoogleCalendar(
+            token,
+            "tarea",
+            String(nTask.id),
+            undefined,
+            {
+              title: `${nTask.type}: ${nTask.title}`,
+              description: nTask.description || "",
+              date: dateStr,
+            },
+          );
+          if (newGoogleId) {
+            const withId = { ...nTask, googleCalendarEventId: newGoogleId };
+            await saveItemToFirestore(activeUserId, "tasks", withId);
+            setTasks((prev) => prev.map((t) => (t.id === withId.id ? withId : t)));
+          }
+        } catch (err) {
+          console.error("Error sincronizando tarea con Google Calendar:", err);
+        }
+      })();
+
       setNewTaskTitle("");
       setNewTaskSubId("");
       setNewTaskDueDate("");
@@ -1426,9 +1459,15 @@ export default function AcademicView({
       "¿Estás seguro de que deseas eliminar esta tarea académica? Esta acción no se puede deshacer.",
       async () => {
         try {
+          const itemToDelete = tasks.find((t) => t.id === id);
           await deleteItemFromFirestore(activeUserId, "tasks", id);
           setTasks((prev) => prev.filter((t) => t.id !== id));
           showToast("Tarea eliminada con éxito", "success");
+
+          if ((itemToDelete as any)?.googleCalendarEventId && token) {
+            const { autoDeleteFromGoogleCalendar } = await import("../lib/googleCalendarAutoSync");
+            autoDeleteFromGoogleCalendar(token, (itemToDelete as any).googleCalendarEventId);
+          }
         } catch (error) {
           console.error("Error deleting task:", error);
           showToast("Error al eliminar la tarea", "error");
@@ -1771,6 +1810,38 @@ export default function AcademicView({
         return [item, ...prev];
       });
       showToast(isEdit ? "Examen actualizado con éxito" : "Examen registrado con éxito", "success");
+
+      // Sincroniza automáticamente con Google Calendar (fire-and-forget, nunca bloquea ni
+      // revierte el guardado real) — mismo patrón que Turnos y Compromisos. Cubre los 3 caminos
+      // que llaman a este núcleo (modal, calendario crear/editar).
+      (async () => {
+        try {
+          const dateStr = String(item.fecha || "").split("T")[0];
+          if (!dateStr) return;
+          const { autoSyncToGoogleCalendar } = await import("../lib/googleCalendarAutoSync");
+          const newGoogleId = await autoSyncToGoogleCalendar(
+            token,
+            "examen",
+            String(item.id),
+            (item as any).googleCalendarEventId,
+            {
+              title: `${item.estado}: ${item.materia}`,
+              description: item.contenidos || "",
+              location: item.aula || "",
+              date: dateStr,
+              time: item.hora,
+            },
+          );
+          if (newGoogleId) {
+            const withId = { ...item, googleCalendarEventId: newGoogleId };
+            await saveItemToFirestore(activeUserId, "examenes", withId);
+            setExamenes((prev) => prev.map((ex) => (ex.id === withId.id ? withId : ex)));
+          }
+        } catch (err) {
+          console.error("Error sincronizando examen con Google Calendar:", err);
+        }
+      })();
+
       return true;
     } catch (error) {
       console.error("[AcademicView] Error saving Examen:", error);
@@ -1788,6 +1859,11 @@ export default function AcademicView({
       return;
     }
 
+    // Si es una edición, preserva el googleCalendarEventId ya vinculado (si lo había) — newItem
+    // se arma desde cero con los campos del formulario, así que sin esto una edición "perdía" el
+    // vínculo y la auto-sync con Calendar creaba un evento duplicado en vez de actualizar el que
+    // ya existía.
+    const existingExamen = editingExamenId ? examenes.find((ex) => ex.id === editingExamenId) : undefined;
     const newItem: ExamenItem = {
       id: editingExamenId || generateUniqueId("ex"),
       materia: exMateria,
@@ -1795,7 +1871,10 @@ export default function AcademicView({
       estado: exEstado,
       instancia: exEstado !== "Examen Final" ? exInstancia : undefined,
       aula: exAula,
-    };
+      ...((existingExamen as any)?.googleCalendarEventId
+        ? { googleCalendarEventId: (existingExamen as any).googleCalendarEventId }
+        : {}),
+    } as ExamenItem;
 
     const ok = await saveExamenRecord(newItem, !!editingExamenId);
     if (ok) {
@@ -1829,7 +1908,22 @@ export default function AcademicView({
     materia: string,
     aula: string,
   ) => {
-    saveExamenRecord({ id, materia, fecha, estado, instancia, aula }, true);
+    // Mismo motivo que en handleAddOrEditExamen: preserva el googleCalendarEventId existente.
+    const existingExamen = examenes.find((ex) => ex.id === id);
+    saveExamenRecord(
+      {
+        id,
+        materia,
+        fecha,
+        estado,
+        instancia,
+        aula,
+        ...((existingExamen as any)?.googleCalendarEventId
+          ? { googleCalendarEventId: (existingExamen as any).googleCalendarEventId }
+          : {}),
+      } as ExamenItem,
+      true,
+    );
   };
 
   const handleDeleteExamen = (id: string) => {
@@ -1840,10 +1934,16 @@ export default function AcademicView({
         setIsDeleting(true);
         console.log("[AcademicView] Deleting examen:", id);
         try {
+          const itemToDelete = examenes.find((ex) => ex.id === id);
           await deleteItemFromFirestore(activeUserId, "examenes", id);
           setExamenes((prev) => prev.filter((ex) => ex.id !== id));
           console.log("[AcademicView] Examen deleted successfully.");
           showToast("Examen eliminado con éxito", "success");
+
+          if ((itemToDelete as any)?.googleCalendarEventId && token) {
+            const { autoDeleteFromGoogleCalendar } = await import("../lib/googleCalendarAutoSync");
+            autoDeleteFromGoogleCalendar(token, (itemToDelete as any).googleCalendarEventId);
+          }
         } catch (error) {
           console.error("[AcademicView] Error deleting Examen:", error);
           showToast("Error al eliminar el examen", "error");
@@ -2501,7 +2601,7 @@ export default function AcademicView({
                 />
 
                 {exams.length > 0 && (
-                  <div className="mt-6">
+                  <div className="mt-6 mb-6 lg:mb-0">
                     <ExamsBlock
                       darkMode={darkMode}
                       userId={activeUserId}
@@ -2513,7 +2613,7 @@ export default function AcademicView({
                 )}
 
                 {/* Overview stats & Study timer */}
-                <div className="space-y-6">
+                <div className="space-y-6 mb-6 lg:mb-0">
             {/* Academic summary bento — ahora full-width: stats a la izquierda, slider con el
                 radar de avance por año / gauge de carrera a la derecha. */}
             <div

@@ -793,7 +793,13 @@ export default function PaymentsTable({
         facturaEmitida,
         comprobantePago,
         observaciones: observaciones.trim() || undefined,
-      };
+        // Conserva el evento de Google Calendar ya vinculado (si lo había) — se arma de nuevo acá
+        // porque paymentData se reconstruye desde los campos del formulario en cada guardado, así
+        // que si no se preserva explícitamente, una edición "pierde" el vínculo ya creado.
+        ...((existingPayment as any)?.googleCalendarEventId
+          ? { googleCalendarEventId: (existingPayment as any).googleCalendarEventId }
+          : {}),
+      } as DetailedPayment;
 
       const userId = userEmail || "hernanmaximiliano10@gmail.com";
       await saveItemToFirestore(userId, "detailed_payments", paymentData);
@@ -805,6 +811,35 @@ export default function PaymentsTable({
         }
         return [paymentData, ...prev];
       });
+
+      // Mantiene el evento vinculado de Google Calendar en sync con este pago (crea uno nuevo si
+      // nunca tuvo, lo actualiza in-place si ya tenía) — mismo patrón que Turnos y Compromisos.
+      (async () => {
+        try {
+          const { autoSyncToGoogleCalendar } = await import("../lib/googleCalendarAutoSync");
+          const dateStr = String(paymentData.fechaVencimiento || "").split("T")[0];
+          if (!dateStr) return;
+          const newGoogleId = await autoSyncToGoogleCalendar(
+            token,
+            "pago",
+            String(paymentData.id),
+            (paymentData as any).googleCalendarEventId,
+            {
+              title: `Pago: ${paymentData.descripcion}`,
+              description: `Categoría: ${paymentData.categoria || "General"}\nMonto: $${paymentData.montoAPagar}`,
+              location: paymentData.dondePagar || "",
+              date: dateStr,
+            },
+          );
+          if (newGoogleId) {
+            const withId = { ...paymentData, googleCalendarEventId: newGoogleId };
+            await saveItemToFirestore(userId, "detailed_payments", withId);
+            setPayments((prev) => prev.map((p) => (p.id === paymentData.id ? withId : p)));
+          }
+        } catch (err) {
+          console.error("Error sincronizando pago con Google Calendar:", err);
+        }
+      })();
 
       if (paymentData.pagoRecurrente) {
         const currentList = payments.some((p) => p.id === paymentData.id)
@@ -843,10 +878,17 @@ export default function PaymentsTable({
       async () => {
         setIsDeleting(true);
         try {
+          const itemToDelete = payments.find((p) => p.id === id);
           const userId = userEmail || "hernanmaximiliano10@gmail.com";
           await deleteItemFromFirestore(userId, "detailed_payments", id);
           setPayments((prev) => prev.filter((p) => p.id !== id));
           showToast("Registro de pago eliminado", "success");
+
+          const linkedGoogleEventId = (itemToDelete as any)?.googleCalendarEventId;
+          if (linkedGoogleEventId && token) {
+            const { autoDeleteFromGoogleCalendar } = await import("../lib/googleCalendarAutoSync");
+            autoDeleteFromGoogleCalendar(token, linkedGoogleEventId);
+          }
         } catch (err: any) {
           showToast("Error al eliminar el pago", "error");
         } finally {

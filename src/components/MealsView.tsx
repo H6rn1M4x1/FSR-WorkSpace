@@ -411,6 +411,9 @@ interface MealsViewProps {
   >;
   activeSubTab?: string;
   onSubTabChange?: (tab: string) => void;
+  /** Access token de Google (Calendar) — para sincronizar automáticamente las comidas
+   *  planificadas con Google Calendar al crear/editar/eliminar, igual que Turnos y Compromisos. */
+  token?: string | null;
   /** Cambia (a cualquier valor distinto del anterior) para abrir automáticamente el formulario
    *  de "Agregar Planificación Semanal" — usado por el botón "Agendar" de Inicio. */
   autoOpenQuickAdd?: number;
@@ -442,6 +445,7 @@ export default function MealsView({
   setOrganizacionSemanal,
   activeSubTab: propActiveSubTab,
   onSubTabChange,
+  token,
   itemsIShared = [],
   autoOpenQuickAdd,
   autoOpenQuickAddDate,
@@ -1288,6 +1292,40 @@ export default function MealsView({
       console.log("[MealsView] Weekly plan saved successfully to Firestore.");
       showToast(editingOrgId ? "Planificación semanal actualizada" : "Planificación semanal guardada con éxito", "success");
 
+      // Mantiene sincronizado el evento de Google Calendar vinculado a esta comida planificada
+      // (crea uno nuevo, o actualiza el existente in-place) — mismo patrón fire-and-forget que
+      // Turnos y Compromisos: el guardado real de arriba ya terminó, esto nunca debe bloquear ni
+      // revertirlo. El estado local (`organizacionSemanal`) no se toca acá a propósito: igual
+      // que el guardado de arriba, se apoya en el listener de Firestore del padre para reflejar
+      // el `googleCalendarEventId` nuevo.
+      (async () => {
+        try {
+          // newItem se arma desde cero más arriba (solo id/fecha/platoId) y no carga el
+          // googleCalendarEventId que la edición pueda ya tener — se busca en el item existente
+          // para no crear un evento duplicado en Calendar cada vez que se edita la misma fila.
+          const existingItem = editingOrgId ? organizacionSemanal.find((o) => o.id === editingOrgId) : null;
+          const { autoSyncToGoogleCalendar } = await import("../lib/googleCalendarAutoSync");
+          const newGoogleId = await autoSyncToGoogleCalendar(
+            token,
+            "comida",
+            newItem.id,
+            (existingItem as any)?.googleCalendarEventId,
+            {
+              title: `Comida planificada: ${getPlatoName(newItem.platoId)}`,
+              date: newItem.fecha,
+            },
+          );
+          if (newGoogleId) {
+            await saveItemToFirestore(userId, "organizacion_semanal", {
+              ...newItem,
+              googleCalendarEventId: newGoogleId,
+            });
+          }
+        } catch (err) {
+          console.error("[MealsView] Error sincronizando con Google Calendar:", err);
+        }
+      })();
+
       // Reset Form
       setOrgFecha("");
       setOrgPlatoId("");
@@ -1316,9 +1354,15 @@ export default function MealsView({
         setIsDeleting(true);
         console.log("[MealsView] Deleting weekly plan:", id);
         try {
+          const itemToDelete = organizacionSemanal.find((o) => o.id === id);
           await deleteItemFromFirestore(userId, "organizacion_semanal", id);
           console.log("[MealsView] Weekly plan deleted successfully.");
           showToast("Planificación semanal eliminada", "success");
+
+          if ((itemToDelete as any)?.googleCalendarEventId && token) {
+            const { autoDeleteFromGoogleCalendar } = await import("../lib/googleCalendarAutoSync");
+            autoDeleteFromGoogleCalendar(token, (itemToDelete as any).googleCalendarEventId);
+          }
         } catch (error) {
           console.error("[MealsView] Error deleting weekly plan:", error);
           showToast("Error al eliminar la planificación", "error");

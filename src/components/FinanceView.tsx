@@ -1085,6 +1085,27 @@ export default function FinanceView({
         await saveItemToFirestore(userId, "invoices", nInv);
         setInvoices((prev) => [nInv, ...prev]);
         showToast("Vencimiento registrado con éxito", "success");
+
+        // Crea el evento vinculado en Google Calendar — mismo patrón que Turnos y Compromisos.
+        (async () => {
+          try {
+            const { autoSyncToGoogleCalendar } = await import("../lib/googleCalendarAutoSync");
+            const dateStr = String(nInv.dueDate || "").split("T")[0];
+            if (!dateStr) return;
+            const newGoogleId = await autoSyncToGoogleCalendar(token, "factura", String(nInv.id), null, {
+              title: `Vencimiento: ${nInv.title}`,
+              description: `Categoría: ${nInv.category || "General"}\nMonto: $${nInv.amount}`,
+              date: dateStr,
+            });
+            if (newGoogleId) {
+              const withId = { ...nInv, googleCalendarEventId: newGoogleId };
+              await saveItemToFirestore(userId, "invoices", withId);
+              setInvoices((prev) => prev.map((inv) => (inv.id === nInv.id ? withId : inv)));
+            }
+          } catch (err) {
+            console.error("Error sincronizando vencimiento con Google Calendar:", err);
+          }
+        })();
       }
 
       setNewTitle("");
@@ -1145,11 +1166,18 @@ export default function FinanceView({
         setIsDeleting(true);
         console.log("[FinanceView] Deleting invoice:", id);
         try {
+          const itemToDelete = invoices.find((inv) => inv.id === id);
           const userId = userEmail || "hernanmaximiliano10@gmail.com";
           await deleteItemFromFirestore(userId, "invoices", id);
           setInvoices((prev) => prev.filter((inv) => inv.id !== id));
           console.log("[FinanceView] Invoice deleted successfully.");
           showToast("Factura/Vencimiento eliminada con éxito", "success");
+
+          const linkedGoogleEventId = (itemToDelete as any)?.googleCalendarEventId;
+          if (linkedGoogleEventId && token) {
+            const { autoDeleteFromGoogleCalendar } = await import("../lib/googleCalendarAutoSync");
+            autoDeleteFromGoogleCalendar(token, linkedGoogleEventId);
+          }
         } catch (error) {
           console.error("[FinanceView] Error deleting invoice:", error);
           showToast("Error al eliminar la factura/vencimiento", "error");

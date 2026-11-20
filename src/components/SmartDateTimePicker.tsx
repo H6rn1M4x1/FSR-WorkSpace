@@ -154,6 +154,9 @@ export const SmartDateTimePicker: React.FC<SmartDateTimePickerProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
+  // Foco del input de Minuto — se usa para saltar ahí apenas se tipean los 2 dígitos de Hora, sin
+  // que el usuario tenga que tabular o clickear.
+  const minuteInputRef = useRef<HTMLInputElement>(null);
   const [popoverPosition, setPopoverPosition] = useState<PopoverPosition | null>(null);
 
   // Formato de hora: 12h (AM/PM) o 24h
@@ -804,12 +807,20 @@ export const SmartDateTimePicker: React.FC<SmartDateTimePickerProps> = ({
                                 min={0}
                                 max={23}
                                 value={String(initHour).padStart(2, "0")}
+                                onFocus={(e) => e.target.select()}
                                 onChange={(e) => {
-                                  const val = parseInt(e.target.value, 10);
+                                  const raw = e.target.value;
+                                  const val = parseInt(raw, 10);
                                   handleTimeChange(
                                     "hour",
                                     isNaN(val) ? 0 : Math.min(23, Math.max(0, val))
                                   );
+                                  // Apenas se tipean los 2 dígitos, salta directo a Minuto (con su
+                                  // valor ya seleccionado, listo para sobreescribir).
+                                  if (raw.replace(/\D/g, "").length >= 2) {
+                                    minuteInputRef.current?.focus();
+                                    minuteInputRef.current?.select();
+                                  }
                                 }}
                                 onKeyDown={(e) => {
                                   if (e.key === "ArrowUp") {
@@ -833,10 +844,12 @@ export const SmartDateTimePicker: React.FC<SmartDateTimePickerProps> = ({
                             </span>
                             <div className="flex items-center">
                               <input
+                                ref={minuteInputRef}
                                 type="number"
                                 min={0}
                                 max={59}
                                 value={String(initMinute).padStart(2, "0")}
+                                onFocus={(e) => e.target.select()}
                                 onChange={(e) => {
                                   const val = parseInt(e.target.value, 10);
                                   handleTimeChange(
