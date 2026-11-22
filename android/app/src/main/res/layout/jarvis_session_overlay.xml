@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Contenido de la sesión de asistente de Jarvis (ver JarvisVoiceInteractionSession): esta vista
+     es lo que Android muestra flotando sobre cualquier app cuando se invoca el gesto de asistente
+     con Jarvis configurado como asistente predeterminado del sistema. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_gravity="bottom"
+    android:orientation="vertical"
+    android:background="#0D0D0D"
+    android:paddingLeft="24dp"
+    android:paddingRight="24dp"
+    android:paddingTop="28dp"
+    android:paddingBottom="36dp">
+
+    <TextView
+        android:id="@+id/jarvis_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="JARVIS"
+        android:textColor="#3B82F6"
+        android:textSize="13sp"
+        android:textStyle="bold"
+        android:letterSpacing="0.15" />
+
+    <TextView
+        android:id="@+id/jarvis_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:text="Preparando el micrófono..."
+        android:textColor="#A1A1AA"
+        android:textSize="12sp" />
+
+    <TextView
+        android:id="@+id/jarvis_transcript"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="18dp"
+        android:text=""
+        android:textColor="#FFFFFF"
+        android:textSize="17sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/jarvis_response"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:text=""
+        android:textColor="#D4D4D8"
+        android:textSize="14sp"
+        android:lineSpacingMultiplier="1.2" />
+
+    <TextView
+        android:id="@+id/jarvis_mic"
+        android:layout_width="64dp"
+        android:layout_height="64dp"
+        android:layout_marginTop="22dp"
+        android:layout_gravity="center_horizontal"
+        android:background="@drawable/jarvis_mic_bg"
+        android:gravity="center"
+        android:text="🎤"
+        android:textSize="26sp"
+        android:clickable="true"
+        android:focusable="true" />
+
+</LinearLayout>
