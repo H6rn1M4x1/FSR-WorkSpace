@@ -63,6 +63,7 @@ import {
   StickyNote,
   Palette,
   Cloud,
+  Bot,
   History,
   Play,
   Database,
@@ -96,6 +97,7 @@ import {
 } from "../lib/appUpdates";
 import { SharedSectionsManager } from "./SharedSectionsManager";
 import { AgendaSharingManager } from "./AgendaSharingManager";
+import { JarvisAssistantSettings } from "./JarvisAssistantSettings";
 import { AgendaShare } from "../types";
 import { MigrationBanner } from "./MigrationBanner";
 import { bulkImportFromFirestore as bulkImportUserProfile, SUPABASE_MIGRATED_CATEGORIES as USER_PROFILE_CATEGORIES } from "../lib/supabaseUserProfileSync";
@@ -555,7 +557,7 @@ export function UserSettingsModal({
   // patrón que DetailModal.tsx y ChatPanel.tsx.
   const dragControls = useDragControls();
   const [activeTab, setActiveTab] = useState<
-    "profile" | "health" | "sharing" | "appearance" | "security" | "backup" | "notifications"
+    "profile" | "health" | "sharing" | "appearance" | "security" | "backup" | "notifications" | "assistant"
   >("profile");
   const [showColorPopover, setShowColorPopover] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(() => isUiSoundEnabled());
@@ -1533,6 +1535,21 @@ export function UserSettingsModal({
             >
               <Shield className="w-4 h-4" />
               <span>Seguridad & Google Authenticator</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={(e) => { setActiveTab("assistant"); e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' }); }}
+              className={`flex items-center gap-2 px-4 py-3 font-bold text-xs md:text-sm border-b-2 transition-all cursor-pointer shrink-0 ${
+                activeTab === "assistant"
+                  ? "border-primary text-primary"
+                  : darkMode
+                  ? "border-transparent text-zinc-400 hover:text-zinc-200"
+                  : "border-transparent text-zinc-500 hover:text-zinc-800"
+              }`}
+            >
+              <Bot className="w-4 h-4" />
+              <span>Asistente Jarvis</span>
             </button>
 
             <button
@@ -3510,6 +3527,12 @@ export function UserSettingsModal({
               </div>
             </div>,
             document.body
+          )}
+
+          {activeTab === "assistant" && (
+            <div className="space-y-6">
+              <JarvisAssistantSettings darkMode={darkMode} />
+            </div>
           )}
 
           {activeTab === "backup" && (

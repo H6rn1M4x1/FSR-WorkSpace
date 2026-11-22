@@ -47,6 +47,36 @@
             </intent-filter>
         </service>
 
+        <!-- Asistente Jarvis: habilita que esta app aparezca como "App de asistente digital"
+             predeterminada del sistema (Ajustes > Apps > Apps predeterminadas), invocable con el
+             gesto de asistente de Android (deslizar desde la esquina / mantener Home), apareciendo
+             flotando sobre cualquier app. Ver JarvisVoiceInteractionService/Session. -->
+        <service
+            android:name=".JarvisVoiceInteractionService"
+            android:exported="true"
+            android:permission="android.permission.BIND_VOICE_INTERACTION">
+            <intent-filter>
+                <action android:name="android.service.voice.VoiceInteractionService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.voice_interaction"
+                android:resource="@xml/jarvis_interaction_service" />
+        </service>
+
+        <service
+            android:name=".JarvisVoiceInteractionSessionService"
+            android:exported="true"
+            android:permission="android.permission.BIND_VOICE_INTERACTION" />
+
+        <service
+            android:name=".JarvisRecognitionService"
+            android:exported="true"
+            android:permission="android.permission.BIND_RECOGNITION_SERVICE">
+            <intent-filter>
+                <action android:name="android.speech.RecognitionService" />
+            </intent-filter>
+        </service>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -61,4 +91,5 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 </manifest>
