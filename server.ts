@@ -397,7 +397,7 @@ function getGeminiClient(): GoogleGenAI {
 
 // El SDK de Gemini tira el error crudo de la API como mensaje (un JSON anidado tipo
 // {"error":{"code":429,"status":"RESOURCE_EXHAUSTED",...}}) — mostrarlo tal cual al usuario (o
-// peor, leérselo en voz alta en Jarvis) es ilegible. Se detecta acá para devolver un mensaje
+// peor, leérselo en voz alta) es ilegible. Se detecta acá para devolver un mensaje
 // entendible, y para no reintentar con el modelo liviano cuando la cuota ya está agotada: ese
 // reintento fallaría exactamente igual (la cuota es de la clave/proyecto, no del modelo puntual),
 // solo suma espera antes de devolver el mismo resultado.
@@ -414,8 +414,8 @@ function friendlyErrorMessage(e: any): string {
 }
 
 // Si la cuota de Gemini está agotada (afecta a la clave/proyecto entero, no a un modelo puntual),
-// probamos un modelo gratuito de respaldo en OpenRouter antes de rendirnos, para que Jarvis y
-// Viernes sigan respondiendo. Sin OPENROUTER_API_KEY configurada (o si también falla), devuelve
+// probamos un modelo gratuito de respaldo en OpenRouter antes de rendirnos, para que Viernes
+// siga respondiendo. Sin OPENROUTER_API_KEY configurada (o si también falla), devuelve
 // null y el flujo normal cae en el error de cuota de siempre. Limitación: este camino no tiene
 // búsqueda en internet (es específica de Gemini) — se le avisa al modelo para que no invente
 // haber buscado algo — y no reenvía archivos adjuntos.
