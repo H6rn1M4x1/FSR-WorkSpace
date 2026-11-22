@@ -7,9 +7,15 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.media.AudioAttributes;
+import android.media.SoundPool;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
+import android.os.VibratorManager;
 import android.service.voice.VoiceInteractionSession;
 import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
@@ -44,16 +50,18 @@ import java.util.Set;
 /**
  * La sesión real que Android muestra flotando sobre cualquier app cuando se invoca el gesto de
  * asistente (con Jarvis configurado como predeterminado). El contenido es un WebView (tarjeta
- * flotante anclada abajo, bordes redondeados, fondo semitransparente, expandible con un tap en
- * el encabezado) para poder reusar el mismo lenguaje visual que el resto de la app (tipografía,
- * color de acento, el logo animado de la marca, el estilo de burbujas de los mensajes internos)
- * sin reimplementar esos estilos en vistas nativas. Escucha en loop continuo con SpeechRecognizer
- * (la ventana de una sesión de asistente tiene permiso especial para usar el micrófono aunque
- * otra app esté en primer plano) — nunca hace falta tocar nada para que arranque o siga
- * escuchando entre turnos — manda el texto reconocido al mismo endpoint de Gemini que ya usa
- * "Viernes" en Facultad (con búsqueda web habilitada), lee la respuesta con TextToSpeech
- * (preferiendo, si el equipo tiene una instalada, una voz masculina en español de mejor calidad)
- * y retoma la escucha sola apenas termina de hablar.
+ * flotante anclada abajo pero sin pegarse al borde, con sombra, bordes redondeados en las 4
+ * puntas, fondo semitransparente, expandible tocando o arrastrando el encabezado) para poder
+ * reusar el mismo lenguaje visual que el resto de la app (tipografía, color de acento, el logo
+ * animado de la marca, el estilo de burbujas de los mensajes internos) sin reimplementar esos
+ * estilos en vistas nativas. Escucha en loop continuo con SpeechRecognizer (la ventana de una
+ * sesión de asistente tiene permiso especial para usar el micrófono aunque otra app esté en
+ * primer plano) — nunca hace falta tocar nada para que arranque o siga escuchando entre turnos —
+ * manda el texto reconocido al mismo endpoint de Gemini que ya usa "Viernes" en Facultad (con
+ * búsqueda web habilitada), lee la respuesta con TextToSpeech (prefiriendo, si el equipo tiene
+ * una instalada, una voz masculina en español de mejor calidad) y retoma la escucha sola apenas
+ * termina de hablar. Un sonido corto marca cuando empieza a escuchar y una vibración breve
+ * confirma cuando te activás y cuando termina de entender lo que dijiste.
  *
  * v1: todavía NO puede agendar turnos/pagos/tareas directamente en la cuenta del usuario — eso
  * necesita acceso autenticado a los datos de la app desde un proceso del sistema, fuera del
@@ -82,7 +90,11 @@ public class JarvisVoiceInteractionSession extends VoiceInteractionSession {
     private static final float SHEET_WIDTH_RATIO = 0.92f;
     private static final float SHEET_COMPACT_HEIGHT_RATIO = 0.44f;
     private static final float SHEET_EXPANDED_HEIGHT_RATIO = 0.82f;
-    private static final int SHEET_BOTTOM_MARGIN_DP = 14;
+    // Margen transparente alrededor de la tarjeta visible (mismo valor que el padding del <body>
+    // en el HTML de abajo, en css px ≈ dp a escala 1): separa la tarjeta del borde de la pantalla
+    // (ventana flotante, no pegada — se ven las 4 puntas redondeadas) y además le da lugar a la
+    // sombra para que no se recorte contra el borde del WebView.
+    private static final int SHEET_BLEED_DP = 20;
 
     private static final String OVERLAY_HTML = """
         <!doctype html>
@@ -101,12 +113,15 @@ public class JarvisVoiceInteractionSession extends VoiceInteractionSession {
           }
           html, body {
             margin: 0;
-            padding: 0;
             width: 100%;
             height: 100%;
             background: transparent;
             overflow: hidden;
             font-family: -apple-system, Roboto, "Segoe UI", sans-serif;
+          }
+          body {
+            box-sizing: border-box;
+            padding: 20px;
           }
           .sheet {
             box-sizing: border-box;
@@ -118,9 +133,21 @@ public class JarvisVoiceInteractionSession extends VoiceInteractionSession {
             flex-direction: column;
             color: var(--text-primary);
             overflow: hidden;
+            box-shadow: 0 14px 44px rgba(0,0,0,0.55), 0 4px 14px rgba(0,0,0,0.35);
+            animation: sheet-in 0.32s cubic-bezier(0.16,1,0.3,1) both;
+          }
+          @keyframes sheet-in {
+            0% { opacity: 0; transform: translateY(28px) scale(0.97); }
+            100% { opacity: 1; transform: translateY(0) scale(1); }
+          }
+          .grab {
+            flex-shrink: 0;
+            cursor: pointer;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
           }
           .handle {
-            flex-shrink: 0;
             width: 36px;
             height: 4px;
             border-radius: 2px;
@@ -129,12 +156,10 @@ public class JarvisVoiceInteractionSession extends VoiceInteractionSession {
             margin: 9px auto 2px;
           }
           .header {
-            flex-shrink: 0;
             display: flex;
             align-items: center;
             justify-content: space-between;
             padding: 8px 18px 4px;
-            cursor: pointer;
           }
           .title {
             font-size: 12px;
@@ -161,6 +186,7 @@ public class JarvisVoiceInteractionSession extends VoiceInteractionSession {
             font-size: 11.5px;
             color: var(--text-secondary);
             min-height: 14px;
+            transition: opacity 0.15s ease;
           }
           .logo-wrap {
             flex-shrink: 0;
@@ -245,13 +271,15 @@ public class JarvisVoiceInteractionSession extends VoiceInteractionSession {
         </head>
         <body>
           <div class="sheet" id="sheet">
-            <div class="handle"></div>
-            <div class="header" id="header">
-              <div class="title">
-                <svg viewBox="0 0 256 256"><rect x="44" y="44" width="54" height="54" rx="12"/><rect x="82" y="82" width="54" height="54" rx="12"/><rect x="120" y="120" width="54" height="54" rx="12"/></svg>
-                <span>JARVIS</span>
+            <div class="grab" id="grab">
+              <div class="handle"></div>
+              <div class="header">
+                <div class="title">
+                  <svg viewBox="0 0 256 256"><rect x="44" y="44" width="54" height="54" rx="12"/><rect x="82" y="82" width="54" height="54" rx="12"/><rect x="120" y="120" width="54" height="54" rx="12"/></svg>
+                  <span>JARVIS</span>
+                </div>
+                <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
               </div>
-              <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
             </div>
             <div class="status" id="status">Preparando...</div>
             <div class="logo-wrap">
@@ -268,15 +296,57 @@ public class JarvisVoiceInteractionSession extends VoiceInteractionSession {
           </div>
         <script>
         (function () {
-          var expanded = false;
           var sheet = document.getElementById('sheet');
-          document.getElementById('header').addEventListener('click', function () {
-            expanded = !expanded;
-            sheet.classList.toggle('expanded', expanded);
-            if (window.JarvisBridge && window.JarvisBridge.setExpanded) {
-              window.JarvisBridge.setExpanded(expanded);
+          var statusEl = document.getElementById('status');
+          var grab = document.getElementById('grab');
+
+          // Expandir/contraer: tocar es un toggle, arrastrar sigue el dedo en vivo — el alto
+          // real lo decide y lo anima Java (ver JarvisJsBridge/applyExpandedState), acá solo se
+          // manda la posición del dedo para que el redimensionado nativo la siga 1:1.
+          var dragging = false;
+          var moved = false;
+          var startY = 0;
+          var pendingDelta = null;
+          var rafScheduled = false;
+          var DRAG_THRESHOLD = 6;
+
+          function scheduleDragUpdate() {
+            if (rafScheduled) return;
+            rafScheduled = true;
+            requestAnimationFrame(function () {
+              rafScheduled = false;
+              if (pendingDelta !== null && window.JarvisBridge && window.JarvisBridge.onDragMove) {
+                window.JarvisBridge.onDragMove(pendingDelta);
+                pendingDelta = null;
+              }
+            });
+          }
+
+          grab.addEventListener('pointerdown', function (e) {
+            dragging = true;
+            moved = false;
+            startY = e.clientY;
+            try { grab.setPointerCapture(e.pointerId); } catch (err) {}
+            if (window.JarvisBridge && window.JarvisBridge.onDragStart) {
+              window.JarvisBridge.onDragStart();
             }
           });
+          grab.addEventListener('pointermove', function (e) {
+            if (!dragging) return;
+            var delta = startY - e.clientY;
+            if (Math.abs(delta) > DRAG_THRESHOLD) moved = true;
+            pendingDelta = delta;
+            scheduleDragUpdate();
+          });
+          function endDrag() {
+            if (!dragging) return;
+            dragging = false;
+            if (window.JarvisBridge && window.JarvisBridge.onDragEnd) {
+              window.JarvisBridge.onDragEnd(moved);
+            }
+          }
+          grab.addEventListener('pointerup', endDrag);
+          grab.addEventListener('pointercancel', endDrag);
 
           function addMessage(role, text) {
             if (!text) return;
@@ -300,6 +370,16 @@ public class JarvisVoiceInteractionSession extends VoiceInteractionSession {
             thread.scrollTop = thread.scrollHeight;
           }
 
+          var statusFadeTimer = null;
+          function setStatusText(text) {
+            statusEl.style.opacity = '0';
+            clearTimeout(statusFadeTimer);
+            statusFadeTimer = setTimeout(function () {
+              statusEl.textContent = text || '';
+              statusEl.style.opacity = '1';
+            }, 150);
+          }
+
           window.JarvisUI = {
             init: function (accentColor, isDark) {
               var root = document.documentElement.style;
@@ -310,10 +390,11 @@ public class JarvisVoiceInteractionSession extends VoiceInteractionSession {
               root.setProperty('--on-accent', isDark ? '#ffffff' : '#000000');
               root.setProperty('--bubble-other-bg', isDark ? '#27272a' : '#f4f4f5');
             },
-            setStatus: function (text) { document.getElementById('status').textContent = text || ''; },
+            setStatus: function (text) { setStatusText(text); },
             setPartialTranscript: function (text) { document.getElementById('partial').textContent = text || ''; },
             addUserMessage: function (text) { addMessage('user', text); },
-            addJarvisMessage: function (text) { addMessage('jarvis', text); }
+            addJarvisMessage: function (text) { addMessage('jarvis', text); },
+            setExpanded: function (expanded) { sheet.classList.toggle('expanded', !!expanded); }
           };
         })();
         </script>
@@ -328,10 +409,15 @@ public class JarvisVoiceInteractionSession extends VoiceInteractionSession {
     private boolean webViewReady = false;
     private boolean sessionActive = false;
     private boolean isExpanded = false;
+    private int dragStartHeightPx = 0;
 
     private SpeechRecognizer speechRecognizer;
     private TextToSpeech textToSpeech;
     private boolean ttsReady = false;
+
+    private SoundPool soundPool;
+    private int listenSoundId = 0;
+    private boolean listenSoundLoaded = false;
 
     public JarvisVoiceInteractionSession(Context context) {
         super(context);
@@ -339,21 +425,49 @@ public class JarvisVoiceInteractionSession extends VoiceInteractionSession {
     }
 
     private class JarvisJsBridge {
-        // El header del overlay llama a esto al tocarlo para expandir/contraer — la tarjeta
-        // nativa (WebView) se redimensiona desde Java (ver applyExpandedState); el callback de
-        // un @JavascriptInterface llega en un hilo aparte, nunca el principal, por eso el post().
+        // Los callbacks de un @JavascriptInterface llegan en un hilo aparte, nunca el principal,
+        // por eso el post() en los tres. onDragStart/onDragMove siguen el dedo en vivo (sin
+        // animación, 1:1); onDragEnd decide el estado final: si no hubo arrastre real, es un tap
+        // (toggle); si lo hubo, encaja al extremo más cercano (applyExpandedState anima ahí).
         @JavascriptInterface
-        public void setExpanded(boolean expanded) {
-            mainHandler.post(() -> applyExpandedState(expanded));
+        public void onDragStart() {
+            mainHandler.post(() -> {
+                if (webView == null) return;
+                FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) webView.getLayoutParams();
+                dragStartHeightPx = params.height;
+            });
+        }
+
+        @JavascriptInterface
+        public void onDragMove(float deltaCssPx) {
+            mainHandler.post(() -> {
+                if (webView == null) return;
+                DisplayMetrics dm = appContext.getResources().getDisplayMetrics();
+                int deltaPx = Math.round(deltaCssPx * dm.density);
+                int newHeight = clamp(dragStartHeightPx + deltaPx, minContainerHeightPx(dm), maxContainerHeightPx(dm));
+                FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) webView.getLayoutParams();
+                params.height = newHeight;
+                webView.setLayoutParams(params);
+            });
+        }
+
+        @JavascriptInterface
+        public void onDragEnd(boolean wasDrag) {
+            mainHandler.post(() -> {
+                if (!wasDrag) {
+                    applyExpandedState(!isExpanded);
+                } else {
+                    snapToNearest();
+                }
+            });
         }
     }
 
     @Override
     public View onCreateContentView() {
         DisplayMetrics dm = appContext.getResources().getDisplayMetrics();
-        int width = Math.round(dm.widthPixels * SHEET_WIDTH_RATIO);
-        int height = Math.round(dm.heightPixels * SHEET_COMPACT_HEIGHT_RATIO);
-        int bottomMargin = Math.round(SHEET_BOTTOM_MARGIN_DP * dm.density);
+        int width = Math.round(dm.widthPixels * SHEET_WIDTH_RATIO) + 2 * bleedPx(dm);
+        int height = minContainerHeightPx(dm);
 
         webView = new WebView(appContext);
         webView.setBackgroundColor(Color.TRANSPARENT);
@@ -369,10 +483,11 @@ public class JarvisVoiceInteractionSession extends VoiceInteractionSession {
                 applyTheme();
             }
         });
-        // Toda la tarjeta (tamaño, bordes redondeados, fondo semitransparente, tipografía, el
-        // logo animado, el chat) vive en este HTML embebido — así reusa el mismo lenguaje visual
-        // que la web/app en vez de reimplementarlo en vistas nativas. loadDataWithBaseURL(null,
-        // ...) alcanza porque la página es autocontenida (sin red ni recursos externos).
+        // Toda la tarjeta (tamaño, bordes redondeados, sombra, fondo semitransparente,
+        // tipografía, el logo animado, el chat) vive en este HTML embebido — así reusa el mismo
+        // lenguaje visual que la web/app en vez de reimplementarlo en vistas nativas.
+        // loadDataWithBaseURL(null, ...) alcanza porque la página es autocontenida (sin red ni
+        // recursos externos).
         webView.loadDataWithBaseURL(null, OVERLAY_HTML, "text/html", "UTF-8", null);
         // Mientras falte el permiso de micrófono, tocar la tarjeta abre la app para concederlo
         // (ver startListening/requestMicPermissionFromApp) — una sesión de asistente no puede
@@ -383,7 +498,9 @@ public class JarvisVoiceInteractionSession extends VoiceInteractionSession {
 
         FrameLayout.LayoutParams webParams = new FrameLayout.LayoutParams(width, height);
         webParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-        webParams.bottomMargin = bottomMargin;
+        // Sin bottomMargin: el padding del <body> (SHEET_BLEED_DP) ya separa la tarjeta visible
+        // del borde de la pantalla — ventana flotante, no pegada, con las 4 puntas redondeadas
+        // visibles y lugar para que la sombra no se recorte.
 
         FrameLayout root = new FrameLayout(appContext);
         root.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -395,6 +512,7 @@ public class JarvisVoiceInteractionSession extends VoiceInteractionSession {
     public void onShow(Bundle args, int showFlags) {
         super.onShow(args, showFlags);
         sessionActive = true;
+        vibrate(30);
         if (textToSpeech == null) {
             textToSpeech = new TextToSpeech(appContext, status -> {
                 ttsReady = status == TextToSpeech.SUCCESS;
@@ -417,6 +535,17 @@ public class JarvisVoiceInteractionSession extends VoiceInteractionSession {
                     }
                 });
             });
+        }
+        if (soundPool == null) {
+            AudioAttributes attrs = new AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build();
+            soundPool = new SoundPool.Builder().setMaxStreams(2).setAudioAttributes(attrs).build();
+            soundPool.setOnLoadCompleteListener((sp, sampleId, status) -> {
+                if (status == 0) listenSoundLoaded = true;
+            });
+            listenSoundId = soundPool.load(appContext, R.raw.jarvis_listen, 1);
         }
         mainHandler.post(this::startListening);
     }
@@ -443,6 +572,10 @@ public class JarvisVoiceInteractionSession extends VoiceInteractionSession {
         if (textToSpeech != null) {
             textToSpeech.shutdown();
             textToSpeech = null;
+        }
+        if (soundPool != null) {
+            soundPool.release();
+            soundPool = null;
         }
         super.onDestroy();
     }
@@ -497,15 +630,41 @@ public class JarvisVoiceInteractionSession extends VoiceInteractionSession {
         return name.contains("male") && !name.contains("female");
     }
 
-    // Anima el alto nativo del WebView entre el tamaño compacto y el expandido — el toque viene
-    // del header dentro del HTML (ver JarvisJsBridge), el redimensionado real es nativo.
+    private int bleedPx(DisplayMetrics dm) {
+        return Math.round(SHEET_BLEED_DP * dm.density);
+    }
+
+    private int minContainerHeightPx(DisplayMetrics dm) {
+        return Math.round(dm.heightPixels * SHEET_COMPACT_HEIGHT_RATIO) + 2 * bleedPx(dm);
+    }
+
+    private int maxContainerHeightPx(DisplayMetrics dm) {
+        return Math.round(dm.heightPixels * SHEET_EXPANDED_HEIGHT_RATIO) + 2 * bleedPx(dm);
+    }
+
+    private int clamp(int v, int min, int max) {
+        return Math.max(min, Math.min(max, v));
+    }
+
+    // Encaja al extremo (compacto/expandido) más cercano al alto actual — se usa al soltar el
+    // dedo después de un arrastre real (ver JarvisJsBridge.onDragEnd).
+    private void snapToNearest() {
+        if (webView == null) return;
+        DisplayMetrics dm = appContext.getResources().getDisplayMetrics();
+        FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) webView.getLayoutParams();
+        int midpoint = (minContainerHeightPx(dm) + maxContainerHeightPx(dm)) / 2;
+        applyExpandedState(params.height > midpoint);
+    }
+
+    // Anima el alto nativo del WebView entre el tamaño compacto y el expandido (toque = toggle,
+    // o el encaje final de un arrastre) y le avisa al HTML para que rote la flecha.
     private void applyExpandedState(boolean expanded) {
         if (webView == null) return;
         isExpanded = expanded;
         DisplayMetrics dm = appContext.getResources().getDisplayMetrics();
         final FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) webView.getLayoutParams();
         final int from = params.height;
-        final int to = Math.round(dm.heightPixels * (expanded ? SHEET_EXPANDED_HEIGHT_RATIO : SHEET_COMPACT_HEIGHT_RATIO));
+        final int to = expanded ? maxContainerHeightPx(dm) : minContainerHeightPx(dm);
         ValueAnimator animator = ValueAnimator.ofInt(from, to);
         animator.setDuration(220);
         animator.setInterpolator(new DecelerateInterpolator());
@@ -514,6 +673,7 @@ public class JarvisVoiceInteractionSession extends VoiceInteractionSession {
             webView.setLayoutParams(params);
         });
         animator.start();
+        runJs("window.JarvisUI && window.JarvisUI.setExpanded(" + expanded + ")");
     }
 
     private void applyTheme() {
@@ -546,6 +706,25 @@ public class JarvisVoiceInteractionSession extends VoiceInteractionSession {
         runJs("window.JarvisUI && window.JarvisUI.addJarvisMessage(" + JSONObject.quote(text != null ? text : "") + ")");
     }
 
+    // Vibración breve (no crítica: si el equipo no tiene motor de vibración o algo falla, se
+    // ignora en silencio) para confirmar, sin que haga falta mirar la pantalla, que Jarvis se
+    // activó o que terminó de entender lo que dijiste.
+    private void vibrate(long ms) {
+        try {
+            Vibrator vibrator;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                VibratorManager vm = (VibratorManager) appContext.getSystemService(Context.VIBRATOR_MANAGER_SERVICE);
+                vibrator = vm != null ? vm.getDefaultVibrator() : null;
+            } else {
+                vibrator = (Vibrator) appContext.getSystemService(Context.VIBRATOR_SERVICE);
+            }
+            if (vibrator != null && vibrator.hasVibrator()) {
+                vibrator.vibrate(VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE));
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
     // Jarvis escucha en loop continuo: arranca solo al abrirse y, entre turnos (después de un
     // error de reconocimiento, un silencio sin resultados, o de terminar de hablar su propia
     // respuesta), vuelve a escuchar sin que el usuario tenga que tocar nada.
@@ -571,6 +750,9 @@ public class JarvisVoiceInteractionSession extends VoiceInteractionSession {
             @Override
             public void onReadyForSpeech(Bundle params) {
                 setStatus("Escuchando...");
+                if (listenSoundLoaded && soundPool != null) {
+                    soundPool.play(listenSoundId, 0.5f, 0.5f, 0, 0, 1f);
+                }
             }
 
             @Override
@@ -606,6 +788,7 @@ public class JarvisVoiceInteractionSession extends VoiceInteractionSession {
                 ArrayList<String> matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
                 if (matches != null && !matches.isEmpty()) {
                     String heard = matches.get(0);
+                    vibrate(20);
                     addUserMessage(heard);
                     askJarvis(heard);
                 } else {
