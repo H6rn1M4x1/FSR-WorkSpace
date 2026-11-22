@@ -413,6 +413,49 @@ function friendlyErrorMessage(e: any): string {
   return (typeof e?.message === "string" && e.message) || "Error al comunicarse con Gemini.";
 }
 
+// Si la cuota de Gemini está agotada (afecta a la clave/proyecto entero, no a un modelo puntual),
+// probamos un modelo gratuito de respaldo en OpenRouter antes de rendirnos, para que Jarvis y
+// Viernes sigan respondiendo. Sin OPENROUTER_API_KEY configurada (o si también falla), devuelve
+// null y el flujo normal cae en el error de cuota de siempre. Limitación: este camino no tiene
+// búsqueda en internet (es específica de Gemini) — se le avisa al modelo para que no invente
+// haber buscado algo — y no reenvía archivos adjuntos.
+async function callOpenRouterFallback(
+  message: string,
+  history: any,
+  systemInstruction?: string
+): Promise<string | null> {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) return null;
+  try {
+    const messages: any[] = [
+      {
+        role: "system",
+        content:
+          (systemInstruction || "") +
+          " No tenés acceso a búsqueda en internet en este modo de respaldo: respondé solo con lo que ya sabés, y si la pregunta depende de información muy reciente o cambiante, aclaralo en vez de inventar una respuesta.",
+      },
+    ];
+    if (Array.isArray(history)) {
+      history.forEach((msg: any) => {
+        messages.push({ role: msg.role === "user" ? "user" : "assistant", content: String(msg.text || "") });
+      });
+    }
+    messages.push({ role: "user", content: message });
+
+    const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: "openrouter/free", messages }),
+    });
+    if (!resp.ok) return null;
+    const data: any = await resp.json();
+    const text = data?.choices?.[0]?.message?.content;
+    return typeof text === "string" && text.trim() ? text : null;
+  } catch {
+    return null;
+  }
+}
+
 // REST API Endpoints
 
 // 1. Health & Configuration status check
@@ -911,9 +954,15 @@ app.post("/api/gemini/chat", async (req, res) => {
       });
     } catch (e: any) {
       // Ver nota en isQuotaExhaustedError: si la cuota ya está agotada, reintentar con el modelo
-      // liviano falla exactamente igual (la cuota es de la clave/proyecto, no del modelo), así
-      // que no vale la pena la espera extra.
-      if (isQuotaExhaustedError(e)) throw e;
+      // liviano falla exactamente igual (la cuota es de la clave/proyecto, no del modelo). En vez
+      // de rendirnos directo, probamos el respaldo de OpenRouter (ver callOpenRouterFallback).
+      if (isQuotaExhaustedError(e)) {
+        const fallbackText = await callOpenRouterFallback(message, history, systemInstruction);
+        if (fallbackText) {
+          return res.json({ text: fallbackText, groundingChunks: [] });
+        }
+        throw e;
+      }
       console.warn(`Model ${selectedModel} busy (503). Retrying with gemini-3.5-flash-lite...`);
       response = await ai.models.generateContent({
         model: "gemini-3.5-flash-lite",
