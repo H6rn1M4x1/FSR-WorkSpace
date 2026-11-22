@@ -1,3 +1,5 @@
+import { Capacitor } from "@capacitor/core";
+import { Preferences } from "@capacitor/preferences";
 import {
   AcademicSubject,
   AcademicTask,
@@ -167,6 +169,17 @@ export function setStoredDataSilent<T>(key: string, data: T): void {
   setStoredData(key, data, true);
 }
 
+// Espejo de bajo riesgo hacia @capacitor/preferences (que sí persiste en SharedPreferences
+// nativas, archivo "CapacitorStorage", clave tal cual) — SOLO para que código nativo fuera del
+// WebView (ver JarvisVoiceInteractionSession.java) pueda leer el color de acento/tema real del
+// usuario. No reemplaza a localStorage: todas las lecturas síncronas existentes (getThemeColor,
+// getDarkMode, el useState inicial en App.tsx, etc.) siguen leyendo de localStorage sin cambios;
+// esto solo agrega una copia async de "mejor esfuerzo" en paralelo.
+function mirrorToNativePreferences(key: string, value: string): void {
+  if (!Capacitor.isNativePlatform()) return;
+  Preferences.set({ key, value }).catch(() => {});
+}
+
 // Aesthetic Preferences Helper (Local Storage EXCLUSIVE for current device)
 export class AestheticStorageService {
   // Gris por defecto (antes era un azul) hasta que el usuario elija otro color de acento desde
@@ -191,6 +204,7 @@ export class AestheticStorageService {
     } catch (e) {
       console.error("Error setting theme_color in localStorage:", e);
     }
+    mirrorToNativePreferences("theme_color", color);
   }
 
   static getBackgroundStyle(): "dither" | "pixelblast" | "plasma" {
@@ -224,6 +238,7 @@ export class AestheticStorageService {
     } catch (e) {
       console.error("Error setting dark_mode in localStorage:", e);
     }
+    mirrorToNativePreferences("dark_mode", enabled ? "true" : "false");
   }
 
   static getMenuVisibility(): Record<string, boolean> {

@@ -395,6 +395,24 @@ function getGeminiClient(): GoogleGenAI {
   return aiInstance;
 }
 
+// El SDK de Gemini tira el error crudo de la API como mensaje (un JSON anidado tipo
+// {"error":{"code":429,"status":"RESOURCE_EXHAUSTED",...}}) — mostrarlo tal cual al usuario (o
+// peor, leérselo en voz alta en Jarvis) es ilegible. Se detecta acá para devolver un mensaje
+// entendible, y para no reintentar con el modelo liviano cuando la cuota ya está agotada: ese
+// reintento fallaría exactamente igual (la cuota es de la clave/proyecto, no del modelo puntual),
+// solo suma espera antes de devolver el mismo resultado.
+function isQuotaExhaustedError(e: any): boolean {
+  const msg = typeof e?.message === "string" ? e.message : "";
+  return e?.status === 429 || e?.code === 429 || msg.includes("RESOURCE_EXHAUSTED") || msg.includes('"code":429');
+}
+
+function friendlyErrorMessage(e: any): string {
+  if (isQuotaExhaustedError(e)) {
+    return "Se agotó la cuota de uso de la IA por ahora. Probá de nuevo más tarde.";
+  }
+  return (typeof e?.message === "string" && e.message) || "Error al comunicarse con Gemini.";
+}
+
 // REST API Endpoints
 
 // 1. Health & Configuration status check
@@ -892,6 +910,10 @@ app.post("/api/gemini/chat", async (req, res) => {
         config,
       });
     } catch (e: any) {
+      // Ver nota en isQuotaExhaustedError: si la cuota ya está agotada, reintentar con el modelo
+      // liviano falla exactamente igual (la cuota es de la clave/proyecto, no del modelo), así
+      // que no vale la pena la espera extra.
+      if (isQuotaExhaustedError(e)) throw e;
       console.warn(`Model ${selectedModel} busy (503). Retrying with gemini-3.5-flash-lite...`);
       response = await ai.models.generateContent({
         model: "gemini-3.5-flash-lite",
@@ -906,7 +928,7 @@ app.post("/api/gemini/chat", async (req, res) => {
     res.json({ text, groundingChunks: chunks });
   } catch (error: any) {
     console.error("Error in /api/gemini/chat:", error);
-    res.status(500).json({ error: error.message });
+    res.status(isQuotaExhaustedError(error) ? 429 : 500).json({ error: friendlyErrorMessage(error) });
   }
 });
 
