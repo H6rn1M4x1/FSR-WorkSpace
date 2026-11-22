@@ -3,6 +3,24 @@ import { GoogleGenAI } from "@google/genai";
 
 let aiInstance: GoogleGenAI | null = null;
 
+// El SDK de Gemini tira el error crudo de la API como mensaje (un JSON anidado tipo
+// {"error":{"code":429,"status":"RESOURCE_EXHAUSTED",...}}) — mostrarlo tal cual al usuario (o
+// peor, leérselo en voz alta en Jarvis) es ilegible. Se detecta acá para devolver un mensaje
+// entendible, y para no reintentar con el modelo liviano cuando la cuota ya está agotada: ese
+// reintento fallaría exactamente igual (la cuota es de la clave/proyecto, no del modelo puntual),
+// solo suma espera antes de devolver el mismo resultado.
+function isQuotaExhaustedError(e: any): boolean {
+  const msg = typeof e?.message === "string" ? e.message : "";
+  return e?.status === 429 || e?.code === 429 || msg.includes("RESOURCE_EXHAUSTED") || msg.includes('"code":429');
+}
+
+function friendlyErrorMessage(e: any): string {
+  if (isQuotaExhaustedError(e)) {
+    return "Se agotó la cuota de uso de la IA por ahora. Probá de nuevo más tarde.";
+  }
+  return (typeof e?.message === "string" && e.message) || "Error al comunicarse con Gemini.";
+}
+
 function getGeminiClient(): GoogleGenAI {
   if (!aiInstance) {
     const apiKey = process.env.GEMINI_API_KEY;
@@ -87,10 +105,11 @@ export const handler: Handler = async (event) => {
         config,
       });
     } catch (e: any) {
-      // Si ya se había pedido el modelo liviano, no hay a qué más caer — reintentar el mismo
-      // modelo acá adentro solo duplicaría la espera (y el riesgo de que Netlify corte la función
-      // por tiempo) sin cambiar el resultado.
-      if (selectedModel === "gemini-3.5-flash-lite") throw e;
+      // Si ya se había pedido el modelo liviano, o si la cuota está agotada (afecta a la clave/
+      // proyecto entero, no a un modelo puntual), no hay a qué más caer — reintentar acá adentro
+      // solo duplicaría la espera (y el riesgo de que Netlify corte la función por tiempo) sin
+      // cambiar el resultado.
+      if (selectedModel === "gemini-3.5-flash-lite" || isQuotaExhaustedError(e)) throw e;
       console.warn(`Model ${selectedModel} busy/unavailable. Retrying with gemini-3.5-flash-lite...`, e?.message);
       response = await ai.models.generateContent({
         model: "gemini-3.5-flash-lite",
@@ -105,6 +124,7 @@ export const handler: Handler = async (event) => {
     return { statusCode: 200, body: JSON.stringify({ text, groundingChunks: chunks }) };
   } catch (error: any) {
     console.error("Error in gemini-chat function:", error);
-    return { statusCode: 500, body: JSON.stringify({ error: error.message || "Error al comunicarse con Gemini." }) };
+    const statusCode = isQuotaExhaustedError(error) ? 429 : 500;
+    return { statusCode, body: JSON.stringify({ error: friendlyErrorMessage(error) }) };
   }
 };
