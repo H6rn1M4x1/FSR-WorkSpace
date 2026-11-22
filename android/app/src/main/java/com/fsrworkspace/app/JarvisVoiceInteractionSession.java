@@ -1,6 +1,7 @@
 package com.fsrworkspace.app;
 
 import android.Manifest;
+import android.animation.ValueAnimator;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -15,10 +16,13 @@ import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
+import android.speech.tts.Voice;
 import android.util.DisplayMetrics;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.animation.DecelerateInterpolator;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
@@ -35,18 +39,21 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Locale;
+import java.util.Set;
 
 /**
  * La sesión real que Android muestra flotando sobre cualquier app cuando se invoca el gesto de
- * asistente (con Jarvis configurado como predeterminado). El contenido es un WebView chico
- * (tarjeta flotante, bordes redondeados, fondo semitransparente, ~1/3 de la pantalla) para poder
- * reusar el mismo lenguaje visual que el resto de la app (tipografía, color de acento, el "orbe"
- * animado) sin reimplementar esos estilos en vistas nativas. Escucha en loop continuo con
- * SpeechRecognizer (la ventana de una sesión de asistente tiene permiso especial para usar el
- * micrófono aunque otra app esté en primer plano) — nunca hace falta tocar nada para que arranque
- * o siga escuchando entre turnos — manda el texto reconocido al mismo endpoint de Gemini que ya
- * usa "Viernes" en Facultad (con búsqueda web habilitada), lee la respuesta con TextToSpeech y
- * retoma la escucha sola apenas termina de hablar.
+ * asistente (con Jarvis configurado como predeterminado). El contenido es un WebView (tarjeta
+ * flotante anclada abajo, bordes redondeados, fondo semitransparente, expandible con un tap en
+ * el encabezado) para poder reusar el mismo lenguaje visual que el resto de la app (tipografía,
+ * color de acento, el logo animado de la marca, el estilo de burbujas de los mensajes internos)
+ * sin reimplementar esos estilos en vistas nativas. Escucha en loop continuo con SpeechRecognizer
+ * (la ventana de una sesión de asistente tiene permiso especial para usar el micrófono aunque
+ * otra app esté en primer plano) — nunca hace falta tocar nada para que arranque o siga
+ * escuchando entre turnos — manda el texto reconocido al mismo endpoint de Gemini que ya usa
+ * "Viernes" en Facultad (con búsqueda web habilitada), lee la respuesta con TextToSpeech
+ * (preferiendo, si el equipo tiene una instalada, una voz masculina en español de mejor calidad)
+ * y retoma la escucha sola apenas termina de hablar.
  *
  * v1: todavía NO puede agendar turnos/pagos/tareas directamente en la cuenta del usuario — eso
  * necesita acceso autenticado a los datos de la app desde un proceso del sistema, fuera del
@@ -72,6 +79,11 @@ public class JarvisVoiceInteractionSession extends VoiceInteractionSession {
     private static final String PREF_DARK_MODE = "dark_mode";
     private static final String DEFAULT_ACCENT = "#71717a";
 
+    private static final float SHEET_WIDTH_RATIO = 0.92f;
+    private static final float SHEET_COMPACT_HEIGHT_RATIO = 0.44f;
+    private static final float SHEET_EXPANDED_HEIGHT_RATIO = 0.82f;
+    private static final int SHEET_BOTTOM_MARGIN_DP = 14;
+
     private static final String OVERLAY_HTML = """
         <!doctype html>
         <html>
@@ -81,7 +93,9 @@ public class JarvisVoiceInteractionSession extends VoiceInteractionSession {
         <style>
           :root {
             --accent: #71717a;
+            --on-accent: #ffffff;
             --card-bg: rgba(13,13,13,0.88);
+            --bubble-other-bg: #27272a;
             --text-primary: #ffffff;
             --text-secondary: #a1a1aa;
           }
@@ -94,16 +108,33 @@ public class JarvisVoiceInteractionSession extends VoiceInteractionSession {
             overflow: hidden;
             font-family: -apple-system, Roboto, "Segoe UI", sans-serif;
           }
-          .card {
+          .sheet {
             box-sizing: border-box;
             width: 100%;
             height: 100%;
             background: var(--card-bg);
-            border-radius: 28px;
-            padding: 18px 22px 16px;
+            border-radius: 24px;
             display: flex;
             flex-direction: column;
             color: var(--text-primary);
+            overflow: hidden;
+          }
+          .handle {
+            flex-shrink: 0;
+            width: 36px;
+            height: 4px;
+            border-radius: 2px;
+            background: var(--text-secondary);
+            opacity: 0.5;
+            margin: 9px auto 2px;
+          }
+          .header {
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 18px 4px;
+            cursor: pointer;
           }
           .title {
             font-size: 12px;
@@ -112,148 +143,177 @@ public class JarvisVoiceInteractionSession extends VoiceInteractionSession {
             color: var(--accent);
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 7px;
           }
-          .title svg { width: 13px; height: 13px; }
+          .title svg { width: 14px; height: 14px; }
+          .title svg rect { fill: var(--accent); }
+          .chevron {
+            width: 16px;
+            height: 16px;
+            color: var(--text-secondary);
+            transition: transform 0.2s ease;
+          }
+          .sheet.expanded .chevron { transform: rotate(180deg); }
           .status {
-            margin-top: 3px;
+            flex-shrink: 0;
+            margin-top: 2px;
+            padding: 0 18px;
             font-size: 11.5px;
             color: var(--text-secondary);
             min-height: 14px;
           }
-          .orb-wrap {
-            flex: 1;
+          .logo-wrap {
+            flex-shrink: 0;
             display: flex;
             align-items: center;
             justify-content: center;
+            padding: 6px 0 2px;
+          }
+          .logo-wrap svg { width: 52px; height: 52px; }
+          .logo-sq {
+            fill: var(--accent);
+            transform-box: fill-box;
+            transform-origin: center;
+            opacity: 0;
+          }
+          .logo-sq.sq1 { animation: logo-enter 0.45s cubic-bezier(0.34,1.56,0.64,1) 0s both, jarvis-pulse 1.35s ease-in-out 0.45s infinite; }
+          .logo-sq.sq2 { animation: logo-enter 0.45s cubic-bezier(0.34,1.56,0.64,1) 0.12s both, jarvis-pulse 1.35s ease-in-out 0.57s infinite; }
+          .logo-sq.sq3 { animation: logo-enter 0.45s cubic-bezier(0.34,1.56,0.64,1) 0.24s both, jarvis-pulse 1.35s ease-in-out 0.69s infinite; }
+          @keyframes logo-enter {
+            0% { transform: scale(0.4); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+          }
+          @keyframes jarvis-pulse {
+            0%, 100% { transform: scale(0.75); opacity: 0.35; }
+            50% { transform: scale(1); opacity: 1; }
+          }
+          .thread {
+            flex: 1;
             min-height: 0;
-          }
-          canvas#orb {
-            width: 92px;
-            height: 92px;
-          }
-          .texts {
             overflow-y: auto;
-            max-height: 42%;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding: 6px 16px 4px;
           }
-          .transcript {
-            font-size: 14.5px;
-            font-weight: 700;
-            line-height: 1.3;
-          }
-          .response {
-            margin-top: 6px;
-            font-size: 12.5px;
+          .empty {
+            margin: auto;
+            font-size: 12px;
             color: var(--text-secondary);
+            text-align: center;
+          }
+          .row { display: flex; }
+          .row.user { justify-content: flex-end; }
+          .row.jarvis { justify-content: flex-start; }
+          .bubble {
+            max-width: 78%;
+            padding: 7px 12px;
+            border-radius: 16px;
+            font-size: 12px;
+            font-weight: 500;
             line-height: 1.35;
+            animation: bubble-in 0.25s cubic-bezier(0.16,1,0.3,1) both;
+          }
+          .bubble.user {
+            background: var(--accent);
+            color: var(--on-accent);
+            border-bottom-right-radius: 6px;
+          }
+          .bubble.jarvis {
+            background: var(--bubble-other-bg);
+            color: var(--text-primary);
+            border-bottom-left-radius: 6px;
+          }
+          .bubble .time {
+            font-size: 9px;
+            opacity: 0.8;
+            margin-top: 3px;
+          }
+          @keyframes bubble-in {
+            0% { opacity: 0; transform: translateY(14px) scale(0.96); }
+            100% { opacity: 1; transform: translateY(0) scale(1); }
+          }
+          .partial {
+            flex-shrink: 0;
+            min-height: 16px;
+            padding: 0 18px 10px;
+            font-size: 11px;
+            font-style: italic;
+            color: var(--text-secondary);
           }
         </style>
         </head>
         <body>
-          <div class="card">
-            <div class="title">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 4.6L18 9l-4.1 1.4L12 15l-1.9-4.6L6 9l4.1-1.4L12 3z"/><circle cx="18.5" cy="17.5" r="1.4"/></svg>
-              <span>JARVIS</span>
+          <div class="sheet" id="sheet">
+            <div class="handle"></div>
+            <div class="header" id="header">
+              <div class="title">
+                <svg viewBox="0 0 256 256"><rect x="44" y="44" width="54" height="54" rx="12"/><rect x="82" y="82" width="54" height="54" rx="12"/><rect x="120" y="120" width="54" height="54" rx="12"/></svg>
+                <span>JARVIS</span>
+              </div>
+              <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
             </div>
             <div class="status" id="status">Preparando...</div>
-            <div class="orb-wrap"><canvas id="orb" width="184" height="184"></canvas></div>
-            <div class="texts">
-              <div class="transcript" id="transcript"></div>
-              <div class="response" id="response"></div>
+            <div class="logo-wrap">
+              <svg viewBox="0 0 256 256">
+                <rect class="logo-sq sq1" x="44" y="44" width="76" height="76" rx="16"/>
+                <rect class="logo-sq sq2" x="90" y="90" width="76" height="76" rx="16"/>
+                <rect class="logo-sq sq3" x="136" y="136" width="76" height="76" rx="16"/>
+              </svg>
             </div>
+            <div class="thread" id="thread">
+              <div class="empty" id="empty">Decime en qué te ayudo...</div>
+            </div>
+            <div class="partial" id="partial"></div>
           </div>
         <script>
         (function () {
-          var canvas = document.getElementById('orb');
-          var ctx = canvas.getContext('2d');
-          var W = canvas.width, H = canvas.height, cx = W / 2, cy = H / 2;
-          var accent = '#71717a';
-          var level = 0;
-          var targetLevel = 0;
-          var t = 0;
-
-          function hexToRgb(hex) {
-            var m = /^#?([a-f\\d]{2})([a-f\\d]{2})([a-f\\d]{2})$/i.exec(hex || '');
-            return m ? { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) } : { r: 113, g: 113, b: 122 };
-          }
-
-          function draw() {
-            t += 0.02;
-            level += (targetLevel - level) * 0.15;
-            ctx.clearRect(0, 0, W, H);
-            var rgb = hexToRgb(accent);
-            var rgbStr = rgb.r + ',' + rgb.g + ',' + rgb.b;
-            var breathe = Math.sin(t) * 2;
-            var r = 32 + level * 16 + breathe;
-            var maxSafeRadius = Math.min(cx, cy) - 2;
-            var haloR = Math.min(r * 1.55, maxSafeRadius);
-
-            var halo = ctx.createRadialGradient(cx, cy, r * 0.2, cx, cy, haloR);
-            halo.addColorStop(0, 'rgba(' + rgbStr + ',' + (0.3 + level * 0.4) + ')');
-            halo.addColorStop(1, 'rgba(' + rgbStr + ',0)');
-            ctx.fillStyle = halo;
-            ctx.beginPath();
-            ctx.arc(cx, cy, haloR, 0, Math.PI * 2);
-            ctx.fill();
-
-            var core = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.3, r * 0.1, cx, cy, r);
-            core.addColorStop(0, 'rgba(255,255,255,0.88)');
-            core.addColorStop(0.38, 'rgba(' + rgbStr + ',0.92)');
-            core.addColorStop(1, 'rgba(' + rgbStr + ',0.38)');
-            ctx.fillStyle = core;
-            ctx.beginPath();
-            ctx.arc(cx, cy, r, 0, Math.PI * 2);
-            ctx.fill();
-
-            ctx.save();
-            ctx.globalAlpha = 0.3 + level * 0.55;
-            ctx.strokeStyle = 'rgba(255,255,255,0.85)';
-            ctx.lineWidth = 1;
-            var crackleCount = 5;
-            for (var i = 0; i < crackleCount; i++) {
-              var ang = (i / crackleCount) * Math.PI * 2 + t * 0.6;
-              var jitter = Math.sin(t * 3 + i) * 0.16;
-              var x1 = cx + Math.cos(ang) * r * 0.28;
-              var y1 = cy + Math.sin(ang) * r * 0.28;
-              var x2 = cx + Math.cos(ang + jitter) * r * 0.96;
-              var y2 = cy + Math.sin(ang + jitter) * r * 0.96;
-              ctx.beginPath();
-              ctx.moveTo(x1, y1);
-              ctx.lineTo(x2, y2);
-              ctx.stroke();
+          var expanded = false;
+          var sheet = document.getElementById('sheet');
+          document.getElementById('header').addEventListener('click', function () {
+            expanded = !expanded;
+            sheet.classList.toggle('expanded', expanded);
+            if (window.JarvisBridge && window.JarvisBridge.setExpanded) {
+              window.JarvisBridge.setExpanded(expanded);
             }
-            ctx.restore();
+          });
 
-            var dustCount = 12;
-            for (var d = 0; d < dustCount; d++) {
-              var dir = d % 2 === 0 ? 1 : -1;
-              var dAng = (d / dustCount) * Math.PI * 2 + t * (0.35 + level * 0.75) * dir;
-              var dRad = r * (1.18 + 0.22 * Math.sin(t * 2 + d));
-              var dx = cx + Math.cos(dAng) * dRad;
-              var dy = cy + Math.sin(dAng) * dRad;
-              var size = 1 + level * 1.4;
-              ctx.beginPath();
-              ctx.fillStyle = 'rgba(' + rgbStr + ',' + (0.45 + 0.45 * Math.sin(t * 3 + d)) + ')';
-              ctx.arc(dx, dy, size, 0, Math.PI * 2);
-              ctx.fill();
-            }
-
-            requestAnimationFrame(draw);
+          function addMessage(role, text) {
+            if (!text) return;
+            var empty = document.getElementById('empty');
+            if (empty) empty.style.display = 'none';
+            document.getElementById('partial').textContent = '';
+            var thread = document.getElementById('thread');
+            var row = document.createElement('div');
+            row.className = 'row ' + role;
+            var bubble = document.createElement('div');
+            bubble.className = 'bubble ' + role;
+            var p = document.createElement('div');
+            p.textContent = text;
+            bubble.appendChild(p);
+            var time = document.createElement('div');
+            time.className = 'time';
+            time.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+            bubble.appendChild(time);
+            row.appendChild(bubble);
+            thread.appendChild(row);
+            thread.scrollTop = thread.scrollHeight;
           }
-          requestAnimationFrame(draw);
 
           window.JarvisUI = {
             init: function (accentColor, isDark) {
-              accent = accentColor || accent;
-              document.documentElement.style.setProperty('--accent', accent);
-              document.documentElement.style.setProperty('--card-bg', isDark ? 'rgba(13,13,13,0.88)' : 'rgba(244,244,245,0.92)');
-              document.documentElement.style.setProperty('--text-primary', isDark ? '#ffffff' : '#18181b');
-              document.documentElement.style.setProperty('--text-secondary', isDark ? '#a1a1aa' : '#71717a');
+              var root = document.documentElement.style;
+              root.setProperty('--accent', accentColor || '#71717a');
+              root.setProperty('--card-bg', isDark ? 'rgba(13,13,13,0.88)' : 'rgba(244,244,245,0.92)');
+              root.setProperty('--text-primary', isDark ? '#ffffff' : '#18181b');
+              root.setProperty('--text-secondary', isDark ? '#a1a1aa' : '#71717a');
+              root.setProperty('--on-accent', isDark ? '#ffffff' : '#000000');
+              root.setProperty('--bubble-other-bg', isDark ? '#27272a' : '#f4f4f5');
             },
             setStatus: function (text) { document.getElementById('status').textContent = text || ''; },
-            setTranscript: function (text) { document.getElementById('transcript').textContent = text || ''; },
-            setResponse: function (text) { document.getElementById('response').textContent = text || ''; },
-            setRms: function (normalized) { targetLevel = Math.max(0, Math.min(1, normalized)); }
+            setPartialTranscript: function (text) { document.getElementById('partial').textContent = text || ''; },
+            addUserMessage: function (text) { addMessage('user', text); },
+            addJarvisMessage: function (text) { addMessage('jarvis', text); }
           };
         })();
         </script>
@@ -267,6 +327,7 @@ public class JarvisVoiceInteractionSession extends VoiceInteractionSession {
     private WebView webView;
     private boolean webViewReady = false;
     private boolean sessionActive = false;
+    private boolean isExpanded = false;
 
     private SpeechRecognizer speechRecognizer;
     private TextToSpeech textToSpeech;
@@ -277,15 +338,30 @@ public class JarvisVoiceInteractionSession extends VoiceInteractionSession {
         appContext = context.getApplicationContext();
     }
 
+    private class JarvisJsBridge {
+        // El header del overlay llama a esto al tocarlo para expandir/contraer — la tarjeta
+        // nativa (WebView) se redimensiona desde Java (ver applyExpandedState); el callback de
+        // un @JavascriptInterface llega en un hilo aparte, nunca el principal, por eso el post().
+        @JavascriptInterface
+        public void setExpanded(boolean expanded) {
+            mainHandler.post(() -> applyExpandedState(expanded));
+        }
+    }
+
     @Override
     public View onCreateContentView() {
         DisplayMetrics dm = appContext.getResources().getDisplayMetrics();
-        int width = Math.round(dm.widthPixels * 0.9f);
-        int height = dm.heightPixels / 3;
+        int width = Math.round(dm.widthPixels * SHEET_WIDTH_RATIO);
+        int height = Math.round(dm.heightPixels * SHEET_COMPACT_HEIGHT_RATIO);
+        int bottomMargin = Math.round(SHEET_BOTTOM_MARGIN_DP * dm.density);
 
         webView = new WebView(appContext);
         webView.setBackgroundColor(Color.TRANSPARENT);
         webView.getSettings().setJavaScriptEnabled(true);
+        // Solo carga el HTML de acá abajo (nunca navega a una URL externa), por eso exponer este
+        // bridge no abre una superficie de ataque: no hay contenido no confiable corriendo en el
+        // mismo WebView.
+        webView.addJavascriptInterface(new JarvisJsBridge(), "JarvisBridge");
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageFinished(WebView view, String url) {
@@ -294,9 +370,9 @@ public class JarvisVoiceInteractionSession extends VoiceInteractionSession {
             }
         });
         // Toda la tarjeta (tamaño, bordes redondeados, fondo semitransparente, tipografía, el
-        // orbe) vive en este HTML embebido — así reusa el mismo lenguaje visual que la web/app en
-        // vez de reimplementarlo en vistas nativas. loadDataWithBaseURL(null, ...) alcanza porque
-        // la página es autocontenida (sin red ni recursos externos).
+        // logo animado, el chat) vive en este HTML embebido — así reusa el mismo lenguaje visual
+        // que la web/app en vez de reimplementarlo en vistas nativas. loadDataWithBaseURL(null,
+        // ...) alcanza porque la página es autocontenida (sin red ni recursos externos).
         webView.loadDataWithBaseURL(null, OVERLAY_HTML, "text/html", "UTF-8", null);
         // Mientras falte el permiso de micrófono, tocar la tarjeta abre la app para concederlo
         // (ver startListening/requestMicPermissionFromApp) — una sesión de asistente no puede
@@ -306,7 +382,8 @@ public class JarvisVoiceInteractionSession extends VoiceInteractionSession {
         });
 
         FrameLayout.LayoutParams webParams = new FrameLayout.LayoutParams(width, height);
-        webParams.gravity = Gravity.CENTER;
+        webParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        webParams.bottomMargin = bottomMargin;
 
         FrameLayout root = new FrameLayout(appContext);
         root.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -323,6 +400,7 @@ public class JarvisVoiceInteractionSession extends VoiceInteractionSession {
                 ttsReady = status == TextToSpeech.SUCCESS;
                 if (!ttsReady) return;
                 textToSpeech.setLanguage(new Locale("es", "AR"));
+                selectBestSpanishVoice();
                 // Apenas termina de hablar la respuesta, retoma la escucha sola — así la
                 // conversación sigue sin que el usuario tenga que tocar nada entre turnos.
                 textToSpeech.setOnUtteranceProgressListener(new UtteranceProgressListener() {
@@ -379,6 +457,65 @@ public class JarvisVoiceInteractionSession extends VoiceInteractionSession {
             == PackageManager.PERMISSION_GRANTED;
     }
 
+    // Entre las voces en español ya instaladas en el equipo (ninguna cuenta nueva, ningún
+    // servicio pago), preferimos una masculina de la mejor calidad disponible en vez de dejar la
+    // que el motor elija por default. Es "mejor esfuerzo": el API de Android no expone un campo
+    // de género formal, así que se infiere del nombre de la voz — varía según el motor/fabricante
+    // y puede no encontrar ninguna que matchee, en cuyo caso se deja la voz default del idioma.
+    private void selectBestSpanishVoice() {
+        if (textToSpeech == null) return;
+        try {
+            Set<Voice> voices = textToSpeech.getVoices();
+            if (voices == null) return;
+            Voice best = null;
+            for (Voice v : voices) {
+                Locale locale = v.getLocale();
+                if (locale == null || !"spa".equals(locale.getISO3Language())) continue;
+                if (v.getFeatures() != null && v.getFeatures().contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED)) continue;
+                if (best == null || isBetterVoice(v, best)) {
+                    best = v;
+                }
+            }
+            if (best != null) {
+                textToSpeech.setVoice(best);
+            }
+        } catch (Exception ignored) {
+            // Si el motor no expone bien getVoices()/getName(), seguimos con la voz default del
+            // Locale — no es crítico para que Jarvis funcione.
+        }
+    }
+
+    private boolean isBetterVoice(Voice candidate, Voice current) {
+        boolean candidateMale = looksMale(candidate);
+        boolean currentMale = looksMale(current);
+        if (candidateMale != currentMale) return candidateMale;
+        return candidate.getQuality() > current.getQuality();
+    }
+
+    private boolean looksMale(Voice v) {
+        String name = v.getName() != null ? v.getName().toLowerCase(Locale.ROOT) : "";
+        return name.contains("male") && !name.contains("female");
+    }
+
+    // Anima el alto nativo del WebView entre el tamaño compacto y el expandido — el toque viene
+    // del header dentro del HTML (ver JarvisJsBridge), el redimensionado real es nativo.
+    private void applyExpandedState(boolean expanded) {
+        if (webView == null) return;
+        isExpanded = expanded;
+        DisplayMetrics dm = appContext.getResources().getDisplayMetrics();
+        final FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) webView.getLayoutParams();
+        final int from = params.height;
+        final int to = Math.round(dm.heightPixels * (expanded ? SHEET_EXPANDED_HEIGHT_RATIO : SHEET_COMPACT_HEIGHT_RATIO));
+        ValueAnimator animator = ValueAnimator.ofInt(from, to);
+        animator.setDuration(220);
+        animator.setInterpolator(new DecelerateInterpolator());
+        animator.addUpdateListener(a -> {
+            params.height = (int) a.getAnimatedValue();
+            webView.setLayoutParams(params);
+        });
+        animator.start();
+    }
+
     private void applyTheme() {
         if (!webViewReady) return;
         SharedPreferences prefs = appContext.getSharedPreferences(PREFS_FILE, Context.MODE_PRIVATE);
@@ -397,16 +534,16 @@ public class JarvisVoiceInteractionSession extends VoiceInteractionSession {
         runJs("window.JarvisUI && window.JarvisUI.setStatus(" + JSONObject.quote(text != null ? text : "") + ")");
     }
 
-    private void setTranscript(String text) {
-        runJs("window.JarvisUI && window.JarvisUI.setTranscript(" + JSONObject.quote(text != null ? text : "") + ")");
+    private void setPartialTranscript(String text) {
+        runJs("window.JarvisUI && window.JarvisUI.setPartialTranscript(" + JSONObject.quote(text != null ? text : "") + ")");
     }
 
-    private void setResponse(String text) {
-        runJs("window.JarvisUI && window.JarvisUI.setResponse(" + JSONObject.quote(text != null ? text : "") + ")");
+    private void addUserMessage(String text) {
+        runJs("window.JarvisUI && window.JarvisUI.addUserMessage(" + JSONObject.quote(text != null ? text : "") + ")");
     }
 
-    private void setRms(float normalized) {
-        runJs("window.JarvisUI && window.JarvisUI.setRms(" + normalized + ")");
+    private void addJarvisMessage(String text) {
+        runJs("window.JarvisUI && window.JarvisUI.addJarvisMessage(" + JSONObject.quote(text != null ? text : "") + ")");
     }
 
     // Jarvis escucha en loop continuo: arranca solo al abrirse y, entre turnos (después de un
@@ -442,11 +579,6 @@ public class JarvisVoiceInteractionSession extends VoiceInteractionSession {
 
             @Override
             public void onRmsChanged(float rmsdB) {
-                // SpeechRecognizer da dB, no un nivel 0..1 calibrado — esta normalización es una
-                // aproximación razonable (silencio ~ -2dB, voz fuerte ~ 8-10dB) para que el orbe
-                // reaccione de forma fluida, no un valor acústicamente exacto.
-                float normalized = Math.max(0f, Math.min(1f, (rmsdB + 2f) / 10f));
-                setRms(normalized);
             }
 
             @Override
@@ -456,12 +588,10 @@ public class JarvisVoiceInteractionSession extends VoiceInteractionSession {
             @Override
             public void onEndOfSpeech() {
                 setStatus("Pensando...");
-                setRms(0f);
             }
 
             @Override
             public void onError(int error) {
-                setRms(0f);
                 if (error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
                     setStatus("Falta el permiso de micrófono.");
                     return;
@@ -473,11 +603,10 @@ public class JarvisVoiceInteractionSession extends VoiceInteractionSession {
 
             @Override
             public void onResults(Bundle results) {
-                setRms(0f);
                 ArrayList<String> matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
                 if (matches != null && !matches.isEmpty()) {
                     String heard = matches.get(0);
-                    setTranscript(heard);
+                    addUserMessage(heard);
                     askJarvis(heard);
                 } else {
                     mainHandler.postDelayed(() -> { if (sessionActive) startListening(); }, 400);
@@ -488,7 +617,7 @@ public class JarvisVoiceInteractionSession extends VoiceInteractionSession {
             public void onPartialResults(Bundle partialResults) {
                 ArrayList<String> matches = partialResults.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
                 if (matches != null && !matches.isEmpty()) {
-                    setTranscript(matches.get(0));
+                    setPartialTranscript(matches.get(0));
                 }
             }
 
@@ -502,8 +631,7 @@ public class JarvisVoiceInteractionSession extends VoiceInteractionSession {
         recognizerIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "es-AR");
         recognizerIntent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
         setStatus("Escuchando...");
-        setTranscript("");
-        setResponse("");
+        setPartialTranscript("");
         speechRecognizer.startListening(recognizerIntent);
     }
 
@@ -520,7 +648,6 @@ public class JarvisVoiceInteractionSession extends VoiceInteractionSession {
 
     private void askJarvis(String heard) {
         setStatus("Pensando...");
-        setResponse("");
         new Thread(() -> {
             String answer;
             try {
@@ -528,7 +655,7 @@ public class JarvisVoiceInteractionSession extends VoiceInteractionSession {
             } catch (Exception e) {
                 answer = "No pude conectarme para responderte. Probá de nuevo en un rato.";
             }
-            setResponse(answer);
+            addJarvisMessage(answer);
             setStatus("Respondiendo...");
             speak(answer);
         }).start();
