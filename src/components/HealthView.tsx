@@ -346,7 +346,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
                       key={opt.value}
                       className={`group relative flex items-center justify-between w-full font-semibold rounded-xl transition-colors border my-0.5 ${
                         isSelected
-                          ? "bg-primary text-white dark:text-blue-950 font-bold shadow-xs border-primary"
+                          ? "bg-primary text-white dark:text-black font-bold shadow-xs border-primary"
                           : "text-black dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800/80 border-transparent hover:border-primary/40"
                       }`}
                     >
@@ -385,7 +385,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
                           }}
                           className={`p-1.5 mr-1 rounded-lg transition-colors cursor-pointer shrink-0 ${
                             isSelected
-                              ? "text-white/80 hover:text-white hover:bg-white/20 dark:text-blue-950/80 dark:hover:bg-blue-950/20"
+                              ? "text-white/80 hover:text-white hover:bg-white/20 dark:text-black/80 dark:hover:bg-blue-950/20"
                               : "text-slate-400 hover:text-red-500 hover:bg-red-50 dark:text-zinc-500 dark:hover:text-red-400 dark:hover:bg-red-950/30"
                           }`}
                         >
@@ -448,7 +448,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
                               handleCreateAndSelect(customInputValue);
                             }
                           }}
-                          className="px-2.5 py-1.5 bg-primary text-white dark:text-blue-950 rounded-lg text-xs font-bold hover:bg-primary/90 shrink-0 cursor-pointer"
+                          className="px-2.5 py-1.5 bg-primary text-white dark:text-black rounded-lg text-xs font-bold hover:bg-primary/90 shrink-0 cursor-pointer"
                         >
                           Añadir
                         </button>
@@ -3014,7 +3014,13 @@ export default function HealthView({
   const handleOpenAddBpTableModal = () => {
     setEditingBpLogItem(null);
     setFormBpPatient("Hernan");
-    setFormBpDate(new Date().toISOString().split("T")[0]);
+    // Fecha y hora actuales en el momento de abrir el formulario (no solo la fecha) — el usuario
+    // pidió que se complete solo, sin tener que elegirla a mano cada vez que registra un dato.
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    setFormBpDate(
+      `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`,
+    );
     setFormBpSys("120");
     setFormBpDia("80");
     setFormBpPulse("72");
@@ -3379,7 +3385,7 @@ export default function HealthView({
                               isSelected
                                 ? "border-2 border-primary text-primary dark:text-primary bg-primary/10 scale-105 shadow-sm"
                                 : isToday
-                                ? "bg-primary text-white dark:text-blue-950 shadow-md font-bold"
+                                ? "bg-primary text-white dark:text-black shadow-md font-bold"
                                 : "hover:bg-primary/10 text-slate-700 dark:text-zinc-300"
                             }`}
                           >
@@ -4196,7 +4202,7 @@ export default function HealthView({
                       onClick={() => {
                         setShowAddBp(!showAddBp);
                       }}
-                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-primary hover:bg-primary-hover text-white dark:text-blue-950 text-xs font-bold cursor-pointer transition-all shadow-xs"
+                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-primary hover:bg-primary-hover text-white dark:text-black text-xs font-bold cursor-pointer transition-all shadow-xs"
                     >
                       <Plus className="w-4 h-4" />
                       <span>Registrar</span>
@@ -4716,7 +4722,7 @@ export default function HealthView({
                           setMedCuello(metabolicProfile.cuello || "");
                           setShowMedidasModal(true);
                         }}
-                        className="px-4 py-2 bg-primary hover:bg-primary-hover text-white dark:text-blue-950 text-xs font-bold rounded-full flex items-center gap-1.5 cursor-pointer transition-all shadow-md shadow-primary/10 hover:scale-[1.02] active:scale-[0.98]"
+                        className="px-4 py-2 bg-primary hover:bg-primary-hover text-white dark:text-black text-xs font-bold rounded-full flex items-center gap-1.5 cursor-pointer transition-all shadow-md shadow-primary/10 hover:scale-[1.02] active:scale-[0.98]"
                       >
                         <Scale className="w-4 h-4" />
                         <span>Registrar Peso / Medidas</span>
@@ -5362,7 +5368,7 @@ export default function HealthView({
                               onClick={() => setAlimEstado(es as any)}
                               className={`flex items-center justify-center px-2.5 py-1.5 rounded-full text-[11px] font-bold border-2 transition-all cursor-pointer ${
                                 isActive
-                                  ? "bg-primary border-primary text-white dark:text-blue-950 shadow-sm"
+                                  ? "bg-primary border-primary text-white dark:text-black shadow-sm"
                                   : "bg-transparent border-slate-200 dark:border-zinc-700 text-slate-500 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800/60"
                               }`}
                             >
@@ -5564,7 +5570,7 @@ export default function HealthView({
                         type="button"
                         onClick={handleSaveAlimLog}
                         disabled={isSaving || !alimFecha || !alimEstado || !alimPlatoId}
-                        className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-white dark:text-blue-950 text-xs font-extrabold shadow-sm transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-white dark:text-black text-xs font-extrabold shadow-sm transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         {isSaving ? (
                           <>
@@ -5695,7 +5701,7 @@ export default function HealthView({
                               isSelected
                                 ? "border-2 border-primary text-primary bg-primary/10 scale-[1.02] shadow-sm"
                                 : isToday
-                                  ? "bg-primary text-white dark:text-blue-950 shadow-md"
+                                  ? "bg-primary text-white dark:text-black shadow-md"
                                   : "hover:bg-primary/10 text-slate-700 dark:text-zinc-300"
                             }`}
                           >
@@ -5959,7 +5965,7 @@ export default function HealthView({
                               isSelected
                                 ? "border-2 border-primary text-primary bg-primary/10 scale-[1.02] shadow-sm"
                                 : isToday
-                                  ? "bg-primary text-white dark:text-blue-950 shadow-md"
+                                  ? "bg-primary text-white dark:text-black shadow-md"
                                   : "hover:bg-primary/10 text-slate-700 dark:text-zinc-300"
                             }`}
                           >
@@ -6027,7 +6033,7 @@ export default function HealthView({
       {activeSubTab === "control_clinico" && (
         <div className="space-y-6">
           {clinicoPartnerInfo.isLinked && (
-            <div className="flex flex-wrap items-center justify-between gap-2 p-3 px-4 rounded-2xl bg-primary/10 border border-primary/20 text-xs font-bold text-primary dark:text-blue-200 shadow-xs">
+            <div className="flex flex-wrap items-center justify-between gap-2 p-3 px-4 rounded-2xl bg-primary/10 border border-primary/20 text-xs font-bold text-primary shadow-xs">
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
                 <span>
@@ -6076,7 +6082,7 @@ export default function HealthView({
                     </div>
                     <button
                       onClick={handleOpenAddDoctorModal}
-                      className="px-4 py-2.5 bg-primary hover:bg-primary-hover text-white dark:text-blue-950 text-xs font-bold rounded-full flex items-center gap-1.5 cursor-pointer transition-all shadow-md shadow-primary/10 hover:scale-[1.02] active:scale-[0.98]"
+                      className="px-4 py-2.5 bg-primary hover:bg-primary-hover text-white dark:text-black text-xs font-bold rounded-full flex items-center gap-1.5 cursor-pointer transition-all shadow-md shadow-primary/10 hover:scale-[1.02] active:scale-[0.98]"
                     >
                       <Plus className="w-4 h-4" />
                       <span>Registrar Doctor/a</span>
@@ -6333,7 +6339,7 @@ export default function HealthView({
                         whileHover={{ scale: 1.04 }}
                         whileTap={{ scale: 0.94 }}
                         onClick={medsActiveTab === "historial" ? openAddModal : handleOpenAddDisp}
-                        className={`${medsActiveTab === "historial" ? "hidden md:flex" : "flex"} items-center justify-center gap-1.5 px-4 py-2.5 rounded-full bg-primary hover:bg-primary-hover text-white dark:text-blue-950 text-xs font-bold transition-all cursor-pointer shadow-xs w-full sm:w-auto mt-2 sm:mt-0 sm:self-center`}
+                        className={`${medsActiveTab === "historial" ? "hidden md:flex" : "flex"} items-center justify-center gap-1.5 px-4 py-2.5 rounded-full bg-primary hover:bg-primary-hover text-white dark:text-black text-xs font-bold transition-all cursor-pointer shadow-xs w-full sm:w-auto mt-2 sm:mt-0 sm:self-center`}
                       >
                         <Plus className="w-4 h-4" />
                         <span>
@@ -7027,7 +7033,7 @@ export default function HealthView({
                     </div>
                     <button
                       onClick={handleOpenAddBpTableModal}
-                      className="px-4 py-2.5 bg-primary hover:bg-primary-hover text-white dark:text-blue-950 text-xs font-bold rounded-full flex items-center gap-1.5 cursor-pointer transition-all shadow-md shadow-primary/10 hover:scale-[1.02] active:scale-[0.98]"
+                      className="px-4 py-2.5 bg-primary hover:bg-primary-hover text-white dark:text-black text-xs font-bold rounded-full flex items-center gap-1.5 cursor-pointer transition-all shadow-md shadow-primary/10 hover:scale-[1.02] active:scale-[0.98]"
                     >
                       <Plus className="w-4 h-4" />
                       <span>Registrar Presión / Signos</span>
@@ -7313,7 +7319,7 @@ export default function HealthView({
                       whileHover={{ scale: 1.04 }}
                       whileTap={{ scale: 0.94 }}
                       onClick={handleOpenAddEstudio}
-                      className="px-4 py-2.5 bg-primary hover:bg-primary-hover text-white dark:text-blue-950 text-xs font-bold rounded-full flex items-center gap-1.5 cursor-pointer transition-all shadow-md shadow-primary/10"
+                      className="px-4 py-2.5 bg-primary hover:bg-primary-hover text-white dark:text-black text-xs font-bold rounded-full flex items-center gap-1.5 cursor-pointer transition-all shadow-md shadow-primary/10"
                     >
                       <Plus className="w-4 h-4" />
                       <span>Registrar Registro Médico</span>
@@ -7950,7 +7956,7 @@ export default function HealthView({
                     <button
                       type="submit"
                       disabled={isSaving}
-                      className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-white dark:text-blue-950 text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-md shadow-primary/10 disabled:opacity-50"
+                      className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-white dark:text-black text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-md shadow-primary/10 disabled:opacity-50"
                     >
                       {isSaving ? (
                         <>
@@ -8255,7 +8261,7 @@ export default function HealthView({
                   <button
                     type="submit"
                     disabled={isSaving}
-                    className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-white dark:text-blue-950 text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-md shadow-primary/10 disabled:opacity-50"
+                    className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-white dark:text-black text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-md shadow-primary/10 disabled:opacity-50"
                   >
                     {isSaving ? (
                       <>
@@ -8412,7 +8418,7 @@ export default function HealthView({
                     <button
                       type="submit"
                       disabled={isSaving}
-                      className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-white dark:text-blue-950 text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-md shadow-primary/10 disabled:opacity-50"
+                      className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-white dark:text-black text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-md shadow-primary/10 disabled:opacity-50"
                     >
                       {isSaving ? (
                         <>
@@ -8585,7 +8591,7 @@ export default function HealthView({
                     <button
                       type="submit"
                       disabled={isSaving}
-                      className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-white dark:text-blue-950 text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-md shadow-primary/10 disabled:opacity-50"
+                      className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-white dark:text-black text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-md shadow-primary/10 disabled:opacity-50"
                     >
                       {isSaving ? (
                         <>
@@ -8816,7 +8822,7 @@ export default function HealthView({
                       type="button"
                       onClick={handleSaveActividad}
                       disabled={isSaving || !actFechaDesde || !actFechaHasta || !actInformacion}
-                      className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-white dark:text-blue-950 text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-white dark:text-black text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isSaving ? (
                         <>
@@ -9117,7 +9123,7 @@ export default function HealthView({
                     <button
                       type="submit"
                       disabled={isSaving}
-                      className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-white dark:text-blue-950 text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-white dark:text-black text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                     >
                       {isSaving ? (
                         <>
@@ -9247,7 +9253,7 @@ export default function HealthView({
                   <button
                     type="submit"
                     disabled={isSaving}
-                    className="px-4 py-2 rounded-xl bg-primary hover:bg-primary-hover text-white dark:text-blue-950 text-xs font-bold disabled:opacity-50 flex items-center gap-1.5"
+                    className="px-4 py-2 rounded-xl bg-primary hover:bg-primary-hover text-white dark:text-black text-xs font-bold disabled:opacity-50 flex items-center gap-1.5"
                   >
                     {isSaving ? (
                       <>
@@ -9393,7 +9399,7 @@ export default function HealthView({
                     <button
                       type="submit"
                       disabled={isSaving}
-                      className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-white dark:text-blue-950 text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-white dark:text-black text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                     >
                       {isSaving ? (
                         <>
@@ -9543,7 +9549,7 @@ export default function HealthView({
                     <button
                       type="submit"
                       disabled={isSaving}
-                      className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-white dark:text-blue-950 text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-white dark:text-black text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                     >
                       {isSaving ? (
                         <>

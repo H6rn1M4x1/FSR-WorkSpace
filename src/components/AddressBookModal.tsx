@@ -313,6 +313,7 @@ export const AddressBookModal: React.FC<AddressBookModalProps> = ({
 
   // Form fields
   const [newName, setNewName] = useState("");
+  const newNameInputRef = useRef<HTMLInputElement>(null);
   const [newAddress, setNewAddress] = useState("");
   const [newLat, setNewLat] = useState<string>("");
   const [newLon, setNewLon] = useState<string>("");
@@ -383,14 +384,24 @@ export const AddressBookModal: React.FC<AddressBookModalProps> = ({
     setConfirmDeleteId(id);
   };
 
+  // "name" puede venir siendo en realidad las coordenadas crudas (p. ej. "-31.53292, -68.52202")
+  // cuando la geocodificación inversa no encontró una dirección real — ver handleReverseGeocode
+  // en LocationPickerMap.tsx. Mostrar eso como "nombre" no sirve de nada; mejor dejar el campo
+  // vacío con el teclado listo para que el usuario tipee el nombre del lugar directamente.
+  const looksLikeRawCoords = (value: string) => /^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$/.test(value.trim());
+
   const handleStartAddCurrent = () => {
-    setNewName(currentSelected?.name || "");
+    const name = currentSelected?.name || "";
+    setNewName(looksLikeRawCoords(name) ? "" : name);
     setNewAddress(currentSelected?.address || currentSelected?.name || "");
     setNewLat(currentSelected?.lat ? String(currentSelected.lat) : "");
     setNewLon(currentSelected?.lon ? String(currentSelected.lon) : "");
     setNewNotes("");
     setEditingId(null);
     setShowAddForm(true);
+    // El formulario recién se monta después de este render — sin el pequeño delay, el ref
+    // todavía apunta a nada (o al input de la búsqueda anterior) y el foco no se mueve.
+    setTimeout(() => newNameInputRef.current?.focus(), 50);
   };
 
   const handleStartEdit = (entry: AddressEntry, e: React.MouseEvent) => {
@@ -574,6 +585,7 @@ export const AddressBookModal: React.FC<AddressBookModalProps> = ({
                 setNewLon("");
                 setNewNotes("");
                 setShowAddForm(!showAddForm);
+                if (!showAddForm) setTimeout(() => newNameInputRef.current?.focus(), 50);
               }}
               className="px-3 py-2 rounded-xl bg-primary text-white dark:text-slate-950 font-bold text-xs flex items-center gap-1.5 hover:bg-primary-hover shadow-xs cursor-pointer shrink-0"
             >
@@ -621,6 +633,7 @@ export const AddressBookModal: React.FC<AddressBookModalProps> = ({
                   Nombre o Identificador *
                 </label>
                 <input
+                  ref={newNameInputRef}
                   type="text"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
