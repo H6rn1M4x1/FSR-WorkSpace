@@ -712,7 +712,7 @@ export function GymScheduleGrid({
               type="button"
               onClick={handleConfirmDraft}
               disabled={!canConfirmDraft}
-              className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-white dark:text-blue-950 text-xs font-extrabold shadow-sm transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-white dark:text-black text-xs font-extrabold shadow-sm transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Check className="w-3.5 h-3.5" />
               <span>{editingDraftId ? "Guardar Cambios" : "Registrar Ejercicio"}</span>
@@ -756,7 +756,7 @@ export function GymScheduleGrid({
                   onClick={() => setMode("pintar")}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all cursor-pointer ${
                     mode === "pintar"
-                      ? "bg-primary text-white dark:text-blue-950 shadow-sm"
+                      ? "bg-primary text-white dark:text-black shadow-sm"
                       : "text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200"
                   }`}
                 >
@@ -772,7 +772,7 @@ export function GymScheduleGrid({
                   }}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all cursor-pointer ${
                     mode === "borrar"
-                      ? "bg-primary text-white dark:text-blue-950 shadow-sm"
+                      ? "bg-primary text-white dark:text-black shadow-sm"
                       : "text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200"
                   }`}
                 >

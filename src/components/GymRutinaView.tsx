@@ -2255,7 +2255,7 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
                   <div className="pt-4 mt-2 border-t border-slate-100 dark:border-zinc-800/60 flex items-center gap-2">
                     <button
                       onClick={() => handleStartWorkout(rutina)}
-                      className="w-full py-2.5 bg-primary hover:bg-primary-hover text-white dark:text-blue-950 text-xs font-black rounded-xl flex items-center justify-center gap-2 shadow-md shadow-primary/10 hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer"
+                      className="w-full py-2.5 bg-primary hover:bg-primary-hover text-white dark:text-black text-xs font-black rounded-xl flex items-center justify-center gap-2 shadow-md shadow-primary/10 hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer"
                     >
                       <Play className="w-3.5 h-3.5 fill-current" />
                       <span>Iniciar Este Entrenamiento</span>
@@ -2275,7 +2275,7 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
               </p>
               <button
                 onClick={handleOpenNewRoutineModal}
-                className="mt-4 px-4 py-2 bg-primary text-white dark:text-blue-950 font-bold text-xs rounded-full inline-flex items-center gap-1.5"
+                className="mt-4 px-4 py-2 bg-primary text-white dark:text-black font-bold text-xs rounded-full inline-flex items-center gap-1.5"
               >
                 <Plus className="w-4 h-4" /> Crear Rutina
               </button>
@@ -2520,7 +2520,7 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
                 <button
                   disabled={isFinishingWorkout}
                   onClick={handleFinishWorkout}
-                  className="px-5 py-2.5 bg-primary hover:bg-primary-hover text-white dark:text-blue-950 text-xs font-black rounded-full flex items-center gap-2 shadow-lg shadow-primary/20 cursor-pointer disabled:opacity-50"
+                  className="px-5 py-2.5 bg-primary hover:bg-primary-hover text-white dark:text-black text-xs font-black rounded-full flex items-center gap-2 shadow-lg shadow-primary/20 cursor-pointer disabled:opacity-50"
                 >
                   {isFinishingWorkout ? (
                     <>
@@ -2734,7 +2734,7 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
                     key={s}
                     type="button"
                     onClick={() => setGeneralFeeling(s)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${generalFeeling === s ? "bg-primary text-white dark:text-blue-950 border-primary" : "bg-slate-100 dark:bg-zinc-800 border-slate-200 dark:border-zinc-700 text-slate-600 dark:text-zinc-400"}`}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${generalFeeling === s ? "bg-primary text-white dark:text-black border-primary" : "bg-slate-100 dark:bg-zinc-800 border-slate-200 dark:border-zinc-700 text-slate-600 dark:text-zinc-400"}`}
                   >
                     {s}
                   </button>
@@ -3187,7 +3187,7 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
                   <button
                     type="button"
                     onClick={handleSaveCustomExercise}
-                    className="w-full py-2 text-xs font-bold rounded-xl bg-primary text-white dark:text-blue-950 shadow-xs cursor-pointer"
+                    className="w-full py-2 text-xs font-bold rounded-xl bg-primary text-white dark:text-black shadow-xs cursor-pointer"
                   >
                     Guardar y Agregar Ejercicio
                   </button>

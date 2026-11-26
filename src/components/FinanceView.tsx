@@ -593,12 +593,22 @@ function TrendArrow({ positive }: { positive: boolean }) {
 function findPriorRecurringAmount(payment: DetailedPayment, allPayments: DetailedPayment[]): number | null {
   if (!payment.pagoRecurrente) return null;
   const sameDescription = payment.descripcion.trim().toLowerCase();
+  // fechaVencimiento puede guardarse en más de un formato (ISO o DD/MM/YYYY, ver
+  // normalizeDateComponents) — comparar los strings crudos con "<"/">" da resultados incorrectos
+  // en esos casos, así que se normaliza antes a isoDate para que el orden cronológico sea real.
+  const currentParsed = normalizeDateComponents(payment.fechaVencimiento);
+  if (!currentParsed) return null;
   let prior: DetailedPayment | null = null;
+  let priorIso = "";
   for (const other of allPayments) {
     if (other.id === payment.id) continue;
     if (other.descripcion.trim().toLowerCase() !== sameDescription) continue;
-    if (other.fechaVencimiento >= payment.fechaVencimiento) continue;
-    if (!prior || other.fechaVencimiento > prior.fechaVencimiento) prior = other;
+    const otherParsed = normalizeDateComponents(other.fechaVencimiento);
+    if (!otherParsed || otherParsed.isoDate >= currentParsed.isoDate) continue;
+    if (!prior || otherParsed.isoDate > priorIso) {
+      prior = other;
+      priorIso = otherParsed.isoDate;
+    }
   }
   return prior ? prior.montoAPagar : null;
 }

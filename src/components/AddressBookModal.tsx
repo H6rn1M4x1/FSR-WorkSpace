@@ -384,15 +384,13 @@ export const AddressBookModal: React.FC<AddressBookModalProps> = ({
     setConfirmDeleteId(id);
   };
 
-  // "name" puede venir siendo en realidad las coordenadas crudas (p. ej. "-31.53292, -68.52202")
-  // cuando la geocodificación inversa no encontró una dirección real — ver handleReverseGeocode
-  // en LocationPickerMap.tsx. Mostrar eso como "nombre" no sirve de nada; mejor dejar el campo
-  // vacío con el teclado listo para que el usuario tipee el nombre del lugar directamente.
-  const looksLikeRawCoords = (value: string) => /^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$/.test(value.trim());
-
+  // "currentSelected.name" puede ser una dirección real geocodificada o las coordenadas crudas
+  // (ver handleReverseGeocode en LocationPickerMap.tsx) — en cualquiera de los dos casos, el
+  // campo "Nombre" siempre arranca vacío con el teclado listo para tipear un nombre propio, sin
+  // precargar nada automático. La dirección/coordenadas sí quedan precargadas en "Dirección
+  // Completa", que es donde sirven.
   const handleStartAddCurrent = () => {
-    const name = currentSelected?.name || "";
-    setNewName(looksLikeRawCoords(name) ? "" : name);
+    setNewName("");
     setNewAddress(currentSelected?.address || currentSelected?.name || "");
     setNewLat(currentSelected?.lat ? String(currentSelected.lat) : "");
     setNewLon(currentSelected?.lon ? String(currentSelected.lon) : "");
