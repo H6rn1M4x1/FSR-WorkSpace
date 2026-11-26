@@ -236,7 +236,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                           }}
                           className={`w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-semibold rounded-lg text-left transition-colors cursor-pointer ${
                             isSelected
-                              ? "bg-primary text-white dark:text-blue-950 font-bold"
+                              ? "bg-primary text-white dark:text-black font-bold"
                               : "text-black dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-950/50"
                           }`}
                         >

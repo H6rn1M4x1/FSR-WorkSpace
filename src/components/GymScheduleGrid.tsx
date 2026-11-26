@@ -135,6 +135,10 @@ export function GymScheduleGrid({
   const [mode, setMode] = useState<"pintar" | "borrar">("pintar");
   const [drag, setDrag] = useState<DragState | null>(null);
   const dragRef = useRef<DragState | null>(null);
+  // Para hacer scroll hasta el panel de edición cuando se toca una tarjeta de la vista de notas
+  // (mobile): el panel queda arriba del todo, fuera de la vista, si la tarjeta tocada está más
+  // abajo en la lista.
+  const panelRef = useRef<HTMLDivElement>(null);
 
   const weekDates = useMemo(() => {
     const monday = getMondayOfCurrentWeek();
@@ -153,6 +157,12 @@ export function GymScheduleGrid({
       })
       .filter((x): x is WeekActividad => x !== null);
   }, [actividades, weekDateStrs]);
+
+  // Mismo listado, ordenado lunes→sábado y por hora — para la vista de tarjetas tipo "nota" en
+  // mobile (ver más abajo), que reemplaza la rejilla de arrastrar porque no es usable con el dedo.
+  const weekActividadesSorted = useMemo<WeekActividad[]>(() => {
+    return [...weekActividades].sort((a, b) => a.dayIdx - b.dayIdx || a.horaInicio.localeCompare(b.horaInicio));
+  }, [weekActividades]);
 
   // Panel izquierdo: desplegable de Rutina/Actividad (o "Actividad libre") + Día/Hora Inicio/Fin
   // para el alta manual, que además se van completando en vivo mientras se pinta.
@@ -222,6 +232,19 @@ export function GymScheduleGrid({
       setPanelFrecuencia("");
     }
   };
+
+  // Recalcula Tiempo Movimiento/Calorías/Puntos cada vez que cambian las horas — antes solo se
+  // recalculaba al arrastrar en la grilla o al elegir rutina/actividad (ver commitCreate/
+  // handleSelectOption), así que si el usuario tipeaba Hora Inicio/Hora Fin directamente en los
+  // campos de texto, esos valores quedaban desactualizados en vez de seguir a la hora real.
+  const panelMinutesRef = useRef<number | null>(null);
+  useEffect(() => {
+    const minutes = Math.max(MIN_BLOCK_MIN, parseTimeMin(panelHoraFin) - parseTimeMin(panelHoraInicio));
+    if (panelMinutesRef.current === minutes) return;
+    panelMinutesRef.current = minutes;
+    applyEstimate(selectedOption, minutes, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [panelHoraInicio, panelHoraFin]);
 
   const handleSelectOption = (key: string) => {
     setSelectedOptionKey(key);
@@ -503,6 +526,7 @@ export function GymScheduleGrid({
       <div className="lg:flex lg:gap-6 lg:items-start">
         {/* Panel izquierdo */}
         <div
+          ref={panelRef}
           className={`w-full lg:w-[280px] shrink-0 mb-6 lg:mb-0 rounded-2xl border p-4 space-y-3.5 ${
             darkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-slate-200"
           }`}
@@ -705,8 +729,11 @@ export function GymScheduleGrid({
                   <CalendarDays className="w-4 h-4 text-primary" />
                   <span>Historial de Sesiones</span>
                 </h3>
-                <p className="text-xs text-zinc-500 mt-0.5">
+                <p className="hidden md:block text-xs text-zinc-500 mt-0.5">
                   Elegí una rutina o deporte en el panel (o dejalo libre) y arrastrá sobre la rejilla para pintarla.
+                </p>
+                <p className="md:hidden text-xs text-zinc-500 mt-0.5">
+                  Elegí una rutina o deporte en el panel de arriba (o dejalo libre) y tocá "Registrar Ejercicio". Tocá una tarjeta para editarla.
                 </p>
               </div>
               <div className="pl-4 border-l border-slate-200 dark:border-zinc-800 shrink-0">
@@ -722,7 +749,7 @@ export function GymScheduleGrid({
             </div>
 
             <div className="flex items-center gap-2 w-full sm:w-auto">
-              <div className="flex items-center gap-1 p-1 rounded-full bg-slate-100 dark:bg-zinc-800/80 border border-slate-200 dark:border-zinc-800">
+              <div className="hidden md:flex items-center gap-1 p-1 rounded-full bg-slate-100 dark:bg-zinc-800/80 border border-slate-200 dark:border-zinc-800">
                 <button
                   type="button"
                   data-sound="click"
@@ -766,7 +793,7 @@ export function GymScheduleGrid({
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
+          <div className="hidden md:block rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
             <div className="overflow-x-auto">
               <div className="flex min-w-[620px]">
                 <div className="shrink-0 w-12 pt-8 relative" style={{ height: totalHeight + 32 }}>
@@ -941,11 +968,61 @@ export function GymScheduleGrid({
           </div>
 
           {weekActividades.length === 0 && (
-            <p className="mt-3 text-[11px] text-zinc-500 flex items-center gap-1.5">
+            <p className="hidden md:flex mt-3 text-[11px] text-zinc-500 items-center gap-1.5">
               <Clock className="w-3 h-3" />
               Arrastrá sobre la rejilla (o tocá una celda) para registrar tu primer ejercicio de la semana.
             </p>
           )}
+
+          {/* Vista en tarjetas tipo "nota" para mobile — mismo criterio que ya se usa para las
+              tablas en mobile (ver PaymentsTable.tsx): la rejilla de arrastrar necesita mouse y
+              espacio horizontal, así que en el celular cada sesión de la semana se muestra como
+              una tarjeta tocable que abre el mismo panel de edición de la izquierda. */}
+          <div className="md:hidden space-y-2.5">
+            {weekActividadesSorted.length === 0 ? (
+              <div className="px-4 py-8 text-center text-xs text-slate-500 dark:text-zinc-400 rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
+                Todavía no registraste ejercicios esta semana. Usá el panel de arriba para agregar el primero.
+              </div>
+            ) : (
+              weekActividadesSorted.map((item) => (
+                <div
+                  key={item.raw.id}
+                  onClick={() => {
+                    startEditingBlock(item);
+                    panelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  }}
+                  className="rounded-2xl border p-3.5 cursor-pointer active:scale-[0.98] transition-transform bg-white dark:bg-zinc-900 border-slate-100 dark:border-zinc-800/80"
+                >
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
+                      {DIAS_CORTO[item.dayIdx]} {weekDates[item.dayIdx].getDate()}
+                    </span>
+                    <span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500">
+                      {item.horaInicio}–{item.horaFin}
+                    </span>
+                  </div>
+                  <p className="flex items-center gap-1.5 font-extrabold text-sm text-slate-900 dark:text-zinc-100 mb-1">
+                    <span
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ backgroundColor: colorForLabel(item.raw.informacion) }}
+                    />
+                    <span className="truncate">{item.raw.informacion}</span>
+                  </p>
+                  {(item.raw.calorias > 0 || item.raw.tiempoMovimiento) && (
+                    <div className="flex items-center gap-3 text-[11px] font-medium text-slate-500 dark:text-zinc-400 mt-1.5 pt-1.5 border-t border-slate-100 dark:border-zinc-800/60">
+                      {item.raw.tiempoMovimiento && (
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3 h-3 shrink-0" />
+                          {item.raw.tiempoMovimiento}
+                        </span>
+                      )}
+                      {item.raw.calorias > 0 && <span>{item.raw.calorias} kcal</span>}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
         </div>
       </div>
     </div>

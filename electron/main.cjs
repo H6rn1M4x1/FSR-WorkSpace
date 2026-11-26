@@ -124,6 +124,41 @@ function positionDockWindow(win, width, height) {
   win.setBounds({ x, y: areaY, width, height }, true);
 }
 
+// Reintenta un rato antes de resignarse a la pantalla principal — SOLO para el posicionamiento
+// de arranque (ver positionDockWindowOnStartup). Un monitor externo (HDMI/DisplayPort, dock de
+// notebook) puede tardar varios segundos más que la propia app en aparecer para Windows después
+// de un reinicio real: si la app arranca sola con el inicio de sesión (ver openAtLogin más abajo)
+// y se posiciona apenas arranca Electron, screen.getAllDisplays() todavía no incluye ese monitor
+// y la preferencia guardada (punto 6 pedido por el usuario) se pierde en silencio, aunque el
+// archivo de prefs siga teniendo el id correcto. Elegir la pantalla A MANO después (dock-set-display
+// más abajo) nunca pasa por acá: en ese momento los monitores ya están listos, por eso "funciona
+// hasta que reinicio".
+function waitForPreferredDisplay(displayId, retriesLeft = 16) {
+  return new Promise((resolve) => {
+    const tryFind = (remaining) => {
+      const found = screen.getAllDisplays().find((d) => d.id === displayId);
+      if (found || remaining <= 0) {
+        resolve(found || null);
+        return;
+      }
+      setTimeout(() => tryFind(remaining - 1), 500);
+    };
+    tryFind(retriesLeft);
+  });
+}
+
+async function positionDockWindowOnStartup(win, width, height) {
+  const prefs = readDockPrefs();
+  let display = screen.getPrimaryDisplay();
+  if (prefs.displayId) {
+    display = (await waitForPreferredDisplay(prefs.displayId)) || screen.getPrimaryDisplay();
+  }
+  if (win.isDestroyed()) return;
+  const { x: areaX, y: areaY, width: areaWidth } = display.workArea;
+  const x = Math.round(areaX + (areaWidth - width) / 2);
+  win.setBounds({ x, y: areaY, width, height }, true);
+}
+
 function createDockWindow() {
   dockWindow = new BrowserWindow({
     width: DOCK_DEFAULT_SIZE.width,
@@ -154,7 +189,9 @@ function createDockWindow() {
   });
 
   dockWindow.setAlwaysOnTop(true, "screen-saver");
-  positionDockWindow(dockWindow, DOCK_DEFAULT_SIZE.width, DOCK_DEFAULT_SIZE.height);
+  // Versión con reintento (no la sincrónica de siempre) — ver el comentario en
+  // waitForPreferredDisplay sobre por qué hace falta específicamente acá, al arrancar.
+  positionDockWindowOnStartup(dockWindow, DOCK_DEFAULT_SIZE.width, DOCK_DEFAULT_SIZE.height);
   dockWindow.loadURL("app://-/?mode=dock");
 
   dockWindow.on("closed", () => {

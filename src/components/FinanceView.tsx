@@ -587,6 +587,43 @@ function TrendArrow({ positive }: { positive: boolean }) {
   );
 }
 
+// Si el pago está marcado como recurrente, busca la ocurrencia anterior más cercana con la misma
+// descripción para poder comparar montos (punto pedido por el usuario) — sin una ocurrencia previa
+// (primera vez que se registra, o no está marcado recurrente) no hay nada para comparar.
+function findPriorRecurringAmount(payment: DetailedPayment, allPayments: DetailedPayment[]): number | null {
+  if (!payment.pagoRecurrente) return null;
+  const sameDescription = payment.descripcion.trim().toLowerCase();
+  let prior: DetailedPayment | null = null;
+  for (const other of allPayments) {
+    if (other.id === payment.id) continue;
+    if (other.descripcion.trim().toLowerCase() !== sameDescription) continue;
+    if (other.fechaVencimiento >= payment.fechaVencimiento) continue;
+    if (!prior || other.fechaVencimiento > prior.fechaVencimiento) prior = other;
+  }
+  return prior ? prior.montoAPagar : null;
+}
+
+// Badge chico arriba del monto con el % de cambio respecto a la vez anterior. Al revés de
+// TrendArrow: acá "subir" es malo (se gastó más), así que rojo = aumento, verde = descenso.
+function RecurringAmountTrend({ current, prior }: { current: number; prior: number | null }) {
+  if (prior === null || prior === 0) return null;
+  const pct = Math.round(((current - prior) / prior) * 100);
+  if (pct === 0) return null;
+  const increased = pct > 0;
+  const Icon = increased ? ArrowUpRight : ArrowDownRight;
+  return (
+    <span
+      className={`inline-flex items-center gap-0.5 text-[10px] font-extrabold ${
+        increased ? "text-red-500 dark:text-red-400" : "text-emerald-500 dark:text-emerald-400"
+      }`}
+      title={`${increased ? "Aumentó" : "Bajó"} respecto a la vez anterior`}
+    >
+      <Icon className="w-3 h-3" />
+      {Math.abs(pct)}%
+    </span>
+  );
+}
+
 export default function FinanceView({
   darkMode,
   invoices,
@@ -2474,9 +2511,15 @@ export default function FinanceView({
                                         {formatFechaDMY(p.fechaVencimiento)}
                                       </span>
                                     </div>
-                                    <span className="font-mono font-bold text-base text-slate-900 dark:text-zinc-100">
-                                      {formatCurrency(p.montoAPagar)}
-                                    </span>
+                                    <div className="flex flex-col items-end gap-0.5">
+                                      <RecurringAmountTrend
+                                        current={p.montoAPagar}
+                                        prior={findPriorRecurringAmount(p, detailedPayments)}
+                                      />
+                                      <span className="font-mono font-bold text-base text-slate-900 dark:text-zinc-100">
+                                        {formatCurrency(p.montoAPagar)}
+                                      </span>
+                                    </div>
                                   </div>
 
                                   {p.metodoPago && (
@@ -2741,9 +2784,15 @@ export default function FinanceView({
                                         {formatFechaDMY(p.fechaVencimiento)}
                                       </span>
                                     </div>
-                                    <span className="font-mono font-bold text-base text-slate-900 dark:text-zinc-100">
-                                      {formatCurrency(p.montoAPagar)}
-                                    </span>
+                                    <div className="flex flex-col items-end gap-0.5">
+                                      <RecurringAmountTrend
+                                        current={p.montoAPagar}
+                                        prior={findPriorRecurringAmount(p, detailedPayments)}
+                                      />
+                                      <span className="font-mono font-bold text-base text-slate-900 dark:text-zinc-100">
+                                        {formatCurrency(p.montoAPagar)}
+                                      </span>
+                                    </div>
                                   </div>
 
                                   {p.metodoPago && (

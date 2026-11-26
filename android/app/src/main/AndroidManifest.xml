@@ -62,4 +62,10 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Sin esto, navigator.geolocation (botón "Mi GPS" al registrar un turno, clima del dock,
+         búsqueda de lugares cercanos) falla de entrada en el WebView de Android: el permiso de
+         ubicación del navegador necesita que el permiso nativo esté declarado para que el puente
+         de Capacitor pueda pedirlo en tiempo de ejecución. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 </manifest>
