@@ -101,7 +101,7 @@ const PickerSelect: React.FC<PickerSelectProps> = ({
                   }}
                   className={`w-full flex items-center justify-between px-2 py-1 text-xs sm:text-[10px] font-semibold rounded-lg text-left transition-colors cursor-pointer capitalize ${
                     isSelected
-                      ? "bg-primary text-white dark:text-blue-950 font-bold shadow-xs"
+                      ? "bg-primary text-white dark:text-black font-bold shadow-xs"
                       : "text-zinc-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800"
                   } ${isMono ? "font-mono" : ""}`}
                 >
@@ -754,7 +754,7 @@ export const SmartDateTimePicker: React.FC<SmartDateTimePickerProps> = ({
                         }
                         className={`h-7 sm:h-6.5 w-full flex items-center justify-center rounded-full cursor-pointer transition-all text-[11px] sm:text-[9.5px] leading-none ${
                           selected
-                            ? "bg-primary text-white dark:text-blue-950 font-extrabold shadow-xs"
+                            ? "bg-primary text-white dark:text-black font-extrabold shadow-xs"
                             : isToday
                               ? "bg-slate-100 dark:bg-slate-800 text-primary font-bold border border-primary/50"
                               : cell.isCurrentMonth
@@ -911,7 +911,7 @@ export const SmartDateTimePicker: React.FC<SmartDateTimePickerProps> = ({
                   <button
                     type="button"
                     onClick={() => setIsOpen(false)}
-                    className="flex-1 py-1.5 rounded-xl bg-primary text-white dark:text-blue-950 text-xs sm:text-[10px] font-bold transition-all text-center cursor-pointer shadow-xs hover:brightness-105 active:scale-98"
+                    className="flex-1 py-1.5 rounded-xl bg-primary text-white dark:text-black text-xs sm:text-[10px] font-bold transition-all text-center cursor-pointer shadow-xs hover:brightness-105 active:scale-98"
                   >
                     Aceptar
                   </button>
