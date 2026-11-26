@@ -1,8 +1,9 @@
 import React, { useRef, useState, useCallback, useEffect, useMemo } from "react";
-import { Paintbrush, Eraser, Trash2, Clock, Check, X, CalendarDays, Pencil } from "lucide-react";
+import { Paintbrush, Eraser, Trash2, Clock, Check, X, CalendarDays, Pencil, Plus } from "lucide-react";
 import { DeporteActividad } from "../types";
 import { AnimatedNumber } from "./AnimatedNumber";
 import { CustomSelect } from "./CustomSelect";
+import { DetailModal } from "./DetailModal";
 import { RouteDrawMap } from "./RouteDrawMap";
 import { getLocalDateString } from "../utils/date";
 import { estimateCaloriesByMET } from "../data/activityCatalog";
@@ -25,10 +26,6 @@ import {
 
 const DIAS_CORTO = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 const DIAS_LARGO = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
-const MESES = [
-  "enero", "febrero", "marzo", "abril", "mayo", "junio",
-  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
-];
 
 const SLOT_MIN = 30;
 const ROW_PX = 26;
@@ -56,11 +53,6 @@ function formatMinutesLabel(mins: number): string {
 function splitFecha(fecha: string): { dateStr: string; time: string } {
   const [dateStr, time] = (fecha || "").split(" ");
   return { dateStr: dateStr || "", time: (time || "00:00").slice(0, 5) };
-}
-
-function formatFullDiaLabel(dayIdx: number, weekDates: Date[]): string {
-  const d = weekDates[dayIdx];
-  return `${DIAS_LARGO[dayIdx]} ${d.getDate()} de ${MESES[d.getMonth()]} de ${d.getFullYear()}`;
 }
 
 function formatPace(minutes: number, distanceKm: number): string {
@@ -135,10 +127,11 @@ export function GymScheduleGrid({
   const [mode, setMode] = useState<"pintar" | "borrar">("pintar");
   const [drag, setDrag] = useState<DragState | null>(null);
   const dragRef = useRef<DragState | null>(null);
-  // Para hacer scroll hasta el panel de edición cuando se toca una tarjeta de la vista de notas
-  // (mobile): el panel queda arriba del todo, fuera de la vista, si la tarjeta tocada está más
-  // abajo en la lista.
-  const panelRef = useRef<HTMLDivElement>(null);
+  // El panel de "Registrar/Editar Ejercicio" queda fijo en la columna izquierda en desktop/tablet,
+  // pero en mobile no hay espacio para tenerlo siempre visible — ahí se muestra como una hoja
+  // inferior (DetailModal) disparada por el botón "+" de la lista de tarjetas o al tocar una
+  // tarjeta existente para editarla.
+  const [showMobileFormSheet, setShowMobileFormSheet] = useState(false);
 
   const weekDates = useMemo(() => {
     const monday = getMondayOfCurrentWeek();
@@ -486,11 +479,13 @@ export function GymScheduleGrid({
     }
     setHasPendingDraft(false);
     setEditingDraftId(null);
+    setShowMobileFormSheet(false);
   };
 
   const handleCancelDraft = () => {
     setHasPendingDraft(false);
     setEditingDraftId(null);
+    setShowMobileFormSheet(false);
   };
 
   const startEditingBlock = (item: WeekActividad) => {
@@ -515,22 +510,12 @@ export function GymScheduleGrid({
   ];
   const diaOptions = DIAS_LARGO.map((d, i) => ({ value: String(i), label: `${d} ${weekDates[i].getDate()}` }));
 
-  return (
-    <div
-      className={`p-6 rounded-3xl border scroll-reveal ${
-        darkMode
-          ? "bg-black/85 backdrop-blur-md border-zinc-800 text-white shadow-lg"
-          : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
-      }`}
-    >
-      <div className="lg:flex lg:gap-6 lg:items-start">
-        {/* Panel izquierdo */}
-        <div
-          ref={panelRef}
-          className={`w-full lg:w-[280px] shrink-0 mb-6 lg:mb-0 rounded-2xl border p-4 space-y-3.5 ${
-            darkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-slate-200"
-          }`}
-        >
+  // Contenido del panel "Registrar/Editar Ejercicio" — definido una sola vez y reusado tal
+  // cual en dos lugares: fijo en la columna izquierda en desktop/tablet (md+), y dentro de una
+  // hoja inferior (DetailModal, con el mismo sonido/vibración/animación que el resto de la app)
+  // en mobile, donde no hay espacio para tenerlo siempre visible.
+  const formPanelContent = (
+    <>
           <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-zinc-400 flex items-center gap-1.5">
             <Pencil className="w-3.5 h-3.5 text-primary" />
             {editingDraftId ? "Editando Ejercicio" : "Registrar Ejercicio"}
@@ -564,19 +549,17 @@ export function GymScheduleGrid({
             <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
               Día
             </label>
-            {editingDraftId ? (
-              <CustomSelect
-                value={String(panelDayIdx)}
-                onChange={(v) => setPanelDayIdx(Number(v))}
-                options={diaOptions}
-                size="sm"
-                className="w-full"
-              />
-            ) : (
-              <div className="w-full px-3 py-2.5 h-[42px] rounded-xl bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 text-xs md:text-sm font-semibold flex items-center truncate">
-                {formatFullDiaLabel(panelDayIdx, weekDates)}
-              </div>
-            )}
+            {/* Siempre editable (antes era de solo lectura al crear, asumiendo que el día ya
+                quedaba fijado por dónde se arrastró en la rejilla) — en la hoja inferior de
+                mobile no hay rejilla para arrastrar, así que es la única forma de elegir el día
+                al cargar un ejercicio nuevo ahí. */}
+            <CustomSelect
+              value={String(panelDayIdx)}
+              onChange={(v) => setPanelDayIdx(Number(v))}
+              options={diaOptions}
+              size="sm"
+              className="w-full"
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-2">
@@ -718,6 +701,26 @@ export function GymScheduleGrid({
               <span>{editingDraftId ? "Guardar Cambios" : "Registrar Ejercicio"}</span>
             </button>
           </div>
+    </>
+  );
+
+  return (
+    <>
+    <div
+      className={`p-6 rounded-3xl border scroll-reveal ${
+        darkMode
+          ? "bg-black/85 backdrop-blur-md border-zinc-800 text-white shadow-lg"
+          : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
+      }`}
+    >
+      <div className="lg:flex lg:gap-6 lg:items-start">
+        {/* Panel izquierdo */}
+        <div
+          className={`hidden md:block w-full lg:w-[280px] shrink-0 mb-6 lg:mb-0 rounded-2xl border p-4 space-y-3.5 ${
+            darkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-slate-200"
+          }`}
+        >
+          {formPanelContent}
         </div>
 
         {/* Columna derecha: título + contador animado + modo pintar/borrar + rejilla */}
@@ -733,7 +736,7 @@ export function GymScheduleGrid({
                   Elegí una rutina o deporte en el panel (o dejalo libre) y arrastrá sobre la rejilla para pintarla.
                 </p>
                 <p className="md:hidden text-xs text-zinc-500 mt-0.5">
-                  Elegí una rutina o deporte en el panel de arriba (o dejalo libre) y tocá "Registrar Ejercicio". Tocá una tarjeta para editarla.
+                  Tocá "Agregar Ejercicio" para cargar uno nuevo, o tocá una tarjeta para editarla.
                 </p>
               </div>
               <div className="pl-4 border-l border-slate-200 dark:border-zinc-800 shrink-0">
@@ -977,11 +980,24 @@ export function GymScheduleGrid({
           {/* Vista en tarjetas tipo "nota" para mobile — mismo criterio que ya se usa para las
               tablas en mobile (ver PaymentsTable.tsx): la rejilla de arrastrar necesita mouse y
               espacio horizontal, así que en el celular cada sesión de la semana se muestra como
-              una tarjeta tocable que abre el mismo panel de edición de la izquierda. */}
+              una tarjeta tocable que abre, en una hoja inferior, el mismo panel de edición que en
+              desktop queda fijo en la columna izquierda (ver formPanelContent/DetailModal). */}
           <div className="md:hidden space-y-2.5">
+            <button
+              type="button"
+              data-sound="click"
+              onClick={() => {
+                handleCancelDraft();
+                setShowMobileFormSheet(true);
+              }}
+              className="w-full flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-white dark:text-black text-xs font-bold cursor-pointer transition-all active:scale-[0.98]"
+            >
+              <Plus className="w-4 h-4" />
+              Agregar Ejercicio
+            </button>
             {weekActividadesSorted.length === 0 ? (
               <div className="px-4 py-8 text-center text-xs text-slate-500 dark:text-zinc-400 rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
-                Todavía no registraste ejercicios esta semana. Usá el panel de arriba para agregar el primero.
+                Todavía no registraste ejercicios esta semana. Tocá "Agregar Ejercicio" para cargar el primero.
               </div>
             ) : (
               weekActividadesSorted.map((item) => (
@@ -989,7 +1005,7 @@ export function GymScheduleGrid({
                   key={item.raw.id}
                   onClick={() => {
                     startEditingBlock(item);
-                    panelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    setShowMobileFormSheet(true);
                   }}
                   className="rounded-2xl border p-3.5 cursor-pointer active:scale-[0.98] transition-transform bg-white dark:bg-zinc-900 border-slate-100 dark:border-zinc-800/80"
                 >
@@ -1026,6 +1042,15 @@ export function GymScheduleGrid({
         </div>
       </div>
     </div>
+
+    {/* Hoja inferior — mobile: mismo panel de "Registrar/Editar Ejercicio" que queda fijo en la
+        columna izquierda en desktop/tablet, acá disparado por el botón "+" o al tocar una
+        tarjeta ya registrada. DetailModal aporta el sonido/vibración/animación de apertura y
+        cierre (incluido arrastrar hacia abajo para cerrar), igual que el resto de la app. */}
+    <DetailModal isOpen={showMobileFormSheet} onClose={handleCancelDraft}>
+      <div className="space-y-3.5">{formPanelContent}</div>
+    </DetailModal>
+    </>
   );
 }
 
