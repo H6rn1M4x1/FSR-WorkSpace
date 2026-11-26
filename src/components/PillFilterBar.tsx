@@ -92,7 +92,7 @@ export function PillFilterBar<T extends string>({
               }}
               className={`relative px-2.5 py-1 rounded-lg text-[10px] font-extrabold capitalize transition-colors cursor-pointer whitespace-nowrap shrink-0 z-10 ${
                 isActive
-                  ? "text-white dark:text-blue-950 font-black"
+                  ? "text-white dark:text-black font-black"
                   : "text-slate-600 dark:text-zinc-400 hover:text-black dark:hover:text-white"
               }`}
             >
