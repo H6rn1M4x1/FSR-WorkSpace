@@ -64,6 +64,7 @@ import {
   MapPin,
   RefreshCw,
   FileText,
+  Minus,
 } from "lucide-react";
 import {
   Invoice,
@@ -592,7 +593,8 @@ function TrendArrow({ positive }: { positive: boolean }) {
 // (primera vez que se registra, o no está marcado recurrente) no hay nada para comparar.
 function findPriorRecurringAmount(payment: DetailedPayment, allPayments: DetailedPayment[]): number | null {
   if (!payment.pagoRecurrente) return null;
-  const sameDescription = payment.descripcion.trim().toLowerCase();
+  const sameDescription = (payment.descripcion || "").trim().toLowerCase();
+  if (!sameDescription) return null;
   // fechaVencimiento puede guardarse en más de un formato (ISO o DD/MM/YYYY, ver
   // normalizeDateComponents) — comparar los strings crudos con "<"/">" da resultados incorrectos
   // en esos casos, así que se normaliza antes a isoDate para que el orden cronológico sea real.
@@ -602,7 +604,7 @@ function findPriorRecurringAmount(payment: DetailedPayment, allPayments: Detaile
   let priorIso = "";
   for (const other of allPayments) {
     if (other.id === payment.id) continue;
-    if (other.descripcion.trim().toLowerCase() !== sameDescription) continue;
+    if ((other.descripcion || "").trim().toLowerCase() !== sameDescription) continue;
     const otherParsed = normalizeDateComponents(other.fechaVencimiento);
     if (!otherParsed || otherParsed.isoDate >= currentParsed.isoDate) continue;
     if (!prior || otherParsed.isoDate > priorIso) {
@@ -614,11 +616,23 @@ function findPriorRecurringAmount(payment: DetailedPayment, allPayments: Detaile
 }
 
 // Badge chico arriba del monto con el % de cambio respecto a la vez anterior. Al revés de
-// TrendArrow: acá "subir" es malo (se gastó más), así que rojo = aumento, verde = descenso.
+// TrendArrow: acá "subir" es malo (se gastó más), así que rojo = aumento, verde = descenso. Si hay
+// una ocurrencia previa pero el monto no cambió, se muestra un indicador neutro en vez de no
+// mostrar nada — así el usuario ve que el índice "está vivo" aunque todavía no haya habido cambios.
 function RecurringAmountTrend({ current, prior }: { current: number; prior: number | null }) {
   if (prior === null || prior === 0) return null;
   const pct = Math.round(((current - prior) / prior) * 100);
-  if (pct === 0) return null;
+  if (pct === 0) {
+    return (
+      <span
+        className="inline-flex items-center gap-0.5 text-[10px] font-extrabold text-slate-400 dark:text-zinc-500"
+        title="Mismo monto que la vez anterior"
+      >
+        <Minus className="w-3 h-3" />
+        Sin cambios
+      </span>
+    );
+  }
   const increased = pct > 0;
   const Icon = increased ? ArrowUpRight : ArrowDownRight;
   return (
