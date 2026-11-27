@@ -57,6 +57,7 @@ export function DetailModal({
   isComplete = false,
   completeLabel = "Marcar Realizado",
   incompleteLabel = "Marcar Pendiente",
+  hideCloseButton = false,
   children,
 }: {
   isOpen: boolean;
@@ -92,6 +93,11 @@ export function DetailModal({
   isComplete?: boolean;
   completeLabel?: string;
   incompleteLabel?: string;
+  // Oculta el botón "X" de cerrar del encabezado (y el encabezado entero, si tampoco hay
+  // title/subtitle/icon) — para los casos donde ya sobra como forma de cerrar: el formulario de
+  // adentro tiene su propio botón "Cancelar", y arrastrar hacia abajo / tocar el fondo siguen
+  // funcionando igual.
+  hideCloseButton?: boolean;
   children: React.ReactNode;
 }) {
   // Bloquea el scroll del fondo mientras el modal está abierto (con contador global: si hay más
@@ -179,36 +185,40 @@ export function DetailModal({
               <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-white/15" />
             </div>
 
-            <div className="flex items-start justify-between gap-3 px-5 sm:px-6 pt-3 sm:pt-6 pb-4 sm:pb-5 border-b border-slate-100 dark:border-white/[0.06] shrink-0">
-              <div className="flex items-center gap-3 min-w-0">
-                {Icon && (
-                  <span className="h-10 w-10 sm:h-11 sm:w-11 rounded-2xl bg-slate-100 dark:bg-white/[0.05] border border-slate-200 dark:border-white/10 flex items-center justify-center text-primary shrink-0 shadow-inner">
-                    <Icon className="w-5 h-5" />
-                  </span>
-                )}
-                <div className="min-w-0">
-                  {title && (
-                    <h3 className="font-extrabold text-[15px] sm:text-lg text-zinc-900 dark:text-white leading-snug truncate">
-                      {title}
-                    </h3>
+            {(title || subtitle || Icon || !hideCloseButton) && (
+              <div className="flex items-start justify-between gap-3 px-5 sm:px-6 pt-3 sm:pt-6 pb-4 sm:pb-5 border-b border-slate-100 dark:border-white/[0.06] shrink-0">
+                <div className="flex items-center gap-3 min-w-0">
+                  {Icon && (
+                    <span className="h-10 w-10 sm:h-11 sm:w-11 rounded-2xl bg-slate-100 dark:bg-white/[0.05] border border-slate-200 dark:border-white/10 flex items-center justify-center text-primary shrink-0 shadow-inner">
+                      <Icon className="w-5 h-5" />
+                    </span>
                   )}
-                  {subtitle && (
-                    <p className="text-[10px] sm:text-xs font-semibold text-zinc-400 dark:text-zinc-500 truncate">
-                      {subtitle}
-                    </p>
-                  )}
+                  <div className="min-w-0">
+                    {title && (
+                      <h3 className="font-extrabold text-[15px] sm:text-lg text-zinc-900 dark:text-white leading-snug truncate">
+                        {title}
+                      </h3>
+                    )}
+                    {subtitle && (
+                      <p className="text-[10px] sm:text-xs font-semibold text-zinc-400 dark:text-zinc-500 truncate">
+                        {subtitle}
+                      </p>
+                    )}
+                  </div>
                 </div>
+                {!hideCloseButton && (
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    data-no-global-sound
+                    className="h-8 w-8 sm:h-9 sm:w-9 rounded-full bg-slate-100 dark:bg-white/[0.04] hover:bg-slate-200 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 flex items-center justify-center text-zinc-400 hover:text-zinc-700 dark:hover:text-white transition-colors shrink-0 cursor-pointer"
+                    title="Cerrar"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
               </div>
-              <button
-                type="button"
-                onClick={onClose}
-                data-no-global-sound
-                className="h-8 w-8 sm:h-9 sm:w-9 rounded-full bg-slate-100 dark:bg-white/[0.04] hover:bg-slate-200 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 flex items-center justify-center text-zinc-400 hover:text-zinc-700 dark:hover:text-white transition-colors shrink-0 cursor-pointer"
-                title="Cerrar"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+            )}
 
             {status && (
               <div className="px-5 sm:px-6 pt-4 shrink-0">

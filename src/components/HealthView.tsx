@@ -2548,14 +2548,20 @@ export default function HealthView({
   // Gimnasio > Historial de Sesiones (mobile), abrir la hoja de "Registrar Ejercicio" de ese
   // lugar en vez de saltar a "Agregar Medicamento" — ver el comentario de handleQuickAdd en
   // App.tsx (no navega fuera de deporte_alimentacion en ese caso, solo dispara el nonce).
+  // IMPORTANTE: deporteAlimActiveTab/gymActiveTab son estado local que NO se resetea al salir de
+  // Deporte y Alimentación — si no se confirma además que activeSubTab sigue siendo
+  // "deporte_alimentacion" (es decir, que el usuario está REALMENTE ahí ahora mismo, no que
+  // simplemente la última vez que estuvo fue en Gimnasio/Historial), tocar "+" en CUALQUIER OTRA
+  // sub-pestaña de Salud (p. ej. Medicamentos) terminaba redirigiendo acá por error y no abría
+  // nada, porque GymScheduleGrid ni siquiera está montado en ese momento.
   useEffect(() => {
     if (!autoOpenQuickAdd) return;
-    if (deporteAlimActiveTab === "rutina" && gymActiveTab === "historial") {
+    if (activeSubTab === "deporte_alimentacion" && deporteAlimActiveTab === "rutina" && gymActiveTab === "historial") {
       setGymQuickAddNonce(autoOpenQuickAdd);
       onQuickAddHandled?.();
       return;
     }
-    if (deporteAlimActiveTab === "alimentacion") {
+    if (activeSubTab === "deporte_alimentacion" && deporteAlimActiveTab === "alimentacion") {
       resetAlimDraft();
       setAlimFecha(autoOpenQuickAddDate || new Date().toISOString().substring(0, 10));
       setShowAlimMobileSheet(true);
@@ -5658,6 +5664,7 @@ export default function HealthView({
                   currentWeightKg={currentWeight}
                   weightHistory={medidasHistory}
                   openLoggerSheetNonce={gymQuickAddNonce}
+                  onLoggerSheetOpened={() => setGymQuickAddNonce(undefined)}
                 />
                 </SectionTransition>
               </motion.div>
@@ -5871,7 +5878,7 @@ export default function HealthView({
                     desktop/tablet queda fijo en la columna izquierda. Se abre al tocar un día
                     del calendario, al editar un registro ya cargado, o desde el "+" de la barra
                     inferior. */}
-                <DetailModal isOpen={showAlimMobileSheet} onClose={handleCancelAlimDraft}>
+                <DetailModal isOpen={showAlimMobileSheet} onClose={handleCancelAlimDraft} hideCloseButton>
                   <div className="space-y-3.5">{alimPanelContent}</div>
                 </DetailModal>
 

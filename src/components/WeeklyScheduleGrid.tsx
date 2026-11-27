@@ -144,6 +144,11 @@ interface WeeklyScheduleGridProps {
   // Relevo del "+" de la barra inferior (ver App.tsx/AcademicView.tsx) — un nonce nuevo abre la
   // hoja inferior de "Nuevo Horario" en mobile, como si se hubiera tocado una tarjeta nueva.
   externalOpenNonce?: number;
+  // Avisa que ya se consumió externalOpenNonce, para que AcademicView (que es quien lo guarda)
+  // lo vuelva a dejar en undefined — si no, la PRÓXIMA vez que este componente se vuelva a montar
+  // (p. ej. al salir de Horario y volver) vería ese mismo valor "nuevo" otra vez y abriría la
+  // hoja solo, sin que nadie haya tocado el "+".
+  onExternalOpenHandled?: () => void;
 }
 
 export function WeeklyScheduleGrid({
@@ -159,6 +164,7 @@ export function WeeklyScheduleGrid({
   onCopyDayToOthers,
   generateId,
   externalOpenNonce,
+  onExternalOpenHandled,
 }: WeeklyScheduleGridProps) {
   const [mode, setMode] = useState<"pintar" | "borrar">("pintar");
   const [drag, setDrag] = useState<DragState | null>(null);
@@ -425,6 +431,7 @@ export function WeeklyScheduleGrid({
     if (externalOpenNonce === undefined) return;
     handleCancelDraft();
     setShowMobileFormSheet(true);
+    onExternalOpenHandled?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [externalOpenNonce]);
 
@@ -554,6 +561,20 @@ export function WeeklyScheduleGrid({
           </div>
 
           <div className="flex items-center gap-2">
+            {editingDraftId && (
+              <button
+                type="button"
+                onClick={() => {
+                  const id = editingDraftId;
+                  handleCancelDraft();
+                  onBatchUpdate({ toDelete: [id], toUpsert: [] });
+                }}
+                title="Eliminar este horario"
+                className="shrink-0 p-2.5 rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-all cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
             {hasPendingDraft && (
               <button
                 type="button"
@@ -659,12 +680,14 @@ export function WeeklyScheduleGrid({
               <span>Borrar</span>
             </button>
           </div>
+          {/* Solo desktop/tablet — en mobile no hay forma de arrastrar en modo "Borrar", así que
+              borrar de a uno se hace desde el botón "Eliminar" del panel al editar. */}
           <button
             type="button"
             onClick={onClearWeek}
             disabled={horarios.length === 0}
             title="Vaciar semana"
-            className="p-2 rounded-full bg-slate-100 dark:bg-zinc-800/80 text-slate-500 dark:text-zinc-400 hover:text-red-500 hover:bg-red-500/10 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+            className="hidden md:block p-2 rounded-full bg-slate-100 dark:bg-zinc-800/80 text-slate-500 dark:text-zinc-400 hover:text-red-500 hover:bg-red-500/10 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
           >
             <Trash2 className="w-3.5 h-3.5" />
           </button>
@@ -942,7 +965,7 @@ export function WeeklyScheduleGrid({
         tocar una tarjeta ya registrada. DetailModal aporta el sonido/vibración/animación de
         apertura y cierre (incluido arrastrar hacia abajo para cerrar), igual que el resto de la
         app. */}
-    <DetailModal isOpen={showMobileFormSheet} onClose={handleCancelDraft}>
+    <DetailModal isOpen={showMobileFormSheet} onClose={handleCancelDraft} hideCloseButton>
       <div className="space-y-3.5">{formPanelContent}</div>
     </DetailModal>
     </>

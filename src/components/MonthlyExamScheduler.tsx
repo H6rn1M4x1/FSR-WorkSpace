@@ -54,6 +54,11 @@ export interface MonthlyExamSchedulerProps {
   // hoja inferior de "Nuevo Examen/Trabajo" en mobile con el día en curso ya precargado.
   externalOpenNonce?: number;
   externalOpenDate?: string;
+  // Avisa que ya se consumió externalOpenNonce, para que AcademicView (que es quien lo guarda)
+  // lo vuelva a dejar en undefined — si no, la PRÓXIMA vez que este componente se vuelva a montar
+  // (p. ej. al salir de Exámenes y Trabajos y volver) vería ese mismo valor "nuevo" otra vez y
+  // abriría la hoja solo, sin que nadie haya tocado el "+".
+  onExternalOpenHandled?: () => void;
 }
 
 // Equivalente mensual y de único registro al "pintar" semanal de Horario: a la izquierda se arma
@@ -72,6 +77,7 @@ export function MonthlyExamScheduler({
   onDeleteExamen,
   externalOpenNonce,
   externalOpenDate,
+  onExternalOpenHandled,
 }: MonthlyExamSchedulerProps) {
   const isMobile = useIsMobile();
   const [currentMonth, setCurrentMonth] = useState(() => new Date());
@@ -183,6 +189,7 @@ export function MonthlyExamScheduler({
     resetDraft();
     setSelectedDate(externalOpenDate || todayStr);
     setShowMobileFormSheet(true);
+    onExternalOpenHandled?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [externalOpenNonce]);
 
@@ -545,7 +552,7 @@ export function MonthlyExamScheduler({
       {/* Hoja inferior — mobile: mismo panel de "Nuevo/Editar Examen o Trabajo" que en
           desktop/tablet queda fijo en la columna izquierda. Se abre al tocar un día del
           calendario, al editar un registro ya cargado, o desde el "+" de la barra inferior. */}
-      <DetailModal isOpen={showMobileFormSheet} onClose={handleCancel}>
+      <DetailModal isOpen={showMobileFormSheet} onClose={handleCancel} hideCloseButton>
         <div className="space-y-3.5">{formPanelContent}</div>
       </DetailModal>
     </div>
