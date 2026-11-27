@@ -3034,6 +3034,7 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
           onBatchUpdate={handleGymBatchUpdate}
           onClearWeek={handleGymClearWeek}
           onDeleteOne={handleGymDeleteOne}
+          rutinasGimnasio={rutinasGimnasio}
           generateId={generateUniqueId}
           externalOpenNonce={openLoggerSheetNonce}
           onExternalOpenHandled={onLoggerSheetOpened}

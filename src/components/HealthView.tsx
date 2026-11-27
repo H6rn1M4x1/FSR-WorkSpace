@@ -1743,6 +1743,25 @@ export default function HealthView({
     return { platoInfo, p, c, g };
   };
 
+  // Para dispositivos móviles: el calendario mensual de Alimentación se reemplaza por una lista
+  // cronológica de tarjetas de notas (mismo patrón que Historial de Sesiones de Gimnasio), una por
+  // cada día con comidas registradas.
+  const alimDaysSorted = useMemo(() => {
+    const byDate = new Map<string, AlimentacionLog[]>();
+    (alimentacionLogs || []).forEach((l) => {
+      if (!l.fecha) return;
+      if (!byDate.has(l.fecha)) byDate.set(l.fecha, []);
+      byDate.get(l.fecha)!.push(l);
+    });
+    return Array.from(byDate.entries())
+      .sort((a, b) => (a[0] < b[0] ? 1 : a[0] > b[0] ? -1 : 0))
+      .map(([fecha, logs]) => ({
+        fecha,
+        logs,
+        kcalTotal: logs.reduce((acc, curr) => acc + (curr.calorias || 0), 0),
+      }));
+  }, [alimentacionLogs, platos]);
+
   // Mismo cálculo (BMR/TDEE, consumido vs. gastado, cumplimiento del objetivo) compartido entre
   // la tarjeta de un día de Historial Diario y su DetailModal.
   const getDiarioDayDetails = (diaStr: string) => {
@@ -1795,6 +1814,21 @@ export default function HealthView({
 
     return { dateObj, pesoDia, comidaDia, deporteDia, gymDia, gastadasTotal, balanceNeto, metaCalorias, cumplio, isToday };
   };
+
+  // Para dispositivos móviles: el calendario mensual se reemplaza por una lista cronológica de
+  // tarjetas de notas (mismo patrón que Historial de Sesiones de Gimnasio), una por cada día con
+  // algún registro (comida, gym, deporte o peso). Se arma recolectando todas las fechas únicas con
+  // actividad de las 4 fuentes de datos, más reciente primero.
+  const diarioDaysSorted = useMemo(() => {
+    const dateSet = new Set<string>();
+    (alimentacionLogs || []).forEach((l) => l.fecha && dateSet.add(l.fecha));
+    (deportesActividades || []).forEach((a) => a.fechaDesde && dateSet.add(a.fechaDesde.substring(0, 10)));
+    (registrosEntrenamiento || []).forEach((r) => r.fecha && dateSet.add(r.fecha));
+    (medidasHistory || []).forEach((m) => m.fecha && dateSet.add(m.fecha));
+    return Array.from(dateSet)
+      .sort((a, b) => (a < b ? 1 : a > b ? -1 : 0))
+      .map((fecha) => ({ fecha, details: getDiarioDayDetails(fecha) }));
+  }, [alimentacionLogs, deportesActividades, registrosEntrenamiento, medidasHistory]);
 
   const [showEstudioModal, setShowEstudioModal] = useState(false);
   const [editingEstudio, setEditingEstudio] = useState<MedicalRecord | null>(
@@ -5701,19 +5735,17 @@ export default function HealthView({
                     {alimPanelContent}
                   </div>
 
-                  {/* Columna derecha: calendario mensual de Alimentación. */}
-                  <div className="flex-1 min-w-0">
+                  {/* Columna derecha: calendario mensual de Alimentación. Solo en escritorio —
+                      en mobile se reemplaza por la lista de tarjetas más abajo. */}
+                  <div className="hidden md:block flex-1 min-w-0">
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-5">
                       <div className="min-w-0">
                         <h3 className="font-extrabold text-sm flex items-center gap-2">
                           <Calendar className="w-4 h-4 text-primary" />
                           <span>Calendario de Alimentación</span>
                         </h3>
-                        <p className="hidden md:block text-xs text-zinc-500 mt-0.5">
+                        <p className="text-xs text-zinc-500 mt-0.5">
                           Tocá un día para agendarlo. Doble click para ver el detalle.
-                        </p>
-                        <p className="md:hidden text-xs text-zinc-500 mt-0.5">
-                          Tocá un día para agendarlo, o "+" para cargar uno nuevo. Tocá dos veces un día ya agendado para ver el detalle.
                         </p>
                       </div>
 
@@ -5794,6 +5826,60 @@ export default function HealthView({
                     </div>
                     </div>
                   </div>
+                </div>
+
+                {/* Mobile: lista cronológica de tarjetas de notas en vez del calendario, mismo
+                    patrón visual que Historial de Sesiones de Gimnasio. */}
+                <div className="md:hidden space-y-2.5">
+                  {alimDaysSorted.length === 0 ? (
+                    <div className="text-center py-10 text-xs font-semibold text-slate-400 dark:text-zinc-500">
+                      Todavía no hay comidas registradas. Tocá "+" para cargar la primera.
+                    </div>
+                  ) : (
+                    alimDaysSorted.map(({ fecha, logs, kcalTotal }) => {
+                      const dateObj = new Date(`${fecha}T12:00:00`);
+                      const isToday = fecha === todayDiarioStr;
+                      return (
+                        <div
+                          key={fecha}
+                          onClick={() => setDetailAlimDayId(fecha)}
+                          className="rounded-2xl border p-3.5 cursor-pointer active:scale-[0.98] transition-transform bg-white dark:bg-zinc-900 border-slate-100 dark:border-zinc-800/80"
+                        >
+                          <div className="flex items-center justify-between gap-2 mb-2">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
+                              {isToday ? "Hoy" : dateObj.toLocaleDateString("es-AR", { weekday: "short", day: "numeric", month: "short" })}
+                            </span>
+                            <span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500">
+                              {logs.length} {logs.length === 1 ? "comida" : "comidas"}
+                            </span>
+                          </div>
+                          <p className="font-extrabold text-sm text-slate-900 dark:text-zinc-100 mb-1.5">
+                            Total: <span className="text-primary">{Math.round(kcalTotal)} kcal</span>
+                          </p>
+                          <ul className="space-y-1 pt-1.5 border-t border-slate-100 dark:border-zinc-800/60">
+                            {logs.slice(0, 4).map((log) => {
+                              const { platoInfo } = getAlimLogDetails(log);
+                              return (
+                                <li key={log.id} className="text-xs flex items-center justify-between gap-2">
+                                  <span className="font-semibold text-slate-700 dark:text-zinc-200 truncate pr-2">
+                                    • {log.estado}: {platoInfo ? platoInfo.nombrePlato : "Comida registrada"}
+                                  </span>
+                                  <span className="text-[10px] font-mono font-medium text-slate-500 dark:text-zinc-400 whitespace-nowrap shrink-0">
+                                    {log.calorias} kcal
+                                  </span>
+                                </li>
+                              );
+                            })}
+                            {logs.length > 4 && (
+                              <li className="text-[10px] font-bold text-primary pt-0.5">
+                                + {logs.length - 4} comidas más
+                              </li>
+                            )}
+                          </ul>
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
 
                 {(() => {
@@ -5907,7 +5993,7 @@ export default function HealthView({
                     visual que el Calendario de Exámenes y Trabajos: a la izquierda se ve, de solo
                     lectura, el resumen del día elegido (hoy por defecto) y a la derecha se elige
                     el día tocándolo (doble click abre el detalle completo, con gym/deporte). */}
-                <div className="flex flex-col lg:flex-row lg:gap-6 lg:items-start">
+                <div className="hidden md:flex md:flex-col lg:flex-row lg:gap-6 lg:items-start">
                   <div
                     className={`order-2 lg:order-1 w-full lg:w-[320px] shrink-0 mt-6 lg:mt-0 lg:mb-0 rounded-2xl border p-4 space-y-3 ${
                       darkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-slate-200"
@@ -6061,6 +6147,45 @@ export default function HealthView({
                     </div>
                     </div>
                   </div>
+                </div>
+
+                {/* Mobile: lista cronológica de tarjetas de notas en vez del calendario, mismo
+                    patrón visual que Historial de Sesiones de Gimnasio. */}
+                <div className="md:hidden space-y-2.5">
+                  {diarioDaysSorted.length === 0 ? (
+                    <div className="text-center py-10 text-xs font-semibold text-slate-400 dark:text-zinc-500">
+                      Todavía no hay registros. Las comidas, sesiones de gym, deportes y
+                      mediciones que cargues van a aparecer acá.
+                    </div>
+                  ) : (
+                    diarioDaysSorted.map(({ fecha, details: d }) => (
+                      <div
+                        key={fecha}
+                        onClick={() => setDetailDiarioId(fecha)}
+                        className="rounded-2xl border p-3.5 cursor-pointer active:scale-[0.98] transition-transform bg-white dark:bg-zinc-900 border-slate-100 dark:border-zinc-800/80"
+                      >
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
+                            {d.isToday ? "Hoy" : d.dateObj.toLocaleDateString("es-AR", { weekday: "short", day: "numeric", month: "short" })}
+                          </span>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-primary/10 text-primary">
+                            {d.comidaDia > 0 ? (d.cumplio ? "Cumplido" : "Fuera de Rango") : "Sin Registros"}
+                          </span>
+                        </div>
+                        <p className="font-extrabold text-sm text-slate-900 dark:text-zinc-100 mb-1.5">
+                          Balance Neto: <span className="text-primary">{d.balanceNeto > 0 ? `+${d.balanceNeto}` : d.balanceNeto} kcal</span>
+                        </p>
+                        <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-[11px] font-medium text-slate-500 dark:text-zinc-400 pt-1.5 border-t border-slate-100 dark:border-zinc-800/60">
+                          <span className="flex items-center gap-1"><Utensils className="w-3 h-3 shrink-0" />{d.comidaDia} kcal</span>
+                          <span className="flex items-center gap-1"><Dumbbell className="w-3 h-3 shrink-0" />{d.gymDia} kcal</span>
+                          <span className="flex items-center gap-1"><Footprints className="w-3 h-3 shrink-0" />{d.deporteDia} kcal</span>
+                          {d.pesoDia !== "-" && (
+                            <span className="flex items-center gap-1"><Scale className="w-3 h-3 shrink-0" />{d.pesoDia}</span>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
 
                 {(() => {

@@ -561,7 +561,14 @@ export function GymAIAnalysisPanel({
                 <p className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wider text-primary mb-3">
                   <TrendingUp className="w-3.5 h-3.5" /> Progreso por Ejercicio
                 </p>
-                <div onMouseEnter={() => setIsHoveringExercises(true)} onMouseLeave={() => setIsHoveringExercises(false)}>
+                {/* overflow-hidden: el slide de entrada/salida anima x:±16px — sin esto, durante
+                    la transición la tarjeta se ve momentáneamente "salida" del borde redondeado
+                    del bloque, más notorio en mobile por lo angosto de la pantalla. */}
+                <div
+                  onMouseEnter={() => setIsHoveringExercises(true)}
+                  onMouseLeave={() => setIsHoveringExercises(false)}
+                  className="overflow-hidden"
+                >
                   <AnimatePresence mode="wait">
                     <motion.div
                       key={exercisePage}
