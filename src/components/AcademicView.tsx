@@ -824,14 +824,19 @@ export default function AcademicView({
   // Exámenes y Trabajos, abre la hoja de ESE lugar en vez de siempre el modal viejo de "Nuevo
   // Examen/Trabajo" (que además ya no se ve en ningún otro lado, ver SHOW_LEGACY_EXAMENES_LIST) —
   // ese modal queda como respaldo solo si por algún motivo no hay una sub-pestaña reconocida.
+  // Importante: se compara contra activeSubTab (la prop que llega de App.tsx, siempre al día) y
+  // no contra horarioSubTab — ese es estado local que solo AVANZA a "horario"/"examenes" pero
+  // nunca se resetea al salir a otra sub-pestaña de Universidad, así que quedaba "pegado" ahí y
+  // tocar "+" en cualquier otra sub-pestaña (Materias, Calificaciones, etc.) terminaba
+  // redirigiendo a un componente que ni siquiera está montado, sin abrir nada.
   useEffect(() => {
     if (!autoOpenQuickAdd) return;
-    if (horarioSubTab === "horario") {
+    if (activeSubTab === "horario") {
       setHorarioQuickAddNonce(autoOpenQuickAdd);
       onQuickAddHandled?.();
       return;
     }
-    if (horarioSubTab === "examenes") {
+    if (activeSubTab === "examenes") {
       setExamenesQuickAddNonce(autoOpenQuickAdd);
       onQuickAddHandled?.();
       return;
@@ -3900,6 +3905,7 @@ export default function AcademicView({
                 onCopyDayToOthers={handleCopyDayToOthers}
                 generateId={generateUniqueId}
                 externalOpenNonce={horarioQuickAddNonce}
+                onExternalOpenHandled={() => setHorarioQuickAddNonce(undefined)}
               />
             {SHOW_LEGACY_HORARIO_LIST && (
             <div className={`p-6 rounded-3xl border scroll-reveal ${darkMode ? "bg-zinc-900 border-zinc-800 text-white shadow-lg" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"}`}>
@@ -4251,6 +4257,7 @@ export default function AcademicView({
                 onDeleteExamen={handleDeleteExamen}
                 externalOpenNonce={examenesQuickAddNonce}
                 externalOpenDate={autoOpenQuickAddDate}
+                onExternalOpenHandled={() => setExamenesQuickAddNonce(undefined)}
               />
               {SHOW_LEGACY_EXAMENES_LIST && (
               <div className={`p-6 rounded-3xl border scroll-reveal ${darkMode ? "bg-zinc-900 border-zinc-800 text-white shadow-lg" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"}`}>

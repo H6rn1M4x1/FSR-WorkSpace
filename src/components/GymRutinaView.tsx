@@ -106,6 +106,9 @@ interface GymRutinaViewProps {
   // Relevo del "+" de la barra inferior (ver App.tsx/HealthView.tsx) — cuando llega un nonce
   // nuevo acá, GymScheduleGrid abre su hoja inferior de "Registrar Ejercicio" en mobile.
   openLoggerSheetNonce?: number;
+  // Avisa que GymScheduleGrid ya consumió openLoggerSheetNonce, para que HealthView (que es
+  // quien lo guarda) lo vuelva a dejar en undefined.
+  onLoggerSheetOpened?: () => void;
 }
 
 // Grupos musculares requeridos
@@ -623,6 +626,7 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
   currentWeightKg,
   weightHistory = [],
   openLoggerSheetNonce,
+  onLoggerSheetOpened,
 }) => {
   const userId = getEffectiveUserId(userEmail);
 
@@ -1316,6 +1320,21 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
         await handleGymBatchUpdate({ toDelete: ids, toUpsert: [] });
         uiSounds.delete();
         showToast("Semana vaciada", "success");
+      }
+    );
+  };
+
+  // Eliminar un solo ejercicio (botón "Eliminar" del panel al editar, en vez de "Vaciar semana"
+  // como única opción en mobile) — misma mecánica que handleGymClearWeek pero con la confirmación
+  // hablando de ESE ejercicio puntual, no de toda la semana.
+  const handleGymDeleteOne = (id: string) => {
+    requestConfirmation(
+      "Eliminar ejercicio",
+      "¿Estás seguro de que querés eliminar este ejercicio registrado?",
+      async () => {
+        await handleGymBatchUpdate({ toDelete: [id], toUpsert: [] });
+        uiSounds.delete();
+        showToast("Ejercicio eliminado", "success");
       }
     );
   };
@@ -3014,8 +3033,10 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
           onConfirmEdit={handleGymConfirmEdit}
           onBatchUpdate={handleGymBatchUpdate}
           onClearWeek={handleGymClearWeek}
+          onDeleteOne={handleGymDeleteOne}
           generateId={generateUniqueId}
           externalOpenNonce={openLoggerSheetNonce}
+          onExternalOpenHandled={onLoggerSheetOpened}
         />
         </SectionTransition>
       )}

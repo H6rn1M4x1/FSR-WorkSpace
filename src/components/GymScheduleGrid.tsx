@@ -111,11 +111,20 @@ interface GymScheduleGridProps {
   onConfirmEdit: (id: string, payload: GymScheduleCreatePayload) => void;
   onBatchUpdate: (batch: GymScheduleBatch) => void;
   onClearWeek: (ids: string[]) => void;
+  // Eliminar UN ejercicio puntual (con su propia confirmación, distinta de "Vaciar semana") —
+  // usado por el botón "Eliminar" del panel al editar, que reemplaza a "Vaciar semana" como forma
+  // de borrar en mobile (ahí no hay rejilla para arrastrar en modo "Borrar").
+  onDeleteOne: (id: string) => void;
   generateId: (prefix: string) => string;
   // Relevo del "+" de la barra inferior (ver App.tsx/HealthView.tsx/GymRutinaView.tsx) — un
   // nonce nuevo abre la hoja inferior de "Registrar Ejercicio" en mobile, como si se hubiera
   // tocado una tarjeta nueva.
   externalOpenNonce?: number;
+  // Avisa que ya se consumió externalOpenNonce, para que quien lo guarda (HealthView) lo vuelva
+  // a dejar en undefined — si no, la PRÓXIMA vez que este componente se vuelva a montar (p. ej.
+  // al salir de Historial de Sesiones y volver) vería ese mismo valor "nuevo" otra vez y abriría
+  // la hoja solo, sin que nadie haya tocado el "+".
+  onExternalOpenHandled?: () => void;
 }
 
 export function GymScheduleGrid({
@@ -126,7 +135,9 @@ export function GymScheduleGrid({
   onConfirmEdit,
   onBatchUpdate,
   onClearWeek,
+  onDeleteOne,
   externalOpenNonce,
+  onExternalOpenHandled,
   generateId,
 }: GymScheduleGridProps) {
   const [mode, setMode] = useState<"pintar" | "borrar">("pintar");
@@ -499,6 +510,7 @@ export function GymScheduleGrid({
     if (externalOpenNonce === undefined) return;
     handleCancelDraft();
     setShowMobileFormSheet(true);
+    onExternalOpenHandled?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [externalOpenNonce]);
 
@@ -695,6 +707,21 @@ export function GymScheduleGrid({
           )}
 
           <div className="flex items-center gap-2">
+            {editingDraftId && (
+              <button
+                type="button"
+                data-sound="delete"
+                onClick={() => {
+                  const id = editingDraftId;
+                  handleCancelDraft();
+                  onDeleteOne(id);
+                }}
+                title="Eliminar este ejercicio"
+                className="shrink-0 p-2.5 rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-all cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
             {hasPendingDraft && (
               <button
                 type="button"
@@ -797,13 +824,16 @@ export function GymScheduleGrid({
                   <span>Borrar</span>
                 </button>
               </div>
+              {/* Solo desktop/tablet — en mobile no hay forma de arrastrar en modo "Borrar", así
+                  que borrar de a uno se hace desde el botón "Eliminar" del panel al editar, en
+                  vez de dejar como única opción esta que borra TODA la semana de un toque. */}
               <button
                 type="button"
                 data-sound="delete"
                 onClick={() => onClearWeek(weekActividades.map((a) => a.raw.id))}
                 disabled={weekActividades.length === 0}
                 title="Vaciar semana"
-                className="p-2 rounded-full bg-slate-100 dark:bg-zinc-800/80 text-slate-500 dark:text-zinc-400 hover:text-red-500 hover:bg-red-500/10 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                className="hidden md:block p-2 rounded-full bg-slate-100 dark:bg-zinc-800/80 text-slate-500 dark:text-zinc-400 hover:text-red-500 hover:bg-red-500/10 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
@@ -1051,7 +1081,7 @@ export function GymScheduleGrid({
         columna izquierda en desktop/tablet, acá disparado por el botón "+" o al tocar una
         tarjeta ya registrada. DetailModal aporta el sonido/vibración/animación de apertura y
         cierre (incluido arrastrar hacia abajo para cerrar), igual que el resto de la app. */}
-    <DetailModal isOpen={showMobileFormSheet} onClose={handleCancelDraft}>
+    <DetailModal isOpen={showMobileFormSheet} onClose={handleCancelDraft} hideCloseButton>
       <div className="space-y-3.5">{formPanelContent}</div>
     </DetailModal>
     </>
