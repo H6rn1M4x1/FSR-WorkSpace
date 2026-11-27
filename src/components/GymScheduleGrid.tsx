@@ -1,5 +1,5 @@
 import React, { useRef, useState, useCallback, useEffect, useMemo } from "react";
-import { Paintbrush, Eraser, Trash2, Clock, Check, X, CalendarDays, Pencil, Plus } from "lucide-react";
+import { Paintbrush, Eraser, Trash2, Clock, Check, X, CalendarDays, Pencil } from "lucide-react";
 import { DeporteActividad } from "../types";
 import { AnimatedNumber } from "./AnimatedNumber";
 import { CustomSelect } from "./CustomSelect";
@@ -112,6 +112,10 @@ interface GymScheduleGridProps {
   onBatchUpdate: (batch: GymScheduleBatch) => void;
   onClearWeek: (ids: string[]) => void;
   generateId: (prefix: string) => string;
+  // Relevo del "+" de la barra inferior (ver App.tsx/HealthView.tsx/GymRutinaView.tsx) — un
+  // nonce nuevo abre la hoja inferior de "Registrar Ejercicio" en mobile, como si se hubiera
+  // tocado una tarjeta nueva.
+  externalOpenNonce?: number;
 }
 
 export function GymScheduleGrid({
@@ -122,6 +126,7 @@ export function GymScheduleGrid({
   onConfirmEdit,
   onBatchUpdate,
   onClearWeek,
+  externalOpenNonce,
   generateId,
 }: GymScheduleGridProps) {
   const [mode, setMode] = useState<"pintar" | "borrar">("pintar");
@@ -488,6 +493,15 @@ export function GymScheduleGrid({
     setShowMobileFormSheet(false);
   };
 
+  // El "+" de la barra inferior (en mobile) reemplaza al botón propio de "Agregar Ejercicio" que
+  // había acá — ahora la señal llega desde afuera (ver externalOpenNonce más arriba).
+  useEffect(() => {
+    if (externalOpenNonce === undefined) return;
+    handleCancelDraft();
+    setShowMobileFormSheet(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [externalOpenNonce]);
+
   const startEditingBlock = (item: WeekActividad) => {
     setEditingDraftId(item.raw.id);
     setPanelDayIdx(item.dayIdx);
@@ -736,7 +750,7 @@ export function GymScheduleGrid({
                   Elegí una rutina o deporte en el panel (o dejalo libre) y arrastrá sobre la rejilla para pintarla.
                 </p>
                 <p className="md:hidden text-xs text-zinc-500 mt-0.5">
-                  Tocá "Agregar Ejercicio" para cargar uno nuevo, o tocá una tarjeta para editarla.
+                  Tocá "+" para cargar un ejercicio nuevo, o tocá una tarjeta para editarla.
                 </p>
               </div>
               <div className="pl-4 border-l border-slate-200 dark:border-zinc-800 shrink-0">
@@ -981,23 +995,13 @@ export function GymScheduleGrid({
               tablas en mobile (ver PaymentsTable.tsx): la rejilla de arrastrar necesita mouse y
               espacio horizontal, así que en el celular cada sesión de la semana se muestra como
               una tarjeta tocable que abre, en una hoja inferior, el mismo panel de edición que en
-              desktop queda fijo en la columna izquierda (ver formPanelContent/DetailModal). */}
+              desktop queda fijo en la columna izquierda (ver formPanelContent/DetailModal). Para
+              cargar una nueva se usa el "+" de la barra inferior (ver externalOpenNonce), no un
+              botón propio acá. */}
           <div className="md:hidden space-y-2.5">
-            <button
-              type="button"
-              data-sound="click"
-              onClick={() => {
-                handleCancelDraft();
-                setShowMobileFormSheet(true);
-              }}
-              className="w-full flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-white dark:text-black text-xs font-bold cursor-pointer transition-all active:scale-[0.98]"
-            >
-              <Plus className="w-4 h-4" />
-              Agregar Ejercicio
-            </button>
             {weekActividadesSorted.length === 0 ? (
               <div className="px-4 py-8 text-center text-xs text-slate-500 dark:text-zinc-400 rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
-                Todavía no registraste ejercicios esta semana. Tocá "Agregar Ejercicio" para cargar el primero.
+                Todavía no registraste ejercicios esta semana. Tocá "+" para cargar el primero.
               </div>
             ) : (
               weekActividadesSorted.map((item) => (

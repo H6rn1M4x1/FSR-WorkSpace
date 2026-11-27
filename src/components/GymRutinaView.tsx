@@ -103,6 +103,9 @@ interface GymRutinaViewProps {
   // evaluar el progreso mensual de peso real sin que GymRutinaView tenga que duplicar esa lógica.
   currentWeightKg?: number;
   weightHistory?: { fecha: string; peso: number }[];
+  // Relevo del "+" de la barra inferior (ver App.tsx/HealthView.tsx) — cuando llega un nonce
+  // nuevo acá, GymScheduleGrid abre su hoja inferior de "Registrar Ejercicio" en mobile.
+  openLoggerSheetNonce?: number;
 }
 
 // Grupos musculares requeridos
@@ -619,6 +622,7 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
   onActiveTabChange,
   currentWeightKg,
   weightHistory = [],
+  openLoggerSheetNonce,
 }) => {
   const userId = getEffectiveUserId(userEmail);
 
@@ -3011,6 +3015,7 @@ export const GymRutinaView: React.FC<GymRutinaViewProps> = ({
           onBatchUpdate={handleGymBatchUpdate}
           onClearWeek={handleGymClearWeek}
           generateId={generateUniqueId}
+          externalOpenNonce={openLoggerSheetNonce}
         />
         </SectionTransition>
       )}

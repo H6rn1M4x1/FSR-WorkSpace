@@ -408,7 +408,17 @@ export default function App() {
   // hoy — es la fecha que el usuario ya eligió, tiene sentido que sea la del ítem que está
   // por agendar.
   const handleQuickAdd = (category: keyof typeof QUICK_ADD_TARGETS, date?: string) => {
-    const target = QUICK_ADD_TARGETS[category];
+    // Si ya estás parado en una sub-pestaña con su propio formulario de "nuevo" (Gimnasio >
+    // Historial de Sesiones / Alimentación dentro de Salud, Horario dentro de Universidad), el
+    // "+" no debe sacarte de ahí para mandarte a Medicamentos/Exámenes — se queda en la
+    // sub-pestaña actual (no-op de navegación) y solo dispara el nonce, que cada vista ya sabe
+    // interpretar según su propio estado interno (ver los useEffect de autoOpenQuickAdd).
+    const target =
+      category === "salud" && activeSubTab === "deporte_alimentacion"
+        ? { tab: "health", subTab: "deporte_alimentacion" }
+        : category === "universidad" && activeSubTab === "horario"
+          ? { tab: "academic", subTab: "horario" }
+          : QUICK_ADD_TARGETS[category];
     handleTabChange(target.tab);
     setActiveSubTab(target.subTab);
     setQuickAddDate(date);

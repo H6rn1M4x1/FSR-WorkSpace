@@ -1,8 +1,9 @@
-import React, { useRef, useState, useCallback, useEffect } from "react";
+import React, { useRef, useState, useCallback, useEffect, useMemo } from "react";
 import { Paintbrush, Eraser, Copy, Trash2, Clock, Check, X, Calendar, Pencil } from "lucide-react";
 import { HorarioItem } from "../types";
 import { AnimatedNumber } from "./AnimatedNumber";
 import { CustomSelect } from "./CustomSelect";
+import { DetailModal } from "./DetailModal";
 
 const DIAS: HorarioItem["dia"][] = [
   "Lunes",
@@ -140,6 +141,9 @@ interface WeeklyScheduleGridProps {
   onClearWeek: () => void;
   onCopyDayToOthers: (dia: string) => void;
   generateId: (prefix: string) => string;
+  // Relevo del "+" de la barra inferior (ver App.tsx/AcademicView.tsx) — un nonce nuevo abre la
+  // hoja inferior de "Nuevo Horario" en mobile, como si se hubiera tocado una tarjeta nueva.
+  externalOpenNonce?: number;
 }
 
 export function WeeklyScheduleGrid({
@@ -154,6 +158,7 @@ export function WeeklyScheduleGrid({
   onClearWeek,
   onCopyDayToOthers,
   generateId,
+  externalOpenNonce,
 }: WeeklyScheduleGridProps) {
   const [mode, setMode] = useState<"pintar" | "borrar">("pintar");
   const [drag, setDrag] = useState<DragState | null>(null);
@@ -186,6 +191,11 @@ export function WeeklyScheduleGrid({
   // su bloque lo carga acá) en vez de uno nuevo — confirmar actualiza ese id en vez de crear otro,
   // y mientras tanto el bloque original se oculta para no duplicarse con el borrador titilando.
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
+  // El panel de "Nuevo/Editando Horario" queda fijo en la columna izquierda en desktop/tablet,
+  // pero en mobile no hay espacio para tenerlo siempre visible — ahí se muestra como una hoja
+  // inferior (DetailModal) disparada por el "+" de la barra inferior o al tocar una tarjeta
+  // existente para editarla (mismo criterio que GymScheduleGrid.tsx).
+  const [showMobileFormSheet, setShowMobileFormSheet] = useState(false);
 
   const gridStartMin = horarios.reduce(
     (min, h) => Math.min(min, Math.floor(parseTimeMin(h.horaInicio) / 60) * 60),
@@ -202,6 +212,16 @@ export function WeeklyScheduleGrid({
     (sum, h) => sum + Math.max(0, parseTimeMin(h.horaFin) - parseTimeMin(h.horaInicio)) / 60,
     0,
   );
+
+  // Mismo listado, ordenado lunes→sábado y por hora — para la vista de tarjetas tipo "nota" en
+  // mobile (ver más abajo), que reemplaza la rejilla de arrastrar porque no es usable con el dedo.
+  const horariosSorted = useMemo(() => {
+    return [...horarios].sort((a, b) => {
+      const dayDiff = DIAS.indexOf(a.dia) - DIAS.indexOf(b.dia);
+      if (dayDiff !== 0) return dayDiff;
+      return a.horaInicio.localeCompare(b.horaInicio);
+    });
+  }, [horarios]);
 
   const minutesFromClientY = useCallback(
     (clientY: number, rectTop: number) => {
@@ -391,12 +411,22 @@ export function WeeklyScheduleGrid({
     }
     setHasPendingDraft(false);
     setEditingDraftId(null);
+    setShowMobileFormSheet(false);
   };
 
   const handleCancelDraft = () => {
     setHasPendingDraft(false);
     setEditingDraftId(null);
+    setShowMobileFormSheet(false);
   };
+
+  // El "+" de la barra inferior (en mobile) abre esta hoja sin pasar por ningún botón propio acá.
+  useEffect(() => {
+    if (externalOpenNonce === undefined) return;
+    handleCancelDraft();
+    setShowMobileFormSheet(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [externalOpenNonce]);
 
   const startEditingBlock = (h: HorarioItem) => {
     setEditingDraftId(h.id);
@@ -409,21 +439,12 @@ export function WeeklyScheduleGrid({
     setHasPendingDraft(true);
   };
 
-  return (
-    <div
-      className={`p-6 rounded-3xl border scroll-reveal ${
-        darkMode ? "bg-black/85 backdrop-blur-md border-zinc-800 text-white shadow-lg" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
-      }`}
-    >
-      <div className="lg:flex lg:gap-6 lg:items-start">
-        {/* Panel izquierdo: mismas funciones que tenía el modal "Nuevo Horario" (materia, día,
-            horas, aula, profesor) pero siempre visible — el pincel se elige acá, nunca en un
-            menú, y también alimenta lo que se pinta arrastrando sobre la rejilla. */}
-        <div
-          className={`w-full lg:w-[280px] shrink-0 mb-6 lg:mb-0 rounded-2xl border p-4 space-y-3.5 ${
-            darkMode ? "bg-zinc-950/40 border-zinc-800" : "bg-slate-50 border-slate-200"
-          }`}
-        >
+  // Contenido del panel "Nuevo/Editando Horario" — definido una sola vez y reusado tal cual
+  // en dos lugares: fijo en la columna izquierda en desktop/tablet (md+), y dentro de una hoja
+  // inferior (DetailModal, mismo sonido/vibración/animación que el resto de la app) en mobile,
+  // donde no hay espacio para tenerlo siempre visible (mismo criterio que GymScheduleGrid.tsx).
+  const formPanelContent = (
+    <>
           <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-zinc-400 flex items-center gap-1.5">
             <Pencil className="w-3.5 h-3.5 text-primary" />
             {editingDraftId ? "Editando Horario" : "Nuevo Horario"}
@@ -546,7 +567,7 @@ export function WeeklyScheduleGrid({
               type="button"
               onClick={handleConfirmDraft}
               disabled={!canConfirmDraft}
-              className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-white dark:text-blue-950 text-xs font-extrabold shadow-sm transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-white dark:text-black text-xs font-extrabold shadow-sm transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Check className="w-3.5 h-3.5" />
               <span>{editingDraftId ? "Guardar Cambios" : "Agregar Horario"}</span>
@@ -558,6 +579,26 @@ export function WeeklyScheduleGrid({
               Elegí una materia para poder agregar o pintar horarios.
             </p>
           )}
+    </>
+  );
+
+  return (
+    <>
+    <div
+      className={`p-6 rounded-3xl border scroll-reveal ${
+        darkMode ? "bg-black/85 backdrop-blur-md border-zinc-800 text-white shadow-lg" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
+      }`}
+    >
+      <div className="lg:flex lg:gap-6 lg:items-start">
+        {/* Panel izquierdo: mismas funciones que tenía el modal "Nuevo Horario" (materia, día,
+            horas, aula, profesor) pero siempre visible — el pincel se elige acá, nunca en un
+            menú, y también alimenta lo que se pinta arrastrando sobre la rejilla. */}
+        <div
+          className={`hidden md:block w-full lg:w-[280px] shrink-0 mb-6 lg:mb-0 rounded-2xl border p-4 space-y-3.5 ${
+            darkMode ? "bg-zinc-950/40 border-zinc-800" : "bg-slate-50 border-slate-200"
+          }`}
+        >
+          {formPanelContent}
         </div>
 
         {/* Columna derecha: título + contador animado + modo pintar/borrar + rejilla */}
@@ -569,8 +610,11 @@ export function WeeklyScheduleGrid({
               <Calendar className="w-4 h-4 text-primary" />
               <span>Horario Semanal</span>
             </h3>
-            <p className="text-xs text-zinc-500 mt-0.5">
+            <p className="hidden md:block text-xs text-zinc-500 mt-0.5">
               Elegí una materia en el panel y arrastrá sobre la rejilla para pintarla.
+            </p>
+            <p className="md:hidden text-xs text-zinc-500 mt-0.5">
+              Tocá "+" para cargar una clase nueva, o tocá una tarjeta para editarla.
             </p>
           </div>
           <div className="pl-4 border-l border-slate-200 dark:border-zinc-800 shrink-0">
@@ -586,13 +630,13 @@ export function WeeklyScheduleGrid({
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto">
-          <div className="flex items-center gap-1 p-1 rounded-full bg-slate-100 dark:bg-zinc-800/80 border border-slate-200 dark:border-zinc-800">
+          <div className="hidden md:flex items-center gap-1 p-1 rounded-full bg-slate-100 dark:bg-zinc-800/80 border border-slate-200 dark:border-zinc-800">
             <button
               type="button"
               onClick={() => setMode("pintar")}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all cursor-pointer ${
                 mode === "pintar"
-                  ? "bg-primary text-white dark:text-blue-950 shadow-sm"
+                  ? "bg-primary text-white dark:text-black shadow-sm"
                   : "text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200"
               }`}
             >
@@ -607,7 +651,7 @@ export function WeeklyScheduleGrid({
               }}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all cursor-pointer ${
                 mode === "borrar"
-                  ? "bg-primary text-white dark:text-blue-950 shadow-sm"
+                  ? "bg-primary text-white dark:text-black shadow-sm"
                   : "text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200"
               }`}
             >
@@ -628,18 +672,18 @@ export function WeeklyScheduleGrid({
       </div>
 
       {mode === "pintar" && !selectedMateria && materiaOptions.length > 0 && (
-        <p className="text-[11px] text-slate-400 dark:text-zinc-500 font-semibold mb-3">
+        <p className="hidden md:block text-[11px] text-slate-400 dark:text-zinc-500 font-semibold mb-3">
           Elegí una materia en el panel de la izquierda para empezar a pintar.
         </p>
       )}
 
-      {/* Rejilla — el borde/fondo van en un contenedor SIN overflow propio (crece libre junto con
+      {/* Rejilla (solo desktop/tablet) — el borde/fondo van en un contenedor SIN overflow propio (crece libre junto con
           la página, nunca con scroll interno) y el scroll horizontal (para pantallas angostas,
           donde las 6 columnas no entran) vive en un wrapper aparte, adentro. Si los dos overflow
           (x e y) estuvieran en el mismo div, los navegadores fuerzan el eje vertical a "auto"
           también apenas el horizontal deja de ser "visible" — eso es lo que generaba el scroll
           interno chico e incómodo que había antes. */}
-      <div className="rounded-2xl border border-slate-100 dark:border-zinc-800/80 bg-slate-50/50 dark:bg-black/40">
+      <div className="hidden md:block rounded-2xl border border-slate-100 dark:border-zinc-800/80 bg-slate-50/50 dark:bg-black/40">
         <div className="overflow-x-auto">
         <div className="flex min-w-[620px]">
           {/* Columna de horas */}
@@ -837,14 +881,71 @@ export function WeeklyScheduleGrid({
       </div>
 
       {horarios.length === 0 && (
-        <p className="mt-3 text-[11px] text-zinc-500 flex items-center gap-1.5">
+        <p className="hidden md:flex mt-3 text-[11px] text-zinc-500 items-center gap-1.5">
           <Clock className="w-3 h-3" />
           Arrastrá sobre la rejilla (o tocá una celda) para pintar tu primera clase.
         </p>
       )}
+
+          {/* Vista en tarjetas tipo "nota" para mobile — mismo criterio que ya se usa para las
+              tablas en mobile (ver PaymentsTable.tsx) y que GymScheduleGrid.tsx: la rejilla de
+              arrastrar necesita mouse y espacio horizontal, así que en el celular cada clase se
+              muestra como una tarjeta tocable que abre, en una hoja inferior, el mismo panel de
+              edición que en desktop queda fijo en la columna izquierda. Para cargar una nueva se
+              usa el "+" de la barra inferior (ver externalOpenNonce), no un botón propio acá. */}
+          <div className="md:hidden space-y-2.5">
+            {horariosSorted.length === 0 ? (
+              <div className="px-4 py-8 text-center text-xs text-slate-500 dark:text-zinc-400 rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
+                Todavía no cargaste nada en el horario. Tocá "+" para agregar la primera clase.
+              </div>
+            ) : (
+              horariosSorted.map((h) => (
+                <div
+                  key={h.id}
+                  onClick={() => {
+                    startEditingBlock(h);
+                    setShowMobileFormSheet(true);
+                  }}
+                  className="rounded-2xl border p-3.5 cursor-pointer active:scale-[0.98] transition-transform bg-white dark:bg-zinc-900 border-slate-100 dark:border-zinc-800/80"
+                >
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
+                      {DIAS_CORTO[h.dia]}
+                    </span>
+                    <span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500">
+                      {h.horaInicio}–{h.horaFin}
+                    </span>
+                  </div>
+                  <p className="flex items-center gap-1.5 font-extrabold text-sm text-slate-900 dark:text-zinc-100 mb-1">
+                    <span
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ backgroundColor: colorForMateria(h.materia) }}
+                    />
+                    <span className="truncate">{h.materia}</span>
+                  </p>
+                  {(h.aulas || h.profesores) && (
+                    <div className="flex items-center gap-3 text-[11px] font-medium text-slate-500 dark:text-zinc-400 mt-1.5 pt-1.5 border-t border-slate-100 dark:border-zinc-800/60">
+                      {h.aulas && <span className="truncate">{h.aulas}</span>}
+                      {h.profesores && <span className="truncate">{h.profesores}</span>}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
         </div>
       </div>
     </div>
+
+    {/* Hoja inferior — mobile: mismo panel de "Nuevo/Editando Horario" que queda fijo en la
+        columna izquierda en desktop/tablet, acá disparado por el "+" de la barra inferior o al
+        tocar una tarjeta ya registrada. DetailModal aporta el sonido/vibración/animación de
+        apertura y cierre (incluido arrastrar hacia abajo para cerrar), igual que el resto de la
+        app. */}
+    <DetailModal isOpen={showMobileFormSheet} onClose={handleCancelDraft}>
+      <div className="space-y-3.5">{formPanelContent}</div>
+    </DetailModal>
+    </>
   );
 }
 
