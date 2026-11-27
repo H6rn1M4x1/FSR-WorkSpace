@@ -1,6 +1,6 @@
 import React, { useRef, useState, useCallback, useEffect, useMemo } from "react";
 import { Paintbrush, Eraser, Trash2, Clock, Check, X, CalendarDays, Pencil } from "lucide-react";
-import { DeporteActividad } from "../types";
+import { DeporteActividad, RutinaGimnasio } from "../types";
 import { AnimatedNumber } from "./AnimatedNumber";
 import { CustomSelect } from "./CustomSelect";
 import { DetailModal } from "./DetailModal";
@@ -107,6 +107,9 @@ interface GymScheduleGridProps {
   darkMode: boolean;
   actividades: DeporteActividad[];
   options: GymScheduleOption[];
+  // Para mostrar los ejercicios de la rutina agendada en la tarjeta de mobile (ver
+  // weekActividadesSorted más abajo) — mismo detalle que ya se ve en Mis Rutinas.
+  rutinasGimnasio?: RutinaGimnasio[];
   onDirectCreate: (payload: GymScheduleCreatePayload) => void;
   onConfirmEdit: (id: string, payload: GymScheduleCreatePayload) => void;
   onBatchUpdate: (batch: GymScheduleBatch) => void;
@@ -131,6 +134,7 @@ export function GymScheduleGrid({
   darkMode,
   actividades,
   options,
+  rutinasGimnasio,
   onDirectCreate,
   onConfirmEdit,
   onBatchUpdate,
@@ -1069,6 +1073,41 @@ export function GymScheduleGrid({
                       {item.raw.calorias > 0 && <span>{item.raw.calorias} kcal</span>}
                     </div>
                   )}
+                  {/* Ejercicios de la rutina agendada — mismo detalle que ya se ve en Mis
+                      Rutinas, para que se entienda de un vistazo qué hay que hacer sin tener
+                      que abrir la rutina aparte. Nada que mostrar para "Actividad libre" o un
+                      deporte (esos no tienen lista de ejercicios). */}
+                  {(() => {
+                    const rutina = rutinasGimnasio?.find((r) => r.nombre === item.raw.informacion);
+                    if (!rutina || !rutina.ejercicios || rutina.ejercicios.length === 0) return null;
+                    return (
+                      <div
+                        onClick={(e) => e.stopPropagation()}
+                        className="mt-2 p-2.5 rounded-xl border space-y-1 bg-slate-50 border-slate-200/60 dark:bg-zinc-950 dark:border-zinc-800/60 cursor-default"
+                      >
+                        <span className="text-[9px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-wider block">
+                          Ejercicios Incluidos
+                        </span>
+                        <ul className="space-y-1">
+                          {rutina.ejercicios.slice(0, 4).map((ej, idx) => (
+                            <li key={idx} className="text-[11px] flex items-center justify-between gap-2">
+                              <span className="font-semibold text-slate-700 dark:text-zinc-200 truncate">
+                                • {ej.nombre}
+                              </span>
+                              <span className="text-[10px] font-mono font-medium text-slate-500 dark:text-zinc-400 whitespace-nowrap shrink-0">
+                                {ej.seriesObjetivo || 4}x{ej.repeticionesObjetivo || 10} ({ej.pesoObjetivoKg || 0}kg)
+                              </span>
+                            </li>
+                          ))}
+                          {rutina.ejercicios.length > 4 && (
+                            <li className="text-[10px] font-bold text-primary pt-0.5">
+                              + {rutina.ejercicios.length - 4} ejercicios más
+                            </li>
+                          )}
+                        </ul>
+                      </div>
+                    );
+                  })()}
                 </div>
               ))
             )}

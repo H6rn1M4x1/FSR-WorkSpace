@@ -383,19 +383,17 @@ export function MonthlyExamScheduler({
         </div>
 
         {/* Columna derecha: calendario mensual — un solo click sobre un día lo marca como el
-            destino del registro que se está armando en el panel. */}
-        <div className="flex-1 min-w-0">
+            destino del registro que se está armando en el panel. Solo en escritorio — en mobile
+            se reemplaza por la lista de tarjetas más abajo. */}
+        <div className="hidden md:block flex-1 min-w-0">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-5">
             <div className="min-w-0">
               <h3 className="font-extrabold text-sm flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-primary" />
                 <span>Calendario de Exámenes y Trabajos</span>
               </h3>
-              <p className="hidden md:block text-xs text-zinc-500 mt-0.5">
+              <p className="text-xs text-zinc-500 mt-0.5">
                 Completá los datos del panel y tocá un día para agendarlo. Doble click para ver el detalle.
-              </p>
-              <p className="md:hidden text-xs text-zinc-500 mt-0.5">
-                Tocá un día para agendarlo, o "+" para cargar uno nuevo. Tocá dos veces un día ya agendado para ver el detalle.
               </p>
             </div>
 
@@ -479,6 +477,61 @@ export function MonthlyExamScheduler({
           </div>
           </div>
         </div>
+      </div>
+
+      {/* Mobile: lista cronológica de tarjetas de notas en vez del calendario, mismo patrón
+          visual que Historial de Sesiones de Gimnasio — tocar una tarjeta abre la hoja para
+          editar ese examen/trabajo. */}
+      <div className="md:hidden space-y-2.5">
+        {examenes.length === 0 ? (
+          <div className="text-center py-10 text-xs font-semibold text-slate-400 dark:text-zinc-500">
+            Todavía no hay exámenes ni trabajos agendados. Tocá "+" para cargar el primero.
+          </div>
+        ) : (
+          [...examenes]
+            .sort((a, b) => a.fecha.localeCompare(b.fecha))
+            .map((ex) => {
+              const dateStr = ex.fecha.split("T")[0];
+              const dateObj = new Date(`${dateStr}T12:00:00`);
+              const horaTxt = ex.fecha.includes("T") ? ex.fecha.split("T")[1].slice(0, 5) : "";
+              const isToday = dateStr === todayStr;
+              return (
+                <div
+                  key={ex.id}
+                  onClick={() => startEditing(ex)}
+                  className="rounded-2xl border p-3.5 cursor-pointer active:scale-[0.98] transition-transform bg-white dark:bg-zinc-900 border-slate-100 dark:border-zinc-800/80"
+                >
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
+                      {isToday ? "Hoy" : dateObj.toLocaleDateString("es-AR", { weekday: "short", day: "numeric", month: "short" })}
+                    </span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
+                      {ex.instancia ? `${ex.estado} · ${ex.instancia}` : ex.estado}
+                    </span>
+                  </div>
+                  <p className="font-extrabold text-sm text-slate-900 dark:text-zinc-100 mb-1">
+                    {ex.materia}
+                  </p>
+                  {(horaTxt || ex.aula) && (
+                    <div className="flex items-center gap-3 text-[11px] font-medium text-slate-500 dark:text-zinc-400 mt-1.5 pt-1.5 border-t border-slate-100 dark:border-zinc-800/60">
+                      {horaTxt && (
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3 h-3 shrink-0" />
+                          {horaTxt}
+                        </span>
+                      )}
+                      {ex.aula && (
+                        <span className="flex items-center gap-1">
+                          <MapPin className="w-3 h-3 shrink-0" />
+                          {ex.aula}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+        )}
       </div>
 
       {(() => {
