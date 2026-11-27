@@ -814,10 +814,28 @@ export default function AcademicView({
   const [exAula, setExAula] = useState("");
   const [tiFilter, setTiFilter] = useState("Todos");
 
-  // Botón "Agendar" de Inicio: abre directo el formulario de "Nuevo Examen / Trabajo" (misma
-  // secuencia que el botón "Nuevo Examen / Trabajo" de esta pantalla).
+  // Relevo del nonce de "Agendar"/"+" un nivel más adentro — ver el useEffect de abajo.
+  // WeeklyScheduleGrid (Horario) y MonthlyExamScheduler (Exámenes y Trabajos) escuchan cada uno
+  // el suyo para abrir su propia hoja inferior en mobile.
+  const [horarioQuickAddNonce, setHorarioQuickAddNonce] = useState<number | undefined>(undefined);
+  const [examenesQuickAddNonce, setExamenesQuickAddNonce] = useState<number | undefined>(undefined);
+
+  // Botón "Agendar" de Inicio / "+" de la barra inferior: si ya estás parado en Horario o en
+  // Exámenes y Trabajos, abre la hoja de ESE lugar en vez de siempre el modal viejo de "Nuevo
+  // Examen/Trabajo" (que además ya no se ve en ningún otro lado, ver SHOW_LEGACY_EXAMENES_LIST) —
+  // ese modal queda como respaldo solo si por algún motivo no hay una sub-pestaña reconocida.
   useEffect(() => {
     if (!autoOpenQuickAdd) return;
+    if (horarioSubTab === "horario") {
+      setHorarioQuickAddNonce(autoOpenQuickAdd);
+      onQuickAddHandled?.();
+      return;
+    }
+    if (horarioSubTab === "examenes") {
+      setExamenesQuickAddNonce(autoOpenQuickAdd);
+      onQuickAddHandled?.();
+      return;
+    }
     setEditingExamenId(null);
     setExMateria("");
     setExFecha(autoOpenQuickAddDate || "");
@@ -3881,6 +3899,7 @@ export default function AcademicView({
                 onClearWeek={handleClearWeekHorarios}
                 onCopyDayToOthers={handleCopyDayToOthers}
                 generateId={generateUniqueId}
+                externalOpenNonce={horarioQuickAddNonce}
               />
             {SHOW_LEGACY_HORARIO_LIST && (
             <div className={`p-6 rounded-3xl border scroll-reveal ${darkMode ? "bg-zinc-900 border-zinc-800 text-white shadow-lg" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"}`}>
@@ -4230,6 +4249,8 @@ export default function AcademicView({
                 onDirectCreate={handleCalendarExamenCreate}
                 onConfirmEdit={handleCalendarExamenEdit}
                 onDeleteExamen={handleDeleteExamen}
+                externalOpenNonce={examenesQuickAddNonce}
+                externalOpenDate={autoOpenQuickAddDate}
               />
               {SHOW_LEGACY_EXAMENES_LIST && (
               <div className={`p-6 rounded-3xl border scroll-reveal ${darkMode ? "bg-zinc-900 border-zinc-800 text-white shadow-lg" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"}`}>

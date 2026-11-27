@@ -3,6 +3,7 @@ import { Calendar, ChevronLeft, ChevronRight, Check, Pencil, Trash2, BookOpen, C
 import { ExamenItem } from "../types";
 import { CustomSelect } from "./CustomSelect";
 import { DetailModal, DetailBlock, DetailBlockGrid } from "./DetailModal";
+import { useIsMobile } from "../hooks/useIsMobile";
 
 const ESTADOS = ["Parcial", "Recuperatorio", "Extraordinario", "Examen Final"];
 const INSTANCIAS = ["Primero", "Segundo", "Tercero", "Primero/Segundo", "Trabajo Practico"];
@@ -49,6 +50,10 @@ export interface MonthlyExamSchedulerProps {
     aula: string,
   ) => void;
   onDeleteExamen: (id: string) => void;
+  // Relevo del "+" de la barra inferior (ver App.tsx/AcademicView.tsx) — un nonce nuevo abre la
+  // hoja inferior de "Nuevo Examen/Trabajo" en mobile con el día en curso ya precargado.
+  externalOpenNonce?: number;
+  externalOpenDate?: string;
 }
 
 // Equivalente mensual y de único registro al "pintar" semanal de Horario: a la izquierda se arma
@@ -65,7 +70,10 @@ export function MonthlyExamScheduler({
   onDirectCreate,
   onConfirmEdit,
   onDeleteExamen,
+  externalOpenNonce,
+  externalOpenDate,
 }: MonthlyExamSchedulerProps) {
+  const isMobile = useIsMobile();
   const [currentMonth, setCurrentMonth] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [detailDayId, setDetailDayId] = useState<string | null>(null);
@@ -75,6 +83,11 @@ export function MonthlyExamScheduler({
   const [materia, setMateria] = useState("");
   const [hora, setHora] = useState("08:00");
   const [aula, setAula] = useState("");
+  // El panel de "Nuevo/Editar Examen o Trabajo" queda fijo en la columna izquierda en
+  // desktop/tablet, pero en mobile no hay espacio para tenerlo siempre visible — ahí se muestra
+  // como una hoja inferior (DetailModal), disparada al tocar un día del calendario, al editar un
+  // examen/trabajo ya cargado, o desde el "+" de la barra inferior.
+  const [showMobileFormSheet, setShowMobileFormSheet] = useState(false);
 
   const materiaOptions = estado === "Examen Final" ? materiaOptionsFinal : materiaOptionsOtros;
 
@@ -95,9 +108,14 @@ export function MonthlyExamScheduler({
   // Un solo click deja el día como destino del panel (para cargar o editar), sin tocar los datos
   // que ya se hayan cargado — así arma el registro en cualquier orden (elegir día y después
   // completar datos, o completar datos y después elegir día) sin perder nada en el camino. Doble
-  // click abre el menú con toda la información del día.
+  // click abre el menú con toda la información del día. En mobile, seleccionar un día (no
+  // deseleccionarlo) también abre la hoja del panel, que ahí no queda visible fijo en pantalla.
   const selectDay = (dateStr: string) => {
-    setSelectedDate((prev) => (prev === dateStr ? null : dateStr));
+    setSelectedDate((prev) => {
+      const next = prev === dateStr ? null : dateStr;
+      if (next && isMobile) setShowMobileFormSheet(true);
+      return next;
+    });
   };
 
   const openDayDetail = (dateStr: string) => {
@@ -134,11 +152,13 @@ export function MonthlyExamScheduler({
     setMateria(ex.materia);
     setHora(ex.fecha.includes("T") ? ex.fecha.split("T")[1].slice(0, 5) : "08:00");
     setAula(ex.aula);
+    if (isMobile) setShowMobileFormSheet(true);
   };
 
   const handleCancel = () => {
     resetDraft();
     setSelectedDate(null);
+    setShowMobileFormSheet(false);
   };
 
   const canConfirm = Boolean(selectedDate && materia && estado);
@@ -153,29 +173,47 @@ export function MonthlyExamScheduler({
       onDirectCreate(fecha, estado, finalInstancia, materia, aula);
     }
     resetDraft();
+    setShowMobileFormSheet(false);
   };
+
+  // "+" de la barra inferior: precarga hoy (o la fecha que se haya pasado) y abre la hoja,
+  // igual que tocar un día del calendario pero sin necesidad de ubicarlo primero.
+  useEffect(() => {
+    if (externalOpenNonce === undefined) return;
+    resetDraft();
+    setSelectedDate(externalOpenDate || todayStr);
+    setShowMobileFormSheet(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [externalOpenNonce]);
 
   const days = getDaysInMonth(currentMonth);
   const selectedDayExams = selectedDate ? examsForDate(selectedDate) : [];
 
-  return (
-    <div
-      className={`p-6 rounded-3xl border scroll-reveal mb-6 ${
-        darkMode ? "bg-black/85 backdrop-blur-md border-zinc-800 text-white shadow-lg" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
-      }`}
-    >
-      <div className="lg:flex lg:gap-6 lg:items-start">
-        {/* Panel izquierdo: mismo rol que el panel de "Nuevo Horario" — arma el dato que después
-            queda pegado al día que se toque en el calendario de la derecha. */}
-        <div
-          className={`w-full lg:w-[280px] shrink-0 mb-6 lg:mb-0 rounded-2xl border p-4 space-y-3.5 ${
-            darkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-slate-200"
-          }`}
-        >
+  // Contenido del panel "Nuevo/Editar Examen o Trabajo" — definido una sola vez y reusado
+  // tal cual en dos lugares: fijo en la columna izquierda en desktop/tablet (md+), y dentro
+  // de una hoja inferior (DetailModal) en mobile.
+  const formPanelContent = (
+    <>
           <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-zinc-400 flex items-center gap-1.5">
             <Pencil className="w-3.5 h-3.5 text-primary" />
             {editingId ? "Editando Examen/Trabajo" : "Nuevo Examen/Trabajo"}
           </h4>
+
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
+              Día
+            </label>
+            {/* Mismo dato que tocar un día del calendario (selectedDate) — pensado para cuando se
+                abre el panel desde el "+" de la barra inferior, sin haber tocado el calendario
+                todavía (en mobile el calendario queda detrás de la hoja, así que hace falta una
+                forma de elegir/corregir el día sin cerrarla). */}
+            <input
+              type="date"
+              value={selectedDate || ""}
+              onChange={(e) => setSelectedDate(e.target.value || null)}
+              className="w-full px-2.5 py-2 rounded-xl bg-white dark:bg-black/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white outline-none text-xs focus:border-primary"
+            />
+          </div>
 
           <div>
             <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
@@ -191,7 +229,7 @@ export function MonthlyExamScheduler({
                     onClick={() => setEstado(es)}
                     className={`px-2.5 py-1.5 rounded-full text-[11px] font-bold border-2 transition-all cursor-pointer ${
                       isActive
-                        ? "bg-primary border-primary text-white dark:text-blue-950 shadow-sm"
+                        ? "bg-primary border-primary text-white dark:text-black shadow-sm"
                         : "bg-transparent border-slate-200 dark:border-zinc-700 text-slate-500 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800/60"
                     }`}
                   >
@@ -270,7 +308,7 @@ export function MonthlyExamScheduler({
               type="button"
               onClick={handleConfirm}
               disabled={!canConfirm}
-              className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-white dark:text-blue-950 text-xs font-extrabold shadow-sm transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-white dark:text-black text-xs font-extrabold shadow-sm transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Check className="w-3.5 h-3.5" />
               <span>{editingId ? "Guardar Cambios" : "Agregar"}</span>
@@ -279,7 +317,7 @@ export function MonthlyExamScheduler({
 
           {!selectedDate && (
             <p className="text-[10px] text-slate-400 dark:text-zinc-500 font-semibold">
-              Elegí un día en el calendario para agendar.
+              Elegí un día (arriba o en el calendario) para agendar.
             </p>
           )}
 
@@ -317,6 +355,24 @@ export function MonthlyExamScheduler({
               ))}
             </div>
           )}
+    </>
+  );
+
+  return (
+    <div
+      className={`p-6 rounded-3xl border scroll-reveal mb-6 ${
+        darkMode ? "bg-black/85 backdrop-blur-md border-zinc-800 text-white shadow-lg" : "bg-white border-zinc-200 text-zinc-800 shadow-sm"
+      }`}
+    >
+      <div className="lg:flex lg:gap-6 lg:items-start">
+        {/* Panel izquierdo: mismo rol que el panel de "Nuevo Horario" — arma el dato que después
+            queda pegado al día que se toque en el calendario de la derecha. */}
+        <div
+          className={`hidden md:block w-full lg:w-[280px] shrink-0 mb-6 lg:mb-0 rounded-2xl border p-4 space-y-3.5 ${
+            darkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-slate-200"
+          }`}
+        >
+          {formPanelContent}
         </div>
 
         {/* Columna derecha: calendario mensual — un solo click sobre un día lo marca como el
@@ -328,8 +384,11 @@ export function MonthlyExamScheduler({
                 <Calendar className="w-4 h-4 text-primary" />
                 <span>Calendario de Exámenes y Trabajos</span>
               </h3>
-              <p className="text-xs text-zinc-500 mt-0.5">
+              <p className="hidden md:block text-xs text-zinc-500 mt-0.5">
                 Completá los datos del panel y tocá un día para agendarlo. Doble click para ver el detalle.
+              </p>
+              <p className="md:hidden text-xs text-zinc-500 mt-0.5">
+                Tocá un día para agendarlo, o "+" para cargar uno nuevo. Tocá dos veces un día ya agendado para ver el detalle.
               </p>
             </div>
 
@@ -387,7 +446,7 @@ export function MonthlyExamScheduler({
                     isSelected
                       ? "border-2 border-primary text-primary bg-primary/10 scale-[1.02] shadow-sm"
                       : isToday
-                        ? "bg-primary text-white dark:text-blue-950 shadow-md"
+                        ? "bg-primary text-white dark:text-black shadow-md"
                         : "hover:bg-primary/10 text-slate-700 dark:text-zinc-300"
                   }`}
                 >
@@ -482,6 +541,13 @@ export function MonthlyExamScheduler({
           </DetailModal>
         );
       })()}
+
+      {/* Hoja inferior — mobile: mismo panel de "Nuevo/Editar Examen o Trabajo" que en
+          desktop/tablet queda fijo en la columna izquierda. Se abre al tocar un día del
+          calendario, al editar un registro ya cargado, o desde el "+" de la barra inferior. */}
+      <DetailModal isOpen={showMobileFormSheet} onClose={handleCancel}>
+        <div className="space-y-3.5">{formPanelContent}</div>
+      </DetailModal>
     </div>
   );
 }

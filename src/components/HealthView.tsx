@@ -5,6 +5,7 @@ import { useSubPanelRows } from "../lib/navPanelContext";
 import { SharedBadge, makeSharedOutHelpers } from "./SharedBadge";
 import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
 import { useBriefLoading } from "../hooks/useBriefLoading";
+import { useIsMobile } from "../hooks/useIsMobile";
 import { TableSkeleton } from "./TableSkeleton";
 import { AnimatedNumber } from "./AnimatedNumber";
 import { UserProfileData } from "./UserSettingsModal";
@@ -1315,6 +1316,16 @@ export default function HealthView({
   const [medsActiveTab, setMedsActiveTab] = useState<"historial" | "stock">("historial");
   const [deporteAlimActiveTab, setDeporteAlimActiveTab] = useState<"rutina" | "alimentacion" | "registro_diario">("rutina");
   const [gymActiveTab, setGymActiveTab] = useState<"rutinas" | "logger" | "tecnica" | "progreso" | "historial">("historial");
+  // Relevo del nonce de "Agendar"/"+" un nivel más adentro — ver el useEffect de autoOpenQuickAdd
+  // más abajo. GymScheduleGrid (dentro de GymRutinaView) escucha este nonce para abrir su propia
+  // hoja inferior de "Registrar Ejercicio" en mobile.
+  const [gymQuickAddNonce, setGymQuickAddNonce] = useState<number | undefined>(undefined);
+  // El panel de "Nuevo/Editar Registro" de Alimentación (más abajo) queda fijo en la columna
+  // izquierda en desktop/tablet, pero en mobile se muestra como hoja inferior (DetailModal) —
+  // necesita saber si está en mobile para decidir, al tocar un día o editar un registro, si
+  // además de actualizar el estado hay que abrir esa hoja (en desktop el panel ya está visible).
+  const isMobile = useIsMobile();
+  const [showAlimMobileSheet, setShowAlimMobileSheet] = useState(false);
 
   const lastSubTabRef = useRef<string | null>(null);
 
@@ -1507,7 +1518,11 @@ export default function HealthView({
   // después completar el menú, o completar el menú y después elegir el día). Doble click abre el
   // detalle con todas las comidas de ese día (con foto incluida).
   const selectAlimDay = (dateStr: string) => {
-    setAlimFecha((prev) => (prev === dateStr ? "" : dateStr));
+    setAlimFecha((prev) => {
+      const next = prev === dateStr ? "" : dateStr;
+      if (next && isMobile) setShowAlimMobileSheet(true);
+      return next;
+    });
   };
 
   const openAlimDayDetail = (dateStr: string) => {
@@ -1539,6 +1554,7 @@ export default function HealthView({
   const handleCancelAlimDraft = () => {
     resetAlimDraft();
     setAlimFecha("");
+    setShowAlimMobileSheet(false);
   };
 
   const handleEditAlimLog = (log: AlimentacionLog) => {
@@ -1556,6 +1572,7 @@ export default function HealthView({
       setAlimCantidades({});
     }
     setAlimCalorias(log.calorias);
+    if (isMobile) setShowAlimMobileSheet(true);
   };
 
   const handleSaveAlimLog = async () => {
@@ -2527,10 +2544,24 @@ export default function HealthView({
     setShowDetailedModal(true);
   };
 
-  // Botón "Agendar" de Inicio: abre directo el formulario de "Agregar Medicamento" (mismo
-  // openAddModal que usa el botón de esta pantalla).
+  // Botón "Agendar" de Inicio / "+" de la barra inferior: cuando el usuario ya está parado en
+  // Gimnasio > Historial de Sesiones (mobile), abrir la hoja de "Registrar Ejercicio" de ese
+  // lugar en vez de saltar a "Agregar Medicamento" — ver el comentario de handleQuickAdd en
+  // App.tsx (no navega fuera de deporte_alimentacion en ese caso, solo dispara el nonce).
   useEffect(() => {
     if (!autoOpenQuickAdd) return;
+    if (deporteAlimActiveTab === "rutina" && gymActiveTab === "historial") {
+      setGymQuickAddNonce(autoOpenQuickAdd);
+      onQuickAddHandled?.();
+      return;
+    }
+    if (deporteAlimActiveTab === "alimentacion") {
+      resetAlimDraft();
+      setAlimFecha(autoOpenQuickAddDate || new Date().toISOString().substring(0, 10));
+      setShowAlimMobileSheet(true);
+      onQuickAddHandled?.();
+      return;
+    }
     openAddModal();
     if (autoOpenQuickAddDate) setDetFechaInicio(autoOpenQuickAddDate);
     onQuickAddHandled?.();
@@ -3207,6 +3238,319 @@ export default function HealthView({
             : [])
         ]
       : null
+  );
+
+  // Contenido del panel "Nuevo/Editar Registro" de Alimentación — definido una sola vez y
+  // reusado tal cual en dos lugares: fijo en la columna izquierda en desktop/tablet (md+), y
+  // dentro de una hoja inferior (DetailModal) en mobile.
+  const alimPanelContent = (
+    <>
+                    <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-zinc-400 flex items-center gap-1.5">
+                      <Pencil className="w-3.5 h-3.5 text-primary" />
+                      {editingAlimLog ? "Editando Registro" : "Nuevo Registro"}
+                    </h4>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
+                        Día
+                      </label>
+                      {/* Mismo dato que tocar un día del calendario (alimFecha) — pensado para
+                          cuando se abre el panel desde el "+" de la barra inferior, sin haber
+                          tocado el calendario todavía (en mobile el calendario queda detrás de
+                          la hoja, así que hace falta una forma de elegir/corregir el día sin
+                          cerrarla). */}
+                      <input
+                        type="date"
+                        value={alimFecha}
+                        onChange={(e) => setAlimFecha(e.target.value)}
+                        className="w-full px-2.5 py-2 rounded-xl bg-white dark:bg-black/50 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white outline-none text-xs focus:border-primary"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
+                        Comida
+                      </label>
+                      {/* grid 2x2 solo en mobile (Desayuno+Almuerzo arriba, Merienda+Cena abajo,
+                          cada botón a todo el ancho de su columna) — en desktop sigue siendo una
+                          sola fila, donde los 4 entran sin problema. */}
+                      <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-1.5">
+                        {["Desayuno", "Almuerzo", "Merienda", "Cena"].map((es) => {
+                          const isActive = alimEstado === es;
+                          return (
+                            <button
+                              key={es}
+                              type="button"
+                              onClick={() => setAlimEstado(es as any)}
+                              className={`flex items-center justify-center px-2.5 py-1.5 rounded-full text-[11px] font-bold border-2 transition-all cursor-pointer ${
+                                isActive
+                                  ? "bg-primary border-primary text-white dark:text-black shadow-sm"
+                                  : "bg-transparent border-slate-200 dark:border-zinc-700 text-slate-500 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800/60"
+                              }`}
+                            >
+                              {es}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
+                        Plato
+                      </label>
+                      <CustomSelect
+                        value={alimPlatoId}
+                        onChange={(val: string) => setAlimPlatoId(val)}
+                        searchable={true}
+                        options={(platos || []).map((p) => ({
+                          value: p.id,
+                          label: p.nombrePlato,
+                        }))}
+                        placeholder="Seleccionar Plato"
+                        size="sm"
+                      />
+                    </div>
+
+                    {alimPlatoId && (
+                      <div className="space-y-3 pt-2">
+                        <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
+                          Ingredientes y Cantidades
+                        </label>
+                        <div className="grid gap-2 max-h-48 overflow-y-auto pr-1">
+                          {(() => {
+                            const plato = platos?.find((p) => p.id === alimPlatoId);
+                            if (!plato) return null;
+                            const ingList: {
+                              nombre: string;
+                              defaultUnidad: string;
+                            }[] = [];
+                            const extract = (aId?: string) => {
+                              if (!aId) return;
+                              const ali = alimentos?.find((a) => a.id === aId);
+                              if (!ali) return;
+                              if (ali.ingrediente1)
+                                ingList.push({
+                                  nombre: ali.ingrediente1,
+                                  defaultUnidad: ali.unidad1 || "",
+                                });
+                              if (ali.ingrediente2)
+                                ingList.push({
+                                  nombre: ali.ingrediente2,
+                                  defaultUnidad: ali.unidad2 || "",
+                                });
+                              if (ali.ingrediente3)
+                                ingList.push({
+                                  nombre: ali.ingrediente3,
+                                  defaultUnidad: ali.unidad3 || "",
+                                });
+                            };
+                            extract(plato.alimentoId1);
+                            extract(plato.alimentoId2);
+                            extract(plato.alimentoId3);
+
+                            if (ingList.length === 0)
+                              return (
+                                <div className="text-xs text-zinc-500">
+                                  Sin ingredientes asociados.
+                                </div>
+                              );
+
+                            return ingList.map((ing, idx) => (
+                              <div
+                                key={idx}
+                                className="flex items-center justify-between gap-3 bg-white dark:bg-black/50 p-2.5 rounded-xl border border-slate-200 dark:border-zinc-800"
+                              >
+                                <div className="flex-1 min-w-0">
+                                  <span
+                                    className="text-xs font-semibold block truncate text-slate-900 dark:text-white"
+                                    title={ing.nombre}
+                                  >
+                                    {ing.nombre}
+                                  </span>
+                                  {(() => {
+                                    const grams = alimCantidades[ing.nombre] || 0;
+                                    const item = mercaderia?.find(m => m.ingredientes === ing.nombre);
+                                    const baseCal = item ? (item.calorias !== undefined && item.calorias !== null ? item.calorias : getCalorieDensity(item.ingredientes, item.categoria, item.sector)) : 0;
+                                    const cal = Math.round((grams / 100) * baseCal);
+
+                                    const baseNutri = getIngredientNutriVal(ing.nombre, mercaderia || []);
+                                    const p = Math.round((grams / 100) * (baseNutri.proteinas || 0) * 10) / 10;
+                                    const c = Math.round((grams / 100) * (baseNutri.carbohidratos || 0) * 10) / 10;
+                                    const g = Math.round((grams / 100) * (baseNutri.grasas || 0) * 10) / 10;
+
+                                    return (
+                                      <span className="text-[10px] text-zinc-400 dark:text-zinc-500 block mt-0.5">
+                                        {cal} kcal | P: {p}g | C: {c}g | G: {g}g
+                                      </span>
+                                    );
+                                  })()}
+                                </div>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="1"
+                                    value={alimCantidades[ing.nombre] !== undefined ? alimCantidades[ing.nombre] : ""}
+                                    onChange={(e) => {
+                                      const val = e.target.value === "" ? 0 : Number(e.target.value);
+                                      setAlimCantidades((prev) => ({
+                                        ...prev,
+                                        [ing.nombre]: val,
+                                      }));
+                                    }}
+                                    className="w-16 px-2 py-1.5 rounded-lg text-xs font-mono bg-white dark:bg-black/85 backdrop-blur-md border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/20 text-right"
+                                    placeholder="Gramos"
+                                  />
+                                  <span className="text-[10px] text-zinc-500 font-mono w-4 text-left shrink-0">
+                                    g
+                                  </span>
+                                </div>
+                              </div>
+                            ));
+                          })()}
+                        </div>
+                      </div>
+                    )}
+
+                    {alimPlatoId && (
+                      <div className="pt-2 space-y-2">
+                        <span className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest">
+                          Total del Registro
+                        </span>
+                        {(() => {
+                          const totalNutri = {
+                            proteinas: 0,
+                            carbohidratos: 0,
+                            grasas: 0,
+                            azucares: 0,
+                            fibra: 0,
+                            sodio: 0,
+                          };
+
+                          Object.entries(alimCantidades).forEach(([ingrediente, grams]) => {
+                            const baseNutri = getIngredientNutriVal(ingrediente, mercaderia || []);
+                            const factor = grams / 100;
+                            totalNutri.proteinas += (baseNutri.proteinas || 0) * factor;
+                            totalNutri.carbohidratos += (baseNutri.carbohidratos || 0) * factor;
+                            totalNutri.grasas += (baseNutri.grasas || 0) * factor;
+                            totalNutri.azucares += (baseNutri.azucares || 0) * factor;
+                            totalNutri.fibra += (baseNutri.fibra || 0) * factor;
+                            totalNutri.sodio += (baseNutri.sodio || 0) * factor;
+                          });
+
+                          const p = Math.round(totalNutri.proteinas * 10) / 10;
+                          const c = Math.round(totalNutri.carbohidratos * 10) / 10;
+                          const g = Math.round(totalNutri.grasas * 10) / 10;
+                          const az = Math.round(totalNutri.azucares * 10) / 10;
+                          const fb = Math.round(totalNutri.fibra * 10) / 10;
+                          const sd = Math.round(totalNutri.sodio);
+
+                          return (
+                            <div className="bg-white dark:bg-black p-3 rounded-2xl border border-slate-200 dark:border-zinc-800 space-y-2">
+                              <div className="flex items-center justify-between text-slate-900 dark:text-white">
+                                <span className="text-xs font-bold">Calorías Totales:</span>
+                                <span className="font-mono text-sm font-bold text-primary">
+                                  {alimCalorias} kcal
+                                </span>
+                              </div>
+                              <div className="pt-2 border-t border-slate-200/50 dark:border-zinc-800/50 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-zinc-500 dark:text-zinc-400">
+                                <span><strong>P:</strong> {p}g</span>
+                                <span>|</span>
+                                <span><strong>C:</strong> {c}g <span className="text-zinc-400 dark:text-zinc-500">(Az: {az}g)</span></span>
+                                <span>|</span>
+                                <span><strong>G:</strong> {g}g</span>
+                                <span>|</span>
+                                <span><strong>Fibra:</strong> {fb}g</span>
+                                <span>|</span>
+                                <span><strong>Sodio:</strong> {sd}mg</span>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-2">
+                      {(alimFecha || editingAlimLog) && (
+                        <button
+                          type="button"
+                          disabled={isSaving}
+                          onClick={handleCancelAlimDraft}
+                          className="shrink-0 px-3 py-2.5 rounded-xl text-xs font-bold text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white transition-all cursor-pointer disabled:opacity-50"
+                        >
+                          Cancelar
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={handleSaveAlimLog}
+                        disabled={isSaving || !alimFecha || !alimEstado || !alimPlatoId}
+                        className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-white dark:text-black text-xs font-extrabold shadow-sm transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        {isSaving ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>Guardando...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Check className="w-3.5 h-3.5" />
+                            <span>{editingAlimLog ? "Guardar Cambios" : "Agregar"}</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    {!alimFecha && (
+                      <p className="text-[10px] text-slate-400 dark:text-zinc-500 font-semibold">
+                        Elegí un día (arriba o en el calendario) para agendar.
+                      </p>
+                    )}
+
+                    {(() => {
+                      if (!alimFecha) return null;
+                      const dayLogs = (alimentacionLogs || []).filter((l) => l.fecha === alimFecha);
+                      if (dayLogs.length === 0) return null;
+                      return (
+                        <div className="pt-2 border-t border-slate-200 dark:border-zinc-800 space-y-1.5">
+                          <span className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest">
+                            Ya agendado este día
+                          </span>
+                          {dayLogs.map((log) => {
+                            const platoInfo = platos?.find((p) => p.id === log.platoId);
+                            return (
+                              <div
+                                key={log.id}
+                                className={`flex items-center justify-between gap-2 px-2.5 py-2 rounded-xl text-[11px] font-semibold transition-colors ${
+                                  editingAlimLog?.id === log.id
+                                    ? "bg-primary/10 border border-primary/30"
+                                    : "bg-white dark:bg-black/40 border border-slate-200 dark:border-zinc-800"
+                                }`}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => handleEditAlimLog(log)}
+                                  className="flex-1 min-w-0 text-left truncate cursor-pointer"
+                                  title="Editar"
+                                >
+                                  {platoInfo ? platoInfo.nombrePlato : "Comida registrada"} · {log.estado}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteAlimLog(log.id)}
+                                  className="shrink-0 p-1 rounded-lg text-red-500 hover:bg-red-500/10 cursor-pointer"
+                                  title="Eliminar"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
+    </>
   );
 
   return (
@@ -5313,6 +5657,7 @@ export default function HealthView({
                   onEditActividad={handleEditActividad}
                   currentWeightKg={currentWeight}
                   weightHistory={medidasHistory}
+                  openLoggerSheetNonce={gymQuickAddNonce}
                 />
                 </SectionTransition>
               </motion.div>
@@ -5342,298 +5687,11 @@ export default function HealthView({
                     detalle completo de ese día, con foto incluida). */}
                 <div className="lg:flex lg:gap-6 lg:items-start">
                   <div
-                    className={`w-full lg:w-[320px] shrink-0 mb-6 lg:mb-0 rounded-2xl border p-4 space-y-3.5 ${
+                    className={`hidden md:block w-full lg:w-[320px] shrink-0 mb-6 lg:mb-0 rounded-2xl border p-4 space-y-3.5 ${
                       darkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-slate-200"
                     }`}
                   >
-                    <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-zinc-400 flex items-center gap-1.5">
-                      <Pencil className="w-3.5 h-3.5 text-primary" />
-                      {editingAlimLog ? "Editando Registro" : "Nuevo Registro"}
-                    </h4>
-
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
-                        Comida
-                      </label>
-                      {/* grid 2x2 solo en mobile (Desayuno+Almuerzo arriba, Merienda+Cena abajo,
-                          cada botón a todo el ancho de su columna) — en desktop sigue siendo una
-                          sola fila, donde los 4 entran sin problema. */}
-                      <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-1.5">
-                        {["Desayuno", "Almuerzo", "Merienda", "Cena"].map((es) => {
-                          const isActive = alimEstado === es;
-                          return (
-                            <button
-                              key={es}
-                              type="button"
-                              onClick={() => setAlimEstado(es as any)}
-                              className={`flex items-center justify-center px-2.5 py-1.5 rounded-full text-[11px] font-bold border-2 transition-all cursor-pointer ${
-                                isActive
-                                  ? "bg-primary border-primary text-white dark:text-black shadow-sm"
-                                  : "bg-transparent border-slate-200 dark:border-zinc-700 text-slate-500 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800/60"
-                              }`}
-                            >
-                              {es}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
-                        Plato
-                      </label>
-                      <CustomSelect
-                        value={alimPlatoId}
-                        onChange={(val: string) => setAlimPlatoId(val)}
-                        searchable={true}
-                        options={(platos || []).map((p) => ({
-                          value: p.id,
-                          label: p.nombrePlato,
-                        }))}
-                        placeholder="Seleccionar Plato"
-                        size="sm"
-                      />
-                    </div>
-
-                    {alimPlatoId && (
-                      <div className="space-y-3 pt-2">
-                        <label className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest mb-1">
-                          Ingredientes y Cantidades
-                        </label>
-                        <div className="grid gap-2 max-h-48 overflow-y-auto pr-1">
-                          {(() => {
-                            const plato = platos?.find((p) => p.id === alimPlatoId);
-                            if (!plato) return null;
-                            const ingList: {
-                              nombre: string;
-                              defaultUnidad: string;
-                            }[] = [];
-                            const extract = (aId?: string) => {
-                              if (!aId) return;
-                              const ali = alimentos?.find((a) => a.id === aId);
-                              if (!ali) return;
-                              if (ali.ingrediente1)
-                                ingList.push({
-                                  nombre: ali.ingrediente1,
-                                  defaultUnidad: ali.unidad1 || "",
-                                });
-                              if (ali.ingrediente2)
-                                ingList.push({
-                                  nombre: ali.ingrediente2,
-                                  defaultUnidad: ali.unidad2 || "",
-                                });
-                              if (ali.ingrediente3)
-                                ingList.push({
-                                  nombre: ali.ingrediente3,
-                                  defaultUnidad: ali.unidad3 || "",
-                                });
-                            };
-                            extract(plato.alimentoId1);
-                            extract(plato.alimentoId2);
-                            extract(plato.alimentoId3);
-
-                            if (ingList.length === 0)
-                              return (
-                                <div className="text-xs text-zinc-500">
-                                  Sin ingredientes asociados.
-                                </div>
-                              );
-
-                            return ingList.map((ing, idx) => (
-                              <div
-                                key={idx}
-                                className="flex items-center justify-between gap-3 bg-white dark:bg-black/50 p-2.5 rounded-xl border border-slate-200 dark:border-zinc-800"
-                              >
-                                <div className="flex-1 min-w-0">
-                                  <span
-                                    className="text-xs font-semibold block truncate text-slate-900 dark:text-white"
-                                    title={ing.nombre}
-                                  >
-                                    {ing.nombre}
-                                  </span>
-                                  {(() => {
-                                    const grams = alimCantidades[ing.nombre] || 0;
-                                    const item = mercaderia?.find(m => m.ingredientes === ing.nombre);
-                                    const baseCal = item ? (item.calorias !== undefined && item.calorias !== null ? item.calorias : getCalorieDensity(item.ingredientes, item.categoria, item.sector)) : 0;
-                                    const cal = Math.round((grams / 100) * baseCal);
-
-                                    const baseNutri = getIngredientNutriVal(ing.nombre, mercaderia || []);
-                                    const p = Math.round((grams / 100) * (baseNutri.proteinas || 0) * 10) / 10;
-                                    const c = Math.round((grams / 100) * (baseNutri.carbohidratos || 0) * 10) / 10;
-                                    const g = Math.round((grams / 100) * (baseNutri.grasas || 0) * 10) / 10;
-
-                                    return (
-                                      <span className="text-[10px] text-zinc-400 dark:text-zinc-500 block mt-0.5">
-                                        {cal} kcal | P: {p}g | C: {c}g | G: {g}g
-                                      </span>
-                                    );
-                                  })()}
-                                </div>
-                                <div className="flex items-center gap-1.5 shrink-0">
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    step="1"
-                                    value={alimCantidades[ing.nombre] !== undefined ? alimCantidades[ing.nombre] : ""}
-                                    onChange={(e) => {
-                                      const val = e.target.value === "" ? 0 : Number(e.target.value);
-                                      setAlimCantidades((prev) => ({
-                                        ...prev,
-                                        [ing.nombre]: val,
-                                      }));
-                                    }}
-                                    className="w-16 px-2 py-1.5 rounded-lg text-xs font-mono bg-white dark:bg-black/85 backdrop-blur-md border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/20 text-right"
-                                    placeholder="Gramos"
-                                  />
-                                  <span className="text-[10px] text-zinc-500 font-mono w-4 text-left shrink-0">
-                                    g
-                                  </span>
-                                </div>
-                              </div>
-                            ));
-                          })()}
-                        </div>
-                      </div>
-                    )}
-
-                    {alimPlatoId && (
-                      <div className="pt-2 space-y-2">
-                        <span className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest">
-                          Total del Registro
-                        </span>
-                        {(() => {
-                          const totalNutri = {
-                            proteinas: 0,
-                            carbohidratos: 0,
-                            grasas: 0,
-                            azucares: 0,
-                            fibra: 0,
-                            sodio: 0,
-                          };
-
-                          Object.entries(alimCantidades).forEach(([ingrediente, grams]) => {
-                            const baseNutri = getIngredientNutriVal(ingrediente, mercaderia || []);
-                            const factor = grams / 100;
-                            totalNutri.proteinas += (baseNutri.proteinas || 0) * factor;
-                            totalNutri.carbohidratos += (baseNutri.carbohidratos || 0) * factor;
-                            totalNutri.grasas += (baseNutri.grasas || 0) * factor;
-                            totalNutri.azucares += (baseNutri.azucares || 0) * factor;
-                            totalNutri.fibra += (baseNutri.fibra || 0) * factor;
-                            totalNutri.sodio += (baseNutri.sodio || 0) * factor;
-                          });
-
-                          const p = Math.round(totalNutri.proteinas * 10) / 10;
-                          const c = Math.round(totalNutri.carbohidratos * 10) / 10;
-                          const g = Math.round(totalNutri.grasas * 10) / 10;
-                          const az = Math.round(totalNutri.azucares * 10) / 10;
-                          const fb = Math.round(totalNutri.fibra * 10) / 10;
-                          const sd = Math.round(totalNutri.sodio);
-
-                          return (
-                            <div className="bg-white dark:bg-black p-3 rounded-2xl border border-slate-200 dark:border-zinc-800 space-y-2">
-                              <div className="flex items-center justify-between text-slate-900 dark:text-white">
-                                <span className="text-xs font-bold">Calorías Totales:</span>
-                                <span className="font-mono text-sm font-bold text-primary">
-                                  {alimCalorias} kcal
-                                </span>
-                              </div>
-                              <div className="pt-2 border-t border-slate-200/50 dark:border-zinc-800/50 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-zinc-500 dark:text-zinc-400">
-                                <span><strong>P:</strong> {p}g</span>
-                                <span>|</span>
-                                <span><strong>C:</strong> {c}g <span className="text-zinc-400 dark:text-zinc-500">(Az: {az}g)</span></span>
-                                <span>|</span>
-                                <span><strong>G:</strong> {g}g</span>
-                                <span>|</span>
-                                <span><strong>Fibra:</strong> {fb}g</span>
-                                <span>|</span>
-                                <span><strong>Sodio:</strong> {sd}mg</span>
-                              </div>
-                            </div>
-                          );
-                        })()}
-                      </div>
-                    )}
-
-                    <div className="flex items-center gap-2">
-                      {(alimFecha || editingAlimLog) && (
-                        <button
-                          type="button"
-                          disabled={isSaving}
-                          onClick={handleCancelAlimDraft}
-                          className="shrink-0 px-3 py-2.5 rounded-xl text-xs font-bold text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white transition-all cursor-pointer disabled:opacity-50"
-                        >
-                          Cancelar
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={handleSaveAlimLog}
-                        disabled={isSaving || !alimFecha || !alimEstado || !alimPlatoId}
-                        className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-white dark:text-black text-xs font-extrabold shadow-sm transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        {isSaving ? (
-                          <>
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            <span>Guardando...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Check className="w-3.5 h-3.5" />
-                            <span>{editingAlimLog ? "Guardar Cambios" : "Agregar"}</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-
-                    {!alimFecha && (
-                      <p className="text-[10px] text-slate-400 dark:text-zinc-500 font-semibold">
-                        Elegí un día en el calendario para agendar.
-                      </p>
-                    )}
-
-                    {(() => {
-                      if (!alimFecha) return null;
-                      const dayLogs = (alimentacionLogs || []).filter((l) => l.fecha === alimFecha);
-                      if (dayLogs.length === 0) return null;
-                      return (
-                        <div className="pt-2 border-t border-slate-200 dark:border-zinc-800 space-y-1.5">
-                          <span className="block text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest">
-                            Ya agendado este día
-                          </span>
-                          {dayLogs.map((log) => {
-                            const platoInfo = platos?.find((p) => p.id === log.platoId);
-                            return (
-                              <div
-                                key={log.id}
-                                className={`flex items-center justify-between gap-2 px-2.5 py-2 rounded-xl text-[11px] font-semibold transition-colors ${
-                                  editingAlimLog?.id === log.id
-                                    ? "bg-primary/10 border border-primary/30"
-                                    : "bg-white dark:bg-black/40 border border-slate-200 dark:border-zinc-800"
-                                }`}
-                              >
-                                <button
-                                  type="button"
-                                  onClick={() => handleEditAlimLog(log)}
-                                  className="flex-1 min-w-0 text-left truncate cursor-pointer"
-                                  title="Editar"
-                                >
-                                  {platoInfo ? platoInfo.nombrePlato : "Comida registrada"} · {log.estado}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteAlimLog(log.id)}
-                                  className="shrink-0 p-1 rounded-lg text-red-500 hover:bg-red-500/10 cursor-pointer"
-                                  title="Eliminar"
-                                >
-                                  <Trash2 className="w-3 h-3" />
-                                </button>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      );
-                    })()}
+                    {alimPanelContent}
                   </div>
 
                   {/* Columna derecha: calendario mensual de Alimentación. */}
@@ -5644,8 +5702,11 @@ export default function HealthView({
                           <Calendar className="w-4 h-4 text-primary" />
                           <span>Calendario de Alimentación</span>
                         </h3>
-                        <p className="text-xs text-zinc-500 mt-0.5">
+                        <p className="hidden md:block text-xs text-zinc-500 mt-0.5">
                           Tocá un día para agendarlo. Doble click para ver el detalle.
+                        </p>
+                        <p className="md:hidden text-xs text-zinc-500 mt-0.5">
+                          Tocá un día para agendarlo, o "+" para cargar uno nuevo. Tocá dos veces un día ya agendado para ver el detalle.
                         </p>
                       </div>
 
@@ -5805,6 +5866,14 @@ export default function HealthView({
                     </DetailModal>
                   );
                 })()}
+
+                {/* Hoja inferior — mobile: mismo panel de "Nuevo/Editar Registro" que en
+                    desktop/tablet queda fijo en la columna izquierda. Se abre al tocar un día
+                    del calendario, al editar un registro ya cargado, o desde el "+" de la barra
+                    inferior. */}
+                <DetailModal isOpen={showAlimMobileSheet} onClose={handleCancelAlimDraft}>
+                  <div className="space-y-3.5">{alimPanelContent}</div>
+                </DetailModal>
 
                 </SectionTransition>
               </motion.div>
