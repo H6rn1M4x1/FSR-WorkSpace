@@ -481,8 +481,14 @@ export function MonthlyExamScheduler({
 
       {/* Mobile: lista cronológica de tarjetas de notas en vez del calendario, mismo patrón
           visual que Historial de Sesiones de Gimnasio — tocar una tarjeta abre la hoja para
-          editar ese examen/trabajo. */}
-      <div className="md:hidden space-y-2.5">
+          editar ese examen/trabajo. Con su propio título + ícono (igual que esa sección) para
+          que no se vea como una lista pelada. */}
+      <div className="md:hidden">
+      <h3 className="font-extrabold text-sm flex items-center gap-2 mb-3">
+        <BookOpen className="w-4 h-4 text-primary" />
+        <span>Exámenes y Trabajos</span>
+      </h3>
+      <div className="space-y-2.5">
         {examenes.length === 0 ? (
           <div className="text-center py-10 text-xs font-semibold text-slate-400 dark:text-zinc-500">
             Todavía no hay exámenes ni trabajos agendados. Tocá "+" para cargar el primero.
@@ -532,6 +538,7 @@ export function MonthlyExamScheduler({
               );
             })
         )}
+      </div>
       </div>
 
       {(() => {

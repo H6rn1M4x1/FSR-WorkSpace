@@ -5829,8 +5829,14 @@ export default function HealthView({
                 </div>
 
                 {/* Mobile: lista cronológica de tarjetas de notas en vez del calendario, mismo
-                    patrón visual que Historial de Sesiones de Gimnasio. */}
-                <div className="md:hidden space-y-2.5">
+                    patrón visual que Historial de Sesiones de Gimnasio — con su propio título +
+                    ícono (igual que esa sección) para que no se vea como una lista pelada. */}
+                <div className="md:hidden">
+                  <h3 className="font-extrabold text-sm flex items-center gap-2 mb-3">
+                    <Utensils className="w-4 h-4 text-primary" />
+                    <span>Registro de Comidas</span>
+                  </h3>
+                  <div className="space-y-2.5">
                   {alimDaysSorted.length === 0 ? (
                     <div className="text-center py-10 text-xs font-semibold text-slate-400 dark:text-zinc-500">
                       Todavía no hay comidas registradas. Tocá "+" para cargar la primera.
@@ -5880,6 +5886,7 @@ export default function HealthView({
                       );
                     })
                   )}
+                  </div>
                 </div>
 
                 {(() => {
@@ -6150,8 +6157,14 @@ export default function HealthView({
                 </div>
 
                 {/* Mobile: lista cronológica de tarjetas de notas en vez del calendario, mismo
-                    patrón visual que Historial de Sesiones de Gimnasio. */}
-                <div className="md:hidden space-y-2.5">
+                    patrón visual que Historial de Sesiones de Gimnasio — con su propio título +
+                    ícono (igual que esa sección) para que no se vea como una lista pelada. */}
+                <div className="md:hidden">
+                  <h3 className="font-extrabold text-sm flex items-center gap-2 mb-3">
+                    <Activity className="w-4 h-4 text-primary" />
+                    <span>Historial Diario</span>
+                  </h3>
+                  <div className="space-y-2.5">
                   {diarioDaysSorted.length === 0 ? (
                     <div className="text-center py-10 text-xs font-semibold text-slate-400 dark:text-zinc-500">
                       Todavía no hay registros. Las comidas, sesiones de gym, deportes y
@@ -6186,6 +6199,7 @@ export default function HealthView({
                       </div>
                     ))
                   )}
+                  </div>
                 </div>
 
                 {(() => {
