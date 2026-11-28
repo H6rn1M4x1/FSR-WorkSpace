@@ -45,6 +45,9 @@ interface GastosVariosTableProps {
   darkMode: boolean;
   token?: string | null;
   userEmail?: string;
+  // Cambia (nonce distinto cada vez) para abrir directo el formulario de "nuevo" — usado por el
+  // "+" de la barra inferior en mobile, que ya no tiene acá su propio botón "Agregar Gasto".
+  autoOpenQuickAdd?: number;
 }
 
 interface CustomSelectProps {
@@ -292,6 +295,7 @@ export default function GastosVariosTable({
   setGastosVarios,
   darkMode,
   userEmail,
+  autoOpenQuickAdd,
 }: GastosVariosTableProps) {
   const { showToast } = useToast();
   // [] y no [gastosVarios]: con el array de datos como dep, cualquier cambio (agregar, editar,
@@ -448,6 +452,14 @@ export default function GastosVariosTable({
     setFormMonto("");
     setShowAddModal(true);
   };
+
+  // "+" de la barra inferior en mobile (ver FinanceView, que relaya el nonce solo cuando ya se
+  // está parado en esta pestaña) — mismo criterio que el resto de las secciones.
+  React.useEffect(() => {
+    if (!autoOpenQuickAdd) return;
+    handleOpenAdd();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOpenQuickAdd]);
 
   const handleOpenEdit = (gasto: GastoVario) => {
     setEditingGasto(gasto);
@@ -681,7 +693,7 @@ export default function GastosVariosTable({
 
             <button
               onClick={handleOpenAdd}
-              className="w-full sm:w-auto justify-center px-4 py-2 rounded-full bg-primary text-white dark:text-blue-950 font-bold text-xs hover:bg-primary-hover shadow-md transition-all flex items-center gap-2 cursor-pointer active:scale-95"
+              className="hidden md:flex w-full sm:w-auto justify-center px-4 py-2 rounded-full bg-primary text-white dark:text-black font-bold text-xs hover:bg-primary-hover shadow-md transition-all items-center gap-2 cursor-pointer active:scale-95"
             >
               <Plus className="w-4 h-4" />
               <span>Agregar Gasto</span>
@@ -899,7 +911,7 @@ export default function GastosVariosTable({
               <div className="flex flex-col items-center gap-2">
                 <Receipt className="w-8 h-8 opacity-40" />
                 <p className="font-semibold text-xs">No se encontraron gastos varios registrados.</p>
-                <p className="text-[11px] opacity-70 px-4">Presiona "Agregar Gasto" o "Subir Resumen con Jarvis" para cargar consumos.</p>
+                <p className="text-[11px] opacity-70 px-4">Tocá "+" o "Subir Resumen con Jarvis" para cargar consumos.</p>
               </div>
             </div>
           ) : (

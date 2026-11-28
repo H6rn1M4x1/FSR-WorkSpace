@@ -402,23 +402,38 @@ export default function App() {
     universidad: { tab: "academic", subTab: "examenes" },
     salud: { tab: "health", subTab: "medicamentos" },
     comidas: { tab: "meals", subTab: "organizacion_semanal" },
+    // "notas" no tiene un destino fijo: el "+" solo la dispara estando ya parado en Notas (ver
+    // handleQuickAdd), así que este target nunca se usa para navegar — existe solo para que
+    // "notas" sea una clave válida de QUICK_ADD_TARGETS.
+    notas: { tab: "notes", subTab: "" },
   } as const;
   // Si en Inicio había una fecha filtrada en el calendario al tocar "Agendar", se la pasamos a
   // la sección destino para que precargue esa fecha en su formulario de "nuevo" en vez de la de
   // hoy — es la fecha que el usuario ya eligió, tiene sentido que sea la del ítem que está
   // por agendar.
   const handleQuickAdd = (category: keyof typeof QUICK_ADD_TARGETS, date?: string) => {
+    // Notas no navega a ningún lado — el "+" solo la dispara estando ya parado en esa sección
+    // (ver TAB_TO_QUICK_ADD_CATEGORY en TopNavbar.tsx), así que reusa el mismo mecanismo que ya
+    // tiene el "+" de la miniatura de Notas Rápidas de Inicio, sin tocar currentTab/activeSubTab.
+    if (category === "notas") {
+      setQuickNoteComposeNonce(Date.now());
+      return;
+    }
     // Si ya estás parado en una sub-pestaña con su propio formulario de "nuevo" (Gimnasio >
     // Historial de Sesiones / Alimentación dentro de Salud, Horario dentro de Universidad), el
     // "+" no debe sacarte de ahí para mandarte a Medicamentos/Exámenes — se queda en la
     // sub-pestaña actual (no-op de navegación) y solo dispara el nonce, que cada vista ya sabe
     // interpretar según su propio estado interno (ver los useEffect de autoOpenQuickAdd).
     const target =
-      category === "salud" && activeSubTab === "deporte_alimentacion"
-        ? { tab: "health", subTab: "deporte_alimentacion" }
-        : category === "universidad" && activeSubTab === "horario"
-          ? { tab: "academic", subTab: "horario" }
-          : QUICK_ADD_TARGETS[category];
+      category === "salud" && (activeSubTab === "deporte_alimentacion" || activeSubTab === "control_clinico")
+        ? { tab: "health", subTab: activeSubTab }
+        : category === "universidad" && (activeSubTab === "horario" || activeSubTab === "informacion_materias")
+          ? { tab: "academic", subTab: activeSubTab }
+          : category === "comidas" && (activeSubTab === "planificador" || activeSubTab === "creacion_comidas")
+            ? { tab: "meals", subTab: activeSubTab }
+            : category === "finanzas" && activeSubTab === "pagos_mensuales"
+              ? { tab: "finances", subTab: "pagos_mensuales" }
+              : QUICK_ADD_TARGETS[category];
     handleTabChange(target.tab);
     setActiveSubTab(target.subTab);
     setQuickAddDate(date);
@@ -3031,6 +3046,7 @@ export default function App() {
                   activeSubTab={activeSubTab}
                   onSubTabChange={setActiveSubTab}
                   autoOpenCompose={quickNoteComposeNonce}
+                  onComposeHandled={() => setQuickNoteComposeNonce(undefined)}
                   autoSelectNote={quickNoteEditTarget}
                   vault={vault}
                 />
