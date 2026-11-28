@@ -841,6 +841,11 @@ export default function AcademicView({
       onQuickAddHandled?.();
       return;
     }
+    if (activeSubTab === "informacion_materias" && planEstudioSubTab === "plan_estudio") {
+      handleOpenAddMateria();
+      onQuickAddHandled?.();
+      return;
+    }
     setEditingExamenId(null);
     setExMateria("");
     setExFecha(autoOpenQuickAddDate || "");
@@ -1500,6 +1505,23 @@ export default function AcademicView({
   };
 
   // Materias Info Handlers
+  // Reusado por el botón "Agregar Materia" y por el "+" de la barra inferior en mobile (ver el
+  // useEffect de autoOpenQuickAdd más abajo) — mismo armado de campos en blanco en ambos casos.
+  const handleOpenAddMateria = () => {
+    setEditingMateriaId(null);
+    setMMateria("");
+    setMEstado("Sin empezar");
+    setMAnoCursado("Primer Año");
+    setMCuatrimestre("Primer Cuatrimestrre");
+    setMCursadoDebil("Sin correlativas");
+    setMCursadoFuerte("Sin correlativas");
+    setMRendirFuerte("Sin correlativas");
+    setMFechaRegularidad("");
+    setMFechaVencimiento("");
+    setMFechaAprobado("");
+    setShowMateriaModal(true);
+  };
+
   const handleEditMateriaClick = (item: MateriaInfo) => {
     setEditingMateriaId(item.id);
     setMEstado(item.estado);
@@ -3114,21 +3136,8 @@ export default function AcademicView({
               <motion.button
                 whileHover={{ scale: 1.04 }}
                 whileTap={{ scale: 0.94 }}
-                onClick={() => {
-                  setEditingMateriaId(null);
-                  setMMateria("");
-                  setMEstado("Sin empezar");
-                  setMAnoCursado("Primer Año");
-                  setMCuatrimestre("Primer Cuatrimestrre");
-                  setMCursadoDebil("Sin correlativas");
-                  setMCursadoFuerte("Sin correlativas");
-                  setMRendirFuerte("Sin correlativas");
-                  setMFechaRegularidad("");
-                  setMFechaVencimiento("");
-                  setMFechaAprobado("");
-                  setShowMateriaModal(true);
-                }}
-                className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-full bg-primary hover:bg-primary-hover text-white dark:text-blue-950 text-xs font-bold cursor-pointer transition-all shadow-sm shrink-0 w-full sm:w-auto"
+                onClick={handleOpenAddMateria}
+                className="hidden md:flex items-center justify-center gap-1.5 px-4 py-2 rounded-full bg-primary hover:bg-primary-hover text-white dark:text-black text-xs font-bold cursor-pointer transition-all shadow-sm shrink-0 w-full sm:w-auto"
               >
                 <Plus className="w-4 h-4" />
                 <span>Agregar Materia</span>

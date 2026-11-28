@@ -821,8 +821,16 @@ export default function FinanceView({
   };
   const [mergedQuickAddNonce, setMergedQuickAddNonce] = useState(0);
   const [mergedQuickAddDate, setMergedQuickAddDate] = useState<string | undefined>(undefined);
+  // "+" de la barra inferior en mobile sobre "Gastos Varios": abre directo ESE formulario en vez
+  // del de "Gastos Mensuales" (PaymentsTable) — se chequea pagosSubTab, que es el que de verdad
+  // distingue entre ambos (activeTab/activeSubTab se queda en "pagos_mensuales" para los dos).
+  const [gastosVariosQuickAddNonce, setGastosVariosQuickAddNonce] = useState(0);
   useEffect(() => {
     if (!autoOpenQuickAdd) return;
+    if (pagosSubTab === "gastos_varios") {
+      setGastosVariosQuickAddNonce((n) => n + 1);
+      return;
+    }
     setMergedQuickAddDate(autoOpenQuickAddDate);
     setMergedQuickAddNonce((n) => n + 1);
   }, [autoOpenQuickAdd]);
@@ -4298,6 +4306,7 @@ export default function FinanceView({
                         darkMode={darkMode}
                         token={token}
                         userEmail={userEmail}
+                        autoOpenQuickAdd={gastosVariosQuickAddNonce}
                       />
                     </div>
                     </SectionTransition>

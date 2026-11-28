@@ -52,8 +52,14 @@ interface NotesViewProps {
   activeSubTab?: string;
   onSubTabChange?: (tab: string) => void;
   /** Cambia (a cualquier valor distinto del anterior) para abrir directo el formulario de
-   *  "nueva nota" — usado por el botón "+" de la miniatura de Notas Rápidas de Inicio. */
+   *  "nueva nota" — usado por el botón "+" de la miniatura de Notas Rápidas de Inicio y, en
+   *  mobile, por el "+" de la barra inferior cuando ya se está parado en Notas. */
   autoOpenCompose?: number;
+  /** Avisa que ya se consumió autoOpenCompose, para que App.tsx (que es quien lo guarda) lo
+   *  vuelva a dejar en undefined — si no, la PRÓXIMA vez que este componente se vuelva a montar
+   *  (p. ej. al salir de Notas y volver) vería ese mismo valor "nuevo" otra vez y crearía una
+   *  nota vacía solo, sin que nadie haya tocado el "+". */
+  onComposeHandled?: () => void;
   /** Cambia (nonce distinto cada vez, aunque sea la misma nota) para seleccionar de una la nota
    *  indicada en el panel de detalle, lista para editar — usado por "Editar" en la miniatura de
    *  Notas Rápidas de Inicio. */
@@ -664,6 +670,7 @@ export function NotesView({
   activeSubTab: propActiveSubTab,
   onSubTabChange,
   autoOpenCompose,
+  onComposeHandled,
   autoSelectNote,
 }: NotesViewProps) {
   const {
@@ -766,7 +773,10 @@ export function NotesView({
   // una nota nueva como para una existente.
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
   useEffect(() => {
-    if (autoOpenCompose) handleCreateNote();
+    if (autoOpenCompose) {
+      handleCreateNote();
+      onComposeHandled?.();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoOpenCompose]);
 
@@ -1635,20 +1645,14 @@ export function NotesView({
                 </div>
               </div>
 
-              <motion.button
-                type="button"
-                data-no-global-sound
-                whileTap={{ scale: 0.98 }}
-                onClick={handleCreateNote}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-primary text-white dark:text-zinc-950 text-xs font-bold hover:bg-primary/90 cursor-pointer transition-colors shadow-sm"
-              >
-                <Plus className="w-4 h-4" /> Nueva nota
-              </motion.button>
+              {/* El botón "Nueva nota" que estaba acá se movió al "+" de la barra inferior —
+                  mismo criterio que el resto de las secciones con formulario de "nuevo" propio
+                  en mobile (Gimnasio, Horario, Alimentación, Exámenes y Trabajos). */}
 
               {visibleNotes.length === 0 ? (
                 <p className="text-center text-xs text-slate-400 dark:text-zinc-500 py-10 px-2">
                   {notes.length === 0
-                    ? "Todavía no tenés notas. Creá la primera de arriba — quedan guardadas de forma permanente hasta que las borres."
+                    ? "Todavía no tenés notas. Tocá \"+\" para crear la primera — quedan guardadas de forma permanente hasta que las borres."
                     : "Esta carpeta todavía no tiene notas."}
                 </p>
               ) : (

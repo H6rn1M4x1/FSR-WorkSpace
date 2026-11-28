@@ -236,7 +236,7 @@ interface TopNavbarProps {
    *  sección real y le pide que abra directo su formulario de "nuevo". Lo usa el botón "+" de la
    *  barra compacta en mobile. */
   onQuickAdd?: (
-    category: "turno" | "finanzas" | "universidad" | "salud" | "comidas",
+    category: "turno" | "finanzas" | "universidad" | "salud" | "comidas" | "notas",
     date?: string,
   ) => void;
 }
@@ -416,12 +416,13 @@ function SubPanelRow({ row, rowIndex, darkMode, isMobile }: { row: NavPanelRow; 
 // formulario de "nuevo" saltar directo según en qué sección está parado el usuario. Home y Notas
 // (que no tienen una categoría de carga rápida propia) quedan afuera a propósito: para esas el
 // "+" sigue mostrando el menú genérico con las 5 opciones, como siempre.
-const TAB_TO_QUICK_ADD_CATEGORY: Record<string, "turno" | "finanzas" | "universidad" | "salud" | "comidas" | undefined> = {
+const TAB_TO_QUICK_ADD_CATEGORY: Record<string, "turno" | "finanzas" | "universidad" | "salud" | "comidas" | "notas" | undefined> = {
   appointments: "turno",
   finances: "finanzas",
   academic: "universidad",
   health: "salud",
   meals: "comidas",
+  notes: "notas",
 };
 
 export default function TopNavbar({
@@ -796,12 +797,17 @@ export default function TopNavbar({
                 type="button"
                 onClick={() => {
                   // Si ya estás parado en una sección que tiene su propio formulario de "nuevo"
-                  // (Turnos/Finanzas/Universidad/Salud/Comidas), el "+" lo abre directo ahí mismo
-                  // en vez de mostrar la lista genérica — esas secciones ya no tienen su propio
-                  // botón de carga en mobile, así que el "+" pasa a cumplir esa función. Solo en
-                  // Inicio (o en secciones sin formulario propio, como Notas) sigue mostrando el
-                  // menú con las 5 opciones, igual que siempre.
-                  const directCategory = TAB_TO_QUICK_ADD_CATEGORY[currentTab];
+                  // (Turnos/Finanzas/Universidad/Salud/Comidas/Notas), el "+" lo abre directo ahí
+                  // mismo en vez de mostrar la lista genérica — esas secciones ya no tienen su
+                  // propio botón de carga en mobile, así que el "+" pasa a cumplir esa función.
+                  // Excepción: Notas > Caja Fuerte no tiene "nueva nota" (es otra UI, de
+                  // contraseñas), así que ahí cae al menú genérico, igual que antes. Solo en
+                  // Inicio (o en secciones sin formulario propio) sigue mostrando el menú con las
+                  // 5 opciones, igual que siempre.
+                  const directCategory =
+                    currentTab === "notes" && activeSubTab === "vault"
+                      ? undefined
+                      : TAB_TO_QUICK_ADD_CATEGORY[currentTab];
                   if (directCategory) {
                     onQuickAdd(directCategory);
                     setMobileMenuOpen(false);

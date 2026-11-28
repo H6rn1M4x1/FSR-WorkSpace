@@ -1140,12 +1140,51 @@ export default function MealsView({
   const [orgPlatoId, setOrgPlatoId] = useState("");
   const [orgSearchQuery, setOrgSearchQuery] = useState("");
 
-  // Botón "Agendar" de Inicio: abre directo el formulario de "Agregar Planificación Semanal"
-  // (misma secuencia que el botón de esta pantalla).
+  // Botón "Agendar" de Inicio / "+" de la barra inferior en mobile: abre directo el formulario
+  // de "nuevo" de la sub-pestaña de Comidas en la que ya se esté parado (Planificador,
+  // Mercadería, Alimentos, Platos), en vez de siempre mandar a "Organización Semanal" — mismo
+  // criterio que ya se usa en Salud/Universidad. Se chequea activeSubTab (el valor de arriba,
+  // siempre al día) en vez de solo creacionComidasActiveTab (que es estado interno y no se
+  // resetea al salir de Comidas, así que por sí solo quedaría "pegado").
   useEffect(() => {
     if (!autoOpenQuickAdd) return;
+    if (activeSubTab === "creacion_comidas" && creacionComidasActiveTab === "mercaderia") {
+      setEditingMercaderiaId(null);
+      setMerName("");
+      setMerCategory("Mercaderia");
+      setMerSector("Dispensa");
+      setMerStore("Chinos");
+      setMerUnit("Uni.");
+      setMerCalorias("");
+      setShowAddMercaderia(true);
+      onQuickAddHandled?.();
+      return;
+    }
+    if (activeSubTab === "creacion_comidas" && creacionComidasActiveTab === "alimentos") {
+      setEditingAlimentoId(null);
+      setAliMercaderiaName("");
+      setAliIng1("");
+      setAliQty1("");
+      setAliIng2("");
+      setAliQty2("");
+      setAliIng3("");
+      setAliQty3("");
+      setShowAddAlimento(true);
+      onQuickAddHandled?.();
+      return;
+    }
+    if (activeSubTab === "creacion_comidas" && creacionComidasActiveTab === "platos") {
+      setEditingPlatoId(null);
+      setPlaNombrePlato("");
+      setPlaAlimentoId1("");
+      setPlaAlimentoId2("");
+      setPlaAlimentoId3("");
+      setShowAddPlato(true);
+      onQuickAddHandled?.();
+      return;
+    }
     setEditingOrgId(null);
-    setOrgFecha(autoOpenQuickAddDate || "");
+    setOrgFecha((activeSubTab === "planificador" && selectedCalendarDate) || autoOpenQuickAddDate || "");
     setOrgPlatoId("");
     setShowAddOrg(true);
     onQuickAddHandled?.();
@@ -2649,7 +2688,7 @@ export default function MealsView({
                         setOrgPlatoId("");
                         setShowAddOrg(true);
                       }}
-                      className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-full bg-primary hover:bg-primary text-white dark:text-blue-950 dark:hover:bg-primary dark:text-zinc-950 text-xs font-extrabold cursor-pointer transition-all shadow-md shrink-0 w-full sm:w-auto"
+                      className="hidden md:flex items-center justify-center gap-1.5 px-4 py-2 rounded-full bg-primary hover:bg-primary dark:hover:bg-primary text-white dark:text-zinc-950 text-xs font-extrabold cursor-pointer transition-all shadow-md shrink-0 w-full sm:w-auto"
                     >
                       <Plus className="w-4 h-4" />
                       <span>Planificar Plato</span>
@@ -3044,7 +3083,7 @@ export default function MealsView({
                   setMerCalorias("");
                   setShowAddMercaderia(true);
                 }}
-                className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-full bg-primary hover:bg-primary-hover text-white dark:text-blue-950 text-xs font-bold cursor-pointer transition-all shadow-sm shrink-0 w-full sm:w-auto"
+                className="hidden md:flex items-center justify-center gap-1.5 px-4 py-2 rounded-full bg-primary hover:bg-primary-hover text-white dark:text-black text-xs font-bold cursor-pointer transition-all shadow-sm shrink-0 w-full sm:w-auto"
               >
                 <Plus className="w-4 h-4" />
                 <span>Agregar Mercadería</span>
@@ -3385,7 +3424,7 @@ export default function MealsView({
                 setAliQty3("");
                 setShowAddAlimento(true);
               }}
-              className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-full bg-primary hover:bg-primary-hover text-white dark:text-blue-950 text-xs font-bold cursor-pointer transition-all shadow-sm shrink-0 w-full sm:w-auto"
+              className="hidden md:flex items-center justify-center gap-1.5 px-4 py-2 rounded-full bg-primary hover:bg-primary-hover text-white dark:text-black text-xs font-bold cursor-pointer transition-all shadow-sm shrink-0 w-full sm:w-auto"
             >
               <Plus className="w-4 h-4" />
               <span>Agregar Alimento</span>
@@ -3794,7 +3833,7 @@ export default function MealsView({
                 setPlaAlimentoId3("");
                 setShowAddPlato(true);
               }}
-              className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-full bg-primary hover:bg-primary-hover text-white dark:text-blue-950 text-xs font-bold cursor-pointer transition-all shadow-sm shrink-0 w-full sm:w-auto"
+              className="hidden md:flex items-center justify-center gap-1.5 px-4 py-2 rounded-full bg-primary hover:bg-primary-hover text-white dark:text-black text-xs font-bold cursor-pointer transition-all shadow-sm shrink-0 w-full sm:w-auto"
             >
               <Plus className="w-4 h-4" />
               <span>Agregar Plato</span>

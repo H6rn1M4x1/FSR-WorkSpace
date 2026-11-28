@@ -1761,6 +1761,10 @@ export default function HealthView({
         kcalTotal: logs.reduce((acc, curr) => acc + (curr.calorias || 0), 0),
       }));
   }, [alimentacionLogs, platos]);
+  const alimPromedioKcal =
+    alimDaysSorted.length > 0
+      ? Math.round(alimDaysSorted.reduce((acc, d) => acc + d.kcalTotal, 0) / alimDaysSorted.length)
+      : 0;
 
   // Mismo cálculo (BMR/TDEE, consumido vs. gastado, cumplimiento del objetivo) compartido entre
   // la tarjeta de un día de Historial Diario y su DetailModal.
@@ -1829,6 +1833,14 @@ export default function HealthView({
       .sort((a, b) => (a < b ? 1 : a > b ? -1 : 0))
       .map((fecha) => ({ fecha, details: getDiarioDayDetails(fecha) }));
   }, [alimentacionLogs, deportesActividades, registrosEntrenamiento, medidasHistory]);
+  // "Día completado" = tiene comida Y ejercicio (gym o deporte) registrados ese día — mismo
+  // criterio de "semana actual" (lunes a domingo) que ya usa el contador de Gimnasio.
+  const diarioDiasCompletadosSemana = useMemo(() => {
+    return weekDaysCurrent.filter((day) => {
+      const d = getDiarioDayDetails(getLocalDateString(day));
+      return d.comidaDia > 0 && d.gastadasTotal > 0;
+    }).length;
+  }, [weekDaysCurrent, alimentacionLogs, deportesActividades, registrosEntrenamiento]);
 
   const [showEstudioModal, setShowEstudioModal] = useState(false);
   const [editingEstudio, setEditingEstudio] = useState<MedicalRecord | null>(
@@ -2599,6 +2611,26 @@ export default function HealthView({
       resetAlimDraft();
       setAlimFecha(autoOpenQuickAddDate || new Date().toISOString().substring(0, 10));
       setShowAlimMobileSheet(true);
+      onQuickAddHandled?.();
+      return;
+    }
+    if (activeSubTab === "control_clinico" && clinicoActiveTab === "doctores") {
+      handleOpenAddDoctorModal();
+      onQuickAddHandled?.();
+      return;
+    }
+    if (activeSubTab === "control_clinico" && clinicoActiveTab === "presion") {
+      handleOpenAddBpTableModal();
+      onQuickAddHandled?.();
+      return;
+    }
+    if (activeSubTab === "control_clinico" && clinicoActiveTab === "estudios") {
+      handleOpenAddEstudio();
+      onQuickAddHandled?.();
+      return;
+    }
+    if (activeSubTab === "control_clinico" && clinicoActiveTab === "medicamentos" && medsActiveTab === "stock") {
+      handleOpenAddDisp();
       onQuickAddHandled?.();
       return;
     }
@@ -5832,10 +5864,18 @@ export default function HealthView({
                     patrón visual que Historial de Sesiones de Gimnasio — con su propio título +
                     ícono (igual que esa sección) para que no se vea como una lista pelada. */}
                 <div className="md:hidden">
-                  <h3 className="font-extrabold text-sm flex items-center gap-2 mb-3">
+                  <h3 className="font-extrabold text-sm flex items-center gap-2">
                     <Utensils className="w-4 h-4 text-primary" />
                     <span>Registro de Comidas</span>
                   </h3>
+                  {alimDaysSorted.length > 0 && (
+                    <p className="text-xs font-bold text-primary mt-0.5">
+                      Promedio: {alimPromedioKcal} kcal/día
+                    </p>
+                  )}
+                  <p className="text-xs text-slate-400 dark:text-zinc-500 mb-3 mt-0.5">
+                    Tocá una tarjeta para editar esa comida, o "+" para cargar una nueva.
+                  </p>
                   <div className="space-y-2.5">
                   {alimDaysSorted.length === 0 ? (
                     <div className="text-center py-10 text-xs font-semibold text-slate-400 dark:text-zinc-500">
@@ -6160,10 +6200,16 @@ export default function HealthView({
                     patrón visual que Historial de Sesiones de Gimnasio — con su propio título +
                     ícono (igual que esa sección) para que no se vea como una lista pelada. */}
                 <div className="md:hidden">
-                  <h3 className="font-extrabold text-sm flex items-center gap-2 mb-3">
+                  <h3 className="font-extrabold text-sm flex items-center gap-2">
                     <Activity className="w-4 h-4 text-primary" />
                     <span>Historial Diario</span>
                   </h3>
+                  <p className="text-xs font-bold text-primary mt-0.5">
+                    {diarioDiasCompletadosSemana} de 7 días completados esta semana
+                  </p>
+                  <p className="text-xs text-slate-400 dark:text-zinc-500 mb-3 mt-0.5">
+                    Un día se cuenta como completado cuando tiene comida y ejercicio registrados. Tocá una tarjeta para ver el detalle completo.
+                  </p>
                   <div className="space-y-2.5">
                   {diarioDaysSorted.length === 0 ? (
                     <div className="text-center py-10 text-xs font-semibold text-slate-400 dark:text-zinc-500">
@@ -6297,7 +6343,7 @@ export default function HealthView({
                     </div>
                     <button
                       onClick={handleOpenAddDoctorModal}
-                      className="px-4 py-2.5 bg-primary hover:bg-primary-hover text-white dark:text-black text-xs font-bold rounded-full flex items-center gap-1.5 cursor-pointer transition-all shadow-md shadow-primary/10 hover:scale-[1.02] active:scale-[0.98]"
+                      className="hidden md:flex px-4 py-2.5 bg-primary hover:bg-primary-hover text-white dark:text-black text-xs font-bold rounded-full items-center gap-1.5 cursor-pointer transition-all shadow-md shadow-primary/10 hover:scale-[1.02] active:scale-[0.98]"
                     >
                       <Plus className="w-4 h-4" />
                       <span>Registrar Doctor/a</span>
@@ -6554,7 +6600,7 @@ export default function HealthView({
                         whileHover={{ scale: 1.04 }}
                         whileTap={{ scale: 0.94 }}
                         onClick={medsActiveTab === "historial" ? openAddModal : handleOpenAddDisp}
-                        className={`${medsActiveTab === "historial" ? "hidden md:flex" : "flex"} items-center justify-center gap-1.5 px-4 py-2.5 rounded-full bg-primary hover:bg-primary-hover text-white dark:text-black text-xs font-bold transition-all cursor-pointer shadow-xs w-full sm:w-auto mt-2 sm:mt-0 sm:self-center`}
+                        className="hidden md:flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-full bg-primary hover:bg-primary-hover text-white dark:text-black text-xs font-bold transition-all cursor-pointer shadow-xs w-full sm:w-auto mt-2 sm:mt-0 sm:self-center"
                       >
                         <Plus className="w-4 h-4" />
                         <span>
@@ -7248,7 +7294,7 @@ export default function HealthView({
                     </div>
                     <button
                       onClick={handleOpenAddBpTableModal}
-                      className="px-4 py-2.5 bg-primary hover:bg-primary-hover text-white dark:text-black text-xs font-bold rounded-full flex items-center gap-1.5 cursor-pointer transition-all shadow-md shadow-primary/10 hover:scale-[1.02] active:scale-[0.98]"
+                      className="hidden md:flex px-4 py-2.5 bg-primary hover:bg-primary-hover text-white dark:text-black text-xs font-bold rounded-full items-center gap-1.5 cursor-pointer transition-all shadow-md shadow-primary/10 hover:scale-[1.02] active:scale-[0.98]"
                     >
                       <Plus className="w-4 h-4" />
                       <span>Registrar Presión / Signos</span>
@@ -7534,7 +7580,7 @@ export default function HealthView({
                       whileHover={{ scale: 1.04 }}
                       whileTap={{ scale: 0.94 }}
                       onClick={handleOpenAddEstudio}
-                      className="px-4 py-2.5 bg-primary hover:bg-primary-hover text-white dark:text-black text-xs font-bold rounded-full flex items-center gap-1.5 cursor-pointer transition-all shadow-md shadow-primary/10"
+                      className="hidden md:flex px-4 py-2.5 bg-primary hover:bg-primary-hover text-white dark:text-black text-xs font-bold rounded-full items-center gap-1.5 cursor-pointer transition-all shadow-md shadow-primary/10"
                     >
                       <Plus className="w-4 h-4" />
                       <span>Registrar Registro Médico</span>

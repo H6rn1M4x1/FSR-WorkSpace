@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { Calendar, ChevronLeft, ChevronRight, Check, Pencil, Trash2, BookOpen, Clock, MapPin } from "lucide-react";
 import { ExamenItem } from "../types";
 import { CustomSelect } from "./CustomSelect";
@@ -101,6 +101,25 @@ export function MonthlyExamScheduler({
   const todayStr = toDateStr(today.getFullYear(), today.getMonth(), today.getDate());
 
   const examsForDate = (dateStr: string) => examenes.filter((ex) => ex.fecha.startsWith(dateStr));
+
+  // Cantidad de Trabajos Prácticos (instancia "Trabajo Practico") con fecha dentro de la semana
+  // actual (lunes a domingo) — mismo criterio de "semana actual" que ya se usa en Gimnasio.
+  const trabajosEstaSemana = useMemo(() => {
+    const currentDay = today.getDay();
+    const distToMonday = currentDay === 0 ? -6 : 1 - currentDay;
+    const monday = new Date(today);
+    monday.setDate(today.getDate() + distToMonday);
+    const mondayStr = toDateStr(monday.getFullYear(), monday.getMonth(), monday.getDate());
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    const sundayStr = toDateStr(sunday.getFullYear(), sunday.getMonth(), sunday.getDate());
+    return examenes.filter((ex) => {
+      if (ex.instancia !== "Trabajo Practico") return false;
+      const fecha = ex.fecha.split("T")[0];
+      return fecha >= mondayStr && fecha <= sundayStr;
+    }).length;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [examenes]);
 
   const resetDraft = () => {
     setEditingId(null);
@@ -484,10 +503,16 @@ export function MonthlyExamScheduler({
           editar ese examen/trabajo. Con su propio título + ícono (igual que esa sección) para
           que no se vea como una lista pelada. */}
       <div className="md:hidden">
-      <h3 className="font-extrabold text-sm flex items-center gap-2 mb-3">
+      <h3 className="font-extrabold text-sm flex items-center gap-2">
         <BookOpen className="w-4 h-4 text-primary" />
         <span>Exámenes y Trabajos</span>
       </h3>
+      <p className="text-xs font-bold text-primary mt-0.5">
+        {trabajosEstaSemana} {trabajosEstaSemana === 1 ? "trabajo" : "trabajos"} esta semana
+      </p>
+      <p className="text-xs text-slate-400 dark:text-zinc-500 mb-3 mt-0.5">
+        Tocá una tarjeta para editar ese examen o trabajo, o "+" para cargar uno nuevo.
+      </p>
       <div className="space-y-2.5">
         {examenes.length === 0 ? (
           <div className="text-center py-10 text-xs font-semibold text-slate-400 dark:text-zinc-500">
